@@ -10,14 +10,20 @@ from pathlib import Path
 from datetime import timedelta
 
 
-def get_p_wave(data: np.ndarray, dt):
+def get_p_wave(data: np.ndarray, dt: int):
     """
     Get the P wave arrival time from the data
+
+    Parameters
+    ----------
+    data : np.ndarray
+        The waveform data from a single component
+    dt : int
+        The sample rate of the data
     """
     wftype = "SM"  # Input wftype is strong motion
-    pflag = "n"
     try:
-        loc = p_phase_picker(data, dt, wftype, pflag)
+        loc = p_phase_picker(data, dt, wftype)
     except Exception as e:
         print(e)
         loc = -1

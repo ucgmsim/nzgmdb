@@ -4,7 +4,32 @@ import scipy.signal as sig
 import scipy.linalg as alg
 
 
-def p_phase_picker(x, dt, wftype, plot, Tn=0, xi=0.6, nbins=0, o='to_peak'):
+def p_phase_picker(x: np.ndarray, dt: int, wftype: str, Tn=0, xi=0.6, nbins=0, o='to_peak'):
+    """
+    P-phase picker based on the fixed-base viscously damped single-degree-of-freedom (SDF) oscillator model
+
+    Parameters
+    ----------
+    x : np.ndarray
+        The waveform data from a single component
+    dt : int
+        The sample rate of the data
+    wftype : str
+        The type of waveform data (strong motion 'sm', weak motion 'wm', or na)
+    Tn : int
+        The natural period of the oscillator in seconds
+    xi : float
+        The damping ratio of the oscillator
+    nbins : int
+        The number of bins to use for the histogram method
+    o : str
+        The method to use for the phase arrival picker ('to_peak' or 'full')
+
+    Returns
+    -------
+    loc : int
+        The location of the P-phase arrival
+    """
     # Check Arguments!
     if 'sm' in wftype.lower():
         wftype = 'sm'
@@ -48,8 +73,6 @@ def p_phase_picker(x, dt, wftype, plot, Tn=0, xi=0.6, nbins=0, o='to_peak'):
         filtflag = 0
         # detrend waveform
         x_d = sig.detrend(x, axis=0)
-
-    x_org = x
 
     # Normalize input to prevent numerical instability from very low amplitudes
     x = x / np.max(np.abs(x))
@@ -104,6 +127,7 @@ def p_phase_picker(x, dt, wftype, plot, Tn=0, xi=0.6, nbins=0, o='to_peak'):
 
 
 def butter_bandpass(lowcut, highcut, fs, order=5):
+    """ Butterworth Bandpass Filter Design """
     nyq = 1 / (2 * fs)  # Nyquist frequency
     Wn = [lowcut / nyq, highcut / nyq]  # Butterworth bandpass non-dimensional frequency
     b, a = sig.butter(order, Wn, btype='bandpass')
@@ -118,6 +142,20 @@ def butter_bandpass_filter(data, lowcut, highcut, fs, order=4):
 
 
 def state_level(y, n):
+    """
+    Compute the state levels for the histogram method
+
+    Parameters
+    ----------
+    y: array_like
+    n: int
+
+    Returns
+    -------
+    levels: array_like
+    histogram: array_like
+    bins: array_like
+    """
     ymax = np.amax(y)
     ymin = np.min(y) - np.finfo(float).eps
 
