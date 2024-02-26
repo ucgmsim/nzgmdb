@@ -46,6 +46,7 @@ Output Variables:
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
 """
+
 import math
 import numpy as np
 
@@ -145,13 +146,11 @@ def Afshari_Stewart_2016_Ds(siteprop, faultprop, im):
 
     # Japan
     MuZ1 = np.exp(
-        -5.23 / 2 * np.log((v30**2 + 412.39**2) / (1360**2 + 412.39**2))
-        - np.log(1000)
+        -5.23 / 2 * np.log((v30**2 + 412.39**2) / (1360**2 + 412.39**2)) - np.log(1000)
     )
     # California
     MuZ1 = np.exp(
-        -7.15 / 4 * np.log((v30**4 + 570.94**4) / (1360**4 + 570.94**4))
-        - np.log(1000)
+        -7.15 / 4 * np.log((v30**4 + 570.94**4) / (1360**4 + 570.94**4)) - np.log(1000)
     )
 
     delta_z1 = Z1p0 - MuZ1

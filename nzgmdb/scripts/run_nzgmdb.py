@@ -1,6 +1,7 @@
 """
 File that contains the function scripts that can be called to run the NZGMDB pipeline.
 """
+
 import typer
 from pathlib import Path
 

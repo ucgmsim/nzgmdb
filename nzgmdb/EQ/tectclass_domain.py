@@ -76,14 +76,14 @@ def filter_tectclass(event_df, tectclass_df, cmt_tectclass_df):
 
     tectclass_df["tect_class"] = tectclass_df["NGASUB_TectClass_Merged"]
     tectclass_df["tect_method"] = tectclass_df["NGASUB_Faults_Merged"]
-    tectclass_df.loc[
-        tectclass_df.NZSMDB_TectClass.isnull() == False, "tect_class"
-    ] = tectclass_df[
-        tectclass_df.NZSMDB_TectClass.isnull() == False
-    ].NZSMDB_TectClass.values
-    tectclass_df.loc[
-        tectclass_df.NZSMDB_TectClass.isnull() == False, "tect_method"
-    ] = "NZSMDB"
+    tectclass_df.loc[tectclass_df.NZSMDB_TectClass.isnull() == False, "tect_class"] = (
+        tectclass_df[
+            tectclass_df.NZSMDB_TectClass.isnull() == False
+        ].NZSMDB_TectClass.values
+    )
+    tectclass_df.loc[tectclass_df.NZSMDB_TectClass.isnull() == False, "tect_method"] = (
+        "NZSMDB"
+    )
     # merged_df = event_df.set_index('evid').join(tectclass_df[['evid','tect_class','tect_method']].set_index('evid'),how='left').reset_index()
     merged_df = event_df
     merged_df = (

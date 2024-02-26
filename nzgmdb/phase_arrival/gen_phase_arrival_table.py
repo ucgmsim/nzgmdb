@@ -1,6 +1,7 @@
 """
     Creates the phase arrival table from a directory of mseed files
 """
+
 import numpy as np
 import pandas as pd
 from obspy import read
