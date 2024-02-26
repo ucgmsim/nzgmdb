@@ -23,6 +23,7 @@ def gen_phase_arrival_table(data_dir: Path, output_dir: Path, n_procs: int):
         The number of processes to use to generate the phase arrival table
     """
     from phase_arrival.gen_phase_arrival_table import generate_phase_arrival_table
+
     generate_phase_arrival_table(data_dir, output_dir, n_procs)
 
 
