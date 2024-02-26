@@ -1,13 +1,14 @@
 """
     Creates the phase arrival table from a directory of mseed files
 """
+import numpy as np
 import pandas as pd
 from obspy import read
-from picker import p_phase_picker
 import multiprocessing
-import numpy as np
 from pathlib import Path
 from datetime import timedelta
+
+from .picker import p_phase_picker
 
 
 def get_p_wave(data: np.ndarray, dt: int):
@@ -98,17 +99,19 @@ def process_mseed(mseed_file_chunk: list):
             # Get the evid from the name without the .xml
             evid = xml_file.stem
 
-            new_data = {
-                "arid": arid,
-                "datetime": datetime,
-                "net": net,
-                "sta": sta,
-                "loc": loc,
-                "chan": chan,
-                "phase": phase,
-                "t_res": t_res,
-                "evid": evid,
-            },
+            new_data = (
+                {
+                    "arid": arid,
+                    "datetime": datetime,
+                    "net": net,
+                    "sta": sta,
+                    "loc": loc,
+                    "chan": chan,
+                    "phase": phase,
+                    "t_res": t_res,
+                    "evid": evid,
+                },
+            )
             data_list.append(new_data)
     return data_list
 
@@ -133,10 +136,7 @@ def generate_phase_arrival_table(data_dir: Path, output_dir: Path, n_procs: int)
     mseed_files = list(data_dir.glob("**/*.mseed"))
 
     # Split the mseed files into chunks based on the number of processes
-    file_chunks = [
-        mseed_files[i::n_procs]
-        for i in range(n_procs)
-    ]
+    file_chunks = [mseed_files[i::n_procs] for i in range(n_procs)]
 
     # Initialize a multiprocessing Pool
     with multiprocessing.Pool(processes=n_procs) as pool:
@@ -148,7 +148,3 @@ def generate_phase_arrival_table(data_dir: Path, output_dir: Path, n_procs: int)
 
     # Save the dataframe
     df.to_csv(output_dir / "phase_arrival_table.csv", index=False)
-
-
-generate_phase_arrival_table(Path("path/to/mseed/files"), Path("path/to/output/dir"), 1)
-

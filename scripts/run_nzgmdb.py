@@ -26,5 +26,13 @@ def gen_phase_arrival_table(data_dir: Path, output_dir: Path, n_procs: int):
     generate_phase_arrival_table(data_dir, output_dir, n_procs)
 
 
+@app.command()
+def test():
+    """
+    Simple Typer Test Case
+    """
+    print("Testing Typer")
+
+
 if __name__ == "__main__":
     app()

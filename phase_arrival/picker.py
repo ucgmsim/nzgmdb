@@ -4,7 +4,9 @@ import scipy.signal as sig
 import scipy.linalg as alg
 
 
-def p_phase_picker(x: np.ndarray, dt: int, wftype: str, Tn=0, xi=0.6, nbins=0, o='to_peak'):
+def p_phase_picker(
+    x: np.ndarray, dt: int, wftype: str, Tn=0, xi=0.6, nbins=0, o="to_peak"
+):
     """
     P-phase picker based on the fixed-base viscously damped single-degree-of-freedom (SDF) oscillator model
 
@@ -31,44 +33,44 @@ def p_phase_picker(x: np.ndarray, dt: int, wftype: str, Tn=0, xi=0.6, nbins=0, o
         The location of the P-phase arrival
     """
     # Check Arguments!
-    if 'sm' in wftype.lower():
-        wftype = 'sm'
-    elif 'wm' in wftype.lower():
-        wftype = 'wm'
-    elif 'na' in wftype.lower():
-        wftype = 'na'
+    if "sm" in wftype.lower():
+        wftype = "sm"
+    elif "wm" in wftype.lower():
+        wftype = "wm"
+    elif "na" in wftype.lower():
+        wftype = "na"
     else:
         return
 
-    if Tn is 0:
+    if Tn == 0:
         if dt <= 0.01:
             Tn = 0.01
         else:
             Tn = 0.1
 
-    if nbins is 0:
+    if nbins == 0:
         if dt <= 0.01:
             nbins = round(2 / dt)
         else:
             nbins = 200
 
-    if 'full' in o:
-        o = 'full'
-    elif 'to_peak' in o:
-        o = 'to_peak'
+    if "full" in o:
+        o = "full"
+    elif "to_peak" in o:
+        o = "to_peak"
     else:
         return
 
-    if 'wm' in wftype.lower():
+    if "wm" in wftype.lower():
         filtflag = 1
         flp = 0.1
         fhp = 10.0
-    elif 'sm' in wftype.lower():
+    elif "sm" in wftype.lower():
         # Strong-motion low- and high-pass corner frequencies in Hz
         filtflag = 1
         flp = 0.1
         fhp = 20.0
-    elif 'na' in wftype.lower():
+    elif "na" in wftype.lower():
         # No bandpass filter will be applied
         filtflag = 0
         # detrend waveform
@@ -78,20 +80,20 @@ def p_phase_picker(x: np.ndarray, dt: int, wftype: str, Tn=0, xi=0.6, nbins=0, o
     x = x / np.max(np.abs(x))
 
     # Bandpass filter and detrend waveform
-    if filtflag is not 0:
+    if filtflag != 0:
         x_f = butter_bandpass_filter(x, flp, fhp, dt, 4)
         x_d = sig.detrend(x_f, axis=0)
 
-    if 'to_peak' in o:
+    if "to_peak" in o:
         ind_peak = np.nonzero(np.abs(x_d) == np.max(np.abs(x_d)))
-        xnew = x_d[0:ind_peak[0][0]]
-    elif 'full' in o:
+        xnew = x_d[0 : ind_peak[0][0]]
+    elif "full" in o:
         xnew = x_d
 
     # Construct a fixed-base viscously damped SDF oscillator
     omegan = 2 * np.pi / Tn  # natural frequency in radian/second
     C = 2 * xi * omegan  # viscous damping term
-    K = omegan ** 2  # stiffness term
+    K = omegan**2  # stiffness term
     y = np.zeros((2, len(xnew)))  # response vector
 
     # Solve second-order ordinary differential equation of motion
@@ -102,24 +104,30 @@ def p_phase_picker(x: np.ndarray, dt: int, wftype: str, Tn=0, xi=0.6, nbins=0, o
     for k in range(1, len(xnew)):
         y[:, k] = np.dot(Ae, y[:, k - 1]) + AeB * xnew[k]
 
-    veloc = (y[1, :])  # relative velocity of mass
-    Edi = np.dot(2 * xi * omegan, np.power(veloc, 2))  # integrand of viscous damping energy
+    veloc = y[1, :]  # relative velocity of mass
+    Edi = np.dot(
+        2 * xi * omegan, np.power(veloc, 2)
+    )  # integrand of viscous damping energy
 
     # Apply histogram method
     levels, histogram, bins = state_level(Edi, nbins)
     locs = np.nonzero(Edi > levels[0])[0]
-    indx = np.nonzero(np.multiply(xnew[0:locs[0] - 1], xnew[1:locs[0]]) < 0)[0]  # get zero crossings
+    indx = np.nonzero(np.multiply(xnew[0 : locs[0] - 1], xnew[1 : locs[0]]) < 0)[
+        0
+    ]  # get zero crossings
     TF = indx.size
 
     # Update first onset
-    if TF is not 0:
+    if TF != 0:
         loc = (indx[TF - 1] + 1) * dt
     else:
         levels, histogram, bins = state_level(Edi, np.ceil(nbins / 2))  # try nbins/2
         locs = np.nonzero(Edi > levels[0])[0]
-        indx = np.nonzero(np.multiply(xnew[0:locs[0] - 1], xnew[1:locs[0]]) < 0)[0]  # get zero crossings
+        indx = np.nonzero(np.multiply(xnew[0 : locs[0] - 1], xnew[1 : locs[0]]) < 0)[
+            0
+        ]  # get zero crossings
         TF = indx.size
-        if TF is not 0:
+        if TF != 0:
             loc = (indx[TF - 1] + 1) * dt
         else:
             loc = -1
@@ -127,15 +135,15 @@ def p_phase_picker(x: np.ndarray, dt: int, wftype: str, Tn=0, xi=0.6, nbins=0, o
 
 
 def butter_bandpass(lowcut, highcut, fs, order=5):
-    """ Butterworth Bandpass Filter Design """
+    """Butterworth Bandpass Filter Design"""
     nyq = 1 / (2 * fs)  # Nyquist frequency
     Wn = [lowcut / nyq, highcut / nyq]  # Butterworth bandpass non-dimensional frequency
-    b, a = sig.butter(order, Wn, btype='bandpass')
+    b, a = sig.butter(order, Wn, btype="bandpass")
     return b, a
 
 
 def butter_bandpass_filter(data, lowcut, highcut, fs, order=4):
-    """ Butterworth Acausal Bandpass Filter """
+    """Butterworth Acausal Bandpass Filter"""
     b, a = butter_bandpass(lowcut, highcut, fs, order)
     y = sig.filtfilt(b, a, data, axis=0)
     return y
@@ -190,8 +198,8 @@ def state_level(y, n):
     uHigh = iHigh
 
     # Upper and lower histograms
-    lHist = histogram[int(lLow):int(lHigh)]
-    uHist = histogram[int(uLow):int(uHigh)]
+    lHist = histogram[int(lLow) : int(lHigh)]
+    uHist = histogram[int(uLow) : int(uHigh)]
 
     levels = np.zeros(2)
     iMax = np.argmax(lHist[1, :])
