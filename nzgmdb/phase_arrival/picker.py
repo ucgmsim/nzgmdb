@@ -30,8 +30,8 @@ def p_phase_picker(
 
     Returns
     -------
-    loc : int
-        The location of the P-phase arrival
+    p_wave_index : int
+        The index of the P-phase arrival
     """
     # Check Arguments!
     if "sm" in wftype.lower():
@@ -120,7 +120,7 @@ def p_phase_picker(
 
     # Update first onset
     if TF != 0:
-        loc = (indx[TF - 1] + 1) * dt
+        p_wave_index = (indx[TF - 1] + 1) * dt
     else:
         levels, histogram, bins = state_level(Edi, np.ceil(nbins / 2))  # try nbins/2
         locs = np.nonzero(Edi > levels[0])[0]
@@ -129,10 +129,10 @@ def p_phase_picker(
         ]  # get zero crossings
         TF = indx.size
         if TF != 0:
-            loc = (indx[TF - 1] + 1) * dt
+            p_wave_index = (indx[TF - 1] + 1) * dt
         else:
-            loc = -1
-    return loc
+            p_wave_index = -1
+    return p_wave_index
 
 
 def butter_bandpass(lowcut, highcut, fs, order=5):

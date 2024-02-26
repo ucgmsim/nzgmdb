@@ -1,5 +1,5 @@
 """
-    Creates the phase arrival table from a directory of mseed files
+    Contains functions for generating the phase arrival table
 """
 
 import numpy as np
