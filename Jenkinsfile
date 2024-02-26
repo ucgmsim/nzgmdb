@@ -37,7 +37,6 @@ pipeline {
                     echo "[ Installing ${env.JOB_NAME} ]"
                     python setup.py install
                     echo "[ Run test now ]"
-                    cd nzgmdb
                     pytest --black
                 """
             }
