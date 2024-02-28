@@ -46,6 +46,7 @@ Output Variables:
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
 """
+
 import math
 import numpy as np
 
@@ -102,16 +103,16 @@ def Afshari_Stewart_2016_Ds(siteprop, faultprop, im):
 
     M0 = 10 ** (1.5 * M + 16.05)
 
-#     if faultprop.faultstyle == FaultStyle.NORMAL:
-    if faultprop.faultstyle == 'normal':
+    #     if faultprop.faultstyle == FaultStyle.NORMAL:
+    if faultprop.faultstyle == "normal":
         b0 = [1.555, 2.541, 1.409]
         b1 = [4.992, 3.170, 4.778]
-#     elif faultprop.faultstyle == FaultStyle.REVERSE:
-    elif faultprop.faultstyle == 'reverse':
+    #     elif faultprop.faultstyle == FaultStyle.REVERSE:
+    elif faultprop.faultstyle == "reverse":
         b0 = [0.7806, 1.612, 0.7729]
         b1 = [7.061, 4.536, 6.579]
-#     elif faultprop.faultstyle == FaultStyle.STRIKESLIP:
-    elif faultprop.faultstyle == 'strikeslip':
+    #     elif faultprop.faultstyle == FaultStyle.STRIKESLIP:
+    elif faultprop.faultstyle == "strikeslip":
         b0 = [1.279, 2.302, 0.8804]
         b1 = [5.578, 3.467, 6.188]
     else:
@@ -124,7 +125,7 @@ def Afshari_Stewart_2016_Ds(siteprop, faultprop, im):
     else:
         delta_sigma = np.exp(b1[i] + b2[i] * (M2[i] - Mstar) + b3[i] * (M - M2[i]))
 
-    f0 = 4.9 * 10 ** 6 * beta * (delta_sigma / M0) ** (1.0 / 3.0)
+    f0 = 4.9 * 10**6 * beta * (delta_sigma / M0) ** (1.0 / 3.0)
 
     if M > M1[i]:
         Fe = 1 / f0
@@ -135,23 +136,21 @@ def Afshari_Stewart_2016_Ds(siteprop, faultprop, im):
         Fp = c1[i] * R
     elif R <= R2:
         Fp = c1[i] * R1 + c2[i] * (R - R1)
-#     elif R <= R3:
+    #     elif R <= R3:
     else:
         Fp = c1[i] * R1 + c2[i] * (R2 - R1) + c3[i] * (R - R2)
-        
+
     # Magnitude-distance function added by J. Hutchinson, may need more tweaking
     if M >= 5:
-        Fp = Fp + (0.124*R + 20.46)*(M-5)
+        Fp = Fp + (0.124 * R + 20.46) * (M - 5)
 
     # Japan
     MuZ1 = np.exp(
-        -5.23 / 2 * np.log((v30 ** 2 + 412.39 ** 2) / (1360 ** 2 + 412.39 ** 2))
-        - np.log(1000)
+        -5.23 / 2 * np.log((v30**2 + 412.39**2) / (1360**2 + 412.39**2)) - np.log(1000)
     )
     # California
     MuZ1 = np.exp(
-        -7.15 / 4 * np.log((v30 ** 4 + 570.94 ** 4) / (1360 ** 4 + 570.94 ** 4))
-        - np.log(1000)
+        -7.15 / 4 * np.log((v30**4 + 570.94**4) / (1360**4 + 570.94**4)) - np.log(1000)
     )
 
     delta_z1 = Z1p0 - MuZ1
@@ -185,7 +184,7 @@ def Afshari_Stewart_2016_Ds(siteprop, faultprop, im):
     else:
         phi_M = phi2[i]
 
-    total_sigma_Ds = np.sqrt(tau_M ** 2 + phi_M ** 2)
+    total_sigma_Ds = np.sqrt(tau_M**2 + phi_M**2)
     sigma_Ds = [total_sigma_Ds, tau_M, phi_M]
 
     return Ds, sigma_Ds

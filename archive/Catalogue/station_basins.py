@@ -13,8 +13,11 @@ import numpy as np
 
 from qcore import formats
 
+
 def get_basin_full_path(basin_list):
-    vm_dir = Path('/Volumes/SeaJade 2 Backup/NZ/NZ_EQ_Catalog/site_info/Velocity-Model-development')
+    vm_dir = Path(
+        "/Volumes/SeaJade 2 Backup/NZ/NZ_EQ_Catalog/site_info/Velocity-Model-development"
+    )
     return [vm_dir / basin for basin in basin_list]
 
 
@@ -94,7 +97,7 @@ basin_outlines = {
     "2.07": v207_basin_list,
 }
 
-stat_file = pd.read_csv('../output/site_table_response.csv',low_memory=False)
+stat_file = pd.read_csv("../output/site_table_response.csv", low_memory=False)
 # stat_file['basin'] = None
 paths = []
 for outline_fp in v207_basin_list:
@@ -102,29 +105,32 @@ for outline_fp in v207_basin_list:
 
     path = mpltPath.Path(outline)
 
-    for idx,stat in stat_file.iterrows():
+    for idx, stat in stat_file.iterrows():
         if path.contains_point((stat.lon, stat.lat)):
-#             print(stat.lon, stat.lat, stat.sta, True, outline_fp.name)
-            basin_name = outline_fp.name.split('_')[0].split('.')[0]
-            stat_file.loc[idx,'basin'] = basin_name
+            #             print(stat.lon, stat.lat, stat.sta, True, outline_fp.name)
+            basin_name = outline_fp.name.split("_")[0].split(".")[0]
+            stat_file.loc[idx, "basin"] = basin_name
             print(stat.sta, basin_name)
-stat_file.loc[stat_file.basin == 'NewCanterburyBasinBoundary','basin'] = 'Canterbury'
-stat_file.loc[stat_file.basin == 'BPVBoundary','basin'] = 'Banks Peninsula volcanics'
-stat_file.loc[stat_file.basin == 'waitaki','basin'] = 'Waitaki'
-stat_file.loc[stat_file.basin == 'Napier1','basin'] = 'Napier'
-stat_file.loc[stat_file.basin == 'mackenzie','basin'] = 'Mackenzie'
-stat_file.loc[stat_file.basin == 'NorthCanterbury','basin'] = 'North Canterbury'
-stat_file.loc[stat_file.basin == 'dun','basin'] = 'Dun'
-stat_file.loc[stat_file.basin == 'WakatipuBasinOutlineWGS84','basin'] = 'Wakatipu'
-stat_file.loc[stat_file.basin == 'WaikatoHaurakiBasinEdge','basin'] = 'Waikato Hauraki'
-stat_file.loc[stat_file.basin == 'HawkesBay1','basin'] = 'Hawkes Bay'
-stat_file.loc[stat_file.basin == 'WanakaOutlineWGS84','basin'] = 'Wanaka'
-stat_file.loc[stat_file.basin == 'Porirua1','basin'] = 'Porirua'
-stat_file.loc[stat_file.basin == 'SpringsJ','basin'] = 'Springs Junction'
-stat_file.loc[stat_file.basin == 'CollingwoodBasinOutline','basin'] = 'Collingwood'
-stat_file.loc[stat_file.basin == 'GreaterWellington4','basin'] = 'Greater Wellington'
+stat_file.loc[stat_file.basin == "NewCanterburyBasinBoundary", "basin"] = "Canterbury"
+stat_file.loc[stat_file.basin == "BPVBoundary", "basin"] = "Banks Peninsula volcanics"
+stat_file.loc[stat_file.basin == "waitaki", "basin"] = "Waitaki"
+stat_file.loc[stat_file.basin == "Napier1", "basin"] = "Napier"
+stat_file.loc[stat_file.basin == "mackenzie", "basin"] = "Mackenzie"
+stat_file.loc[stat_file.basin == "NorthCanterbury", "basin"] = "North Canterbury"
+stat_file.loc[stat_file.basin == "dun", "basin"] = "Dun"
+stat_file.loc[stat_file.basin == "WakatipuBasinOutlineWGS84", "basin"] = "Wakatipu"
+stat_file.loc[stat_file.basin == "WaikatoHaurakiBasinEdge", "basin"] = "Waikato Hauraki"
+stat_file.loc[stat_file.basin == "HawkesBay1", "basin"] = "Hawkes Bay"
+stat_file.loc[stat_file.basin == "WanakaOutlineWGS84", "basin"] = "Wanaka"
+stat_file.loc[stat_file.basin == "Porirua1", "basin"] = "Porirua"
+stat_file.loc[stat_file.basin == "SpringsJ", "basin"] = "Springs Junction"
+stat_file.loc[stat_file.basin == "CollingwoodBasinOutline", "basin"] = "Collingwood"
+stat_file.loc[stat_file.basin == "GreaterWellington4", "basin"] = "Greater Wellington"
 
-stat_file.to_csv('/Volumes/SeaJade 2 Backup/NZ/NZ_EQ_Catalog/converted_output/site_table_basin.csv',index=False)
+stat_file.to_csv(
+    "/Volumes/SeaJade 2 Backup/NZ/NZ_EQ_Catalog/converted_output/site_table_basin.csv",
+    index=False,
+)
 
 #         else:
 #             print(stat.lon, stat.lat, stat.sta, False, None)

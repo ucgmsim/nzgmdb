@@ -214,7 +214,7 @@ def a_to_mw_skarlatoudis(a):
 
 
 def mw_to_a_skarlatoudis(mw):
-    return 1.77 * 10 ** -10 * (10 ** ((3 * (mw + 6.03)) / 2)) ** (2 / 3)
+    return 1.77 * 10**-10 * (10 ** ((3 * (mw + 6.03)) / 2)) ** (2 / 3)
 
 
 def lw_to_mw_stirling(l, w):
@@ -235,7 +235,7 @@ def mom_to_a_murotani_2013(mom):
     :param mom: Moment of rupture in Nm
     :return: Area of rupture in km^2
     """
-    return (1.34 * 10 ** -10) * np.power(mom, 2 / 3)
+    return (1.34 * 10**-10) * np.power(mom, 2 / 3)
 
 
 def mag2mom(mw):
