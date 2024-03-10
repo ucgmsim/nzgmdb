@@ -1127,8 +1127,8 @@ if __name__ == "__main__":
     #             )[1],
     #         axis=1)
 
-    merged_df.to_csv(
-        out_path + "/earthquake_source_table_tectdomain.csv",
-        mode="w",
-        index=False,
-    )
+    # merged_df.to_csv(
+    #     out_path + "/earthquake_source_table_tectdomain.csv",
+    #     mode="w",
+    #     index=False,
+    # )
