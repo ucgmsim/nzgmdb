@@ -470,7 +470,7 @@ def parse_geonet_information(
         The number of processes to run
     """
     # Process the earthquake csv file
-    geonet = pd.read_csv(eq_csv, dtype={'publicid': str}).sort_values("origintime")
+    geonet = pd.read_csv(eq_csv, dtype={"publicid": str}).sort_values("origintime")
     geonet["origintime"] = pd.to_datetime(geonet["origintime"]).dt.tz_localize(None)
     geonet = geonet.reset_index(drop=True)
 
@@ -580,8 +580,8 @@ def parse_geonet_information(
 
 
 parse_geonet_information(
-    Path('/home/joel/code/nzgmdb/nzgmdb/data/earthquakes.csv'),
-    Path('/home/joel/local/gmdb/new_data_refactor'),
+    Path("/home/joel/code/nzgmdb/nzgmdb/data/earthquakes.csv"),
+    Path("/home/joel/local/gmdb/new_data_refactor"),
     datetime.datetime(2022, 1, 1, 0, 0),
     datetime.datetime(2022, 1, 2, 0, 0),
     1,
