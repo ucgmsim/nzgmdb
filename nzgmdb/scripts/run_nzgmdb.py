@@ -6,6 +6,11 @@ import typer
 from datetime import datetime
 from pathlib import Path
 
+from nzgmdb.phase_arrival.gen_phase_arrival_table import (
+    generate_phase_arrival_table,
+)
+from nzgmdb.data_retrieval.geonet import parse_geonet_information
+
 app = typer.Typer()
 
 
@@ -24,10 +29,6 @@ def gen_phase_arrival_table(data_dir: Path, output_dir: Path, n_procs: int):
     n_procs : int
         The number of processes to use to generate the phase arrival table
     """
-    from nzgmdb.phase_arrival.gen_phase_arrival_table import (
-        generate_phase_arrival_table,
-    )
-
     generate_phase_arrival_table(data_dir, output_dir, n_procs)
 
 
@@ -55,8 +56,6 @@ def fetch_geonet_data(
     n_procs : int
         The number of processes to use to generate the earthquake source and station magnitude tables
     """
-    from nzgmdb.data_retrieval.geonet import parse_geonet_information
-
     parse_geonet_information(earthquake_ffp, output_dir, start_date, end_date, n_procs)
 
 

@@ -12,7 +12,26 @@ import obspy as op
 import multiprocessing
 from obspy import UTCDateTime
 from obspy.clients.fdsn import Client as FDSN_Client
-from obspy.core.event import Event
+from obspy.core.event import Event, Magnitude
+
+
+def get_max_magnitude(magnitudes: list[Magnitude], mag_type: str):
+    """
+    Helper function to get the maximum magnitude of a certain type
+
+    Parameters
+    ----------
+    magnitudes : list[Magnitude]
+        The list of magnitudes to search through
+    mag_type : str
+        The magnitude type to search for
+    """
+    filtered_mags = [
+        mag for mag in magnitudes if mag.magnitude_type.lower() == mag_type
+    ]
+    if filtered_mags:
+        return max(filtered_mags, key=lambda mag: mag.station_count)
+    return None
 
 
 def fetch_event_line(event_cat: Event, event_id: str):
@@ -53,17 +72,6 @@ def fetch_event_line(event_cat: Event, event_id: str):
         std = event_cat.preferred_origin().quality.standard_error
     except:
         std = None
-
-    def get_max_magnitude(magnitudes, mag_type):
-        """
-        Helper function to get the maximum magnitude of a certain type
-        """
-        filtered_mags = [
-            mag for mag in magnitudes if mag.magnitude_type.lower() == mag_type
-        ]
-        if filtered_mags:
-            return max(filtered_mags, key=lambda mag: mag.station_count)
-        return None
 
     try:
         pref_mag_type = event_cat.preferred_magnitude().magnitude_type
@@ -462,9 +470,8 @@ def parse_geonet_information(
         The number of processes to run
     """
     # Process the earthquake csv file
-    geonet = pd.read_csv(eq_csv, low_memory=False)
-    geonet = geonet.sort_values("origintime")
-    geonet["origintime"] = geonet.origintime.apply(lambda x: UTCDateTime(x).datetime)
+    geonet = pd.read_csv(eq_csv, dtype={'publicid': str}).sort_values("origintime")
+    geonet["origintime"] = pd.to_datetime(geonet["origintime"]).dt.tz_localize(None)
     geonet = geonet.reset_index(drop=True)
 
     # Extract the data from the geonet dataframe within the date range
@@ -570,3 +577,12 @@ def parse_geonet_information(
     # Save the dataframes
     event_df.to_csv(output_dir / "earthquake_source_table.csv", index=False)
     sta_mag_df.to_csv(output_dir / "station_magnitude_table.csv", index=False)
+
+
+parse_geonet_information(
+    Path('/home/joel/code/nzgmdb/nzgmdb/data/earthquakes.csv'),
+    Path('/home/joel/local/gmdb/new_data_refactor'),
+    datetime.datetime(2022, 1, 1, 0, 0),
+    datetime.datetime(2022, 1, 2, 0, 0),
+    1,
+)
