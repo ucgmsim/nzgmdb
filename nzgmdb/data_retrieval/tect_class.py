@@ -462,8 +462,7 @@ def add_tect_class(cmt_tectclass_ffp: Path, tect_shape_ffp: Path, geonet_cmt_ffp
     pool.join()
 
     # Assign the results to the respective DataFrame columns
-    event_df["NGASUB_TectClass_Merged"] = [result[0] for result in results]
-    event_df["NGASUB_Faults_Merged"] = [result[1] for result in results]
+    event_df["NGASUB_TectClass_Merged"], event_df["NGASUB_Faults_Merged"] = zip(*results)
 
     # Merge tectonic classification data from both CMT and regular event data
     merged_df = filter_tectclass(event_df, df, cmt_tectclass_df)
