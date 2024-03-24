@@ -4,18 +4,18 @@
 
 import warnings
 import datetime
+from typing import List
 from pathlib import Path
 from functools import partial
 
 import pandas as pd
 import obspy as op
 import multiprocessing
-from obspy import UTCDateTime
 from obspy.clients.fdsn import Client as FDSN_Client
 from obspy.core.event import Event, Magnitude
 
 
-def get_max_magnitude(magnitudes: list[Magnitude], mag_type: str):
+def get_max_magnitude(magnitudes: List[Magnitude], mag_type: str):
     """
     Helper function to get the maximum magnitude of a certain type
 
@@ -47,43 +47,30 @@ def fetch_event_line(event_cat: Event, event_id: str):
     """
     reloc = "no"  # Indicates if an earthquake has been relocated, default to 'no'.
 
-    # Extract basic info from the catalog
-    ev_datetime = event_cat.preferred_origin().time
-    ev_lat = event_cat.preferred_origin().latitude
-    ev_lon = event_cat.preferred_origin().longitude
-    ev_depth = event_cat.preferred_origin().depth / 1000
-    try:
-        ev_loc_type = str(event_cat.preferred_origin().method_id).split("/")[1]
-    except:
-        ev_loc_type = None
-    try:
-        ev_loc_grid = str(event_cat.preferred_origin().earth_model_id).split("/")[1]
-    except:
-        ev_loc_grid = None
-    try:
-        ev_ndef = event_cat.preferred_origin().quality.used_phase_count
-    except:
-        ev_ndef = None
-    try:
-        ev_nsta = event_cat.preferred_origin().quality.used_station_count
-    except:
-        ev_nsta = None
-    try:
-        std = event_cat.preferred_origin().quality.standard_error
-    except:
-        std = None
+    # Get the preferred magnitude and preferred origin
+    preferred_origin = event_cat.preferred_origin()
+    preferred_magnitude = event_cat.preferred_magnitude()
 
-    try:
-        pref_mag_type = event_cat.preferred_magnitude().magnitude_type
-    except AttributeError:
-        return None
+    # Extract basic info from the catalog
+    ev_datetime = preferred_origin.time
+    ev_lat = preferred_origin.latitude
+    ev_lon = preferred_origin.longitude
+    ev_depth = preferred_origin.depth / 1000
+    ev_loc_type = str(preferred_origin.method_id).split("/")[1]
+    ev_loc_grid = str(preferred_origin.earth_model_id).split("/")[1]
+    ev_ndef = preferred_origin.quality.used_phase_count
+    ev_nsta = preferred_origin.quality.used_station_count
+    std = preferred_origin.quality.standard_error
+
+    pref_mag_type = preferred_magnitude.magnitude_type
 
     if pref_mag_type.lower() == "m":
         # Get the maximum magnitude of each type
         pref_mag_type = "ML"
-        mb_mag = get_max_magnitude(event_cat.magnitudes, "mb")
-        ml_loc_mag = get_max_magnitude(event_cat.magnitudes, "ml")
-        mlv_loc_mag = get_max_magnitude(event_cat.magnitudes, "mlv")
+        magnitudes = event_cat.magnitudes
+        mb_mag = get_max_magnitude(magnitudes, "mb")
+        ml_loc_mag = get_max_magnitude(magnitudes, "ml")
+        mlv_loc_mag = get_max_magnitude(magnitudes, "mlv")
 
         if mb_mag:
             # For events with few Mb measures, perform some checks.
@@ -121,11 +108,9 @@ def fetch_event_line(event_cat: Event, event_id: str):
         pref_mag_nmag = len(loc_mag.station_magnitude_contributions)
     else:
         # Set the preferred magnitude variables
-        pref_mag = event_cat.preferred_magnitude().mag
-        pref_mag_unc = event_cat.preferred_magnitude().mag_errors.uncertainty
-        pref_mag_nmag = len(
-            event_cat.preferred_magnitude().station_magnitude_contributions
-        )
+        pref_mag = preferred_magnitude.mag
+        pref_mag_unc = preferred_magnitude.mag_errors.uncertainty
+        pref_mag_nmag = len(preferred_magnitude.station_magnitude_contributions)
     pref_mag_method = "uncorrected"
 
     # Create the event line
@@ -141,9 +126,9 @@ def fetch_event_line(event_cat: Event, event_id: str):
         pref_mag_type,
         pref_mag_method,
         pref_mag_unc,
-        event_cat.preferred_magnitude().mag,
-        event_cat.preferred_magnitude().magnitude_type,
-        event_cat.preferred_magnitude().mag_errors.uncertainty,
+        preferred_magnitude.mag,
+        preferred_magnitude.magnitude_type,
+        preferred_magnitude.mag_errors.uncertainty,
         ev_ndef,
         ev_nsta,
         pref_mag_nmag,
@@ -183,6 +168,9 @@ def fetch_sta_mag_lines(
     # Set constants
     sorter = ["HH", "BH", "EH", "SH", "HN", "BN"]
     channel_filter = "HH?,BH?,EH?,SH?,HN?,BN?"
+
+    # Get the preferred_origin
+    preferred_origin = event_cat.preferred_origin()
 
     # Get the pick data
     pick_data = [
@@ -299,10 +287,10 @@ def fetch_sta_mag_lines(
             sta_info = station_df[station_df.sta == sta]
 
             # Event Info
-            ev_datetime = event_cat.preferred_origin().time
-            ev_lat = event_cat.preferred_origin().latitude
-            ev_lon = event_cat.preferred_origin().longitude
-            ev_depth = event_cat.preferred_origin().depth / 1000
+            ev_datetime = preferred_origin.time
+            ev_lat = preferred_origin.latitude
+            ev_lon = preferred_origin.longitude
+            ev_depth = preferred_origin.depth / 1000
 
             # Get the r_hyp
             if len(sta_info) > 0:
@@ -319,7 +307,7 @@ def fetch_sta_mag_lines(
             else:
                 # If the station is not in the current inventory
                 # Get the arrivals
-                arrivals = event_cat.preferred_origin().arrivals
+                arrivals = preferred_origin.arrivals
                 arrival = [
                     arrival for arrival in arrivals if arrival.pick_id == resource_id
                 ][0]
@@ -577,12 +565,3 @@ def parse_geonet_information(
     # Save the dataframes
     event_df.to_csv(output_dir / "earthquake_source_table.csv", index=False)
     sta_mag_df.to_csv(output_dir / "station_magnitude_table.csv", index=False)
-
-
-parse_geonet_information(
-    Path("/home/joel/code/nzgmdb/nzgmdb/data/earthquakes.csv"),
-    Path("/home/joel/local/gmdb/new_data_refactor"),
-    datetime.datetime(2022, 1, 1, 0, 0),
-    datetime.datetime(2022, 1, 2, 0, 0),
-    1,
-)
