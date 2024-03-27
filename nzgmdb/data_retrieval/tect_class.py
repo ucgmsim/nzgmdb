@@ -2,16 +2,17 @@
     Contains the functions to add tectonic class to the data
 """
 
+from typing import Tuple
 from pathlib import Path
+from functools import partial
 
+import fiona
 import numpy as np
 import pandas as pd
-import fiona
 import multiprocessing
-from functools import partial
-from typing import Tuple
+from pyproj import Transformer
 
-from qcore import geo
+from qcore import geo, point_in_polygon
 
 
 def merge_NZSMDB_flatfile_on_events(
@@ -28,28 +29,13 @@ def merge_NZSMDB_flatfile_on_events(
     NZSMDB_csv_path : Path
         The path to the NZSMDB csv file
     """
-    event_cols = [
+    nzsmdb_cols = [
         "CuspID",
-        "Origin_time",
-        "Mw",
-        "MwUncert",
         "TectClass",
-        "Mech",
-        "PreferredFaultPlane",
-        "Strike",
-        "Dip",
-        "Rake",
-        "Location",
-        "HypLat",
-        "HypLon",
-        "HypN",
-        "HypE",
-        "LENGTH_km",
-        "WIDTH_km",
     ]
 
     NZSMDB_df = pd.read_csv(NZSMDB_csv_path).drop_duplicates(subset=["CuspID"])
-    new_columns = {col: f"NZSMDB_{col}" for col in event_cols}
+    new_columns = {col: f"NZSMDB_{col}" for col in nzsmdb_cols}
     NZSMDB_df = NZSMDB_df.rename(columns=new_columns)
     event_df = event_df.merge(
         right=NZSMDB_df[new_columns.values()],
@@ -57,6 +43,8 @@ def merge_NZSMDB_flatfile_on_events(
         left_on="evid",
         right_on="NZSMDB_CuspID",
     )
+    # Drop the NZSMDB_CuspID column
+    event_df.drop(columns=["NZSMDB_CuspID"], inplace=True)
     return event_df
 
 
@@ -77,17 +65,26 @@ def replace_cmt_data_on_event(
         The CMT dataframe
     """
     # Manage index and column renaming
-    event_df.set_index('evid', inplace=True)
-    cmt_df.set_index('PublicID', inplace=True)
-    cmt_df.rename(columns={'Mw': 'mag', 'Latitude': 'lat', 'Longitude': 'lon', 'CD': 'depth'}, inplace=True)
+    event_df.set_index("evid", inplace=True)
+    cmt_df.set_index("PublicID", inplace=True)
+    cmt_df.rename(
+        columns={"Mw": "mag", "Latitude": "lat", "Longitude": "lon", "CD": "depth"},
+        inplace=True,
+    )
 
     # Get the intersection of indices (evid and PublicID)
     common_ids = event_df.index.intersection(cmt_df.index)
 
     # Update values in event df from the CMT data where the evid is the same
-    event_df.loc[common_ids, ['mag', 'lat', 'lon', 'depth']] = cmt_df.loc[
-        common_ids, ['mag', 'lat', 'lon', 'depth']]
-    event_df.loc[common_ids, ['mag_type', 'mag_method', 'loc_type', 'loc_grid']] = "Mw", "CMT", "CMT", "CMT"
+    event_df.loc[common_ids, ["mag", "lat", "lon", "depth"]] = cmt_df.loc[
+        common_ids, ["mag", "lat", "lon", "depth"]
+    ]
+    event_df.loc[common_ids, ["mag_type", "mag_method", "loc_type", "loc_grid"]] = (
+        "Mw",
+        "CMT",
+        "CMT",
+        "CMT",
+    )
 
     # Reset index
     event_df.reset_index(inplace=True)
@@ -150,109 +147,6 @@ def xyz_fault_points(
     R_b[fault] = df_b.to_numpy()
     R_c[fault] = df_c.to_numpy()
 
-    # NOTE: ALL BELOW IS NOT NEEDED IF R_a_syn IS NOT NEEDED
-    # Project additional default offshore region to add to R_a_syn dictionary
-    # Get centre of fault surface definition
-    # pt_1 = df["long"].idxmax(axis=0)
-    # pt_2 = df["long"].idxmin(axis=0)
-    # pt_3 = df["lat"].idxmax(axis=0)
-    # pt_4 = df["lat"].idxmin(axis=0)
-    #
-    # # Calculate midpoint 1
-    # midpoint_1 = geo.ll_mid(df.long[pt_1], df.lat[pt_1], df.long[pt_2], df.lat[pt_2])
-    #
-    # # Calculate midpoint 2
-    # midpoint_2 = geo.ll_mid(df.long[pt_3], df.lat[pt_3], df.long[pt_4], df.lat[pt_4])
-    #
-    # # Calculate fault surface midpoint
-    # lonc_surface, latc_surface = geo.ll_mid(midpoint_1[0], midpoint_1[1], midpoint_2[0], midpoint_2[1])
-    #
-    # # Isolate an approximate updip edge at d_s
-    # df_updip_edge = df[(round(df.depth, 1) == d_s)]
-    #
-    # # Pick opposite ends of the updip edge
-    # pt_a = df_updip_edge["long"].idxmax(axis=0)
-    # pt_b = df_updip_edge["long"].idxmin(axis=0)
-    #
-    # # Get centre of the approximate updip edge
-    # lonc_updip, latc_updip = geo.ll_mid(
-    #     df_updip_edge.long[pt_a],
-    #     df_updip_edge.lat[pt_a],
-    #     df_updip_edge.long[pt_b],
-    #     df_updip_edge.lat[pt_b],
-    # )
-    #
-    # # Determine strike bearing (arbitrary asimuth)
-    # strike_bearing = geo.ll_bearing(
-    #     df_updip_edge.long[pt_a],
-    #     df_updip_edge.lat[pt_a],
-    #     df_updip_edge.long[pt_b],
-    #     df_updip_edge.lat[pt_b],
-    # )
-    #
-    # # Determine length along strike at updip edge
-    # strike_length = geo.ll_dist(
-    #     df_updip_edge.long[pt_a],
-    #     df_updip_edge.lat[pt_a],
-    #     df_updip_edge.long[pt_b],
-    #     df_updip_edge.lat[pt_b],
-    # )
-    #
-    # # Get distance from centre of updip edge to furtherest fault point
-    # # For computing the offshore distance
-    # corner_distances = [
-    #     geo.ll_dist(df.long[pt], df.lat[pt], lonc_updip, latc_updip)
-    #     for pt in [pt_1, pt_2, pt_3, pt_4]
-    # ]
-    #
-    # # Take the offshore distance as the average distance to the two furthest corners
-    # # of the fault surface from the center of the updip strike
-    # os_dist = np.mean(sorted(corner_distances, reverse=True)[:2])
-    #
-    # # Determine the bearing
-    # updip_center_bearing = geo.ll_bearing(
-    #     lonc_updip,
-    #     latc_updip,
-    #     lonc_surface,
-    #     latc_surface,
-    # )
-    #
-    # half_range = 90
-    # upper_limit = (updip_center_bearing + half_range) % 360
-    # lower_limit = (updip_center_bearing - half_range) % 360
-    #
-    # # Set offshore bearing as normal to strike bearing
-    # # and in opposite hemisphere as updip-center bearing
-    # for pot_offshore_bearing in [strike_bearing - 90, strike_bearing + 90]:
-    #     if pot_offshore_bearing > upper_limit or pot_offshore_bearing < lower_limit:
-    #         offshore_bearing = pot_offshore_bearing
-    #
-    # # Points in offshore direction
-    # os_vect = np.linspace(
-    #     0,
-    #     os_dist,
-    #     int(np.ceil(os_dist / grid_space)),
-    # )
-    #
-    # # Points in along-strike direction
-    # y_vect = np.linspace(
-    #     -strike_length / 2,
-    #     strike_length / 2,
-    #     int(np.ceil(strike_length / grid_space)),
-    #     )
-    #
-    # os_mesh, y_mesh = np.meshgrid(os_vect, y_vect)
-    # osy_arr = np.column_stack((os_mesh.ravel(order='F'), y_mesh.ravel(order='F')))
-    #
-    # amat_os, _ = geo.gen_mat(offshore_bearing, lonc_updip, latc_updip)
-    # ll_arr = geo.xy2ll(osy_arr, amat_os)
-    # depth_arr = np.zeros((ll_arr.shape[0], 1))
-    #
-    # R_a_syn[fault] = np.concatenate(
-    #     (ll_arr, depth_arr),
-    #     axis=1,
-    # )
-
     return R_a, R_b, R_c
 
 
@@ -262,8 +156,8 @@ def ngasub2020_tectclass_v3(
     R_b: dict = False,
     R_c: dict = False,
     fault_label: str = np.nan,
-    h_thresh: float =10,
-    v_thresh: float =10,
+    h_thresh: float = 10,
+    v_thresh: float = 10,
 ):
     """Applies the modified classification logic from the NGA-SUB 2020 report
     (PEER NGA SUB, 2020)
@@ -303,7 +197,7 @@ def ngasub2020_tectclass_v3(
     fault (str): fault which triggered 'Interface','Slab' or 'Outer rise' tectclass labels
     """
     row = row_tuple[1]
-    lon, lat, depth = row["lat"], row["lon"], row["depth"]
+    lat, lon, depth = row["lat"], row["lon"], row["depth"]
 
     # Initially classify as if farfield, correct later if neccessary
     if depth <= 30:
@@ -347,71 +241,107 @@ def ngasub2020_tectclass_v3(
     return tectclass, fault_label
 
 
-def filter_tectclass(event_df, tectclass_df, cmt_tectclass_df):
+def merge_tectclass(event_df: pd.DataFrame, cmt_tectclass_df: pd.DataFrame):
+    """
+    Merge the tectonic classification data from the CMT and NGASUB with the event data
+
+    Parameters
+    ----------
+    event_df : pd.DataFrame
+        The event dataframe which also includes the NGASUB tectonic class data
+    cmt_tectclass_df : pd.DataFrame
+        The CMT tectonic class dataframe
+    """
+    # Rename the columns in the event dataframe
+    event_df.rename(
+        columns={
+            "NGASUB_TectClass_Merged": "tect_class",
+            "NGASUB_Faults_Merged": "tect_method",
+        },
+        inplace=True,
+    )
+
+    # Replace the tect_class and tect_method with the NZSMDB data where it exists
+    event_df.loc[event_df.NZSMDB_TectClass.isnull() == False, "tect_class"] = event_df[
+        event_df.NZSMDB_TectClass.isnull() == False
+    ].NZSMDB_TectClass.values
+    event_df.loc[event_df.NZSMDB_TectClass.isnull() == False, "tect_method"] = "NZSMDB"
+
+    # Drop unnecessary columns
+    event_df.drop(columns=["NZSMDB_TectClass"], inplace=True)
+
+    # Rename CMT columns and add method
     cmt_tectclass_df.rename(
         columns={"PublicID": "evid", "tectclass": "tect_class"}, inplace=True
     )
     cmt_tectclass_df["tect_method"] = "manual"
 
-    tectclass_df["tect_class"] = tectclass_df["NGASUB_TectClass_Merged"]
-    tectclass_df["tect_method"] = tectclass_df["NGASUB_Faults_Merged"]
-    tectclass_df.loc[tectclass_df.NZSMDB_TectClass.isnull() == False, "tect_class"] = (
-        tectclass_df[
-            tectclass_df.NZSMDB_TectClass.isnull() == False
-        ].NZSMDB_TectClass.values
-    )
-    tectclass_df.loc[tectclass_df.NZSMDB_TectClass.isnull() == False, "tect_method"] = (
-        "NZSMDB"
-    )
-    # merged_df = event_df.set_index('evid').join(tectclass_df[['evid','tect_class','tect_method']].set_index('evid'),how='left').reset_index()
-    merged_df = event_df
-    merged_df = (
-        merged_df.set_index("evid")
-        .join(
-            tectclass_df[["evid", "tect_class", "tect_method"]].set_index("evid"),
-            how="left",
-            rsuffix="_redone",
-        )
-        .reset_index()
-    )
-    if "tect_class_redone" in merged_df.columns:
-        merged_df[["tect_class", "tect_method"]] = merged_df[
-            ["tect_class_redone", "tect_method_redone"]
-        ]
-    merged_df = (
-        merged_df.set_index("evid")
+    # Merge the CMT tectonic class data with the event data
+    cmt_merged_df = (
+        event_df.set_index("evid")
         .join(
             cmt_tectclass_df[["evid", "tect_class", "tect_method"]].set_index("evid"),
             how="left",
-            rsuffix="_manual",
+            rsuffix="_cmt",
         )
         .reset_index()
     )
-    merged_df.loc[
-        ~merged_df.tect_class_manual.isnull(), ["tect_class", "tect_method"]
-    ] = merged_df.loc[
-        ~merged_df.tect_class_manual.isnull(),
-        ["tect_class_manual", "tect_method_manual"],
+
+    # Replace the tect_class and tect_method with the CMT data where it exists
+    cmt_merged_df.loc[
+        ~cmt_merged_df.tect_class_cmt.isnull(), ["tect_class", "tect_method"]
+    ] = cmt_merged_df.loc[
+        ~cmt_merged_df.tect_class_cmt.isnull(),
+        ["tect_class_cmt", "tect_method_cmt"],
     ].values
-    if "tect_class_redone" in merged_df.columns:
-        merged_df.drop(
-            columns=[
-                "tect_class_redone",
-                "tect_method_redone",
-                "tect_class_manual",
-                "tect_method_manual",
-            ],
-            inplace=True,
-        )
-    else:
-        merged_df.drop(
-            columns=["tect_class_manual", "tect_method_manual"], inplace=True
-        )
 
-    return merged_df
+    # Drop the cmt columns
+    cmt_merged_df.drop(columns=["tect_class_cmt", "tect_method_cmt"], inplace=True)
+
+    return cmt_merged_df
 
 
-def add_tect_class(cmt_tectclass_ffp: Path, tect_shape_ffp: Path, geonet_cmt_ffp: Path, event_csv_ffp: Path, NZ_SMDB_path: Path, sub_surface_dir: Path):
+def get_domains(df, shapes, transformer):
+    from shapely.geometry import Point  # conda install shapely
+    from shapely.geometry.polygon import Polygon
+    import numpy as np
+
+    x, y = transformer.transform(df.lon, df.lat)
+    points = [x, y]
+
+    point = Point(points)
+
+    no, name, type = [], [], []
+    for layer in shapes:
+        domain_no = layer["properties"]["Domain_No"]
+        domain_name = layer["properties"]["DomainName"]
+        domain_type = layer["properties"]["DomainType"]
+        geometry_type = layer["geometry"]["type"]
+        geometry_coords = layer["geometry"]["coordinates"]
+        if geometry_type == "MultiPolygon":
+            for coords in geometry_coords:
+                polygon = Polygon(coords[0])
+                if polygon.contains(point):
+                    no, name, type = domain_no, domain_name, domain_type
+        else:
+            polygon = Polygon(geometry_coords[0])
+            if polygon.contains(point):
+                no, name, type = domain_no, domain_name, domain_type
+    if not no:
+        no, name, type = 0, "Oceanic", None
+    return pd.Series([no, name, type])
+
+
+def add_tect_class(
+    cmt_tectclass_ffp: Path,
+    tect_shape_ffp: Path,
+    geonet_cmt_ffp: Path,
+    event_csv_ffp: Path,
+    NZ_SMDB_path: Path,
+    sub_surface_dir: Path,
+    out_ffp: Path,
+    n_procs: int = 1,
+):
     """
     Adds the tectonic class to the event data
     """
@@ -419,11 +349,13 @@ def add_tect_class(cmt_tectclass_ffp: Path, tect_shape_ffp: Path, geonet_cmt_ffp
     cmt_tectclass_df = pd.read_csv(cmt_tectclass_ffp, low_memory=False)
 
     # Shape file for determining neotectonic domain
-    shape = fiona.open(tect_shape_ffp)
+    shapes = list(fiona.open(tect_shape_ffp))
 
     # Read the geonet CMT and event data
     geonet_cmt_df = pd.read_csv(geonet_cmt_ffp, low_memory=False)
-    event_df = pd.read_csv(event_csv_ffp, low_memory=False).set_index("evid").reset_index()
+    event_df = (
+        pd.read_csv(event_csv_ffp, low_memory=False).set_index("evid").reset_index()
+    )
 
     # Replace the geonet CMT data on the event data
     event_df = replace_cmt_data_on_event(event_df, geonet_cmt_df)
@@ -433,10 +365,11 @@ def add_tect_class(cmt_tectclass_ffp: Path, tect_shape_ffp: Path, geonet_cmt_ffp
 
     # Merge Kermadec and Hikurangi datasets
     merged_a, merged_b, merged_c = xyz_fault_points(
-            fault_file=sub_surface_dir / "Merged_slab/hik_kerm_fault_300km_wgs84_poslon.txt",
-            d_s=10,  # Hayes et al., 2018
-            d_d=47,  # Hayes et al., 2018
-        )
+        fault_file=sub_surface_dir
+        / "Merged_slab/hik_kerm_fault_300km_wgs84_poslon.txt",
+        d_s=10,  # Hayes et al., 2018
+        d_d=47,  # Hayes et al., 2018
+    )
 
     # Merge Puysegur dataset
     merged_a, merged_b, merged_c = xyz_fault_points(
@@ -449,7 +382,7 @@ def add_tect_class(cmt_tectclass_ffp: Path, tect_shape_ffp: Path, geonet_cmt_ffp
     )
 
     # Create a pool of workers
-    pool = multiprocessing.Pool(processes=8)
+    pool = multiprocessing.Pool(processes=n_procs)
 
     # Apply the function to each row of the DataFrame in parallel
     results = pool.map(
@@ -462,17 +395,77 @@ def add_tect_class(cmt_tectclass_ffp: Path, tect_shape_ffp: Path, geonet_cmt_ffp
     pool.join()
 
     # Assign the results to the respective DataFrame columns
-    event_df["NGASUB_TectClass_Merged"], event_df["NGASUB_Faults_Merged"] = zip(*results)
+    event_df["NGASUB_TectClass_Merged"], event_df["NGASUB_Faults_Merged"] = zip(
+        *results
+    )
 
-    # Merge tectonic classification data from both CMT and regular event data
-    merged_df = filter_tectclass(event_df, df, cmt_tectclass_df)
+    # Merge tectonic classification data from both CMT and NGASUB with the event data
+    merged_df = merge_tectclass(event_df, cmt_tectclass_df)
+
+    # Determine tectonic domain
+    wgs2nztm = Transformer.from_crs(4326, 2193, always_xy=True)
+
+    # Create the points from the lon and lat
+    points = np.array(merged_df[["lon", "lat"]])
+
+    # Apply transformer to the points
+    points = np.asarray(wgs2nztm.transform(points[:, 0], points[:, 1])).T
+
+    # Go though each domain and determine if the points are in the domain
+    for layer in shapes:
+        domain_no = layer["properties"]["Domain_No"]
+        domain_type = layer["properties"]["DomainType"]
+        geometry_type = layer["geometry"]["type"]
+        geometry_coords = layer["geometry"]["coordinates"]
+        in_domain = None
+        if geometry_type == "MultiPolygon":
+            for coords in geometry_coords:
+                # Convert the coords into a numpy array
+                coords = np.asarray(coords)
+                in_domain_check = point_in_polygon.is_inside_postgis_parallel(
+                    points, coords
+                )
+                # If in_domain is None, set it to the first in_domain_check
+                if in_domain is None:
+                    in_domain = in_domain_check
+                else:
+                    # If in_domain is not None, update it with the in_domain_check
+                    in_domain = in_domain | in_domain_check
+        else:
+            # Convert the geometry coords into a numpy array
+            geometry_coords = np.asarray([list(coord) for coord in geometry_coords[0]])
+            in_domain = point_in_polygon.is_inside_postgis_parallel(
+                points, geometry_coords
+            )
+
+        # Update the domain_no, domain_name, and domain_type based on the in_domain
+        merged_df.loc[in_domain, ["domain_no", "domain_type"]] = domain_no, domain_type
+
+    # Add Oceanic for points not in any domain
+    merged_df.loc[merged_df.domain_no.isnull(), ["domain_no", "domain_type"]] = (
+        0,
+        "Oceanic",
+    )
+
+    # Save the data
+    merged_df.to_csv(out_ffp, index=False)
 
 
 add_tect_class(
     Path("/home/joel/code/nzgmdb/archive/focal/GeoNet-v04-tectclass.csv"),
-    Path("/home/joel/code/nzgmdb/archive/TectonicDomains/TectonicDomains_Feb2021_8_NZTM.shp"),
+    Path(
+        "/home/joel/code/nzgmdb/archive/TectonicDomains/TectonicDomains_Feb2021_8_NZTM.shp"
+    ),
     Path("/home/joel/code/nzgmdb/archive/focal/GeoNet_CMT_solutions.csv"),
-    Path("/home/joel/local/gmdb/new_data_walkthrough/archive/earthquake_source_table.csv"),
-    Path("/home/joel/local/gmdb/tect_domain_folders/Records/NZ_SMDB/Spectra_flatfiles/NZdatabase_flatfile_FAS_horizontal_GeoMean.csv"),
+    Path(
+        "/home/joel/local/gmdb/new_data_walkthrough/archive/earthquake_source_table.csv"
+    ),
+    Path(
+        "/home/joel/local/gmdb/tect_domain_folders/Records/NZ_SMDB/Spectra_flatfiles/NZdatabase_flatfile_FAS_horizontal_GeoMean.csv"
+    ),
     Path("/home/joel/local/gmdb/tect_domain_folders/geospatial/Subduction_surfaces"),
+    Path(
+        "/home/joel/local/gmdb/new_data_walkthrough/earthquake_source_table_tectdomain.csv"
+    ),
+    n_procs=1,
 )
