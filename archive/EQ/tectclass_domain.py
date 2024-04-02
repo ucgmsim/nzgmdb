@@ -44,15 +44,23 @@ from qcore import geo
 cwd = os.getcwd()
 
 # out_path = cwd + '/out/relocated'
-out_path = "/home/joel/local/gmdb/new_data_walkthrough/archive"
+out_path = "../output"
 if not os.path.exists(out_path):
     os.makedirs(out_path)
 
-NZ_SMDB_path = "/home/joel/local/gmdb/tect_domain_folders/Records/NZ_SMDB/Spectra_flatfiles/NZdatabase_flatfile_FAS_horizontal_GeoMean.csv"
+NZ_SMDB_path = "/".join(
+    cwd.split("/")[:-2]
+    + [
+        "Records",
+        "NZ_SMDB",
+        "Spectra_flatfiles",
+        "NZdatabase_flatfile_FAS_horizontal_GeoMean.csv",
+    ]
+)
 
 CMT_name = "GeoNet_CMT_solutions.csv"
 
-sub = "/home/joel/local/gmdb/tect_domain_folders/geospatial/Subduction_surfaces"
+sub = "/".join(cwd.split("/")[:-2] + ["geospatial", "Subduction_surfaces"])
 
 
 ########################################################################################################################
@@ -901,17 +909,17 @@ def ngasub2020_tectclass_v3(
 if __name__ == "__main__":
     # Tectonic classifications from GeoNet CMTs
     cmt_tectclass_df = pd.read_csv(
-        "/home/joel/code/nzgmdb/archive/focal/GeoNet-v04-tectclass.csv", low_memory=False
+        "../focal/GeoNet-v04-tectclass.csv", low_memory=False
     )
 
     # Shape file for determining neotectonic domain
-    shape = fiona.open("/home/joel/code/nzgmdb/archive/TectonicDomains/TectonicDomains_Feb2021_8_NZTM.shp")
+    shape = fiona.open("../TectonicDomains/TectonicDomains_Feb2021_8_NZTM.shp")
 
     directory = "../"
     geonet_cmt_df = pd.read_csv(
-        "/home/joel/code/nzgmdb/archive/focal/GeoNet_CMT_solutions.csv", low_memory=False
+        "../focal/GeoNet_CMT_solutions.csv", low_memory=False
     )
-    df = pd.read_csv("/home/joel/local/gmdb/new_data_walkthrough/archive/earthquake_source_table.csv", low_memory=False)
+    df = pd.read_csv(directory + "output/all_events.csv", low_memory=False)
 
     geonet_cmt_df.rename(columns={"PublicID": "evid"}, inplace=True)
 
