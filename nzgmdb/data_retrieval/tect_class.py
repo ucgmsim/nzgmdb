@@ -92,31 +92,35 @@ def replace_cmt_data_on_event(
     return event_df
 
 
-def xyz_fault_points(
+def create_regions(
     fault_file: Path,
     d_s: float,
     d_d: float,
-    R_a: dict = None,
-    R_b: dict = None,
-    R_c: dict = None,
+    region_a: dict = None,
+    region_b: dict = None,
+    region_c: dict = None,
 ):
-    """Determine an array of points on, and offshore, of each fault
+    """Determine an array of points on, and offshore, of a fault and divide into regions
     (PEER NGA SUB, 2020)
+
+    Region A (vertical prism offshore of seismogenic zone of fault plane)
+    Region B (vertical prism containing seismogenic zone of fault plane)
+    Region C (vertical prism downdip of the seismogenic zone of the fault plane)
 
     Parameters
     ----------
     fault_file (Path): Text file of longitude, latitude, and depth (-)
     d_s (int,float): Upper limit of seismogenic zone, Hayes, 2018
     d_d (int,float): Lower limit of seismogenic zone, Hayes, 2018
-    R_a (dict): portion of fault in region a (lat,long,depth) NGA-SUB, 2020 (optional)
-    R_b (dict): portion of fault in region b (lat,long,depth) NGA-SUB, 2020 (optional)
-    R_c (dict): portion of fault in region c (lat,long,depth) NGA-SUB, 2020 (optional)
+    region_a (dict): portion of fault in region a (lat,long,depth) NGA-SUB, 2020 (optional)
+    region_b (dict): portion of fault in region b (lat,long,depth) NGA-SUB, 2020 (optional)
+    region_c (dict): portion of fault in region c (lat,long,depth) NGA-SUB, 2020 (optional)
 
     Returns
     -------
-    R_a (dict): portion of faults in region a (lat,long,depth) NGA-SUB, 2020
-    R_b (dict): portion of faults in region b (lat,long,depth) NGA-SUB, 2020
-    R_c (dict): portion of faults in region c (lat,long,depth) NGA-SUB, 2020
+    region_a (dict): portion of faults in region a (lat,long,depth) NGA-SUB, 2020
+    region_b (dict): portion of faults in region b (lat,long,depth) NGA-SUB, 2020
+    region_c (dict): portion of faults in region c (lat,long,depth) NGA-SUB, 2020
 
     """
     # Read fault file
@@ -137,24 +141,24 @@ def xyz_fault_points(
     df_c = df[(df.depth > d_d)]
 
     # Initialize dictionaries if they are None
-    R_a = R_a or {}
-    R_b = R_b or {}
-    R_c = R_c or {}
+    region_a = region_a or {}
+    region_b = region_b or {}
+    region_c = region_c or {}
 
     # Add fault to fault surface dictionary
     fault = fault_file.stem
-    R_a[fault] = df_a.to_numpy()
-    R_b[fault] = df_b.to_numpy()
-    R_c[fault] = df_c.to_numpy()
+    region_a[fault] = df_a.to_numpy()
+    region_b[fault] = df_b.to_numpy()
+    region_c[fault] = df_c.to_numpy()
 
-    return R_a, R_b, R_c
+    return region_a, region_b, region_c
 
 
-def ngasub2020_tectclass_v3(
+def ngasub2020_tectclass(
     row_tuple: Tuple[int, pd.Series],
-    R_a: dict = False,
-    R_b: dict = False,
-    R_c: dict = False,
+    region_a: dict = False,
+    region_b: dict = False,
+    region_c: dict = False,
     fault_label: str = np.nan,
     h_thresh: float = 10,
     v_thresh: float = 10,
@@ -184,9 +188,9 @@ def ngasub2020_tectclass_v3(
     Parameters
     ----------
     row_tuple (tuple[int, pd.Series]): The event row
-    R_a (dict): portion of faults in region a (lat,long,depth) NGA-SUB, 2020
-    R_b (dict): portion of faults in region b (lat,long,depth) NGA-SUB, 2020
-    R_c (dict): portion of faults in region c (lat,long,depth) NGA-SUB, 2020
+    region_a (dict): portion of faults in region a (lat,long,depth) NGA-SUB, 2020
+    region_b (dict): portion of faults in region b (lat,long,depth) NGA-SUB, 2020
+    region_c (dict): portion of faults in region c (lat,long,depth) NGA-SUB, 2020
     fault_label (str): The fault label
     h_thresh (float): Horizontal distance threshold
     v_thresh (float): Vertical distance threshold
@@ -207,7 +211,7 @@ def ngasub2020_tectclass_v3(
     else:
         tectclass = "Undetermined"
 
-    for flag, region in zip(["A", "C", "B"], [R_a, R_c, R_b]):
+    for flag, region in zip(["A", "C", "B"], [region_a, region_c, region_b]):
         for fault, pt_arr in region.items():
             i, d = geo.closest_location(pt_arr[:, :2], lon, lat)
 
@@ -301,58 +305,36 @@ def merge_tectclass(event_df: pd.DataFrame, cmt_tectclass_df: pd.DataFrame):
     return cmt_merged_df
 
 
-def get_domains(df, shapes, transformer):
-    from shapely.geometry import Point  # conda install shapely
-    from shapely.geometry.polygon import Polygon
-    import numpy as np
-
-    x, y = transformer.transform(df.lon, df.lat)
-    points = [x, y]
-
-    point = Point(points)
-
-    no, name, type = [], [], []
-    for layer in shapes:
-        domain_no = layer["properties"]["Domain_No"]
-        domain_name = layer["properties"]["DomainName"]
-        domain_type = layer["properties"]["DomainType"]
-        geometry_type = layer["geometry"]["type"]
-        geometry_coords = layer["geometry"]["coordinates"]
-        if geometry_type == "MultiPolygon":
-            for coords in geometry_coords:
-                polygon = Polygon(coords[0])
-                if polygon.contains(point):
-                    no, name, type = domain_no, domain_name, domain_type
-        else:
-            polygon = Polygon(geometry_coords[0])
-            if polygon.contains(point):
-                no, name, type = domain_no, domain_name, domain_type
-    if not no:
-        no, name, type = 0, "Oceanic", None
-    return pd.Series([no, name, type])
-
-
 def add_tect_class(
-    cmt_tectclass_ffp: Path,
-    tect_shape_ffp: Path,
-    geonet_cmt_ffp: Path,
     event_csv_ffp: Path,
-    NZ_SMDB_path: Path,
-    sub_surface_dir: Path,
     out_ffp: Path,
     n_procs: int = 1,
 ):
     """
     Adds the tectonic class to the event data
+
+    Parameters
+    ----------
+    event_csv_ffp : Path
+        The path to the event data csv file
+    out_ffp : Path
+        The path to the output csv file
+    n_procs : int
+        The number of processes to use
     """
+    # Get the Data folder
+    data_dir = Path(__file__).parent.parent / "data"
+
     # Read the CMT tectonic class data
-    cmt_tectclass_df = pd.read_csv(cmt_tectclass_ffp, low_memory=False)
+    cmt_tectclass_df = pd.read_csv(
+        data_dir / "GeoNet-v04-tectclass.csv", low_memory=False
+    )
 
     # Shape file for determining neotectonic domain
-    shapes = list(fiona.open(tect_shape_ffp))
+    shapes = list(fiona.open(data_dir / "tect_domain" / "TectonicDomains_Feb2021_8_NZTM.shp"))
 
     # Read the geonet CMT and event data
-    geonet_cmt_df = pd.read_csv(geonet_cmt_ffp, low_memory=False)
+    geonet_cmt_df = pd.read_csv(data_dir / "GeoNet_CMT_solutions.csv", low_memory=False)
     event_df = (
         pd.read_csv(event_csv_ffp, low_memory=False).set_index("evid").reset_index()
     )
@@ -361,24 +343,25 @@ def add_tect_class(
     event_df = replace_cmt_data_on_event(event_df, geonet_cmt_df)
 
     # Merge the NZSMDB data
-    event_df = merge_NZSMDB_flatfile_on_events(event_df, NZ_SMDB_path)
+    event_df = merge_NZSMDB_flatfile_on_events(
+        event_df, data_dir / "NZdatabase_flatfile_FAS_horizontal_GeoMean.csv"
+    )
 
-    # Merge Kermadec and Hikurangi datasets
-    merged_a, merged_b, merged_c = xyz_fault_points(
-        fault_file=sub_surface_dir
-        / "Merged_slab/hik_kerm_fault_300km_wgs84_poslon.txt",
+    # Merge Kermadec and Hikurangi datasets into the fault regions
+    region_a, region_b, region_c = create_regions(
+        fault_file=data_dir / "hik_kerm_fault_300km_wgs84_poslon.txt",
         d_s=10,  # Hayes et al., 2018
         d_d=47,  # Hayes et al., 2018
     )
 
-    # Merge Puysegur dataset
-    merged_a, merged_b, merged_c = xyz_fault_points(
-        fault_file=sub_surface_dir / "Slab2_2018/puy/puy_slab2_dep_02.26.18.xyz",
+    # Merge Puysegur dataset into the fault regions
+    region_a, region_b, region_c = create_regions(
+        fault_file=data_dir / "puy_slab2_dep_02.26.18.xyz",
         d_s=11,  # Hayes et al., 2018
         d_d=30,  # Hayes et al., 2018
-        R_a=merged_a,
-        R_b=merged_b,
-        R_c=merged_c,
+        region_a=region_a,
+        region_b=region_b,
+        region_c=region_c,
     )
 
     # Create a pool of workers
@@ -386,7 +369,12 @@ def add_tect_class(
 
     # Apply the function to each row of the DataFrame in parallel
     results = pool.map(
-        partial(ngasub2020_tectclass_v3, R_a=merged_a, R_b=merged_b, R_c=merged_c),
+        partial(
+            ngasub2020_tectclass,
+            region_a=region_a,
+            region_b=region_b,
+            region_c=region_c,
+        ),
         event_df.iterrows(),
     )
 
@@ -449,23 +437,3 @@ def add_tect_class(
 
     # Save the data
     merged_df.to_csv(out_ffp, index=False)
-
-
-add_tect_class(
-    Path("/home/joel/code/nzgmdb/archive/focal/GeoNet-v04-tectclass.csv"),
-    Path(
-        "/home/joel/code/nzgmdb/archive/TectonicDomains/TectonicDomains_Feb2021_8_NZTM.shp"
-    ),
-    Path("/home/joel/code/nzgmdb/archive/focal/GeoNet_CMT_solutions.csv"),
-    Path(
-        "/home/joel/local/gmdb/new_data_walkthrough/archive/earthquake_source_table.csv"
-    ),
-    Path(
-        "/home/joel/local/gmdb/tect_domain_folders/Records/NZ_SMDB/Spectra_flatfiles/NZdatabase_flatfile_FAS_horizontal_GeoMean.csv"
-    ),
-    Path("/home/joel/local/gmdb/tect_domain_folders/geospatial/Subduction_surfaces"),
-    Path(
-        "/home/joel/local/gmdb/new_data_walkthrough/earthquake_source_table_tectdomain.csv"
-    ),
-    n_procs=1,
-)
