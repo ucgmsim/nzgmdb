@@ -917,7 +917,7 @@ if __name__ == "__main__":
 
     directory = "../"
     geonet_cmt_df = pd.read_csv(
-        directory + "../focal/GeoNet_CMT_solutions.csv", low_memory=False
+        directory + "focal/GeoNet_CMT_solutions.csv", low_memory=False
     )
     df = pd.read_csv(directory + "output/all_events.csv", low_memory=False)
 
