@@ -10,6 +10,7 @@ from nzgmdb.phase_arrival.gen_phase_arrival_table import (
     generate_phase_arrival_table,
 )
 from nzgmdb.data_retrieval.geonet import parse_geonet_information
+from nzgmdb.data_retrieval.tect_domain import add_tect_domain
 
 app = typer.Typer()
 
@@ -57,6 +58,27 @@ def fetch_geonet_data(
         The number of processes to use to generate the earthquake source and station magnitude tables
     """
     parse_geonet_information(earthquake_ffp, output_dir, start_date, end_date, n_procs)
+
+
+@app.command()
+def merge_tect_domain(
+    eq_source_ffp: Path,
+    output_dir: Path,
+    n_procs: int,
+):
+    """
+    Adds tectonic domains to the earthquake source table.
+
+    Parameters
+    ----------
+    eq_source_ffp : Path
+        The file path to the earthquake source table
+    output_dir : Path
+        The directory to save the earthquake source table with tectonic domains
+    n_procs : int
+        The number of processes to use for processing
+    """
+    add_tect_domain(eq_source_ffp, output_dir, n_procs)
 
 
 if __name__ == "__main__":

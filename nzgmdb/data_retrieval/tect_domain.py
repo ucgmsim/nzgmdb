@@ -305,13 +305,74 @@ def merge_tectclass(event_df: pd.DataFrame, cmt_tectclass_df: pd.DataFrame):
     return cmt_merged_df
 
 
-def add_tect_class(
+def find_domain_from_shapes(
+    merged_df: pd.DataFrame,
+    shapes: list,
+):
+    """
+    Find the domain from the shapes for each point in the merged_df
+
+    Parameters
+    ----------
+    merged_df : pd.DataFrame
+        The merged event dataframe with lat, lon data
+    shapes : list
+        The shapes containing the layers with domain information
+    """
+    # Determine tectonic domain
+    wgs2nztm = Transformer.from_crs(4326, 2193, always_xy=True)
+
+    # Create the points from the lon and lat
+    points = np.array(merged_df[["lon", "lat"]])
+
+    # Apply transformer to the points
+    points = np.asarray(wgs2nztm.transform(points[:, 0], points[:, 1])).T
+
+    # Go though each domain and determine if the points are in the domain
+    for layer in shapes:
+        domain_no = layer["properties"]["Domain_No"]
+        domain_type = layer["properties"]["DomainType"]
+        geometry_type = layer["geometry"]["type"]
+        geometry_coords = layer["geometry"]["coordinates"]
+        in_domain = None
+        if geometry_type == "MultiPolygon":
+            for coords in geometry_coords:
+                # Convert the coords into a numpy array
+                coords = np.asarray(coords)
+                in_domain_check = point_in_polygon.is_inside_postgis_parallel(
+                    points, coords
+                )
+                # If in_domain is None, set it to the first in_domain_check
+                if in_domain is None:
+                    in_domain = in_domain_check
+                else:
+                    # If in_domain is not None, update it with the in_domain_check
+                    in_domain = in_domain | in_domain_check
+        else:
+            # Convert the geometry coords into a numpy array
+            geometry_coords = np.asarray([list(coord) for coord in geometry_coords[0]])
+            in_domain = point_in_polygon.is_inside_postgis_parallel(
+                points, geometry_coords
+            )
+
+        # Update the domain_no, domain_name, and domain_type based on the in_domain
+        merged_df.loc[in_domain, ["domain_no", "domain_type"]] = domain_no, domain_type
+
+    # Add Oceanic for points not in any domain
+    merged_df.loc[merged_df.domain_no.isnull(), ["domain_no", "domain_type"]] = (
+        0,
+        "Oceanic",
+    )
+    return merged_df
+
+
+def add_tect_domain(
     event_csv_ffp: Path,
     out_ffp: Path,
     n_procs: int = 1,
 ):
     """
-    Adds the tectonic class to the event data
+    Adds the tectonic domain to the event data
 
     Parameters
     ----------
@@ -331,7 +392,9 @@ def add_tect_class(
     )
 
     # Shape file for determining neotectonic domain
-    shapes = list(fiona.open(data_dir / "tect_domain" / "TectonicDomains_Feb2021_8_NZTM.shp"))
+    shapes = list(
+        fiona.open(data_dir / "tect_domain" / "TectonicDomains_Feb2021_8_NZTM.shp")
+    )
 
     # Read the geonet CMT and event data
     geonet_cmt_df = pd.read_csv(data_dir / "GeoNet_CMT_solutions.csv", low_memory=False)
@@ -390,50 +453,7 @@ def add_tect_class(
     # Merge tectonic classification data from both CMT and NGASUB with the event data
     merged_df = merge_tectclass(event_df, cmt_tectclass_df)
 
-    # Determine tectonic domain
-    wgs2nztm = Transformer.from_crs(4326, 2193, always_xy=True)
-
-    # Create the points from the lon and lat
-    points = np.array(merged_df[["lon", "lat"]])
-
-    # Apply transformer to the points
-    points = np.asarray(wgs2nztm.transform(points[:, 0], points[:, 1])).T
-
-    # Go though each domain and determine if the points are in the domain
-    for layer in shapes:
-        domain_no = layer["properties"]["Domain_No"]
-        domain_type = layer["properties"]["DomainType"]
-        geometry_type = layer["geometry"]["type"]
-        geometry_coords = layer["geometry"]["coordinates"]
-        in_domain = None
-        if geometry_type == "MultiPolygon":
-            for coords in geometry_coords:
-                # Convert the coords into a numpy array
-                coords = np.asarray(coords)
-                in_domain_check = point_in_polygon.is_inside_postgis_parallel(
-                    points, coords
-                )
-                # If in_domain is None, set it to the first in_domain_check
-                if in_domain is None:
-                    in_domain = in_domain_check
-                else:
-                    # If in_domain is not None, update it with the in_domain_check
-                    in_domain = in_domain | in_domain_check
-        else:
-            # Convert the geometry coords into a numpy array
-            geometry_coords = np.asarray([list(coord) for coord in geometry_coords[0]])
-            in_domain = point_in_polygon.is_inside_postgis_parallel(
-                points, geometry_coords
-            )
-
-        # Update the domain_no, domain_name, and domain_type based on the in_domain
-        merged_df.loc[in_domain, ["domain_no", "domain_type"]] = domain_no, domain_type
-
-    # Add Oceanic for points not in any domain
-    merged_df.loc[merged_df.domain_no.isnull(), ["domain_no", "domain_type"]] = (
-        0,
-        "Oceanic",
-    )
+    domain_df = find_domain_from_shapes(merged_df, shapes)
 
     # Save the data
-    merged_df.to_csv(out_ffp, index=False)
+    domain_df.to_csv(out_ffp, index=False)
