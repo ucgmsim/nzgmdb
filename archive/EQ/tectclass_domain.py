@@ -917,7 +917,7 @@ if __name__ == "__main__":
 
     directory = "../"
     geonet_cmt_df = pd.read_csv(
-        "../focal/GeoNet_CMT_solutions.csv", low_memory=False
+        directory + "../focal/GeoNet_CMT_solutions.csv", low_memory=False
     )
     df = pd.read_csv(directory + "output/all_events.csv", low_memory=False)
 
@@ -1135,8 +1135,8 @@ if __name__ == "__main__":
     #             )[1],
     #         axis=1)
 
-    # merged_df.to_csv(
-    #     out_path + "/earthquake_source_table_tectdomain.csv",
-    #     mode="w",
-    #     index=False,
-    # )
+    merged_df.to_csv(
+        out_path + "/earthquake_source_table_tectdomain.csv",
+        mode="w",
+        index=False,
+    )
