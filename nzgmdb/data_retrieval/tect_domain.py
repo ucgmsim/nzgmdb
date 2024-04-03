@@ -445,14 +445,3 @@ def add_tect_domain(
 
     # Save the data
     domain_df.to_csv(out_ffp, index=False)
-
-
-add_tect_domain(
-    Path(
-        "/home/joel/local/gmdb/new_data_walkthrough/archive/earthquake_source_table.csv"
-    ),
-    Path(
-        "/home/joel/local/gmdb/new_data_walkthrough/earthquake_source_table_tectdomain.csv"
-    ),
-    n_procs=1,
-)
