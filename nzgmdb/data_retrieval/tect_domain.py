@@ -1,8 +1,7 @@
 """
-    Contains the functions to add tectonic class to the data
+    Contains the functions to add tectonic domain to the data
 """
 
-from typing import Tuple
 from pathlib import Path
 from functools import partial
 
@@ -65,12 +64,10 @@ def replace_cmt_data_on_event(
         The CMT dataframe
     """
     # Manage index and column renaming
-    event_df.set_index("evid", inplace=True)
-    cmt_df.set_index("PublicID", inplace=True)
-    cmt_df.rename(
-        columns={"Mw": "mag", "Latitude": "lat", "Longitude": "lon", "CD": "depth"},
-        inplace=True,
-    )
+    event_df = event_df.set_index("evid")
+    cmt_df = cmt_df.rename(
+        columns={"Mw": "mag", "Latitude": "lat", "Longitude": "lon", "CD": "depth"}
+    ).set_index("PublicID")
 
     # Get the intersection of indices (evid and PublicID)
     common_ids = event_df.index.intersection(cmt_df.index)
@@ -86,19 +83,16 @@ def replace_cmt_data_on_event(
         "CMT",
     )
 
-    # Reset index
-    event_df.reset_index(inplace=True)
-
-    return event_df
+    return event_df.reset_index()
 
 
 def create_regions(
     fault_file: Path,
     d_s: float,
     d_d: float,
-    region_a: dict = None,
-    region_b: dict = None,
-    region_c: dict = None,
+    region_a_offshore: dict = None,
+    region_b_on: dict = None,
+    region_c_downdip: dict = None,
 ):
     """Determine an array of points on, and offshore, of a fault and divide into regions
     (PEER NGA SUB, 2020)
@@ -112,15 +106,15 @@ def create_regions(
     fault_file (Path): Text file of longitude, latitude, and depth (-)
     d_s (int,float): Upper limit of seismogenic zone, Hayes, 2018
     d_d (int,float): Lower limit of seismogenic zone, Hayes, 2018
-    region_a (dict): portion of fault in region a (lat,long,depth) NGA-SUB, 2020 (optional)
-    region_b (dict): portion of fault in region b (lat,long,depth) NGA-SUB, 2020 (optional)
-    region_c (dict): portion of fault in region c (lat,long,depth) NGA-SUB, 2020 (optional)
+    region_a_offshore (dict): portion of fault in region a (lat,long,depth) NGA-SUB, 2020 (optional)
+    region_b_on (dict): portion of fault in region b (lat,long,depth) NGA-SUB, 2020 (optional)
+    region_c_downdip (dict): portion of fault in region c (lat,long,depth) NGA-SUB, 2020 (optional)
 
     Returns
     -------
-    region_a (dict): portion of faults in region a (lat,long,depth) NGA-SUB, 2020
-    region_b (dict): portion of faults in region b (lat,long,depth) NGA-SUB, 2020
-    region_c (dict): portion of faults in region c (lat,long,depth) NGA-SUB, 2020
+    region_a_offshore (dict): portion of faults in region a (lat,long,depth) NGA-SUB, 2020
+    region_b_on (dict): portion of faults in region b (lat,long,depth) NGA-SUB, 2020
+    region_c_downdip (dict): portion of faults in region c (lat,long,depth) NGA-SUB, 2020
 
     """
     # Read fault file
@@ -141,24 +135,24 @@ def create_regions(
     df_c = df[(df.depth > d_d)]
 
     # Initialize dictionaries if they are None
-    region_a = region_a or {}
-    region_b = region_b or {}
-    region_c = region_c or {}
+    region_a_offshore = region_a_offshore or {}
+    region_b_on = region_b_on or {}
+    region_c_downdip = region_c_downdip or {}
 
     # Add fault to fault surface dictionary
     fault = fault_file.stem
-    region_a[fault] = df_a.to_numpy()
-    region_b[fault] = df_b.to_numpy()
-    region_c[fault] = df_c.to_numpy()
+    region_a_offshore[fault] = df_a.to_numpy()
+    region_b_on[fault] = df_b.to_numpy()
+    region_c_downdip[fault] = df_c.to_numpy()
 
-    return region_a, region_b, region_c
+    return region_a_offshore, region_b_on, region_c_downdip
 
 
 def ngasub2020_tectclass(
-    row_tuple: Tuple[int, pd.Series],
-    region_a: dict = False,
-    region_b: dict = False,
-    region_c: dict = False,
+    row: pd.Series,
+    region_a_offshore: dict = False,
+    region_b_on: dict = False,
+    region_c_downdip: dict = False,
     fault_label: str = np.nan,
     h_thresh: float = 10,
     v_thresh: float = 10,
@@ -187,10 +181,10 @@ def ngasub2020_tectclass(
 
     Parameters
     ----------
-    row_tuple (tuple[int, pd.Series]): The event row
-    region_a (dict): portion of faults in region a (lat,long,depth) NGA-SUB, 2020
-    region_b (dict): portion of faults in region b (lat,long,depth) NGA-SUB, 2020
-    region_c (dict): portion of faults in region c (lat,long,depth) NGA-SUB, 2020
+    row (pd.Series): The event row
+    region_a_offshore (dict): portion of faults in region a (lat,long,depth) NGA-SUB, 2020
+    region_b_on (dict): portion of faults in region b (lat,long,depth) NGA-SUB, 2020
+    region_c_downdip (dict): portion of faults in region c (lat,long,depth) NGA-SUB, 2020
     fault_label (str): The fault label
     h_thresh (float): Horizontal distance threshold
     v_thresh (float): Vertical distance threshold
@@ -200,7 +194,6 @@ def ngasub2020_tectclass(
     tectclass (str): 'Slab', 'Interface', 'Outer rise', 'Crustal', or 'Undetermined'
     fault (str): fault which triggered 'Interface','Slab' or 'Outer rise' tectclass labels
     """
-    row = row_tuple[1]
     lat, lon, depth = row["lat"], row["lon"], row["depth"]
 
     # Initially classify as if farfield, correct later if neccessary
@@ -211,33 +204,41 @@ def ngasub2020_tectclass(
     else:
         tectclass = "Undetermined"
 
-    for flag, region in zip(["A", "C", "B"], [region_a, region_c, region_b]):
+    for flag, region in zip(
+        ["A", "C", "B"], [region_a_offshore, region_c_downdip, region_b_on]
+    ):
         for fault, pt_arr in region.items():
-            i, d = geo.closest_location(pt_arr[:, :2], lon, lat)
+            closest_index, distance = geo.closest_location(pt_arr[:, :2], lon, lat)
 
-            if d < h_thresh:
+            if distance < h_thresh:
                 fault_label = fault
-                # Classifications for region A
+                # Classifications for region A Offshore
                 if flag == "A":
                     if depth <= 60:
                         tectclass = "Outer-rise"
                     else:
                         tectclass = "Slab"
 
-                # Classifications for region B
+                # Classifications for region B On
                 elif flag == "B":
-                    if depth <= region[fault][i][-1] - v_thresh and depth <= 20:
+                    if (
+                        depth <= region[fault][closest_index][-1] - v_thresh
+                        and depth <= 20
+                    ):
                         tectclass = "Crustal"
-                    elif depth <= 60 and depth <= region[fault][i][-1] + v_thresh:
+                    elif (
+                        depth <= 60
+                        and depth <= region[fault][closest_index][-1] + v_thresh
+                    ):
                         tectclass = "Interface"
                     else:
                         tectclass = "Slab"
 
-                # Classifications for region C
+                # Classifications for region C DownDip
                 elif flag == "C":
                     if depth <= 30:
                         tectclass = "Crustal"
-                    elif depth >= region[fault][i][-1] - v_thresh:
+                    elif depth >= region[fault][closest_index][-1] - v_thresh:
                         tectclass = "Slab"
                     else:
                         tectclass = "Undetermined"
@@ -281,14 +282,12 @@ def merge_tectclass(event_df: pd.DataFrame, cmt_tectclass_df: pd.DataFrame):
     cmt_tectclass_df["tect_method"] = "manual"
 
     # Merge the CMT tectonic class data with the event data
-    cmt_merged_df = (
-        event_df.set_index("evid")
-        .join(
-            cmt_tectclass_df[["evid", "tect_class", "tect_method"]].set_index("evid"),
-            how="left",
-            rsuffix="_cmt",
-        )
-        .reset_index()
+    cmt_merged_df = pd.merge(
+        event_df,
+        cmt_tectclass_df[["evid", "tect_class", "tect_method"]],
+        how="left",
+        on="evid",
+        suffixes=("", "_cmt"),
     )
 
     # Replace the tect_class and tect_method with the CMT data where it exists
@@ -319,13 +318,10 @@ def find_domain_from_shapes(
     shapes : list
         The shapes containing the layers with domain information
     """
-    # Determine tectonic domain
+    # Convert the lat, lon to NZTM coordinate system
+    # (https://www.linz.govt.nz/guidance/geodetic-system/coordinate-systems-used-new-zealand/projections/new-zealand-transverse-mercator-2000-nztm2000)
     wgs2nztm = Transformer.from_crs(4326, 2193, always_xy=True)
-
-    # Create the points from the lon and lat
     points = np.array(merged_df[["lon", "lat"]])
-
-    # Apply transformer to the points
     points = np.asarray(wgs2nztm.transform(points[:, 0], points[:, 1])).T
 
     # Go though each domain and determine if the points are in the domain
@@ -411,39 +407,31 @@ def add_tect_domain(
     )
 
     # Merge Kermadec and Hikurangi datasets into the fault regions
-    region_a, region_b, region_c = create_regions(
+    region_a_offshore, region_b_on, region_c_downdip = create_regions(
         fault_file=data_dir / "hik_kerm_fault_300km_wgs84_poslon.txt",
         d_s=10,  # Hayes et al., 2018
         d_d=47,  # Hayes et al., 2018
     )
 
     # Merge Puysegur dataset into the fault regions
-    region_a, region_b, region_c = create_regions(
+    region_a_offshore, region_b_on, region_c_downdip = create_regions(
         fault_file=data_dir / "puy_slab2_dep_02.26.18.xyz",
         d_s=11,  # Hayes et al., 2018
         d_d=30,  # Hayes et al., 2018
-        region_a=region_a,
-        region_b=region_b,
-        region_c=region_c,
+        region_a_offshore=region_a_offshore,
+        region_b_on=region_b_on,
+        region_c_downdip=region_c_downdip,
     )
 
-    # Create a pool of workers
-    pool = multiprocessing.Pool(processes=n_procs)
-
-    # Apply the function to each row of the DataFrame in parallel
-    results = pool.map(
-        partial(
-            ngasub2020_tectclass,
-            region_a=region_a,
-            region_b=region_b,
-            region_c=region_c,
-        ),
-        event_df.iterrows(),
+    # Apply the function to each row of the DataFrame
+    f = partial(
+        ngasub2020_tectclass,
+        region_a_offshore=region_a_offshore,
+        region_b_on=region_b_on,
+        region_c_downdip=region_c_downdip,
     )
-
-    # Close the pool of workers
-    pool.close()
-    pool.join()
+    with multiprocessing.Pool(n_procs) as pool:
+        results = pool.map(f, event_df.to_records(index=False))
 
     # Assign the results to the respective DataFrame columns
     event_df["NGASUB_TectClass_Merged"], event_df["NGASUB_Faults_Merged"] = zip(
@@ -457,3 +445,14 @@ def add_tect_domain(
 
     # Save the data
     domain_df.to_csv(out_ffp, index=False)
+
+
+add_tect_domain(
+    Path(
+        "/home/joel/local/gmdb/new_data_walkthrough/archive/earthquake_source_table.csv"
+    ),
+    Path(
+        "/home/joel/local/gmdb/new_data_walkthrough/earthquake_source_table_tectdomain.csv"
+    ),
+    n_procs=1,
+)
