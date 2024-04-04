@@ -2,6 +2,8 @@
     Functions to manage Geonet Data
 """
 
+import io
+import requests
 import warnings
 import datetime
 from typing import List
@@ -11,6 +13,7 @@ from functools import partial
 import pandas as pd
 import obspy as op
 import multiprocessing
+
 from obspy.clients.fdsn import Client as FDSN_Client
 from obspy.core.event import Event, Magnitude
 
@@ -433,8 +436,69 @@ def fetch_event_data(
     return event_line, sta_mag_lines
 
 
+def download_earthquake_data(
+    start_date: datetime,
+    end_date: datetime,
+):
+    """
+    Download the earthquake data files from the geonet website
+    and creates a dataframe with the data.
+
+    Extracted into smaller requests to avoid the 20,000 event limit
+    to stop their system crashing.
+
+    Parameters
+    ----------
+    start_date : datetime
+        The start date for the data extraction from the earthquake data
+    end_date : datetime
+        The end date for the data extraction from the earthquake data
+    """
+    # Define bbox for New Zealand
+    bbox = "163.5205,-49.1817,-176.9238,-32.2871"
+
+    # Send API request for the date ranges required
+    endpoint = f"https://quakesearch.geonet.org.nz/count?bbox={bbox}&startdate={start_date}&enddate={end_date}"
+    response = requests.get(endpoint)
+
+    # Check if the response is valid
+    if response.status_code != 200:
+        raise ValueError("Could not get the earthquake data")
+
+    # Get the response dates
+    response_json = response.json()
+    # Check that the response has the "dates" key
+    if "dates" not in response_json:
+        response_dates = [end_date, start_date]
+    else:
+        response_dates = response_json["dates"]
+
+    # Loop over the dates to extract the csv data to a dataframe
+    dfs = []
+    for index, first_date in enumerate(response_dates[1:]):
+        second_date = response_dates[index]
+        endpoint = f"https://quakesearch.geonet.org.nz/csv?bbox={bbox}&startdate={first_date}&enddate={second_date}"
+        response = requests.get(endpoint)
+
+        # Check if the response is valid
+        if response.status_code != 200:
+            raise ValueError("Could not get the earthquake data")
+
+        dfs.append(pd.read_csv(io.StringIO(response.text)))
+
+    # Concatenate the dataframes and sort by origintime
+    geonet = (
+        pd.concat(dfs, ignore_index=True)
+        .sort_values("origintime")
+        .reset_index(drop=True)
+    )
+    # Convert the origintime to datetime and remove the timezone
+    geonet["origintime"] = pd.to_datetime(geonet["origintime"]).dt.tz_localize(None)
+
+    return geonet
+
+
 def parse_geonet_information(
-    eq_csv: Path,
     output_dir: Path,
     start_date: datetime,
     end_date: datetime,
@@ -445,9 +509,6 @@ def parse_geonet_information(
 
     Parameters
     ----------
-    eq_csv : Path
-        The path to the earthquake csv file containing the geonet information downloaded from
-        the geonet website
     output_dir : Path
         The directory to save the mseed files
     start_date : datetime
@@ -457,13 +518,8 @@ def parse_geonet_information(
     n_procs : int (optional)
         The number of processes to run
     """
-    # Process the earthquake csv file
-    geonet = pd.read_csv(eq_csv, dtype={"publicid": str}).sort_values("origintime")
-    geonet["origintime"] = pd.to_datetime(geonet["origintime"]).dt.tz_localize(None)
-    geonet = geonet.reset_index(drop=True)
-
-    # Extract the data from the geonet dataframe within the date range
-    geonet = geonet[(geonet.origintime >= start_date) & (geonet.origintime <= end_date)]
+    # Get the earthquake data
+    geonet = download_earthquake_data(start_date, end_date)
 
     # Get all event ids
     event_ids = geonet.publicid.unique()
