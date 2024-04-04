@@ -35,7 +35,6 @@ def gen_phase_arrival_table(data_dir: Path, output_dir: Path, n_procs: int):
 
 @app.command()
 def fetch_geonet_data(
-    earthquake_ffp: Path,
     output_dir: Path,
     start_date: datetime,
     end_date: datetime,
@@ -46,8 +45,6 @@ def fetch_geonet_data(
 
     Parameters
     ----------
-    earthquake_ffp : Path
-        The file path to the earthquake data directly downloaded from geonet
     output_dir : Path
         The directory to save the earthquake source and station magnitude tables
     start_date : datetime
@@ -57,7 +54,7 @@ def fetch_geonet_data(
     n_procs : int
         The number of processes to use to generate the earthquake source and station magnitude tables
     """
-    parse_geonet_information(earthquake_ffp, output_dir, start_date, end_date, n_procs)
+    parse_geonet_information(output_dir, start_date, end_date, n_procs)
 
 
 @app.command()
