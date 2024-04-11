@@ -16,52 +16,52 @@ app = typer.Typer()
 
 
 @app.command()
-def gen_phase_arrival_table(data_dir: Path, output_dir: Path, n_procs: int):
+def gen_phase_arrival_table(main_dir: Path, output_dir: Path, n_procs: int = 1):
     """
     Generate the phase arrival table, taking mseed data and finding the phase arrivals using a p_wave picker.
 
     Parameters
     ----------
-    data_dir : Path
-        The top directory containing the mseed files
+    main_dir : Path
+        The main directory of the NZGMDB results (Highest level directory)
         (glob is used to find all mseed files recursively)
     output_dir : Path
         The directory to save the phase arrival table
-    n_procs : int
+    n_procs : int (optional)
         The number of processes to use to generate the phase arrival table
     """
-    generate_phase_arrival_table(data_dir, output_dir, n_procs)
+    generate_phase_arrival_table(main_dir, output_dir, n_procs)
 
 
 @app.command()
 def fetch_geonet_data(
-    output_dir: Path,
+    main_dir: Path,
     start_date: datetime,
     end_date: datetime,
-    n_procs: int,
+    n_procs: int = 1,
 ):
     """
     Fetches earthquake data from Geonet and generates the earthquake source and station magnitude tables.
 
     Parameters
     ----------
-    output_dir : Path
-        The directory to save the earthquake source and station magnitude tables
+    main_dir : Path
+        The main directory of the NZGMDB results (Highest level directory)
     start_date : datetime
         The start date to filter the earthquake data
     end_date : datetime
         The end date to filter the earthquake data
-    n_procs : int
+    n_procs : int (optional)
         The number of processes to use to generate the earthquake source and station magnitude tables
     """
-    parse_geonet_information(output_dir, start_date, end_date, n_procs)
+    parse_geonet_information(main_dir, start_date, end_date, n_procs)
 
 
 @app.command()
 def merge_tect_domain(
     eq_source_ffp: Path,
     output_dir: Path,
-    n_procs: int,
+    n_procs: int = 1,
 ):
     """
     Adds tectonic domains to the earthquake source table.
@@ -72,7 +72,7 @@ def merge_tect_domain(
         The file path to the earthquake source table
     output_dir : Path
         The directory to save the earthquake source table with tectonic domains
-    n_procs : int
+    n_procs : int (optional)
         The number of processes to use for processing
     """
     add_tect_domain(eq_source_ffp, output_dir, n_procs)
