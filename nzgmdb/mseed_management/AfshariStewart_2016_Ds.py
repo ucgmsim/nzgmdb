@@ -138,8 +138,7 @@ def Afshari_Stewart_2016_Ds(Mw, rrup, vs30, faultstyle, im):
 
     # California
     MuZ1 = np.exp(
-        -7.15 / 4 * np.log((vs30**4 + 570.94**4) / (1360**4 + 570.94**4))
-        - np.log(1000)
+        -7.15 / 4 * np.log((vs30**4 + 570.94**4) / (1360**4 + 570.94**4)) - np.log(1000)
     )
 
     delta_z1 = z1p0 - MuZ1
