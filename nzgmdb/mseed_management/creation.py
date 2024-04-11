@@ -10,8 +10,8 @@ from obspy.clients.fdsn import Client as FDSN_Client
 from obspy.clients.fdsn.header import FDSNNoDataException
 from obspy.io.mseed import ObsPyMSEEDFilesizeTooSmallError
 
-from nzgmdb.management.config import Config
-from nzgmdb.mseed_management.AfshariStewart_2016_Ds import Afshari_Stewart_2016_Ds
+from nzgmdb.management import config as cfg
+from nzgmdb.mseed_management import AfshariStewart_2016_Ds
 
 
 def get_waveforms(
@@ -49,10 +49,12 @@ def get_waveforms(
     st : Union[Stream, None]
         The stream object containing the waveform data or None if no data is found
     """
-    config = Config()
+    config = cfg.Config()
     vs30 = config.get_value("vs30")
     # Predict significant duration time from Afshari and Stewart (2016)
-    ds, _ = Afshari_Stewart_2016_Ds(mag, rrup, vs30, None, "Ds595")
+    ds, _ = AfshariStewart_2016_Ds.Afshari_Stewart_2016_Ds(
+        mag, rrup, vs30, None, "Ds595"
+    )
 
     deg = kilometers2degrees(r_epi)
 
@@ -134,14 +136,14 @@ def create_mseed_from_waveforms(st: Stream, event_id: str, sta: str, output_dir:
     -------
     chan_locs : list
         A list of tuples containing the channel and location for each mseed file created
+        [(channel, location), ...]
     """
     chan_locs = []
-    for tr in st:
-        # Check that the trace is not all 0's
-        if not any(tr.data):
-            continue
 
-        loc, chan = tr.stats.location, tr.stats.channel[0:2]
+    # Get the unique channels (Using first 2 keys) and locations
+    unique_channels = set([(tr.stats.channel[0:2], tr.stats.location) for tr in st])
+
+    for chan, loc in unique_channels:
         st_new = st.select(location=loc, channel=f"{chan}?")
         if len(st_new) > 3:
             # Check if all the sample rates are the same
@@ -160,10 +162,10 @@ def create_mseed_from_waveforms(st: Stream, event_id: str, sta: str, output_dir:
         st_new.trim(starttime_trim, endtime_trim)
 
         # Write the mseed file
-        filename = f"{event_id}_{sta}_{chan}.mseed"
+        filename = f"{event_id}_{sta}_{chan}_{loc}.mseed"
         mseed_ffp = output_dir / filename
         st_new.write(mseed_ffp, format="MSEED")
 
-        # Add the channel and location to the list
-        chan_locs.append((chan, loc))
+        # Extend the chan and loc to the full channel codes and loc for each trace
+        chan_locs.extend([(tr.stats.channel, tr.stats.location) for tr in st_new])
     return chan_locs

@@ -9,19 +9,18 @@ from typing import List
 from pathlib import Path
 from functools import partial
 
-import obspy as op
+import obspy
 import numpy as np
 import pandas as pd
 import multiprocessing
 from scipy.interpolate import interp1d
 from obspy.core.inventory import Inventory
 from obspy.core.event import Event, Magnitude
-from obspy.geodetics import kilometers2degrees
 from obspy.clients.fdsn import Client as FDSN_Client
 
-from nzgmdb.management.config import Config
+from nzgmdb.mseed_management import creation
+from nzgmdb.management import config as cfg
 from nzgmdb.management import file_structure
-from nzgmdb.mseed_management.creation import get_waveforms, create_mseed_from_waveforms
 
 
 def get_max_magnitude(magnitudes: List[Magnitude], mag_type: str):
@@ -170,6 +169,11 @@ def get_sta_within_radius(
         The cubic interpolation function for the magnitude distance relationship
     inventory : Inventory
         The inventory of the stations from all networks to extract the stations from
+
+    Returns
+    -------
+    inv_sub : Inventory
+        The subset of the inventory with the stations within the radius
     """
     preferred_magnitude = event_cat.preferred_magnitude().mag
     preferred_origin = event_cat.preferred_origin()
@@ -183,7 +187,7 @@ def get_sta_within_radius(
         rrup = np.array(rrups.max())
     else:
         rrup = f_rrup(preferred_magnitude)
-    maxradius = kilometers2degrees(rrup)
+    maxradius = obspy.geodetics.kilometers2degrees(rrup)
 
     inv_sub = inventory.select(
         latitude=event_lat, longitude=event_lon, maxradius=maxradius
@@ -198,6 +202,7 @@ def fetch_sta_mag_lines(
     main_dir: Path,
     client_NZ: FDSN_Client,
     client_IU: FDSN_Client,
+    inventory: Inventory,
     pref_mag_type: str,
     mws: np.ndarray,
     rrups: np.ndarray,
@@ -219,6 +224,8 @@ def fetch_sta_mag_lines(
         The geonet client to fetch the data from New Zealand
     client_IU : FDSN_Client
         The geonet client to fetch the data from the International Network (necessary for station SNZO)
+    inventory : Inventory
+        The inventory of the stations from all networks to extract the stations from
     pref_mag_type : str
         The preferred magnitude type
     mws : np.ndarray
@@ -228,21 +235,10 @@ def fetch_sta_mag_lines(
     f_rrup : interp1d
         The cubic interpolation function for the magnitude distance relationship
     """
-    # Set constants
-    config = Config()
-    channel_codes = ",".join(config.get_value("channel_codes"))
-
     # Get the preferred_origin
     preferred_origin = event_cat.preferred_origin()
     ev_lat = preferred_origin.latitude
     ev_lon = preferred_origin.longitude
-
-    # Get the full inventory
-    inventory_NZ = client_NZ.get_stations(channel=channel_codes, level="response")
-    inventory_IU = client_IU.get_stations(
-        network="IU", station="SNZO", channel=channel_codes, level="response"
-    )
-    inventory = inventory_NZ + inventory_IU
 
     # Get Networks / Stations within a certain radius of the event
     inv_sub_sta = get_sta_within_radius(event_cat, mws, rrups, f_rrup, inventory)
@@ -255,7 +251,7 @@ def fetch_sta_mag_lines(
             client = client_NZ if network.code == "NZ" else client_IU
 
             # Get the r_hyp
-            dist, _, _ = op.geodetics.gps2dist_azimuth(
+            dist, _, _ = obspy.geodetics.gps2dist_azimuth(
                 ev_lat,
                 ev_lon,
                 station.latitude,
@@ -266,7 +262,7 @@ def fetch_sta_mag_lines(
             r_hyp = ((r_epi) ** 2 + (ev_depth + station.elevation) ** 2) ** 0.5
 
             # Get the waveforms
-            st = get_waveforms(
+            st = creation.get_waveforms(
                 preferred_origin,
                 client,
                 network.code,
@@ -285,7 +281,7 @@ def fetch_sta_mag_lines(
             mseed_dir.mkdir(exist_ok=True, parents=True)
 
             # Create the mseed files
-            chan_locs = create_mseed_from_waveforms(
+            chan_locs = creation.create_mseed_from_waveforms(
                 st, event_id, station.code, mseed_dir
             )
 
@@ -298,7 +294,8 @@ def fetch_sta_mag_lines(
                         if mag.waveform_id.station_code == station.code
                         and (
                             (
-                                len(mag.waveform_id.channel_code) > 2 and len(chan) > 2
+                                len(mag.waveform_id.channel_code) > 2
+                                and len(chan) > 2
                                 and mag.waveform_id.channel_code[2] == chan[2]
                             )
                             or (len(chan) > 2 and chan[2] != "Z")
@@ -350,6 +347,7 @@ def fetch_event_data(
     main_dir: Path,
     client_NZ: FDSN_Client,
     client_IU: FDSN_Client,
+    inventory: Inventory,
     mws: np.ndarray,
     rrups: np.ndarray,
     f_rrup: interp1d,
@@ -367,6 +365,14 @@ def fetch_event_data(
         The geonet client to fetch the data from New Zealand
     client_IU : FDSN_Client
         The geonet client to fetch the data from the International Network (necessary for station SNZO)
+    inventory : Inventory
+        The inventory of the stations from all networks to extract the stations from
+    mws : np.ndarray
+        The magnitudes from the Mw_rrup file
+    rrups : np.ndarray
+        The rrups from the Mw_rrup file
+    f_rrup : interp1d
+        The cubic interpolation function for the magnitude distance relationship
     """
 
     # Get the catalog information
@@ -384,6 +390,7 @@ def fetch_event_data(
             main_dir,
             client_NZ,
             client_IU,
+            inventory,
             event_line[8],
             mws,
             rrups,
@@ -413,12 +420,14 @@ def download_earthquake_data(
         The end date for the data extraction from the earthquake data
     """
     # Define bbox for New Zealand
-    config = Config()
+    config = cfg.Config()
     bbox = ",".join([str(coord) for coord in config.get_value("bbox")])
 
     # Send API request for the date ranges required
     geonet_url = config.get_value("geonet_url")
-    endpoint = f"{geonet_url}/count?bbox={bbox}&startdate={start_date}&enddate={end_date}"
+    endpoint = (
+        f"{geonet_url}/count?bbox={bbox}&startdate={start_date}&enddate={end_date}"
+    )
     response = requests.get(endpoint)
 
     # Check if the response is valid
@@ -434,7 +443,7 @@ def download_earthquake_data(
         response_dates = response_json["dates"]
 
     # Get the min and max magnitude from the config
-    config = Config()
+    config = cfg.Config()
     min_mag = config.get_value("min_mag")
     max_mag = config.get_value("max_mag")
 
@@ -442,7 +451,9 @@ def download_earthquake_data(
     dfs = []
     for index, first_date in enumerate(response_dates[1:]):
         second_date = response_dates[index]
-        endpoint = f"{geonet_url}/csv?bbox={bbox}&startdate={first_date}&enddate={second_date}"
+        endpoint = (
+            f"{geonet_url}/csv?bbox={bbox}&startdate={first_date}&enddate={second_date}"
+        )
         response = requests.get(endpoint)
 
         # Check if the response is valid
@@ -494,9 +505,19 @@ def parse_geonet_information(
     # Get all event ids
     event_ids = geonet.publicid.unique()
 
+    # Set constants
+    config = cfg.Config()
+    channel_codes = ",".join(config.get_value("channel_codes"))
+
     # Get Station Information from geonet clients
     client_NZ = FDSN_Client("GEONET")
     client_IU = FDSN_Client("IRIS")
+    # Get the full inventory
+    inventory_NZ = client_NZ.get_stations(channel=channel_codes, level="response")
+    inventory_IU = client_IU.get_stations(
+        network="IU", station="SNZO", channel=channel_codes, level="response"
+    )
+    inventory = inventory_NZ + inventory_IU
 
     # Get the data_dir
     data_dir = Path(__file__).parent.parent / "data"
@@ -511,33 +532,19 @@ def parse_geonet_information(
     main_dir.mkdir(exist_ok=True, parents=True)
 
     # Get each of the results for the event ids
-    # with multiprocessing.Pool(processes=n_procs) as pool:
-    #     results = pool.map(
-    #         partial(
-    #             fetch_event_data,
-    #             main_dir=main_dir,
-    #             client_NZ=client_NZ,
-    #             client_IU=client_IU,
-    #             mws=mws,
-    #             rrups=rrups,
-    #             f_rrup=f_rrup,
-    #         ),
-    #         event_ids,
-    #     )
-
-    # Do a standard for loop of the commented code above
-    results = []
-    for event_id in event_ids:
-        results.append(
-            fetch_event_data(
-                event_id,
-                main_dir,
-                client_NZ,
-                client_IU,
-                mws,
-                rrups,
-                f_rrup,
-            )
+    with multiprocessing.Pool(processes=n_procs) as pool:
+        results = pool.map(
+            partial(
+                fetch_event_data,
+                main_dir=main_dir,
+                client_NZ=client_NZ,
+                client_IU=client_IU,
+                inventory=inventory,
+                mws=mws,
+                rrups=rrups,
+                f_rrup=f_rrup,
+            ),
+            event_ids,
         )
 
     # Due to uneven lengths, need to extract using a for loop
