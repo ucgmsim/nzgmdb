@@ -1,10 +1,11 @@
 import yaml
-from pathlib import Path
+
+from nzgmdb.management import file_structure
 
 
 class Config:
     _instance = None
-    config_path = Path(__file__).parent.parent / "data" / "config.yaml"
+    config_path = file_structure.get_data_dir() / "config.yaml"
 
     def __new__(cls, *args, **kwargs):
         """

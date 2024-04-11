@@ -12,6 +12,7 @@ import multiprocessing
 from pyproj import Transformer
 
 from qcore import geo, point_in_polygon
+from nzgmdb.management import file_structure
 
 
 def merge_NZSMDB_flatfile_on_events(
@@ -380,7 +381,7 @@ def add_tect_domain(
         The number of processes to use
     """
     # Get the Data folder
-    data_dir = Path(__file__).parent.parent / "data"
+    data_dir = file_structure.get_data_dir()
 
     # Read the CMT tectonic class data
     cmt_tectclass_df = pd.read_csv(

@@ -520,7 +520,7 @@ def parse_geonet_information(
     inventory = inventory_NZ + inventory_IU
 
     # Get the data_dir
-    data_dir = Path(__file__).parent.parent / "data"
+    data_dir = file_structure.get_data_dir()
 
     mw_rrup = np.loadtxt(data_dir / "Mw_rrup.txt")
     mws = mw_rrup[:, 0]

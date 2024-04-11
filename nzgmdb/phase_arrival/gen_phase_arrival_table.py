@@ -117,15 +117,15 @@ def process_mseed(mseed_file_chunk: list):
     return data_list
 
 
-def generate_phase_arrival_table(data_dir: Path, output_dir: Path, n_procs: int):
+def generate_phase_arrival_table(main_dir: Path, output_dir: Path, n_procs: int):
     """
     Generate the phase arrival table from a directory of mseed files
     and save it to a csv file in the output directory
 
     Parameters
     ----------
-    data_dir : Path
-        The top directory containing the mseed files
+    main_dir : Path
+        The top directory that below contains all the mseed files
         (glob is used to find all mseed files recursively)
     output_dir : Path
         The directory to save the phase arrival table
@@ -134,7 +134,7 @@ def generate_phase_arrival_table(data_dir: Path, output_dir: Path, n_procs: int)
     """
 
     # Find all mseed files recursively
-    mseed_files = list(data_dir.glob("**/*.mseed"))
+    mseed_files = list(main_dir.glob("**/*.mseed"))
 
     # Split the mseed files into chunks based on the number of processes
     file_chunks = [mseed_files[i::n_procs] for i in range(n_procs)]

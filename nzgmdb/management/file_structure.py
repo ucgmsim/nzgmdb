@@ -1,5 +1,6 @@
 """
 File containing the functions for organizing the different files into a proper structure.
+For both the NZGMDB results and the data files used to generate the results within this repository.
 """
 
 from pathlib import Path
@@ -50,3 +51,10 @@ def get_flatfile_dir(main_dir: Path):
     """
     flatfile_dir = main_dir / "flatfiles"
     return flatfile_dir
+
+
+def get_data_dir():
+    """
+    Get the directory to the data files
+    """
+    return Path(__file__).parent.parent / "data"
