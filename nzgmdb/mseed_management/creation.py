@@ -2,6 +2,8 @@ import warnings
 import http.client
 from pathlib import Path
 
+import numpy as np
+import pandas as pd
 from obspy import Stream
 from obspy.taup import TauPyModel
 from obspy.core.event import Origin
@@ -11,7 +13,21 @@ from obspy.clients.fdsn.header import FDSNNoDataException
 from obspy.io.mseed import ObsPyMSEEDFilesizeTooSmallError
 
 from nzgmdb.management import config as cfg
-from nzgmdb.mseed_management import AfshariStewart_2016_Ds
+from empirical.util import classdef, openquake_wrapper_vectorized
+
+
+def estimate_z1p0(vs30: float):
+    """
+    Estimate the z1.0 value from the Vs30 value
+
+    Parameters
+    ----------
+    vs30 : float
+        The shear wave velocity at 30m depth
+    """
+    return (
+        np.exp(28.5 - 3.82 / 8.0 * np.log(vs30**8 + 378.7**8)) / 1000.0
+    )  # CY08 estimate in KM
 
 
 def get_waveforms(
@@ -51,10 +67,25 @@ def get_waveforms(
     """
     config = cfg.Config()
     vs30 = config.get_value("vs30")
+    rake = 90  # TODO get from the earthquake source table
+    z1p0 = estimate_z1p0(vs30)
     # Predict significant duration time from Afshari and Stewart (2016)
-    ds, _ = AfshariStewart_2016_Ds.Afshari_Stewart_2016_Ds(
-        mag, rrup, vs30, None, "Ds595"
+    input_df = pd.DataFrame(
+        {
+            "mag": [mag],
+            "rake": [rake],
+            "rrup": [rrup],
+            "vs30": [vs30],
+            "z1pt0": [z1p0],
+        }
     )
+    result_df = openquake_wrapper_vectorized.oq_run(
+        classdef.GMM.AS_16,
+        classdef.TectType.ACTIVE_SHALLOW,
+        input_df,
+        "Ds595",
+    )
+    ds = result_df["Ds595_mean"].values[0]
 
     deg = kilometers2degrees(r_epi)
 
@@ -141,7 +172,7 @@ def create_mseed_from_waveforms(st: Stream, event_id: str, sta: str, output_dir:
     chan_locs = []
 
     # Get the unique channels (Using first 2 keys) and locations
-    unique_channels = set([(tr.stats.channel[0:2], tr.stats.location) for tr in st])
+    unique_channels = set([(tr.stats.channel[:2], tr.stats.location) for tr in st])
 
     for chan, loc in unique_channels:
         st_new = st.select(location=loc, channel=f"{chan}?")

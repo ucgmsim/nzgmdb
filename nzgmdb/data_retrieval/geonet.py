@@ -147,9 +147,9 @@ def fetch_event_line(event_cat: Event, event_id: str):
     return event_line
 
 
-def get_sta_within_radius(
+def get_stations_within_radius(
     event_cat: Event,
-    mws: np.ndarray,
+    mags: np.ndarray,
     rrups: np.ndarray,
     f_rrup: interp1d,
     inventory: Inventory,
@@ -161,7 +161,7 @@ def get_sta_within_radius(
     ----------
     event_cat : Event
         The event catalog to fetch the event data from
-    mws : np.ndarray
+    mags : np.ndarray
         The magnitudes from the Mw_rrup file
     rrups : np.ndarray
         The rrups from the Mw_rrup file
@@ -181,9 +181,9 @@ def get_sta_within_radius(
     event_lon = preferred_origin.longitude
 
     # Get the max radius
-    if preferred_magnitude < mws.min():
+    if preferred_magnitude < mags.min():
         rrup = np.array(rrups.min())
-    elif preferred_magnitude > mws.max():
+    elif preferred_magnitude > mags.max():
         rrup = np.array(rrups.max())
     else:
         rrup = f_rrup(preferred_magnitude)
@@ -204,7 +204,7 @@ def fetch_sta_mag_lines(
     client_IU: FDSN_Client,
     inventory: Inventory,
     pref_mag_type: str,
-    mws: np.ndarray,
+    mags: np.ndarray,
     rrups: np.ndarray,
     f_rrup: interp1d,
 ):
@@ -228,7 +228,7 @@ def fetch_sta_mag_lines(
         The inventory of the stations from all networks to extract the stations from
     pref_mag_type : str
         The preferred magnitude type
-    mws : np.ndarray
+    mags : np.ndarray
         The magnitudes from the Mw_rrup file
     rrups : np.ndarray
         The rrups from the Mw_rrup file
@@ -241,15 +241,14 @@ def fetch_sta_mag_lines(
     ev_lon = preferred_origin.longitude
 
     # Get Networks / Stations within a certain radius of the event
-    inv_sub_sta = get_sta_within_radius(event_cat, mws, rrups, f_rrup, inventory)
+    inv_sub_sta = get_stations_within_radius(event_cat, mags, rrups, f_rrup, inventory)
 
     sta_mag_line = []
     # Loop through the Inventory Subset of Networks / Stations
     for network in inv_sub_sta:
+        # Get the client
+        client = client_NZ if network.code == "NZ" else client_IU
         for station in network:
-            # Get the client
-            client = client_NZ if network.code == "NZ" else client_IU
-
             # Get the r_hyp
             dist, _, _ = obspy.geodetics.gps2dist_azimuth(
                 ev_lat,
@@ -287,18 +286,17 @@ def fetch_sta_mag_lines(
 
             for chan, loc in chan_locs:
                 # Find the station magnitude
+                # Ensures that the station codes matches and that if the channel code ends with Z then it makes
+                # sure that the station magnitude is for the Z channel, otherwise any that match with the first two
+                # characters of the channel code is sufficient
                 sta_mag = next(
                     (
                         mag
                         for mag in event_cat.station_magnitudes
                         if mag.waveform_id.station_code == station.code
                         and (
-                            (
-                                len(mag.waveform_id.channel_code) > 2
-                                and len(chan) > 2
-                                and mag.waveform_id.channel_code[2] == chan[2]
-                            )
-                            or (len(chan) > 2 and chan[2] != "Z")
+                            (chan[-1] == "Z" and mag.waveform_id.channel_code == chan)
+                            or mag.waveform_id.channel_code[:2] == chan[:2]
                         )
                     ),
                     None,
@@ -348,7 +346,7 @@ def fetch_event_data(
     client_NZ: FDSN_Client,
     client_IU: FDSN_Client,
     inventory: Inventory,
-    mws: np.ndarray,
+    mags: np.ndarray,
     rrups: np.ndarray,
     f_rrup: interp1d,
 ):
@@ -367,7 +365,7 @@ def fetch_event_data(
         The geonet client to fetch the data from the International Network (necessary for station SNZO)
     inventory : Inventory
         The inventory of the stations from all networks to extract the stations from
-    mws : np.ndarray
+    mags : np.ndarray
         The magnitudes from the Mw_rrup file
     rrups : np.ndarray
         The rrups from the Mw_rrup file
@@ -392,7 +390,7 @@ def fetch_event_data(
             client_IU,
             inventory,
             event_line[8],
-            mws,
+            mags,
             rrups,
             f_rrup,
         )
@@ -523,10 +521,10 @@ def parse_geonet_information(
     data_dir = file_structure.get_data_dir()
 
     mw_rrup = np.loadtxt(data_dir / "Mw_rrup.txt")
-    mws = mw_rrup[:, 0]
+    mags = mw_rrup[:, 0]
     rrups = mw_rrup[:, 1]
     # Generate cubic interpolation for magnitude distance relationship
-    f_rrup = interp1d(mws, rrups, kind="cubic")
+    f_rrup = interp1d(mags, rrups, kind="cubic")
 
     # Create main directory if it doesn't exist
     main_dir.mkdir(exist_ok=True, parents=True)
@@ -540,7 +538,7 @@ def parse_geonet_information(
                 client_NZ=client_NZ,
                 client_IU=client_IU,
                 inventory=inventory,
-                mws=mws,
+                mags=mags,
                 rrups=rrups,
                 f_rrup=f_rrup,
             ),
