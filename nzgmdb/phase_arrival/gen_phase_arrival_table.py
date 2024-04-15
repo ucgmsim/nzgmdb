@@ -122,7 +122,7 @@ def generate_phase_arrival_table(main_dir: Path, output_dir: Path, n_procs: int)
     Parameters
     ----------
     main_dir : Path
-        The top directory that below contains all the mseed files
+        The main directory of the NZGMDB results (Highest level directory)
         (glob is used to find all mseed files recursively)
     output_dir : Path
         The directory to save the phase arrival table
