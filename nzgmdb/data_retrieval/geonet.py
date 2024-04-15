@@ -286,18 +286,17 @@ def fetch_sta_mag_lines(
 
             for chan, loc in chan_locs:
                 # Find the station magnitude
+                # Ensures that the station codes matches and that if the channel code ends with Z then it makes
+                # sure that the station magnitude is for the Z channel, otherwise any that match with the first two
+                # characters of the channel code is sufficient
                 sta_mag = next(
                     (
                         mag
                         for mag in event_cat.station_magnitudes
                         if mag.waveform_id.station_code == station.code
                         and (
-                            (
-                                len(mag.waveform_id.channel_code) > 2
-                                and len(chan) > 2
-                                and mag.waveform_id.channel_code[2] == chan[2]
-                            )
-                            or (len(chan) > 2 and chan[2] != "Z")
+                            (chan[-1] == "Z" and mag.waveform_id.channel_code == chan)
+                            or mag.waveform_id.channel_code[:2] == chan[:2]
                         )
                     ),
                     None,
