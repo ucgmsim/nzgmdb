@@ -79,6 +79,7 @@ def merge_tect_domain(
     add_tect_domain(eq_source_ffp, output_dir, n_procs)
 
 
+@app.command()
 def run_full_nzgmdb(
     main_dir: Path, start_date: datetime, end_date: datetime, n_procs: int = 1
 ):
