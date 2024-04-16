@@ -4,13 +4,17 @@ import multiprocessing as mp
 from pathlib import Path
 
 import pytz
+import obspy
 import numpy as np
 import pandas as pd
+from obspy.core.trace import Stats
 from pandas._libs.tslibs.timestamps import Timestamp
-from obspy import read
 
 import IM_calculation.IM.snr_calculation as snr_calc
 from IM_calculation.IM.read_waveform import create_waveform_from_data
+
+from nzgmdb.management import file_structure, config as cfg
+from nzgmdb.mseed_management import reading
 
 
 def create_waveform_from_files(
@@ -78,7 +82,7 @@ def create_waveform_from_files(
     return waveform
 
 
-def get_tp_from_phase_table(phase_table_path: Path, mseed_file: Path, event_id: str):
+def get_tp_from_phase_table(phase_table_path: Path, mseed_stats: Stats, event_id: str):
     """
     Get the time of the p-wave arrival from the phase arrival table
     Using the event id and the mseed file to gather metadata
@@ -87,8 +91,8 @@ def get_tp_from_phase_table(phase_table_path: Path, mseed_file: Path, event_id: 
     ----------
     phase_table_path : Path
         Path to the phase arrival table
-    mseed_file : Path
-        Path to the mseed file
+    mseed_stats : Stats
+        Stats object from the mseed file
     event_id : str
         Event id of the event
 
@@ -99,13 +103,10 @@ def get_tp_from_phase_table(phase_table_path: Path, mseed_file: Path, event_id: 
     """
     phase_arrival_table = pd.read_csv(phase_table_path, low_memory=False)
 
-    # Get the mseed files
-    st = read(str(mseed_file))
-
     # Getting the appropriate row from the phase arrival table
     event_df = phase_arrival_table.loc[
         (phase_arrival_table["evid"] == event_id)
-        & (phase_arrival_table["sta"] == st[0].meta.station)
+        & (phase_arrival_table["sta"] == mseed_stats.station)
     ]
     # If there is no data for the event / station pair, return None
     if len(event_df) == 0:
@@ -122,8 +123,8 @@ def get_tp_from_phase_table(phase_table_path: Path, mseed_file: Path, event_id: 
     tp_time = Timestamp(phase_row["datetime"].values[0], tz=pytz.UTC)
 
     # Datetime conversions to timestamps for comparisions with and without UTC
-    dt_start = st[0].meta.starttime
-    dt_end = st[0].meta.endtime
+    dt_start = mseed_stats.starttime
+    dt_end = mseed_stats.endtime
     dt_start_UTC = Timestamp(
         year=dt_start.year,
         month=dt_start.month,
@@ -149,7 +150,7 @@ def get_tp_from_phase_table(phase_table_path: Path, mseed_file: Path, event_id: 
     time_diff = dt_end_UTC - dt_start_UTC
 
     # Calculate the time difference between each point
-    interval = time_diff / (st[2].meta.npts - 1)
+    interval = time_diff / (mseed_stats.npts - 1)
 
     # Calculate the position of the tp time within the time range
     desired_position = (tp_time - dt_start_UTC) / interval
@@ -158,7 +159,7 @@ def get_tp_from_phase_table(phase_table_path: Path, mseed_file: Path, event_id: 
     tp = round(desired_position)
 
     # Ensure the tp is within the range of the waveform
-    if tp > st[0].meta.npts or tp < 0:
+    if tp > mseed_stats.npts or tp < 0:
         return None
     else:
         return tp
@@ -198,41 +199,15 @@ def compute_snr_for_single_mseed(
     """
     skipped_record = None
 
-    # Read the mseed file
-    mseed = read(str(mseed_file))
-    comp_dir = mseed_file.parent / "accBB"
-    station = mseed[0].meta.station
+    # Get the station from the filename
+    station = mseed_file.name.split("_")[1]
 
-    # Find the xml file
-    event_id = None
-    for file in mseed_file.parent.parent.parent.iterdir():
-        if file.suffix == ".xml":
-            event_id = file.stem
-            break
-    assert event_id is not None, "No xml file found"
+    # Get the event_id
+    event_id = file_structure.get_event_id_from_mseed(mseed_file)
 
-    # Check that each comp_file exist
-    if (
-        (comp_dir / f"{station}.000").exists() is False
-        or (comp_dir / f"{station}.090").exists() is False
-        or (comp_dir / f"{station}.ver").exists() is False
-    ):
-        skipped_record_dict = {
-            "event_id": event_id,
-            "station": station,
-            "mseed_file": mseed_file.name,
-            "reason": "Missing ASCII component files",
-        }
-        skipped_record = pd.DataFrame([skipped_record_dict])
-        return None, skipped_record
-
-    waveform = create_waveform_from_files(
-        comp_dir / f"{station}.000",
-        comp_dir / f"{station}.090",
-        comp_dir / f"{station}.ver",
-        mseed[0].meta.npts,
-        mseed[0].meta.delta,
-    )
+    # Read mseed information
+    waveform = reading.create_waveform_from_mseed(mseed_file)
+    stats = obspy.read(str(mseed_file))[0].stats
 
     if waveform is None:
         skipped_record_dict = {
@@ -245,7 +220,7 @@ def compute_snr_for_single_mseed(
         return None, skipped_record
 
     # Index of the start of the P-wave
-    tp = get_tp_from_phase_table(phase_table_path, mseed_file, event_id)
+    tp = get_tp_from_phase_table(phase_table_path, stats, event_id)
 
     # If there is no tp, record and skip this file
     if tp is None:
@@ -271,7 +246,7 @@ def compute_snr_for_single_mseed(
         apply_smoothing=apply_smoothing,
         ko_matrix_path=ko_matrix_path,
         common_frequency_vector=common_frequency_vector,
-        sampling_rate=mseed[0].meta.sampling_rate,
+        sampling_rate=stats.sampling_rate,
     )
 
     if snr is None:
@@ -300,23 +275,25 @@ def compute_snr_for_single_mseed(
         },
         index=frequencies,
     )
-    channel = mseed_file.stem.split("_")[-1]
+    year_dir = output_dir / str(stats.starttime.year)
+    event_dir = year_dir / event_id
+    event_dir.mkdir(parents=True, exist_ok=True)
     snr_fas_df.to_csv(
-        output_dir / f"{event_id}_{station}_{channel}_snr_fas.csv",
+        event_dir / f"{event_id}_{station}_{stats.channel}_snr_fas.csv",
         index_label="frequency",
     )
     # Add to the metadata dataframe
     meta_dict = {
         "evid": event_id,
         "sta": station,
-        "chan": channel,
+        "chan": stats.channel,
         "tp": tp,
         "Ds": Ds,
         "Dn": Dn,
-        "npts": mseed[0].meta.npts,
-        "delta": mseed[0].meta.delta,
-        "starttime": mseed[0].meta.starttime,
-        "endtime": mseed[0].meta.endtime,
+        "npts": stats.npts,
+        "delta": stats.delta,
+        "starttime": stats.starttime,
+        "endtime": stats.endtime,
     }
     meta_df = pd.DataFrame([meta_dict])
     return meta_df, skipped_record
@@ -325,7 +302,8 @@ def compute_snr_for_single_mseed(
 def compute_snr_for_mseed_data(
     data_dir: Path,
     phase_table_path: Path,
-    output_dir: Path,
+    meta_output_dir: Path,
+    snr_fas_output_dir: Path,
     n_procs: int = 1,
     apply_smoothing: bool = True,
     ko_matrix_path: Path = None,
@@ -340,8 +318,10 @@ def compute_snr_for_mseed_data(
         Directory containing the data for observed waveforms at magnitude bin level structure
     phase_table_path : Path
         Path to the phase arrival table
-    output_dir : Path
-        Path to the output directory
+    meta_output_dir : Path
+        Path to the output directory for the metadata and skipped records
+    snr_fas_output_dir : Path
+        Path to the output directory for the SNR and FAS data
     n_procs : int, optional
         Number of processes to use, by default 1
     apply_smoothing : bool, optional
@@ -350,9 +330,16 @@ def compute_snr_for_mseed_data(
         Path to the ko matrix, by default None
     common_frequency_vector : np.ndarray, optional
         Common frequency vector to use for all the waveforms, by default None
+        Uses a default frequency vector if not specified defined in the configuration file
     """
-    # Create the output directory
-    output_dir.mkdir(parents=True, exist_ok=True)
+    # Create the output directories
+    meta_output_dir.mkdir(parents=True, exist_ok=True)
+    snr_fas_output_dir.mkdir(parents=True, exist_ok=True)
+
+    # Creating the common frequency vector if not provided
+    if common_frequency_vector is None:
+        config = cfg.Config()
+        common_frequency_vector = np.logspace(np.log10(0.01318257), np.log10(100), num=389)
 
     # Get all the mseed files
     mseed_files = [mseed_file for mseed_file in data_dir.glob("**/*.mseed")]
@@ -365,7 +352,7 @@ def compute_snr_for_mseed_data(
             functools.partial(
                 compute_snr_for_single_mseed,
                 phase_table_path=phase_table_path,
-                output_dir=output_dir,
+                output_dir=snr_fas_output_dir,
                 apply_smoothing=apply_smoothing,
                 ko_matrix_path=ko_matrix_path,
                 common_frequency_vector=common_frequency_vector,
@@ -382,7 +369,7 @@ def compute_snr_for_mseed_data(
     else:
         print("No metadata dataframes")
         meta_df = pd.DataFrame()
-    meta_df.to_csv(output_dir / "metadata.csv", index=False)
+    meta_df.to_csv(meta_output_dir / "snr_metadata.csv", index=False)
 
     # Check that there are skipped records that are not None
     if not all(value is None for value in skipped_record_dfs):
@@ -391,65 +378,6 @@ def compute_snr_for_mseed_data(
     else:
         print("No skipped records")
         skipped_records = pd.DataFrame()
-    skipped_records.to_csv(output_dir / "skipped_records.csv", index=False)
+    skipped_records.to_csv(meta_output_dir / "snr_skipped_records.csv", index=False)
 
-    print(f"Finished, output data found in {output_dir}")
-
-
-def load_args():
-    parser = argparse.ArgumentParser()
-
-    parser.add_argument(
-        "mseed_dir",
-        type=Path,
-        help="path to the top level mseed directory eg./home/melody/mseed_6-10_preferred",
-    )
-    parser.add_argument(
-        "phase_arrival_path",
-        type=Path,
-        help="path to the phase arrival table eg./home/melody/phase_arrival_table.csv",
-    )
-    parser.add_argument(
-        "output_dir",
-        type=Path,
-        help="path to the output directory eg./home/melody/snr_output",
-    )
-    parser.add_argument(
-        "--no_smoothing",
-        action="store_false",
-        default=True,
-        dest="apply_smoothing",
-        help="If set, no smoothing will be applied to the SNR calculation",
-    )
-    parser.add_argument(
-        "--ko_matrix_path",
-        type=Path,
-        help="path to the ko matrix, default None",
-        default=None,
-    )
-    parser.add_argument(
-        "--n_procs", type=int, help="number of processes to use, default 1", default=1
-    )
-
-    return parser.parse_args()
-
-
-def main():
-    args = load_args()
-
-    # Example of creating a common frequency vector
-    common_freqs = np.logspace(np.log10(0.01318257), np.log10(100), num=389)
-
-    compute_snr_for_mseed_data(
-        args.mseed_dir,
-        args.phase_arrival_path,
-        args.output_dir,
-        args.n_procs,
-        args.apply_smoothing,
-        args.ko_matrix_path,
-        common_frequency_vector=common_freqs,
-    )
-
-
-if __name__ == "__main__":
-    main()
+    print(f"Finished, output data found in {meta_output_dir}")
