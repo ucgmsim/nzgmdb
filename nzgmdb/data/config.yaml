@@ -1,0 +1,23 @@
+# Description: Configuration file for the NZGMDB
+# Geonet filters
+min_mag: 4
+max_mag: 10
+# Geonet Variables
+geonet_url: https://quakesearch.geonet.org.nz
+bbox:
+  - 165.5205
+  - -49.1817
+  - -176.9238
+  - -32.2871
+# Mseed Variables
+vs30: 500
+min_time_difference: 15
+ds_multiplier: 1.2
+channel_codes:
+  - HN?
+  - BN?
+  - EN?
+  - HH?
+  - BH?
+  - EH?
+  - SH?

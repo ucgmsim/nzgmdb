@@ -4,18 +4,23 @@
 
 import io
 import requests
-import warnings
 import datetime
 from typing import List
 from pathlib import Path
 from functools import partial
 
+import obspy
+import numpy as np
 import pandas as pd
-import obspy as op
 import multiprocessing
-
-from obspy.clients.fdsn import Client as FDSN_Client
+from scipy.interpolate import interp1d
+from obspy.core.inventory import Inventory
 from obspy.core.event import Event, Magnitude
+from obspy.clients.fdsn import Client as FDSN_Client
+
+from nzgmdb.mseed_management import creation
+from nzgmdb.management import config as cfg
+from nzgmdb.management import file_structure
 
 
 def get_max_magnitude(magnitudes: List[Magnitude], mag_type: str):
@@ -142,218 +147,160 @@ def fetch_event_line(event_cat: Event, event_id: str):
     return event_line
 
 
+def get_stations_within_radius(
+    event_cat: Event,
+    mags: np.ndarray,
+    rrups: np.ndarray,
+    f_rrup: interp1d,
+    inventory: Inventory,
+):
+    """
+    Get the stations within a certain radius of the event
+
+    Parameters
+    ----------
+    event_cat : Event
+        The event catalog to fetch the event data from
+    mags : np.ndarray
+        The magnitudes from the Mw_rrup file
+    rrups : np.ndarray
+        The rrups from the Mw_rrup file
+    f_rrup : interp1d
+        The cubic interpolation function for the magnitude distance relationship
+    inventory : Inventory
+        The inventory of the stations from all networks to extract the stations from
+
+    Returns
+    -------
+    inv_sub : Inventory
+        The subset of the inventory with the stations within the radius
+    """
+    preferred_magnitude = event_cat.preferred_magnitude().mag
+    preferred_origin = event_cat.preferred_origin()
+    event_lat = preferred_origin.latitude
+    event_lon = preferred_origin.longitude
+
+    # Get the max radius
+    if preferred_magnitude < mags.min():
+        rrup = np.array(rrups.min())
+    elif preferred_magnitude > mags.max():
+        rrup = np.array(rrups.max())
+    else:
+        rrup = f_rrup(preferred_magnitude)
+    maxradius = obspy.geodetics.kilometers2degrees(rrup)
+
+    inv_sub = inventory.select(
+        latitude=event_lat, longitude=event_lon, maxradius=maxradius
+    )
+
+    return inv_sub
+
+
 def fetch_sta_mag_lines(
     event_cat: Event,
     event_id: str,
-    station_df: pd.DataFrame,
+    main_dir: Path,
     client_NZ: FDSN_Client,
     client_IU: FDSN_Client,
+    inventory: Inventory,
     pref_mag_type: str,
+    mags: np.ndarray,
+    rrups: np.ndarray,
+    f_rrup: interp1d,
 ):
     """
     Fetch the station magnitude lines from the geonet client to be added to the sta_mag_df
+    Also creates the mseed files for the stations
 
     Parameters
     ----------
     event_cat : Event
         The event catalog to fetch the data from
     event_id : str
-        The event id to add to the event line
-    station_df : pd.DataFrame
-        The dataframe containing the station information
+        The event id
+    main_dir : Path
+        The main directory of the NZGMDB results (Highest level directory)
     client_NZ : FDSN_Client
         The geonet client to fetch the data from New Zealand
     client_IU : FDSN_Client
         The geonet client to fetch the data from the International Network (necessary for station SNZO)
+    inventory : Inventory
+        The inventory of the stations from all networks to extract the stations from
     pref_mag_type : str
-        The preferred magnitude type from the event line
+        The preferred magnitude type
+    mags : np.ndarray
+        The magnitudes from the Mw_rrup file
+    rrups : np.ndarray
+        The rrups from the Mw_rrup file
+    f_rrup : interp1d
+        The cubic interpolation function for the magnitude distance relationship
     """
-    # Set constants
-    sorter = ["HH", "BH", "EH", "SH", "HN", "BN"]
-    channel_filter = "HH?,BH?,EH?,SH?,HN?,BN?"
-
     # Get the preferred_origin
     preferred_origin = event_cat.preferred_origin()
+    ev_lat = preferred_origin.latitude
+    ev_lon = preferred_origin.longitude
 
-    # Get the pick data
-    pick_data = [
-        [
-            pick.waveform_id.network_code,
-            pick.waveform_id.station_code,
-            pick.waveform_id.location_code,
-            pick.waveform_id.channel_code,
-            pick.time,
-            pick.phase_hint,
-            pick.resource_id,
-        ]
-        for pick in event_cat.picks
-    ]
-    amplitudes = event_cat.amplitudes
-    for amp in amplitudes:
-        if not any(amp.waveform_id.station_code in pick for pick in pick_data):
-            pick_data.append(
-                [
-                    amp.waveform_id.network_code,
-                    amp.waveform_id.station_code,
-                    amp.waveform_id.location_code,
-                    amp.waveform_id.channel_code,
-                    amp.time_window.reference,
-                    "none",
-                    "none",
-                ]
-            )
+    # Get Networks / Stations within a certain radius of the event
+    inv_sub_sta = get_stations_within_radius(event_cat, mags, rrups, f_rrup, inventory)
 
     sta_mag_line = []
-    # Loop through the pick data
-    for net, sta, loc, chan, time, phase_hint, resource_id in pick_data:
+    # Loop through the Inventory Subset of Networks / Stations
+    for network in inv_sub_sta:
         # Get the client
-        client = client_NZ if net == "NZ" else client_IU
+        client = client_NZ if network.code == "NZ" else client_IU
+        for station in network:
+            # Get the r_hyp
+            dist, _, _ = obspy.geodetics.gps2dist_azimuth(
+                ev_lat,
+                ev_lon,
+                station.latitude,
+                station.longitude,
+            )
+            r_epi = dist / 1000
+            ev_depth = preferred_origin.depth / 1000
+            r_hyp = ((r_epi) ** 2 + (ev_depth + station.elevation) ** 2) ** 0.5
 
-        # Checks if there already is an entry for the given net and station combo
-        ns = [net, sta]
-        row_exists = [row[1:3] for row in sta_mag_line if row[1:3] == ns]
-        if row_exists:
-            continue
+            # Get the waveforms
+            st = creation.get_waveforms(
+                preferred_origin,
+                client,
+                network.code,
+                station.code,
+                event_cat.preferred_magnitude().mag,
+                r_hyp,
+                r_epi,
+            )
+            # Check that data was found
+            if st is None:
+                continue
 
-        # Get the Inventory st
-        inventory_st = []
-        search_channel = True
-        with warnings.catch_warnings():
-            warnings.filterwarnings("ignore", category=UserWarning)
-            try:
-                inventory_st = client.get_stations(
-                    network=net,
-                    station=sta,
-                    channel=channel_filter,
-                    level="response",
-                    starttime=time,
-                    endtime=time,
-                )
-                for channel_code in sorter:
-                    for c in inventory_st[0][0]:
-                        if c.code.startswith(channel_code):
-                            loc = c.location_code
-                            chan = f"{channel_code}{chan[-1]}"
-                            search_channel = False
-                            break
-                    if not search_channel:
-                        break
-            except:
-                pass
+            # Create the directory structure for the given event
+            year = event_cat.creation_info.creation_time.year
+            mseed_dir = file_structure.get_mseed_dir(main_dir, year, event_id)
+            mseed_dir.mkdir(exist_ok=True, parents=True)
 
-        # Check the length of the inventory
-        if len(inventory_st) == 0:
-            sta_mags = [
-                sta_mag
-                for sta_mag in event_cat.station_magnitudes
-                if (
-                    (sta_mag.waveform_id.network_code == net)
-                    & (sta_mag.waveform_id.station_code == sta)
-                )
-            ]
-            for sta_mag in sta_mags:
-                amp = next(
+            # Create the mseed files
+            chan_locs = creation.create_mseed_from_waveforms(
+                st, event_id, station.code, mseed_dir
+            )
+
+            for chan, loc in chan_locs:
+                # Find the station magnitude
+                # Ensures that the station codes matches and that if the channel code ends with Z then it makes
+                # sure that the station magnitude is for the Z channel, otherwise any that match with the first two
+                # characters of the channel code is sufficient
+                sta_mag = next(
                     (
-                        amp
-                        for amp in event_cat.amplitudes
-                        if amp.resource_id == sta_mag.amplitude_id
+                        mag
+                        for mag in event_cat.station_magnitudes
+                        if mag.waveform_id.station_code == station.code
+                        and (
+                            (chan[-1] == "Z" and mag.waveform_id.channel_code == chan)
+                            or mag.waveform_id.channel_code[:2] == chan[:2]
+                        )
                     ),
                     None,
                 )
-                if amp:
-                    amp_amp = amp.generic_amplitude
-                    amp_unit = amp.unit if "unit" in amp else None
-                else:
-                    amp_amp = amp_unit = None
-                mag_id = f"{event_id}m{len(sta_mag_line) + 1}"
-                sta_mag_line.append(
-                    [
-                        mag_id,
-                        net,
-                        sta,
-                        sta_mag.waveform_id.location_code,
-                        sta_mag.waveform_id.channel_code,
-                        event_id,
-                        sta_mag.mag,
-                        sta_mag.station_magnitude_type,
-                        "uncorrected",
-                        amp_amp,
-                        amp_unit,
-                    ]
-                )
-        elif (
-            pref_mag_type.lower() == "ml"
-            or pref_mag_type.lower() == "mlv"
-            or pref_mag_type is None
-        ):
-            # Get the station info from the station df
-            sta_info = station_df[station_df.sta == sta]
-
-            # Event Info
-            ev_datetime = preferred_origin.time
-            ev_lat = preferred_origin.latitude
-            ev_lon = preferred_origin.longitude
-            ev_depth = preferred_origin.depth / 1000
-
-            # Get the r_hyp
-            if len(sta_info) > 0:
-                dist, az, b_az = op.geodetics.gps2dist_azimuth(
-                    ev_lat,
-                    ev_lon,
-                    sta_info["lat"].values[0],
-                    sta_info["lon"].values[0],
-                )
-                r_epi = dist / 1000
-                r_hyp = (
-                    r_epi**2 + (ev_depth + sta_info["elev"].values[0] / 1000) ** 2
-                ) ** 0.5
-            else:
-                # If the station is not in the current inventory
-                # Get the arrivals
-                arrivals = preferred_origin.arrivals
-                arrival = [
-                    arrival for arrival in arrivals if arrival.pick_id == resource_id
-                ][0]
-                r_epi = op.geodetics.degrees2kilometers(arrival.distance)
-                r_hyp = ((r_epi) ** 2 + (ev_depth) ** 2) ** 0.5
-
-            # Get the noise and signal windows
-            slow_vel = 3
-            windowEnd = ev_datetime + r_hyp / slow_vel + 30
-            windowStart = time - 35 if phase_hint.lower()[0] == "p" else time - 45
-
-            try:
-                # TODO Change this to instead of grabbing a small window to get the full waveform for saving to mseed
-                st = client.get_waveforms(
-                    net,
-                    sta,
-                    loc,
-                    chan + "?" if len(chan) < 3 else chan[0:2] + "?",
-                    windowStart,
-                    windowEnd,
-                )
-                st = st.merge()
-            except:
-                # Could not get the waveform
-                continue
-
-            for tr in st:
-                # Find the station magnitude
-                sta_mag = None
-                for sta_mag_search in event_cat.station_magnitudes:
-                    if sta_mag_search.waveform_id.station_code == sta:
-                        if len(sta_mag_search.waveform_id.channel_code) > 2:
-                            if (
-                                sta_mag_search.waveform_id.channel_code[2]
-                                == tr.stats.channel[2]
-                            ):
-                                sta_mag = sta_mag_search
-                                break
-                        elif (
-                            tr.stats.channel[2] != "Z"
-                        ):  # For 2012 + data, horizontal channels are combined
-                            sta_mag = sta_mag_search
-                            break
                 if sta_mag:
                     sta_mag_mag = sta_mag.mag
                     sta_mag_type = sta_mag.station_magnitude_type
@@ -374,35 +321,34 @@ def fetch_sta_mag_lines(
                 amp_amp = amp.generic_amplitude if amp else None
                 amp_unit = amp.unit if amp and "unit" in amp else None
 
-                tr = tr.split().detrend("demean").merge(fill_value=0)[0]
-
-                # Check if the trace is all 0s and has a station magnitude or if the trace is not all 0s
-                if tr.max() == 0 and sta_mag or tr.max() != 0:
-                    mag_id = f"{event_id}m{len(sta_mag_line) + 1}"
-                    sta_mag_line.append(
-                        [
-                            mag_id,
-                            net,
-                            sta,
-                            loc,
-                            tr.stats.channel,
-                            event_id,
-                            sta_mag_mag,
-                            sta_mag_type,
-                            "uncorrected",
-                            amp_amp,
-                            amp_unit,
-                        ]
-                    )
-
+                mag_id = f"{event_id}m{len(sta_mag_line) + 1}"
+                sta_mag_line.append(
+                    [
+                        mag_id,
+                        network.code,
+                        station.code,
+                        loc,
+                        chan,
+                        event_id,
+                        sta_mag_mag,
+                        sta_mag_type,
+                        "uncorrected",
+                        amp_amp,
+                        amp_unit,
+                    ]
+                )
     return sta_mag_line
 
 
 def fetch_event_data(
     event_id: str,
-    station_df: pd.DataFrame,
+    main_dir: Path,
     client_NZ: FDSN_Client,
     client_IU: FDSN_Client,
+    inventory: Inventory,
+    mags: np.ndarray,
+    rrups: np.ndarray,
+    f_rrup: interp1d,
 ):
     """
     Fetch the event data from the geonet client to form the event and magnitude dataframes
@@ -411,12 +357,20 @@ def fetch_event_data(
     ----------
     event_id : str
         The event id to fetch the data for
-    station_df : pd.DataFrame
-        The dataframe containing the station information
+    main_dir : Path
+        The main directory of the NZGMDB results (Highest level directory)
     client_NZ : FDSN_Client
         The geonet client to fetch the data from New Zealand
     client_IU : FDSN_Client
         The geonet client to fetch the data from the International Network (necessary for station SNZO)
+    inventory : Inventory
+        The inventory of the stations from all networks to extract the stations from
+    mags : np.ndarray
+        The magnitudes from the Mw_rrup file
+    rrups : np.ndarray
+        The rrups from the Mw_rrup file
+    f_rrup : interp1d
+        The cubic interpolation function for the magnitude distance relationship
     """
 
     # Get the catalog information
@@ -429,7 +383,16 @@ def fetch_event_data(
     if event_line is not None:
         # Get the station magnitude lines
         sta_mag_lines = fetch_sta_mag_lines(
-            event_cat, event_id, station_df, client_NZ, client_IU, event_line[8]
+            event_cat,
+            event_id,
+            main_dir,
+            client_NZ,
+            client_IU,
+            inventory,
+            event_line[8],
+            mags,
+            rrups,
+            f_rrup,
         )
     else:
         sta_mag_lines = None
@@ -455,10 +418,14 @@ def download_earthquake_data(
         The end date for the data extraction from the earthquake data
     """
     # Define bbox for New Zealand
-    bbox = "163.5205,-49.1817,-176.9238,-32.2871"
+    config = cfg.Config()
+    bbox = ",".join([str(coord) for coord in config.get_value("bbox")])
 
     # Send API request for the date ranges required
-    endpoint = f"https://quakesearch.geonet.org.nz/count?bbox={bbox}&startdate={start_date}&enddate={end_date}"
+    geonet_url = config.get_value("geonet_url")
+    endpoint = (
+        f"{geonet_url}/count?bbox={bbox}&startdate={start_date}&enddate={end_date}"
+    )
     response = requests.get(endpoint)
 
     # Check if the response is valid
@@ -473,18 +440,30 @@ def download_earthquake_data(
     else:
         response_dates = response_json["dates"]
 
+    # Get the min and max magnitude from the config
+    config = cfg.Config()
+    min_mag = config.get_value("min_mag")
+    max_mag = config.get_value("max_mag")
+
     # Loop over the dates to extract the csv data to a dataframe
     dfs = []
     for index, first_date in enumerate(response_dates[1:]):
         second_date = response_dates[index]
-        endpoint = f"https://quakesearch.geonet.org.nz/csv?bbox={bbox}&startdate={first_date}&enddate={second_date}"
+        endpoint = (
+            f"{geonet_url}/csv?bbox={bbox}&startdate={first_date}&enddate={second_date}"
+        )
         response = requests.get(endpoint)
 
         # Check if the response is valid
         if response.status_code != 200:
             raise ValueError("Could not get the earthquake data")
 
-        dfs.append(pd.read_csv(io.StringIO(response.text)))
+        # Read the response into a dataframe
+        df = pd.read_csv(io.StringIO(response.text))
+        # Filter the data based on magnitude
+        df = df[(df["magnitude"] >= min_mag) & (df["magnitude"] <= max_mag)]
+
+        dfs.append(df)
 
     # Concatenate the dataframes and sort by origintime
     geonet = (
@@ -499,7 +478,7 @@ def download_earthquake_data(
 
 
 def parse_geonet_information(
-    output_dir: Path,
+    main_dir: Path,
     start_date: datetime,
     end_date: datetime,
     n_procs: int = 1,
@@ -509,8 +488,8 @@ def parse_geonet_information(
 
     Parameters
     ----------
-    output_dir : Path
-        The directory to save the mseed files
+    main_dir : Path
+        The main directory to the NZGMDB results (Highest level directory)
     start_date : datetime
         The start date for the data extraction from the earthquake csv
     end_date : datetime
@@ -524,46 +503,44 @@ def parse_geonet_information(
     # Get all event ids
     event_ids = geonet.publicid.unique()
 
+    # Set constants
+    config = cfg.Config()
+    channel_codes = ",".join(config.get_value("channel_codes"))
+
     # Get Station Information from geonet clients
     client_NZ = FDSN_Client("GEONET")
     client_IU = FDSN_Client("IRIS")
-    inventory_NZ = client_NZ.get_stations()
+    # Get the full inventory
+    inventory_NZ = client_NZ.get_stations(channel=channel_codes, level="response")
     inventory_IU = client_IU.get_stations(
-        network="IU", station="SNZO,AFI,CTAO,RAO,FUNA,HNR,PMG"
+        network="IU", station="SNZO", channel=channel_codes, level="response"
     )
-    inventory_AU = client_IU.get_stations(network="AU")
-    inventory = inventory_NZ + inventory_IU + inventory_AU
+    inventory = inventory_NZ + inventory_IU
 
-    # Extract the station information into list form for the df
-    station_info = [
-        [
-            network.code,
-            station.code,
-            station.latitude,
-            station.longitude,
-            station.elevation,
-        ]
-        for network in inventory
-        for station in network
-    ]
+    # Get the data_dir
+    data_dir = file_structure.get_data_dir()
 
-    # Create the station df
-    station_df = pd.DataFrame(
-        station_info, columns=["net", "sta", "lat", "lon", "elev"]
-    )
-    station_df = station_df.drop_duplicates().reset_index(drop=True)
+    mw_rrup = np.loadtxt(data_dir / "Mw_rrup.txt")
+    mags = mw_rrup[:, 0]
+    rrups = mw_rrup[:, 1]
+    # Generate cubic interpolation for magnitude distance relationship
+    f_rrup = interp1d(mags, rrups, kind="cubic")
 
-    # Create output directory if it doesn't exist
-    output_dir.mkdir(exist_ok=True, parents=True)
+    # Create main directory if it doesn't exist
+    main_dir.mkdir(exist_ok=True, parents=True)
 
     # Get each of the results for the event ids
     with multiprocessing.Pool(processes=n_procs) as pool:
         results = pool.map(
             partial(
                 fetch_event_data,
-                station_df=station_df,
+                main_dir=main_dir,
                 client_NZ=client_NZ,
                 client_IU=client_IU,
+                inventory=inventory,
+                mags=mags,
+                rrups=rrups,
+                f_rrup=f_rrup,
             ),
             event_ids,
         )
@@ -618,6 +595,10 @@ def parse_geonet_information(
         ],
     )
 
+    # Create the output directory for the flatfiles
+    flatfile_dir = file_structure.get_flatfile_dir(main_dir)
+    flatfile_dir.mkdir(exist_ok=True, parents=True)
+
     # Save the dataframes
-    event_df.to_csv(output_dir / "earthquake_source_table.csv", index=False)
-    sta_mag_df.to_csv(output_dir / "station_magnitude_table.csv", index=False)
+    event_df.to_csv(flatfile_dir / "earthquake_source_table.csv", index=False)
+    sta_mag_df.to_csv(flatfile_dir / "station_magnitude_table.csv", index=False)
