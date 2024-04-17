@@ -9,6 +9,10 @@ bbox:
   - -49.1817
   - -176.9238
   - -32.2871
+cmt_url: https://raw.githubusercontent.com/GeoNet/data/main/moment-tensor/GeoNet_CMT_solutions.csv
+nzsmdb_url: https://raw.githubusercontent.com/GeoNet/data/main/nzsmd-flatfiles/NZdatabase_flatfile_FAS_horizontal_GeoMean.csv
+ll_num: 4326
+nztm_num: 2193
 # Mseed Variables
 vs30: 500
 min_time_difference: 15

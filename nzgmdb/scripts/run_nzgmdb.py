@@ -3,7 +3,6 @@ File that contains the function scripts that can be called to run the NZGMDB pip
 """
 
 import typer
-import numpy as np
 from datetime import datetime
 from pathlib import Path
 
@@ -50,7 +49,6 @@ def merge_tect_domain(
 ):
     """
     Adds tectonic domains to the earthquake source table.
-    Requires the earthquake source table to be generated.
 
     Parameters
     ----------
@@ -161,7 +159,8 @@ def run_full_nzgmdb(
     # Merge the tectonic domains
     faltfile_dir = file_structure.get_flatfile_dir(main_dir)
     eq_source_ffp = faltfile_dir / "earthquake_source_table.csv"
-    add_tect_domain(eq_source_ffp, faltfile_dir, n_procs)
+    eq_tect_domain_ffp = faltfile_dir / "earthquake_source_table_tectdomain.csv"
+    add_tect_domain(eq_source_ffp, eq_tect_domain_ffp, n_procs)
 
     # Generate the phase arrival table
     generate_phase_arrival_table(main_dir, faltfile_dir, n_procs)
