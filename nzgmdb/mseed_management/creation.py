@@ -2,7 +2,6 @@ import warnings
 import http.client
 from pathlib import Path
 
-import numpy as np
 import pandas as pd
 from obspy import Stream
 from obspy.taup import TauPyModel
@@ -13,21 +12,7 @@ from obspy.clients.fdsn.header import FDSNNoDataException
 from obspy.io.mseed import ObsPyMSEEDFilesizeTooSmallError
 
 from nzgmdb.management import config as cfg
-from empirical.util import classdef, openquake_wrapper_vectorized
-
-
-def estimate_z1p0(vs30: float):
-    """
-    Estimate the z1.0 value from the Vs30 value
-
-    Parameters
-    ----------
-    vs30 : float
-        The shear wave velocity at 30m depth
-    """
-    return (
-        np.exp(28.5 - 3.82 / 8.0 * np.log(vs30**8 + 378.7**8)) / 1000.0
-    )  # CY08 estimate in KM
+from empirical.util import classdef, openquake_wrapper_vectorized, z_model_calculations
 
 
 def get_waveforms(
@@ -68,7 +53,7 @@ def get_waveforms(
     config = cfg.Config()
     vs30 = config.get_value("vs30")
     rake = 90  # TODO get from the earthquake source table
-    z1p0 = estimate_z1p0(vs30)
+    z1p0 = z_model_calculations.chiou_young_08_calc_z1p0(vs30)
     # Predict significant duration time from Afshari and Stewart (2016)
     input_df = pd.DataFrame(
         {

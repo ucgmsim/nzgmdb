@@ -44,7 +44,7 @@ def merge_NZSMDB_flatfile_on_events(
         right_on="NZSMDB_CuspID",
     )
     # Drop the NZSMDB_CuspID column
-    event_df.drop(columns=["NZSMDB_CuspID"], inplace=True)
+    event_df = event_df.drop(columns=["NZSMDB_CuspID"])
     return event_df
 
 
@@ -120,11 +120,11 @@ def create_regions(
     """
     # Read fault file
     df = pd.read_csv(fault_file, sep=",", engine="python", header=None)
-    df.dropna(how="any", inplace=True)
+    df = df.dropna(how="any")
 
     # Rename columns
     col_dict = {df.columns[-3]: "long", df.columns[-2]: "lat", df.columns[-1]: "depth"}
-    df.rename(columns=col_dict, inplace=True)
+    df = df.rename(columns=col_dict)
 
     # Ensure positive longitudes and depths
     df["depth"] = df["depth"].abs()
@@ -259,12 +259,11 @@ def merge_tectclass(event_df: pd.DataFrame, cmt_tectclass_df: pd.DataFrame):
         The CMT tectonic class dataframe
     """
     # Rename the columns in the event dataframe
-    event_df.rename(
+    event_df = event_df.rename(
         columns={
             "NGASUB_TectClass_Merged": "tect_class",
             "NGASUB_Faults_Merged": "tect_method",
-        },
-        inplace=True,
+        }
     )
 
     # Replace the tect_class and tect_method with the NZSMDB data where it exists
@@ -274,11 +273,11 @@ def merge_tectclass(event_df: pd.DataFrame, cmt_tectclass_df: pd.DataFrame):
     event_df.loc[event_df.NZSMDB_TectClass.isnull() == False, "tect_method"] = "NZSMDB"
 
     # Drop unnecessary columns
-    event_df.drop(columns=["NZSMDB_TectClass"], inplace=True)
+    event_df = event_df.drop(columns=["NZSMDB_TectClass"])
 
     # Rename CMT columns and add method
-    cmt_tectclass_df.rename(
-        columns={"PublicID": "evid", "tectclass": "tect_class"}, inplace=True
+    cmt_tectclass_df = cmt_tectclass_df.rename(
+        columns={"PublicID": "evid", "tectclass": "tect_class"}
     )
     cmt_tectclass_df["tect_method"] = "manual"
 
@@ -300,7 +299,7 @@ def merge_tectclass(event_df: pd.DataFrame, cmt_tectclass_df: pd.DataFrame):
     ].values
 
     # Drop the cmt columns
-    cmt_merged_df.drop(columns=["tect_class_cmt", "tect_method_cmt"], inplace=True)
+    cmt_merged_df = cmt_merged_df.drop(columns=["tect_class_cmt", "tect_method_cmt"])
 
     return cmt_merged_df
 
