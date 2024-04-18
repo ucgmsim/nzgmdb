@@ -53,6 +53,19 @@ def get_flatfile_dir(main_dir: Path):
     return flatfile_dir
 
 
+def get_event_id_from_mseed(mseed_file: Path):
+    """
+    Get the event id from the mseed file
+
+    Parameters
+    ----------
+    mseed_file : Path
+        The mseed file
+    """
+    event_id = mseed_file.parent.parent.name
+    return event_id
+
+
 def get_data_dir():
     """
     Get the directory to the data files

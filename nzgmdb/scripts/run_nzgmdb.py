@@ -11,6 +11,7 @@ from nzgmdb.phase_arrival.gen_phase_arrival_table import (
 )
 from nzgmdb.data_retrieval.geonet import parse_geonet_information
 from nzgmdb.data_retrieval.tect_domain import add_tect_domain
+from nzgmdb.management import file_structure
 
 app = typer.Typer()
 
@@ -76,6 +77,43 @@ def merge_tect_domain(
         The number of processes to use for processing
     """
     add_tect_domain(eq_source_ffp, output_dir, n_procs)
+
+
+@app.command()
+def run_full_nzgmdb(
+    main_dir: Path, start_date: datetime, end_date: datetime, n_procs: int = 1
+):
+    """
+    Run the full NZGMDB pipeline.
+
+    Parameters
+    ----------
+    main_dir : Path
+        The main directory of the NZGMDB results (Highest level directory)
+    start_date : datetime
+        The start date to filter the earthquake data
+    end_date : datetime
+        The end date to filter the earthquake data
+    n_procs : int (optional)
+        The number of processes to use for processing
+    """
+    # Fetch the Geonet data
+    parse_geonet_information(main_dir, start_date, end_date, n_procs)
+
+    # Merge the tectonic domains
+    faltfile_dir = file_structure.get_flatfile_dir(main_dir)
+    eq_source_ffp = faltfile_dir / "earthquake_source_table.csv"
+    add_tect_domain(eq_source_ffp, faltfile_dir, n_procs)
+
+    # Generate the phase arrival table
+    generate_phase_arrival_table(main_dir, faltfile_dir, n_procs)
+
+    # Steps below are TODO
+    # Generate SNR
+    # Calculate Fmax
+    # Run filtering and processing of mseeds
+    # Run IM calculation
+    # Merge flat files with IM results
 
 
 if __name__ == "__main__":

@@ -10,6 +10,7 @@ from pathlib import Path
 from datetime import timedelta
 
 from .picker import p_phase_picker
+from nzgmdb.management import file_structure
 
 
 def get_p_wave(data: np.ndarray, dt: int):
@@ -94,11 +95,7 @@ def process_mseed(mseed_file_chunk: list):
             t_res = None
 
             # Get the evid
-            xml_dir = file.parent.parent.parent
-            # Find the name of the xml file
-            xml_file = list(xml_dir.glob("*.xml"))[0]
-            # Get the evid from the name without the .xml
-            evid = xml_file.stem
+            evid = file_structure.get_event_id_from_mseed(file)
 
             new_data = (
                 {
