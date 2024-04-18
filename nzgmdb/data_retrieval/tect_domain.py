@@ -284,7 +284,9 @@ def find_domain_from_shapes(
     # Convert the lat, lon to NZTM coordinate system
     # (https://www.linz.govt.nz/guidance/geodetic-system/coordinate-systems-used-new-zealand/projections/new-zealand-transverse-mercator-2000-nztm2000)
     config = cfg.Config()
-    wgs2nztm = Transformer.from_crs(config.get_value("ll_num"), config.get_value("nztm_num"), always_xy=True)
+    wgs2nztm = Transformer.from_crs(
+        config.get_value("ll_num"), config.get_value("nztm_num"), always_xy=True
+    )
     points = np.array(merged_df[["lon", "lat"]])
     points = np.asarray(wgs2nztm.transform(points[:, 0], points[:, 1])).T
 
