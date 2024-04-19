@@ -103,7 +103,8 @@ def run_full_nzgmdb(
     # Merge the tectonic domains
     faltfile_dir = file_structure.get_flatfile_dir(main_dir)
     eq_source_ffp = faltfile_dir / "earthquake_source_table.csv"
-    add_tect_domain(eq_source_ffp, faltfile_dir, n_procs)
+    eq_tect_domain_ffp = faltfile_dir / "earthquake_source_table_tectdomain.csv"
+    add_tect_domain(eq_source_ffp, eq_tect_domain_ffp, n_procs)
 
     # Generate the phase arrival table
     generate_phase_arrival_table(main_dir, faltfile_dir, n_procs)

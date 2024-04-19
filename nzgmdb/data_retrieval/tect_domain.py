@@ -12,12 +12,11 @@ import multiprocessing
 from pyproj import Transformer
 
 from qcore import geo, point_in_polygon
-from nzgmdb.management import file_structure
+from nzgmdb.management import file_structure, config as cfg
 
 
 def merge_NZSMDB_flatfile_on_events(
     event_df: pd.DataFrame,
-    NZSMDB_csv_path: Path,
 ):
     """
     Merge metadata fields from NZ SMDB flatfile (Van Houtte, 2017)
@@ -26,15 +25,15 @@ def merge_NZSMDB_flatfile_on_events(
     ----------
     event_df : pd.DataFrame
         The event dataframe
-    NZSMDB_csv_path : Path
-        The path to the NZSMDB csv file
     """
     nzsmdb_cols = [
         "CuspID",
         "TectClass",
     ]
-
-    NZSMDB_df = pd.read_csv(NZSMDB_csv_path).drop_duplicates(subset=["CuspID"])
+    config = cfg.Config()
+    NZSMDB_df = pd.read_csv(config.get_value("nzsmdb_url")).drop_duplicates(
+        subset=["CuspID"]
+    )
     new_columns = {col: f"NZSMDB_{col}" for col in nzsmdb_cols}
     NZSMDB_df = NZSMDB_df.rename(columns=new_columns)
     event_df = event_df.merge(
@@ -247,7 +246,7 @@ def ngasub2020_tectclass(
     return tectclass, fault_label
 
 
-def merge_tectclass(event_df: pd.DataFrame, cmt_tectclass_df: pd.DataFrame):
+def merge_tectclass(event_df: pd.DataFrame):
     """
     Merge the tectonic classification data from the CMT and NGASUB with the event data
 
@@ -255,17 +254,7 @@ def merge_tectclass(event_df: pd.DataFrame, cmt_tectclass_df: pd.DataFrame):
     ----------
     event_df : pd.DataFrame
         The event dataframe which also includes the NGASUB tectonic class data
-    cmt_tectclass_df : pd.DataFrame
-        The CMT tectonic class dataframe
     """
-    # Rename the columns in the event dataframe
-    event_df = event_df.rename(
-        columns={
-            "NGASUB_TectClass_Merged": "tect_class",
-            "NGASUB_Faults_Merged": "tect_method",
-        }
-    )
-
     # Replace the tect_class and tect_method with the NZSMDB data where it exists
     event_df.loc[event_df.NZSMDB_TectClass.isnull() == False, "tect_class"] = event_df[
         event_df.NZSMDB_TectClass.isnull() == False
@@ -275,33 +264,7 @@ def merge_tectclass(event_df: pd.DataFrame, cmt_tectclass_df: pd.DataFrame):
     # Drop unnecessary columns
     event_df = event_df.drop(columns=["NZSMDB_TectClass"])
 
-    # Rename CMT columns and add method
-    cmt_tectclass_df = cmt_tectclass_df.rename(
-        columns={"PublicID": "evid", "tectclass": "tect_class"}
-    )
-    cmt_tectclass_df["tect_method"] = "manual"
-
-    # Merge the CMT tectonic class data with the event data
-    cmt_merged_df = pd.merge(
-        event_df,
-        cmt_tectclass_df[["evid", "tect_class", "tect_method"]],
-        how="left",
-        on="evid",
-        suffixes=("", "_cmt"),
-    )
-
-    # Replace the tect_class and tect_method with the CMT data where it exists
-    cmt_merged_df.loc[
-        ~cmt_merged_df.tect_class_cmt.isnull(), ["tect_class", "tect_method"]
-    ] = cmt_merged_df.loc[
-        ~cmt_merged_df.tect_class_cmt.isnull(),
-        ["tect_class_cmt", "tect_method_cmt"],
-    ].values
-
-    # Drop the cmt columns
-    cmt_merged_df = cmt_merged_df.drop(columns=["tect_class_cmt", "tect_method_cmt"])
-
-    return cmt_merged_df
+    return event_df
 
 
 def find_domain_from_shapes(
@@ -320,11 +283,14 @@ def find_domain_from_shapes(
     """
     # Convert the lat, lon to NZTM coordinate system
     # (https://www.linz.govt.nz/guidance/geodetic-system/coordinate-systems-used-new-zealand/projections/new-zealand-transverse-mercator-2000-nztm2000)
-    wgs2nztm = Transformer.from_crs(4326, 2193, always_xy=True)
+    config = cfg.Config()
+    wgs2nztm = Transformer.from_crs(
+        config.get_value("ll_num"), config.get_value("nztm_num"), always_xy=True
+    )
     points = np.array(merged_df[["lon", "lat"]])
     points = np.asarray(wgs2nztm.transform(points[:, 0], points[:, 1])).T
 
-    # Go though each domain and determine if the points are in the domain
+    # Go through each domain and determine if the points are in the domain
     for layer in shapes:
         domain_no = layer["properties"]["Domain_No"]
         domain_type = layer["properties"]["DomainType"]
@@ -382,18 +348,14 @@ def add_tect_domain(
     # Get the Data folder
     data_dir = file_structure.get_data_dir()
 
-    # Read the CMT tectonic class data
-    cmt_tectclass_df = pd.read_csv(
-        data_dir / "GeoNet-v04-tectclass.csv", low_memory=False
-    )
-
     # Shape file for determining neotectonic domain
     shapes = list(
         fiona.open(data_dir / "tect_domain" / "TectonicDomains_Feb2021_8_NZTM.shp")
     )
 
     # Read the geonet CMT and event data
-    geonet_cmt_df = pd.read_csv(data_dir / "GeoNet_CMT_solutions.csv", low_memory=False)
+    config = cfg.Config()
+    geonet_cmt_df = pd.read_csv(config.get_value("cmt_url"), low_memory=False)
     event_df = (
         pd.read_csv(event_csv_ffp, low_memory=False).set_index("evid").reset_index()
     )
@@ -402,9 +364,7 @@ def add_tect_domain(
     event_df = replace_cmt_data_on_event(event_df, geonet_cmt_df)
 
     # Merge the NZSMDB data
-    event_df = merge_NZSMDB_flatfile_on_events(
-        event_df, data_dir / "NZdatabase_flatfile_FAS_horizontal_GeoMean.csv"
-    )
+    event_df = merge_NZSMDB_flatfile_on_events(event_df)
 
     # Merge Kermadec and Hikurangi datasets into the fault regions
     region_a_offshore, region_b_on, region_c_downdip = create_regions(
@@ -434,12 +394,10 @@ def add_tect_domain(
         results = pool.map(f, event_df.to_records(index=False))
 
     # Assign the results to the respective DataFrame columns
-    event_df["NGASUB_TectClass_Merged"], event_df["NGASUB_Faults_Merged"] = zip(
-        *results
-    )
+    event_df["tect_class"], event_df["tect_method"] = zip(*results)
 
-    # Merge tectonic classification data from both CMT and NGASUB with the event data
-    merged_df = merge_tectclass(event_df, cmt_tectclass_df)
+    # Merge tectonic classification data from NGASUB with the NZSMDB data
+    merged_df = merge_tectclass(event_df)
 
     domain_df = find_domain_from_shapes(merged_df, shapes)
 
