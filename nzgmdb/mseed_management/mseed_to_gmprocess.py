@@ -3,24 +3,19 @@ This file contains the functions needed to convert a set of mseed files to the g
 This currently handles both the old style of data storage and the new style of data.
 """
 
-import shutil
-from pathlib import Path
-import numpy as np
-from json import JSONDecodeError
-import requests
-import json
-from functools import partial
-from obspy import read, read_inventory
 import datetime
-from obspy.core import Stream
+import requests
+from json import JSONDecodeError
+from functools import partial
+
 import multiprocessing
-from scipy.interpolate import interp1d
-from obspy.core.inventory import Inventory
-from obspy.core.event import Event, Magnitude
-from nzgmdb.management import config as cfg
+from pathlib import Path
+from obspy import read
+from obspy.core import Stream
 from obspy.clients.fdsn import Client as FDSN_Client
 from obspy.clients.fdsn.header import FDSNNoDataException
-from nzgmdb.management import file_structure
+
+from nzgmdb.management import config as cfg
 
 
 def gen_station_xml(station: str, client: FDSN_Client, output_dir: Path):
