@@ -5,11 +5,11 @@ This currently handles both the old style of data storage and the new style of d
 
 import datetime
 import requests
-from json import JSONDecodeError
-from functools import partial
-
 import multiprocessing
 from pathlib import Path
+from functools import partial
+from json import JSONDecodeError
+
 from obspy import read
 from obspy.core import Stream
 from obspy.clients.fdsn import Client as FDSN_Client
@@ -145,7 +145,10 @@ def get_old_event_id(mseed_ffp: Path):
 
 
 def run_for_single_event(
-    event_dir: Path, old_style: bool, client_NZ: FDSN_Client, output_dir: Path
+    event_dir: Path,
+    client_NZ: FDSN_Client,
+    output_dir: Path,
+    old_style: bool = False,
 ):
     """
     Run the conversion for a single event.
@@ -157,12 +160,12 @@ def run_for_single_event(
     ----------
     event_dir : Path
         The path to the event directory
-    old_style : bool
-        Whether the data is stored in the old style
     client_NZ : FDSN_Client
         The client to get the event information
     output_dir : Path
         The directory to save the new files in the new format
+    old_style : bool
+        Whether the data is stored in the old style
     """
     # Get the event ID information
     if old_style:
@@ -277,9 +280,9 @@ def convert_mseed_to_gmprocess(
         pool.map(
             partial(
                 run_for_single_event,
-                old_style=old_style,
                 client_NZ=client_NZ,
                 output_dir=output_dir,
+                old_style=old_style,
             ),
             event_dirs,
         )
