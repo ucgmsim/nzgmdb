@@ -210,7 +210,9 @@ def run_for_single_event(
 
         # Check that there is at least one trace with a channel starting with B or H
         if any(trace.stats.channel[0] in ["B", "H"] for trace in mseed):
-            generated = gen_station_xml(mseed[0].stats.station, client_NZ, new_event_dir)
+            generated = gen_station_xml(
+                mseed[0].stats.station, client_NZ, new_event_dir
+            )
 
             if generated is False:
                 return None
