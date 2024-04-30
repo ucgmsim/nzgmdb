@@ -25,3 +25,8 @@ channel_codes:
   - BH?
   - EH?
   - SH?
+# GMProcess Variables
+gmprocess_url: https://earthquake.usgs.gov/fdsnws/event/1/query
+search_radius: 25 # In Kilometers
+mag_range: 1
+time_range: 360 # In Seconds

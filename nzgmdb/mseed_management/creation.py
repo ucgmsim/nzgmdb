@@ -129,7 +129,7 @@ def get_waveforms(
             if attempt < max_retries - 1:  # i.e. not the last attempt
                 continue  # try again
             else:
-                raise  # re-raise exception on the last attempt
+                return None
     return st
 
 
