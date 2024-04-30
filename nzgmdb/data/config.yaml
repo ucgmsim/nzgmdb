@@ -12,15 +12,10 @@ bbox:
 # Mseed Variables
 vs30: 500
 min_time_difference: 15
-ds_multiplier: 1.2
+ds_multiplier: 10
 channel_codes:
   - HN?
   - BN?
-  - EN?
-  - HH?
-  - BH?
-  - EH?
-  - SH?
 # GMProcess Variables
 gmprocess_url: https://earthquake.usgs.gov/fdsnws/event/1/query
 search_radius: 25 # In Kilometers
