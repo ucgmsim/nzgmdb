@@ -214,7 +214,7 @@ def run_for_single_event(
                 mseed[0].stats.station, client_NZ, new_event_dir
             )
 
-            if generated is False:
+            if not generated:
                 return None
 
             split_mseed(mseed, new_event_dir)
