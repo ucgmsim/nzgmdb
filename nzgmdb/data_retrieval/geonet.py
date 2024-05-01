@@ -275,7 +275,7 @@ def fetch_sta_mag_lines(
                 continue
 
             # Create the directory structure for the given event
-            year = event_cat.creation_info.creation_time.year
+            year = event_cat.origins[0].time.year
             mseed_dir = file_structure.get_mseed_dir(main_dir, year, event_id)
             mseed_dir.mkdir(exist_ok=True, parents=True)
 
@@ -501,7 +501,7 @@ def parse_geonet_information(
     geonet = download_earthquake_data(start_date, end_date)
 
     # Get all event ids
-    event_ids = geonet.publicid.unique()
+    event_ids = geonet.publicid.unique().astype(str)
 
     # Set constants
     config = cfg.Config()

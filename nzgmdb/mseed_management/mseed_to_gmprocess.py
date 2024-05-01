@@ -207,12 +207,17 @@ def run_for_single_event(
     # For each mseed file, generate the station xml file and split the mseed file
     for mseed_ffp in mseeds:
         mseed = read(mseed_ffp)
-        generated = gen_station_xml(mseed[0].stats.station, client_NZ, new_event_dir)
 
-        if generated is False:
-            return None
+        # Check that there is at least one trace with a channel starting with B or H
+        if any(trace.stats.channel[0] in ["B", "H"] for trace in mseed):
+            generated = gen_station_xml(
+                mseed[0].stats.station, client_NZ, new_event_dir
+            )
 
-        split_mseed(mseed, new_event_dir)
+            if not generated:
+                return None
+
+            split_mseed(mseed, new_event_dir)
 
 
 def get_event_dirs(main_dir: Path, old_style: bool):
