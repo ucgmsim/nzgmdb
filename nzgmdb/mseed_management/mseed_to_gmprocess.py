@@ -4,16 +4,16 @@ This currently handles both the old style of data storage and the new style of d
 """
 
 import datetime
-import requests
+import functools
 import multiprocessing
-from pathlib import Path
-from functools import partial
 from json import JSONDecodeError
+from pathlib import Path
 
+import requests
 from obspy import read
-from obspy.core import Stream
 from obspy.clients.fdsn import Client as FDSN_Client
 from obspy.clients.fdsn.header import FDSNNoDataException
+from obspy.core import Stream
 
 from nzgmdb.management import config as cfg
 
@@ -210,9 +210,11 @@ def run_for_single_event(
 
         # Check that there is at least one trace with a channel starting with B or H
         if any(trace.stats.channel[0] in ["B", "H"] for trace in mseed):
-            generated = gen_station_xml(mseed[0].stats.station, client_NZ, new_event_dir)
+            generated = gen_station_xml(
+                mseed[0].stats.station, client_NZ, new_event_dir
+            )
 
-            if generated is False:
+            if not generated:
                 return None
 
             split_mseed(mseed, new_event_dir)
@@ -281,7 +283,7 @@ def convert_mseed_to_gmprocess(
     # Do multiprocessing over each event
     with multiprocessing.Pool(processes=n_procs) as pool:
         pool.map(
-            partial(
+            functools.partial(
                 run_for_single_event,
                 client_NZ=client_NZ,
                 output_dir=output_dir,
