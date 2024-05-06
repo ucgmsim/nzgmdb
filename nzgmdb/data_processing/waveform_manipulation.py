@@ -20,7 +20,7 @@ def basic_manipulation(mseed: Stream):
         The processed waveform data, or None if the processing failed
     """
     # Small Processing
-    mseed.detrend('demean')
+    mseed.detrend("demean")
     mseed.detrend()
     # Get the inventory information
     station = mseed[0].stats.station
@@ -31,11 +31,15 @@ def basic_manipulation(mseed: Stream):
     # information takes a long time as it's implemented in a for loop
     try:
         client_NZ = FDSN_Client("GEONET")
-        inv = client_NZ.get_stations(level="response", network="NZ", station=station, location=location)
+        inv = client_NZ.get_stations(
+            level="response", network="NZ", station=station, location=location
+        )
     except FDSNNoDataException:
         try:
             client_IU = FDSN_Client("IRIS")
-            inv = client_IU.get_stations(level="response", network="IU", station=station, location=location)
+            inv = client_IU.get_stations(
+                level="response", network="IU", station=station, location=location
+            )
         except FDSNNoDataException:
             print(f"Failed to find inventory information")
             return None

@@ -7,8 +7,8 @@ from nzgmdb.data_processing import waveform_manipulation
 
 
 def create_waveform_from_mseed(
-        mseed_file: Path,
-        process: bool = False,
+    mseed_file: Path,
+    process: bool = False,
 ):
     """
     Create a waveform object from a mseed file

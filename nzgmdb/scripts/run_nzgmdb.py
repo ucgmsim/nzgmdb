@@ -119,7 +119,9 @@ def calculate_snr(
     """
     # Define the default paths if not provided
     if phase_table_path is None:
-        phase_table_path = file_structure.get_flatfile_dir(main_dir) / "phase_arrival_table.csv"
+        phase_table_path = (
+            file_structure.get_flatfile_dir(main_dir) / "phase_arrival_table.csv"
+        )
     if meta_output_dir is None:
         meta_output_dir = file_structure.get_flatfile_dir(main_dir)
     if snr_fas_output_dir is None:
@@ -168,8 +170,12 @@ def run_full_nzgmdb(
     # Generate SNR
     meta_output_dir = file_structure.get_flatfile_dir(main_dir)
     snr_fas_output_dir = file_structure.get_snr_fas_dir(main_dir)
-    phase_table_path = file_structure.get_flatfile_dir(main_dir) / "phase_arrival_table.csv"
-    calculate_snr(main_dir, phase_table_path, meta_output_dir, snr_fas_output_dir, n_procs)
+    phase_table_path = (
+        file_structure.get_flatfile_dir(main_dir) / "phase_arrival_table.csv"
+    )
+    calculate_snr(
+        main_dir, phase_table_path, meta_output_dir, snr_fas_output_dir, n_procs
+    )
 
     # Steps below are TODO
     # Calculate Fmax
