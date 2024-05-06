@@ -109,30 +109,21 @@ def compute_snr_for_single_mseed(
 
     # Save the SNR data
     # Create dataframe with the snr, fas_noise and fas_signal
-    try:
-        snr_fas_df = pd.DataFrame(
-            {
-                "snr_000": snr[:, 0],
-                "snr_090": snr[:, 1],
-                "snr_ver": snr[:, 2],
-                "fas_signal_000": fas_signal[:, 0],
-                "fas_signal_090": fas_signal[:, 1],
-                "fas_signal_ver": fas_signal[:, 2],
-                "fas_noise_000": fas_noise[:, 0],
-                "fas_noise_090": fas_noise[:, 1],
-                "fas_noise_ver": fas_noise[:, 2],
-            },
-            index=frequencies,
-        )
-    except:
-        skipped_record_dict = {
-            "event_id": event_id,
-            "station": station,
-            "mseed_file": mseed_file.name,
-            "reason": "Failed to create SNR dataframe",
-        }
-        skipped_record = pd.DataFrame([skipped_record_dict])
-        return None, skipped_record
+    snr_fas_df = pd.DataFrame(
+        {
+            "snr_000": snr[:, 0],
+            "snr_090": snr[:, 1],
+            "snr_ver": snr[:, 2],
+            "fas_signal_000": fas_signal[:, 0],
+            "fas_signal_090": fas_signal[:, 1],
+            "fas_signal_ver": fas_signal[:, 2],
+            "fas_noise_000": fas_noise[:, 0],
+            "fas_noise_090": fas_noise[:, 1],
+            "fas_noise_ver": fas_noise[:, 2],
+        },
+        index=frequencies,
+    )
+
     year_dir = output_dir / str(stats.starttime.year)
     event_dir = year_dir / event_id
     event_dir.mkdir(parents=True, exist_ok=True)
