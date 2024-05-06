@@ -49,7 +49,7 @@ def basic_manipulation(mseed: Stream):
 
     try:
         mseed = mseed.remove_sensitivity()
-    except:
+    except ValueError:
         print(f"Failed to remove sensitivity")
         return None
 
