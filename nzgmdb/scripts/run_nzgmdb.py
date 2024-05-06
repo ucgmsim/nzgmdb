@@ -11,7 +11,7 @@ from nzgmdb.phase_arrival.gen_phase_arrival_table import (
 )
 from nzgmdb.data_retrieval.geonet import parse_geonet_information
 from nzgmdb.data_retrieval.tect_domain import add_tect_domain
-from nzgmdb.data_processing.calc_snr import compute_snr_for_mseed_data
+from nzgmdb.calculation.snr import compute_snr_for_mseed_data
 from nzgmdb.management import file_structure
 
 app = typer.Typer()
