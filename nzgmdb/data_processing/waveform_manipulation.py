@@ -5,9 +5,13 @@ from obspy.clients.fdsn.header import FDSNNoDataException
 from nzgmdb.management import config as cfg
 
 
-def basic_manipulation(mseed: Stream):
+def initial_preprocessing(mseed: Stream):
     """
-    Basic manipulation of the waveform data
+    Basic pre processing of the waveform data
+    This performs the following:
+    - Demean and Detrend the data
+    - Remove the sensitivity using the inventory response information if possible
+    - Divide the data by the constant gravity (g)
 
     Parameters
     ----------

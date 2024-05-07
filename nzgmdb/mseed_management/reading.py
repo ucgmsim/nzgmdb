@@ -8,7 +8,7 @@ from nzgmdb.data_processing import waveform_manipulation
 
 def create_waveform_from_mseed(
     mseed_file: Path,
-    process: bool = False,
+    pre_process: bool = False,
 ):
     """
     Create a waveform object from a mseed file
@@ -18,7 +18,7 @@ def create_waveform_from_mseed(
     ----------
     mseed_file : Path
         Path to the mseed file
-    process : bool (optional)
+    pre_process : bool (optional)
         Whether to do some small processing such as detrending and removing sensitivity
         (Can however fail if the sensitivity can't be removed and will return None)
 
@@ -32,8 +32,8 @@ def create_waveform_from_mseed(
     mseed = obspy.read(str(mseed_file))
 
     # Process the data if needed
-    if process:
-        mseed = waveform_manipulation.basic_manipulation(mseed)
+    if pre_process:
+        mseed = waveform_manipulation.initial_preprocessing(mseed)
         if mseed is None:
             return None
 

@@ -40,9 +40,15 @@ def compute_snr_for_single_mseed(
 
     Returns
     -------
-    (meta_df, skipped_record_df): Tuple[pd.DataFrame, pd.DataFrame]
-        Tuple containing the metadata dataframe and the skipped record dataframe,
-        Can be None if no p-wave arrival could be found or if the ASCII files are missing
+    meta_df : pd.DataFrame
+        Metadata dataframe containing the metadata information for each file
+        Can be None if no p-wave arrival could be found or failed to remove sensitivity
+        or noise was less than 1 second
+    skipped_record : pd.DataFrame
+        Dataframe containing the skipped records and reasons why
+        Can be None if no p-wave arrival could be found or failed to remove sensitivity
+        or noise was less than 1 second
+
     """
     skipped_record = None
 
