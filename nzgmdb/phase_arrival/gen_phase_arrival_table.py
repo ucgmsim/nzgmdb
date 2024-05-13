@@ -146,7 +146,7 @@ def process_mseed(mseed_file_chunk: list):
     return data_list
 
 
-def fetch_geo_phase(mseed_file: Path):
+def fetch_geonet_phase(mseed_file: Path):
     phase_lines = []
     # Get the evid
     evid = file_structure.get_event_id_from_mseed(mseed_file)
@@ -294,7 +294,7 @@ def generate_phase_arrival_table(main_dir: Path, output_dir: Path, n_procs: int)
 
     geo_phase_lines = []
     for mseed_file in mseed_files:
-        geo_phase_lines.extend(fetch_geo_phase(mseed_file))
+        geo_phase_lines.extend(fetch_geonet_phase(mseed_file))
 
     # Create DataFrame
     geo_df = pd.DataFrame([tup[0] for tup in geo_phase_lines])
