@@ -1,9 +1,8 @@
-from obspy.clients.fdsn import Client as FDSN_Client
 import numpy as np
+from obspy.clients.fdsn import Client as FDSN_Client
 from obspy.clients.fdsn.header import FDSNNoDataException
 from obspy.core.stream import Stream
 from scipy import integrate, signal
-from obspy.core.stream import Stream
 
 from nzgmdb.management import custom_errors, config as cfg
 
@@ -80,7 +79,7 @@ def initial_preprocessing(mseed: Stream):
                 )
             except FDSNNoDataException:
                 raise custom_errors.InventoryNotFoundError(
-                f"No inventory information found for station {station} with location {location}"
+                    f"No inventory information found for station {station} with location {location}"
                 )
 
         # Rotate
@@ -97,7 +96,7 @@ def initial_preprocessing(mseed: Stream):
             mseed = mseed.remove_sensitivity()
         except ValueError:
             raise custom_errors.SensitivityRemovalError(
-            f"Failed to remove sensitivity for station {station} with location {location}"
+                f"Failed to remove sensitivity for station {station} with location {location}"
             )
 
         # Get constant gravity (g)
@@ -199,6 +198,13 @@ def high_and_low_cut_processing(
         The processed data for the 090 component
     acc_bb_ver : np.array
         The processed data for the vertical component
+
+    Raises
+    ------
+    LowcutHighcutError
+        If the lowcut frequency is greater than the highcut frequency
+    ComponentSelectionError
+        If no N, E, X, or Y components are found in the mseed
     """
 
     # Load config variables
@@ -213,7 +219,9 @@ def high_and_low_cut_processing(
 
     # Check if the lowcut is greater than the highcut
     if lowcut > highcut:
-        raise ValueError("The lowcut frequency is greater than the highcut frequency")
+        raise custom_errors.LowcutHighcutError(
+            f"Lowcut frequency {lowcut} is greater than the highcut frequency {highcut}"
+        )
 
     # Set fs
     fs = 1.0 / dt
@@ -223,10 +231,15 @@ def high_and_low_cut_processing(
         acc_000 = mseed.select(channel="*N")[0]
         acc_090 = mseed.select(channel="*E")[0]
     except IndexError:
-        # If the N and E components are not found, try the X and Y components
-        # TODO Check that this is valid with brendon later
-        acc_000 = mseed.select(channel="*X")[0]
-        acc_090 = mseed.select(channel="*Y")[0]
+        try:
+            # If the N and E components are not found, try the X and Y components
+            # TODO Check that this is valid with brendon later
+            acc_000 = mseed.select(channel="*X")[0]
+            acc_090 = mseed.select(channel="*Y")[0]
+        except IndexError:
+            raise custom_errors.ComponentSelectionError(
+                "No N, X or E, Y components found in the mseed"
+            )
     acc_ver = mseed.select(channel="*Z")[0]
 
     # Apply the bandpass filter

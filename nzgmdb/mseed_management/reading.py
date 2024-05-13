@@ -2,8 +2,8 @@ from pathlib import Path
 
 import numpy as np
 import obspy
-from IM_calculation.IM import read_waveform
 
+from IM_calculation.IM import read_waveform
 from nzgmdb.data_processing import waveform_manipulation
 
 

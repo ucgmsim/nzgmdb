@@ -5,10 +5,10 @@ from pathlib import Path
 
 import obspy
 import pandas as pd
-import qcore.timeseries as ts
 
+import qcore.timeseries as ts
 from nzgmdb.data_processing import waveform_manipulation
-from nzgmdb.management import file_structure
+from nzgmdb.management import file_structure, custom_errors
 
 
 def process_single_mseed(mseed_file: str, gmc_df: pd.DataFrame, fmax_df: pd.DataFrame):
@@ -52,12 +52,19 @@ def process_single_mseed(mseed_file: str, gmc_df: pd.DataFrame, fmax_df: pd.Data
         return skipped_record
 
     # Perform initial pre-processing
-    mseed = waveform_manipulation.initial_preprocessing(mseed)
-
-    if mseed is None:
+    try:
+        mseed = waveform_manipulation.initial_preprocessing(mseed)
+    except custom_errors.InventoryNotFoundError:
         skipped_record_dict = {
             "mseed_file": mseed_stem,
             "reason": "Failed to find Inventory information",
+        }
+        skipped_record = pd.DataFrame([skipped_record_dict])
+        return skipped_record
+    except custom_errors.SensitivityRemovalError:
+        skipped_record_dict = {
+            "mseed_file": mseed_stem,
+            "reason": "Failed to remove sensitivity",
         }
         skipped_record = pd.DataFrame([skipped_record_dict])
         return skipped_record
@@ -81,10 +88,17 @@ def process_single_mseed(mseed_file: str, gmc_df: pd.DataFrame, fmax_df: pd.Data
             acc_bb_090,
             acc_bb_ver,
         ) = waveform_manipulation.high_and_low_cut_processing(mseed, dt, fmin, fmax)
-    except ValueError:
+    except custom_errors.LowcutHighcutError:
         skipped_record_dict = {
             "mseed_file": mseed_stem,
             "reason": "Lowcut frequency is greater than the highcut frequency",
+        }
+        skipped_record = pd.DataFrame([skipped_record_dict])
+        return skipped_record
+    except custom_errors.ComponentSelectionError:
+        skipped_record_dict = {
+            "mseed_file": mseed_stem,
+            "reason": "Failed to find N, E, X, or Y components",
         }
         skipped_record = pd.DataFrame([skipped_record_dict])
         return skipped_record
