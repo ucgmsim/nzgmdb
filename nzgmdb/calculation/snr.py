@@ -2,12 +2,12 @@ import functools
 import multiprocessing as mp
 from pathlib import Path
 
-import obspy
+import IM_calculation.IM.snr_calculation as snr_calc
 import numpy as np
+import obspy
 import pandas as pd
 
-import IM_calculation.IM.snr_calculation as snr_calc
-from nzgmdb.management import file_structure, config as cfg
+from nzgmdb.management import file_structure, custom_errors, config as cfg
 from nzgmdb.mseed_management import reading
 from nzgmdb.phase_arrival import tp_selection
 
@@ -59,9 +59,18 @@ def compute_snr_for_single_mseed(
     event_id = file_structure.get_event_id_from_mseed(mseed_file)
 
     # Read mseed information
-    waveform = reading.create_waveform_from_mseed(mseed_file, process=True)
-
-    if waveform is None:
+    try:
+        waveform = reading.create_waveform_from_mseed(mseed_file, pre_process=True)
+    except custom_errors.InventoryNotFoundError:
+        skipped_record_dict = {
+            "event_id": event_id,
+            "station": station,
+            "mseed_file": mseed_file.name,
+            "reason": "Failed to find inventory information",
+        }
+        skipped_record = pd.DataFrame([skipped_record_dict])
+        return None, skipped_record
+    except custom_errors.SensitivityRemovalError:
         skipped_record_dict = {
             "event_id": event_id,
             "station": station,
@@ -74,15 +83,23 @@ def compute_snr_for_single_mseed(
     stats = obspy.read(str(mseed_file))[0].stats
 
     # Index of the start of the P-wave
-    tp = tp_selection.get_tp_from_phase_table(phase_table_path, stats, event_id)
-
-    # If there is no tp, record and skip this file
-    if tp is None:
+    try:
+        tp = tp_selection.get_tp_from_phase_table(phase_table_path, stats, event_id)
+    except custom_errors.NoPWaveFoundError:
         skipped_record_dict = {
             "event_id": event_id,
             "station": station,
             "mseed_file": mseed_file.name,
             "reason": "No P-wave found in phase arrival table",
+        }
+        skipped_record = pd.DataFrame([skipped_record_dict])
+        return None, skipped_record
+    except custom_errors.TPNotInWaveformError:
+        skipped_record_dict = {
+            "event_id": event_id,
+            "station": station,
+            "mseed_file": mseed_file.name,
+            "reason": "TP not in waveform bounds",
         }
         skipped_record = pd.DataFrame([skipped_record_dict])
         return None, skipped_record

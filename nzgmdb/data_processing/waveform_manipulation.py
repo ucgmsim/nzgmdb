@@ -1,8 +1,8 @@
-from obspy.core.stream import Stream
 from obspy.clients.fdsn import Client as FDSN_Client
 from obspy.clients.fdsn.header import FDSNNoDataException
+from obspy.core.stream import Stream
 
-from nzgmdb.management import config as cfg
+from nzgmdb.management import custom_errors, config as cfg
 
 
 def initial_preprocessing(mseed: Stream):
@@ -20,8 +20,15 @@ def initial_preprocessing(mseed: Stream):
 
     Returns
     -------
-    mseed : Stream or None
-        The processed waveform data, or None if the processing failed
+    mseed : Stream
+        The processed waveform data
+
+    Raises
+    ------
+    InventoryNotFoundError
+        If no inventory information is found for the station and location pair
+    SensitivityRemovalError
+        If the sensitivity removal fails
     """
     # Small Processing
     mseed.detrend("demean")
@@ -45,8 +52,9 @@ def initial_preprocessing(mseed: Stream):
                 level="response", network="IU", station=station, location=location
             )
         except FDSNNoDataException:
-            print(f"Failed to find inventory information")
-            return None
+            raise custom_errors.InventoryNotFoundError(
+                f"No inventory information found for station {station} with location {location}"
+            )
 
     # Add the response (Same for all channels)
     # this is done so that the sensitivity can be removed otherwise it tries to find the exact same channel
@@ -58,8 +66,9 @@ def initial_preprocessing(mseed: Stream):
     try:
         mseed = mseed.remove_sensitivity()
     except ValueError:
-        print(f"Failed to remove sensitivity")
-        return None
+        raise custom_errors.SensitivityRemovalError(
+            f"Failed to remove sensitivity for station {station} with location {location}"
+        )
 
     # Get constant gravity (g)
     config = cfg.Config()

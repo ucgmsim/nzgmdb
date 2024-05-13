@@ -4,9 +4,11 @@ Functions for getting specific times / indexes for p / s waves from the phase ar
 
 from pathlib import Path
 
-import pytz
 import pandas as pd
+import pytz
 from obspy.core import Stats
+
+from nzgmdb.management import custom_errors
 
 
 def get_tp_from_phase_table(phase_table_path: Path, mseed_stats: Stats, event_id: str):
@@ -25,8 +27,14 @@ def get_tp_from_phase_table(phase_table_path: Path, mseed_stats: Stats, event_id
 
     Returns
     -------
-    tp: Index of the p-wave arrival for the waveform array,
-        None if no p-wave arrival could be found
+    tp: Index of the p-wave arrival for the waveform array
+
+    Raises
+    ------
+    NoPWaveFoundError
+        If no P-wave arrival data is found for the event / station pair
+    TPNotInWaveformError
+        If the TP is not within the bounds of the waveform
     """
     phase_arrival_table = pd.read_csv(phase_table_path, low_memory=False)
 
@@ -35,16 +43,20 @@ def get_tp_from_phase_table(phase_table_path: Path, mseed_stats: Stats, event_id
         (phase_arrival_table["evid"] == event_id)
         & (phase_arrival_table["sta"] == mseed_stats.station)
     ]
-    # If there is no data for the event / station pair, return None
+    # Check if there is no data for the event / station pair
     if len(event_df) == 0:
-        return None
+        raise custom_errors.NoPWaveFoundError(
+            f"No P-Wave arrival data found for event {event_id} and station {mseed_stats.station}"
+        )
 
     # Select the correct phase (Needs to start with a P)
     phase_row = event_df.loc[event_df["phase"].str.upper().str.startswith("P")]
 
-    # If there is no P phase, return None
+    # Check if there is no P phase
     if len(phase_row) == 0:
-        return None
+        raise custom_errors.NoPWaveFoundError(
+            f"No P-Wave arrival data found for event {event_id} and station {mseed_stats.station}"
+        )
 
     # Get the time of the P phase
     tp_time = pd.Timestamp(phase_row["datetime"].values[0], tz=pytz.UTC)
@@ -87,6 +99,8 @@ def get_tp_from_phase_table(phase_table_path: Path, mseed_stats: Stats, event_id
 
     # Ensure the tp is within the range of the waveform
     if tp > mseed_stats.npts or tp < 0:
-        return None
+        raise custom_errors.TPNotInWaveformError(
+            f"TP is not within the bounds of the waveform for event {event_id} and station {mseed_stats.station}"
+        )
     else:
         return tp

@@ -1,8 +1,9 @@
-import obspy
-import numpy as np
 from pathlib import Path
 
+import numpy as np
+import obspy
 from IM_calculation.IM import read_waveform
+
 from nzgmdb.data_processing import waveform_manipulation
 
 
@@ -20,13 +21,19 @@ def create_waveform_from_mseed(
         Path to the mseed file
     pre_process : bool (optional)
         Whether to do some small processing such as detrending and removing sensitivity
-        (Can however fail if the sensitivity can't be removed and will return None)
+        (Can however fail if the sensitivity can't be removed and raise errors), by default False
 
     Returns
     -------
-    Waveform, None
+    Waveform
         The waveform object created from the mseed file
-        or None if processing failed
+
+    Raises
+    ------
+    InventoryNotFoundError
+        If no inventory information is found for the station and location pair
+    SensitivityRemovalError
+        If the sensitivity removal fails
     """
     # Read the mseed file
     mseed = obspy.read(str(mseed_file))
@@ -34,8 +41,6 @@ def create_waveform_from_mseed(
     # Process the data if needed
     if pre_process:
         mseed = waveform_manipulation.initial_preprocessing(mseed)
-        if mseed is None:
-            return None
 
     # Stack the data
     data = np.stack([tr.data for tr in mseed], axis=1)
