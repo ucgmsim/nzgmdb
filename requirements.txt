@@ -12,3 +12,6 @@ pytz
 # Below help for installing IM_calculation
 Cython
 wheel
+# Below is for Jenkins test
+pytest
+black

@@ -171,8 +171,8 @@ def high_and_low_cut_processing(
     """
     Process the waveform data by using the highcut and lowcut for the butter bandpass filter
     This processing performs the following:
-    - Remove the zero padding
     - Apply the bandpass filter
+    - Remove the zero padding
     - Calculate the velocity and displacement
     - Fit a six-order polynomial to the displacement series
     - Subtract the 2nd derivative of the polynomial from the original acc series
