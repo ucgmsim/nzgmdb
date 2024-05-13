@@ -2,15 +2,16 @@
     Contains functions for generating the phase arrival table
 """
 
+import multiprocessing
+from datetime import timedelta
+from pathlib import Path
+
 import numpy as np
 import pandas as pd
 from obspy import read
-import multiprocessing
-from pathlib import Path
-from datetime import timedelta
 
-from .picker import p_phase_picker
 from nzgmdb.management import file_structure
+from .picker import p_phase_picker
 
 
 def get_p_wave(data: np.ndarray, dt: int):
@@ -145,4 +146,5 @@ def generate_phase_arrival_table(main_dir: Path, output_dir: Path, n_procs: int)
     df = pd.DataFrame([tup[0] for data_list in mseed_data_list for tup in data_list])
 
     # Save the dataframe
+    output_dir.mkdir(parents=True, exist_ok=True)
     df.to_csv(output_dir / "phase_arrival_table.csv", index=False)
