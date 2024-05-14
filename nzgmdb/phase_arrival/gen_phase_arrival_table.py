@@ -7,8 +7,8 @@ from datetime import timedelta
 from pathlib import Path
 
 import numpy as np
+import obspy
 import pandas as pd
-from obspy import read
 from obspy.clients.fdsn import Client as FDSN_Client
 
 from nzgmdb.management import file_structure
@@ -67,7 +67,7 @@ def process_mseed(mseed_file_chunk: list):
     data_list = []
     for file in mseed_file_chunk:
         # Read the mseed file
-        mseed_data = read(str(file))
+        mseed_data = obspy.read(str(file))
 
         try:
             p_comp_000 = get_p_wave(mseed_data[0].data, mseed_data[0].stats.delta)
@@ -167,7 +167,7 @@ def fetch_geonet_phases(mseed_file: Path):
     evid = file_structure.get_event_id_from_mseed(mseed_file)
 
     # Read the mseed
-    mseed = read(str(mseed_file))
+    mseed = obspy.read(str(mseed_file))
 
     # Fetch all records relating to the given event ID (evid) from Geonet
     # Fetched records include all phase picks and arrival times for all combinations of
