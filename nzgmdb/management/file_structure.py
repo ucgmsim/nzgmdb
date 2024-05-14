@@ -71,3 +71,16 @@ def get_data_dir():
     Get the directory to the data files
     """
     return Path(__file__).parent.parent / "data"
+
+
+def get_snr_fas_dir(main_dir: Path):
+    """
+    Get the directory to save the SNR and FAS results
+
+    Parameters
+    ----------
+    main_dir : Path
+        The main directory of the NZGMDB results (Highest level directory)
+    """
+    snr_fas_dir = main_dir / "snr_fas"
+    return snr_fas_dir
