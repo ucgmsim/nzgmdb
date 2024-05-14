@@ -12,6 +12,9 @@ def initial_preprocessing(mseed: Stream):
     Basic pre processing of the waveform data
     This performs the following:
     - Demean and Detrend the data
+    - Taper the data 5% at each end
+    - Perform zero padding
+    - Rotate the data to NEZ
     - Remove the sensitivity using the inventory response information if possible
     - Divide the data by the constant gravity (g)
 
