@@ -115,3 +115,16 @@ def get_processed_dir_from_mseed(mseed_file: Path):
         The directory to save the processed files
     """
     return mseed_file.parent.parent / "processed"
+
+
+def get_im_dir(main_dir: Path):
+    """
+    Get the directory to the IM data
+
+    Parameters
+    ----------
+    main_dir : Path
+        The main directory of the NZGMDB results (Highest level directory)
+    """
+    im_dir = main_dir / "IM"
+    return im_dir
