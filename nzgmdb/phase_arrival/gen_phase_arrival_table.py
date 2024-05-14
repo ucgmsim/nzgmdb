@@ -120,17 +120,6 @@ def process_mseed(mseed_file_chunk: list):
             evid = file_structure.get_event_id_from_mseed(file)
 
             new_data = (
-                # {
-                #     "arid": arid,
-                #     "datetime": datetime,
-                #     "net": net,
-                #     "sta": sta,
-                #     "loc": loc,
-                #     "chan": chan,
-                #     "phase": phase,
-                #     "t_res": t_res,
-                #     "evid": evid,
-                # },
                 {
                     "evid": evid,
                     "datetime": datetime,
@@ -146,120 +135,89 @@ def process_mseed(mseed_file_chunk: list):
     return data_list
 
 
-def fetch_geonet_phase(mseed_file: Path):
-    phase_lines = []
-    # Get the evid
+class too_many_matching_geonet_picks_Exception(Exception):
+    """
+    This exception is raised if more than two phase picks from Geonet seem to match a given mseed file
+    as there should only be one P phase pick and sometimes one S phase pick
+    """
+
+    pass
+
+
+def fetch_geonet_phases(mseed_file: Path):
+    """
+    Fetch the phase arrival times from Geonet that correspond to a given mseed file
+    (matching event ID, network, station, and channel)
+
+    Parameters
+    ----------
+    mseed_file: Path
+        Path to the mseed file
+
+    Returns
+    ----------
+    phase_lines_for_table: list
+        A list of phase arrival times
+    """
+
+    # Creating an empty list that will be populated and returned
+    phase_lines_for_table = []
+
+    # Get the event ID (evid) from the mseed file
     evid = file_structure.get_event_id_from_mseed(mseed_file)
 
     # Read the mseed
     mseed = read(str(mseed_file))
-    stats = mseed[0].stats
 
+    # Fetch all records relating to the given event ID (evid) from Geonet
+    # Fetched records include all phase picks and arrival times for all combinations of
+    # network, station, location, and channel
     client_NZ = FDSN_Client("GEONET")
     cat = client_NZ.get_events(eventid=evid)
-
     event = cat[0]
-    arrivals = event.preferred_origin().arrivals
 
-    # Get mseed info
-    network = stats.network
-    sta = stats.station
-    loc = stats.location
-    chan = stats.channel[:2]
-
-    # Find the pick
-    picks = event.picks
-    mseed_picks = []
-    for pick in picks:
+    # Find the picks corresponding to the given mseed file (matching network, station, location, and channel)
+    picks_matching_mseed = []
+    for pick in event.picks:
         if (
-            pick.waveform_id.network_code == network
-            and pick.waveform_id.station_code == sta
-            and pick.waveform_id.location_code == loc
-            and pick.waveform_id.channel_code[:2] == chan
+            pick.waveform_id.network_code == mseed[0].stats.network
+            and pick.waveform_id.station_code == mseed[0].stats.station
+            and pick.waveform_id.location_code == mseed[0].stats.location
+            and pick.waveform_id.channel_code[:2] == mseed[0].stats.channel[:2]
         ):
-            mseed_picks.append(pick)
+            picks_matching_mseed.append(pick)
 
-    # Get arrival data
-    mseed_arrivals = [
+    # Check that the number of matching picks is acceptable
+    if len(picks_matching_mseed) > 2:
+        raise too_many_matching_geonet_picks_Exception(
+            "More than two phase picks from Geonet seem to match the given mseed file. There should only be one P phase pick and sometimes one S phase pick."
+        )
+
+    # Get arrival data corresponding to the given mseed file by matching pick_id
+    mseed_arrival_pick_pairs = [
         (arrival, pick)
-        for arrival in arrivals
-        for pick in mseed_picks
+        for arrival in event.preferred_origin().arrivals
+        for pick in picks_matching_mseed
         if pick.resource_id == arrival.pick_id
     ]
 
-    if len(mseed_picks) > 2:
-        print(
-            "Two primary phase arrival times for a given event ID, station, and channel were found in Geonet"
-        )
-        raise Exception
-
-    added_p_wave = False
-    potential_p_wave = None
-
-    for mseed_arrival, pick in mseed_arrivals:
-        phase = mseed_arrival.phase
-        arr_t_res = mseed_arrival.time_residual
-        if phase != "P":
-            phase_line = (
-                {
-                    "evid": evid,
-                    "datetime": pick.time,
-                    "net": network,
-                    "sta": sta,
-                    "loc": loc,
-                    "chan": chan,
-                    "phase": phase,
-                    "t_res": arr_t_res,
-                },
-            )
-            phase_lines.append(phase_line)
-        elif not added_p_wave:
-            if pick.waveform_id.channel_code[-1] == "Z":
-                phase_line = (
-                    {
-                        "evid": evid,
-                        "datetime": pick.time,
-                        "net": network,
-                        "sta": sta,
-                        "loc": loc,
-                        "chan": chan,
-                        "phase": phase,
-                        "t_res": arr_t_res,
-                    },
-                )
-                phase_lines.append(phase_line)
-                added_p_wave = True
-            else:
-                if potential_p_wave is None:
-                    potential_p_wave = (mseed_arrival, pick)
-                else:
-                    current_time = potential_p_wave[1].time
-                    potential_new_time = pick.time
-
-                    potential_p_wave = (
-                        potential_p_wave
-                        if current_time < potential_new_time
-                        else (mseed_arrival, pick)
-                    )
-
-    if potential_p_wave is not None:
-        phase = potential_p_wave[0].phase
-        arr_t_res = potential_p_wave[0].time_residual
+    # Create the lines to write in the phase arrival table
+    for mseed_arrival, pick in mseed_arrival_pick_pairs:
         phase_line = (
             {
                 "evid": evid,
-                "datetime": potential_p_wave[1].time,
-                "net": network,
-                "sta": sta,
-                "loc": loc,
-                "chan": chan,
-                "phase": phase,
-                "t_res": arr_t_res,
+                "datetime": pick.time,
+                "net": mseed[0].stats.network,
+                "sta": mseed[0].stats.station,
+                "loc": mseed[0].stats.location,
+                "chan": mseed[0].stats.channel[:2],
+                "phase": mseed_arrival.phase,
+                "t_res": mseed_arrival.time_residual,
             },
         )
-        phase_lines.append(phase_line)
+        phase_lines_for_table.append(phase_line)
 
-    return phase_lines
+    return phase_lines_for_table
 
 
 def generate_phase_arrival_table(main_dir: Path, output_dir: Path, n_procs: int):
@@ -289,42 +247,37 @@ def generate_phase_arrival_table(main_dir: Path, output_dir: Path, n_procs: int)
         # Map the reading function to the file chunks
         mseed_data_list = pool.map(process_mseed, file_chunks)
 
-    # Create the dataframe
-    df = pd.DataFrame([tup[0] for data_list in mseed_data_list for tup in data_list])
-
-    geo_phase_lines = []
-    for mseed_file in mseed_files:
-        geo_phase_lines.extend(fetch_geonet_phase(mseed_file))
-
-    # Create DataFrame
-    geo_df = pd.DataFrame([tup[0] for tup in geo_phase_lines])
-
-    # Setting all df t_res = 0.0 because if they are left as nan, the Geonet t_res values are subsituted even though
-    # we are using the arrival time from picker (instead of from Geonet)
-    df["t_res"] = 0.0
-
-    geo_df_unique_label_cols_to_exclude = ["datetime", "t_res"]
-    geo_df_unique_label_cols = [
-        x for x in list(geo_df) if x not in geo_df_unique_label_cols_to_exclude
-    ]
-    geo_df_unique_label = geo_df.set_index(geo_df_unique_label_cols)
-    df_unique_label = df.set_index(geo_df_unique_label_cols)
-
-    f1 = df_unique_label
-    f2 = geo_df_unique_label
-
-    # Adds extra fields that are not already in f1 from f2 that dont have the same index names
-    int_df = f1.combine_first(f2)
-    # reset the index back to normal
-    int_df = int_df.reset_index()
-
-    # Save the dataframe
-    df.to_csv(output_dir / "picker_phase_arrival_table.csv", index=False)
-
-    # Save the Geonet phase arrival table
-    geo_df.to_csv(output_dir / "geonet_phase_arrival_table.csv", index=False)
-
-    # Save the dataframe with Geonet arrival times and Picker's arrival times when available
-    int_df.to_csv(
-        output_dir / "merged_picker_and_geonet_phase_arrival_table.csv", index=False
+    # Create the dataframe for phases from picker
+    picker_phases_df = pd.DataFrame(
+        [tup[0] for data_list in mseed_data_list for tup in data_list]
     )
+
+    # Changing picker_phases_df[t_res] from nan to 0.0 so that the Geonet t_res values
+    # will not be used for the missing picker_phases_df[t_res] values from picker
+    picker_phases_df["t_res"] = 0.0
+
+    # Get the Geonet phases
+    geonet_phase_lines = []
+    for mseed_file in mseed_files:
+        geonet_phase_lines.extend(fetch_geonet_phases(mseed_file))
+
+    # Create a DataFrame containing Geonet phases
+    geonet_phases_df = pd.DataFrame([tup[0] for tup in geonet_phase_lines])
+
+    # Use other columns as a new DataFrame index
+    columns_to_merge_for_new_index = ["evid", "net", "sta", "loc", "chan", "phase"]
+    geonet_phases_df_new_index = geonet_phases_df.set_index(
+        columns_to_merge_for_new_index
+    )
+    picker_phases_df_new_index = picker_phases_df.set_index(
+        columns_to_merge_for_new_index
+    )
+
+    # Use the new index to add Geonet phases if they were not found by picker
+    merged_df = picker_phases_df_new_index.combine_first(geonet_phases_df_new_index)
+
+    # reset the index back to normal
+    merged_df = merged_df.reset_index()
+
+    # Save the phase arrival table
+    merged_df.to_csv(output_dir / "phase_arrival_table.csv", index=False)
