@@ -37,84 +37,78 @@ def get_p_wave(data: np.ndarray, dt: int):
     return loc
 
 
-def process_mseed(mseed_file_chunk: list):
+def process_mseed(mseed_file: Path):
     """
-    Process a chunk of mseed files and return the phase arrival data
+    Process an mseed file and return the phase arrival data.
 
     Parameters
     ----------
-    mseed_file_chunk : list
-        A list of mseed files to process
+    mseed_file : Path
+        Path to the mseed file.
     """
-    data_list = []
-    for file in mseed_file_chunk:
-        # Read the mseed file
-        mseed_data = obspy.read(str(file))
 
-        try:
-            p_comp_000 = get_p_wave(mseed_data[0].data, mseed_data[0].stats.delta)
-        except:
-            p_comp_000 = -1
-        try:
-            p_comp_090 = get_p_wave(mseed_data[1].data, mseed_data[1].stats.delta)
-        except:
-            p_comp_090 = -1
-        try:
-            p_comp_ver = get_p_wave(mseed_data[2].data, mseed_data[2].stats.delta)
-        except:
-            p_comp_ver = -1
+    mseed_data = obspy.read(str(mseed_file))
 
-        if p_comp_ver > 1:
-            # Vertical is greater than 1 use this for the record
-            p_wave_loc = p_comp_ver
-        else:
-            # Find the max between all three components and take away 0.5
-            p_wave_loc = max(p_comp_000, p_comp_090, p_comp_ver) - 0.5
+    try:
+        p_comp_000 = get_p_wave(mseed_data[0].data, mseed_data[0].stats.delta)
+    except:
+        p_comp_000 = -1
+    try:
+        p_comp_090 = get_p_wave(mseed_data[1].data, mseed_data[1].stats.delta)
+    except:
+        p_comp_090 = -1
+    try:
+        p_comp_ver = get_p_wave(mseed_data[2].data, mseed_data[2].stats.delta)
+    except:
+        p_comp_ver = -1
 
-        if p_wave_loc < 0:
-            continue
-        else:
-            arid = None
-            stats = mseed_data[0].stats
+    if p_comp_ver > 1:
+        # Vertical is greater than 1 use this for the record
+        p_wave_loc = p_comp_ver
+    else:
+        # Find the max between all three components and take away 0.5
+        p_wave_loc = max(p_comp_000, p_comp_090, p_comp_ver) - 0.5
 
-            # Get the datetime
-            datetime = stats.starttime + timedelta(seconds=p_wave_loc)
+    if p_wave_loc >= 0:
+        stats = mseed_data[0].stats
 
-            # Get the net
-            net = stats.network
+        # Get the datetime
+        datetime = stats.starttime + timedelta(seconds=p_wave_loc)
 
-            # Get the sta
-            sta = stats.station
+        # Get the net
+        net = stats.network
 
-            # Get the loc
-            loc = stats.location
+        # Get the sta
+        sta = stats.station
 
-            # Get the chan
-            chan = stats.channel
+        # Get the loc
+        loc = stats.location
 
-            # Get the phase
-            phase = "P"
+        # Get the chan
+        chan = stats.channel
 
-            # Get the t_res
-            t_res = None
+        # Get the phase
+        phase = "P"
 
-            # Get the evid
-            evid = file_structure.get_event_id_from_mseed(file)
+        # Get the t_res
+        t_res = None
 
-            new_data = (
-                {
-                    "evid": evid,
-                    "datetime": datetime,
-                    "net": net,
-                    "sta": sta,
-                    "loc": loc,
-                    "chan": chan[:2],
-                    "phase": phase,
-                    "t_res": t_res,
-                },
-            )
-            data_list.append(new_data)
-    return data_list
+        # Get the evid
+        evid = file_structure.get_event_id_from_mseed(mseed_file)
+
+        new_data = (
+            {
+                "evid": evid,
+                "datetime": datetime,
+                "net": net,
+                "sta": sta,
+                "loc": loc,
+                "chan": chan[:2],
+                "phase": phase,
+                "t_res": t_res,
+            },
+        )
+        return new_data
 
 
 class InvalidNumberOfGeonetPicksException(Exception):
@@ -229,21 +223,17 @@ def generate_phase_arrival_table(main_dir: Path, output_dir: Path, n_procs: int)
     # Find all mseed files recursively
     mseed_files = list(main_dir.glob("**/*.mseed"))
 
-    # Split the mseed files into chunks based on the number of processes
-    file_chunks = [mseed_files[i::n_procs] for i in range(n_procs)]
-
     # Initialize a multiprocessing Pool
     with multiprocessing.Pool(processes=n_procs) as pool:
-        # Map the reading function to the file chunks
-        mseed_data_list = pool.map(process_mseed, file_chunks)
-        # mseed_data_list2 = pool.map(process_mseed, mseed_files)
-
-    print("breakpoint")
-
+        # Map the reading function to the file list.
+        # Process_mseed could return None, so we filter this out.
+        mseed_data_list = [
+            mseed_data
+            for mseed_data in pool.map(process_mseed, mseed_files)
+            if mseed_data
+        ]
     # Create the dataframe for phases from picker
-    picker_phases_df = pd.DataFrame(
-        [tup[0] for data_list in mseed_data_list for tup in data_list]
-    )
+    picker_phases_df = pd.DataFrame([data_list[0] for data_list in mseed_data_list])
 
     # Change picker_phases_df[t_res] from nan to 0.0 so Geonet t_res values
     # will not be substituted for the missing picker_phases_df[t_res] values
