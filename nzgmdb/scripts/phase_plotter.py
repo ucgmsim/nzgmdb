@@ -23,6 +23,7 @@ def make_plot(
         typer.Argument(
             help="Path to the mseed file containing waveforms.",
             exists=True,
+            file_okay=True,
         ),
     ],
     phase_arrival_table: Annotated[
@@ -30,6 +31,7 @@ def make_plot(
         typer.Argument(
             help="Path to the phase arrival table.",
             exists=True,
+            file_okay=True,
         ),
     ],
     output_dir: Annotated[
@@ -37,6 +39,7 @@ def make_plot(
         typer.Argument(
             help="The directory to save the plot in.",
             exists=True,
+            file_okay=False,
         ),
     ],
 ):
@@ -51,6 +54,7 @@ def batch_plot(
             help="The main directory of the NZGMDB results (highest level directory) "
             "(glob is used to find all mseed files recursively).",
             exists=True,
+            file_okay=False,
         ),
     ],
     phase_arrival_table: Annotated[
@@ -58,6 +62,7 @@ def batch_plot(
         typer.Argument(
             help="The phase arrival table to load.",
             exists=True,
+            file_okay=True,
         ),
     ],
     output_dir: Annotated[
@@ -65,6 +70,7 @@ def batch_plot(
         typer.Argument(
             help="The directory to save the plot in.",
             exists=True,
+            file_okay=False,
         ),
     ],
     n_procs: Annotated[int, typer.Option(help="Number of processes to use")] = 1,

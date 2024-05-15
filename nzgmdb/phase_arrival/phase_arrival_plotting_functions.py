@@ -4,6 +4,7 @@
     from mseed files.
 """
 
+import functools
 import multiprocessing
 from pathlib import Path
 
@@ -47,9 +48,10 @@ def plot_phase_arrivals_on_mseed_waveforms(
 
     # Creating a list of phase arrival times,
     # formatted for plotting with matplotlib
-    arrival_times_as_list = []
-    for arrival_time in phase_arrival_times.values:
-        arrival_times_as_list.append(obspy.UTCDateTime(arrival_time).matplotlib_date)
+    arrival_times_as_list = [
+        obspy.UTCDateTime(arrival_time).matplotlib_date
+        for arrival_time in phase_arrival_times.values
+    ]
 
     if len(arrival_times_as_list) > 0:
 
@@ -67,31 +69,6 @@ def plot_phase_arrivals_on_mseed_waveforms(
             ax.vlines(arrival_times_as_list, ymin=-1e6, ymax=1e6, linestyle="--")
         fig.savefig(output_dir / f"{mseed_file.stem}.png")
         plt.close()
-
-
-def unpack_inputs_and_call_plotting_function(input_list: list):
-    """
-    Unpacks inputs and passes them
-    to the plotting function.
-
-    Parameters
-    ----------
-    input_list: list
-        A list of inputs of the form
-         [ [file_list_chunk: list] ,
-           phase_arrival_table_path: Path,
-           output_dir: Path] ].
-    """
-
-    mseed_file_list = input_list[0]
-    phase_arrival_table_path = input_list[1]
-    output_dir = input_list[2]
-
-    for mseed_file in mseed_file_list:
-
-        plot_phase_arrivals_on_mseed_waveforms(
-            mseed_file, phase_arrival_table_path, output_dir
-        )
 
 
 #############################################################################
@@ -117,16 +94,14 @@ def batch_plot_phase_arrivals(
 
     # Find all mseed files recursively
     mseed_files = list(main_dir.glob("**/*.mseed"))
-
-    # Split the mseed files into chunks based on the number of processes
-    file_chunks = [mseed_files[i::n_procs] for i in range(n_procs)]
-
-    # Pack inputs into a list for pool.map()
-    list_of_inputs_for_pool = [
-        (file_chunk, phase_arrival_table, output_dir) for file_chunk in file_chunks
-    ]
-
     # Initialize a multiprocessing Pool
     with multiprocessing.Pool(processes=n_procs) as pool:
         # Map the plotting function to the file chunks
-        pool.map(unpack_inputs_and_call_plotting_function, list_of_inputs_for_pool)
+        pool.map(
+            functools.partial(
+                plot_phase_arrivals_on_mseed_waveforms,
+                phase_arrival_table=phase_arrival_table,
+                output_dir=output_dir,
+            ),
+            mseed_files,
+        )

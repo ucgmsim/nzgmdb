@@ -4,6 +4,7 @@
 """
 
 import multiprocessing
+import typing
 from datetime import timedelta
 from pathlib import Path
 
@@ -13,7 +14,7 @@ import pandas as pd
 from obspy.clients.fdsn import Client as FDSN_Client
 
 from nzgmdb.management import file_structure
-from .picker import p_phase_picker
+from nzgmdb.phase_arrival import picker
 
 
 def get_p_wave(data: np.ndarray, dt: int):
@@ -29,7 +30,7 @@ def get_p_wave(data: np.ndarray, dt: int):
     """
     wftype = "SM"  # Input wftype is strong motion
     try:
-        loc = p_phase_picker(data, dt, wftype)
+        loc = picker.p_phase_picker(data, dt, wftype)
     except Exception as e:
         print(e)
         loc = -1
@@ -116,7 +117,7 @@ def process_mseed(mseed_file_chunk: list):
     return data_list
 
 
-class too_many_matching_geonet_picks_Exception(Exception):
+class InvalidNumberOfGeonetPicksException(Exception):
     """
     This exception is raised if more than two phase picks
     from Geonet match a given mseed file as there should
@@ -126,10 +127,9 @@ class too_many_matching_geonet_picks_Exception(Exception):
     pass
 
 
-def fetch_geonet_phases(mseed_file: Path):
+def fetch_geonet_phases(mseed_file: Path) -> list[dict[str, typing.Any]]:
     """
-    Fetch the phase arrival times from
-    Geonet for a given mseed file.
+    Fetch the phase arrival times from Geonet for a given mseed file.
 
     Parameters
     ----------
@@ -137,9 +137,16 @@ def fetch_geonet_phases(mseed_file: Path):
         Path to the mseed file.
 
     Returns
-    ----------
-    phase_lines_for_table: list
+    -------
+    phase_lines_for_table: list[dict[str, typer.Any]]
         A list of phase arrival times.
+
+    Raises
+    ------
+    InvalidNumberOfGeonetPicksException
+        If more than two phase picks from Geonet match
+        a given mseed file as there should only be one
+        P phase pick and sometimes one S phase pick.
     """
 
     # Creating an empty list that will be populated and returned
@@ -172,7 +179,7 @@ def fetch_geonet_phases(mseed_file: Path):
 
     # Check that the number of matching picks is acceptable
     if len(picks_matching_mseed) > 2:
-        raise too_many_matching_geonet_picks_Exception(
+        raise InvalidNumberOfGeonetPicksException(
             "More than two phase picks from Geonet seem to match the given mseed file."
             "\nThere should only be one P phase pick and sometimes one S phase pick."
         )
@@ -229,6 +236,9 @@ def generate_phase_arrival_table(main_dir: Path, output_dir: Path, n_procs: int)
     with multiprocessing.Pool(processes=n_procs) as pool:
         # Map the reading function to the file chunks
         mseed_data_list = pool.map(process_mseed, file_chunks)
+        # mseed_data_list2 = pool.map(process_mseed, mseed_files)
+
+    print("breakpoint")
 
     # Create the dataframe for phases from picker
     picker_phases_df = pd.DataFrame(
