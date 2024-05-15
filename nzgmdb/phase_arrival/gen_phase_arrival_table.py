@@ -1,5 +1,6 @@
 """
-    Contains functions for generating the phase arrival table
+    Contains functions for generating
+    the phase arrival table
 """
 
 import multiprocessing
@@ -13,26 +14,6 @@ from obspy.clients.fdsn import Client as FDSN_Client
 
 from nzgmdb.management import file_structure
 from .picker import p_phase_picker
-
-
-# def get_p_wave(data: np.ndarray, dt: int):
-#     """
-#     Get the P wave arrival time from the data
-#
-#     Parameters
-#     ----------
-#     data : np.ndarray
-#         The waveform data from a single component
-#     dt : int
-#         The sample rate of the data
-#     """
-#     wftype = "SM"  # Input wftype is strong motion
-#     try:
-#         loc = p_phase_picker(data, dt, wftype)
-#     except Exception as e:
-#         print(e)
-#         loc = -1
-#     return loc
 
 
 def get_p_wave(data: np.ndarray, dt: int):
@@ -137,8 +118,9 @@ def process_mseed(mseed_file_chunk: list):
 
 class too_many_matching_geonet_picks_Exception(Exception):
     """
-    This exception is raised if more than two phase picks from Geonet seem to match a given mseed file
-    as there should only be one P phase pick and sometimes one S phase pick
+    This exception is raised if more than two phase picks
+    from Geonet match a given mseed file as there should
+    only be one P phase pick and sometimes one S phase pick.
     """
 
     pass
@@ -146,18 +128,18 @@ class too_many_matching_geonet_picks_Exception(Exception):
 
 def fetch_geonet_phases(mseed_file: Path):
     """
-    Fetch the phase arrival times from Geonet that correspond to a given mseed file
-    (matching event ID, network, station, and channel)
+    Fetch the phase arrival times from
+    Geonet for a given mseed file.
 
     Parameters
     ----------
     mseed_file: Path
-        Path to the mseed file
+        Path to the mseed file.
 
     Returns
     ----------
     phase_lines_for_table: list
-        A list of phase arrival times
+        A list of phase arrival times.
     """
 
     # Creating an empty list that will be populated and returned
@@ -169,8 +151,9 @@ def fetch_geonet_phases(mseed_file: Path):
     # Read the mseed
     mseed = obspy.read(str(mseed_file))
 
-    # Fetch all records relating to the given event ID (evid) from Geonet
-    # Fetched records include all phase picks and arrival times for all combinations of
+    # Fetch all records relating to the given event ID (evid)
+    # from Geonet. Fetched records include all phase picks
+    # and arrival times for all combinations of
     # network, station, location, and channel
     client_NZ = FDSN_Client("GEONET")
     cat = client_NZ.get_events(eventid=evid)
@@ -190,7 +173,8 @@ def fetch_geonet_phases(mseed_file: Path):
     # Check that the number of matching picks is acceptable
     if len(picks_matching_mseed) > 2:
         raise too_many_matching_geonet_picks_Exception(
-            "More than two phase picks from Geonet seem to match the given mseed file. There should only be one P phase pick and sometimes one S phase pick."
+            "More than two phase picks from Geonet seem to match the given mseed file."
+            "There should only be one P phase pick and sometimes one S phase pick."
         )
 
     # Get arrival data corresponding to the given mseed file by matching pick_id
@@ -222,8 +206,7 @@ def fetch_geonet_phases(mseed_file: Path):
 
 def generate_phase_arrival_table(main_dir: Path, output_dir: Path, n_procs: int):
     """
-    Generate the phase arrival table from a directory of mseed files
-    and save it to a csv file in the output directory
+    Generate the phase arrival table
 
     Parameters
     ----------
@@ -252,8 +235,8 @@ def generate_phase_arrival_table(main_dir: Path, output_dir: Path, n_procs: int)
         [tup[0] for data_list in mseed_data_list for tup in data_list]
     )
 
-    # Changing picker_phases_df[t_res] from nan to 0.0 so that the Geonet t_res values
-    # will not be used for the missing picker_phases_df[t_res] values from picker
+    # Change picker_phases_df[t_res] from nan to 0.0 so Geonet t_res values
+    # will not be substituted for the missing picker_phases_df[t_res] values
     picker_phases_df["t_res"] = 0.0
 
     # Get the Geonet phases
@@ -273,7 +256,9 @@ def generate_phase_arrival_table(main_dir: Path, output_dir: Path, n_procs: int)
         columns_to_merge_for_new_index
     )
 
-    # Use the new index to add Geonet phases if they were not found by picker
+    # Use the new index to include Geonet phase
+    # arrival times if there are not any conflicting
+    # phase arrival times from picker
     merged_df = picker_phases_df_new_index.combine_first(geonet_phases_df_new_index)
 
     # reset the index back to normal
