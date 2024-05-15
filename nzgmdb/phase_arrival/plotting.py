@@ -71,9 +71,6 @@ def plot_phase_arrivals_on_mseed_waveforms(
         plt.close()
 
 
-#############################################################################
-
-
 def batch_plot_phase_arrivals(
     main_dir: Path, phase_arrival_table: Path, output_dir: Path, n_procs: int
 ):
@@ -83,6 +80,7 @@ def batch_plot_phase_arrivals(
 
     Parameters
     ----------
+    n_procs
     main_dir : Path
         The main directory of the NZGMDB results (highest level directory)
         (glob is used to find all mseed files recursively).

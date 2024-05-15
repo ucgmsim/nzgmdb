@@ -4,7 +4,6 @@
 """
 
 import multiprocessing
-import typing
 from datetime import timedelta
 from pathlib import Path
 
@@ -17,7 +16,7 @@ from nzgmdb.management import file_structure
 from nzgmdb.phase_arrival import picker
 
 
-def get_p_wave(data: np.ndarray, dt: int):
+def get_p_wave(data: np.ndarray, dt: int) -> int:
     """
     Get the P wave arrival time from the data
 
@@ -27,6 +26,14 @@ def get_p_wave(data: np.ndarray, dt: int):
         The waveform data from a single component
     dt : int
         The sample rate of the data
+
+    Returns
+    -------
+    loc : int
+        The index of the P-phase arrival if
+        picker.p_phase_picker() runs successfully.
+        If picker.p_phase_picker() raises an
+        Exception, loc is -1.
     """
     wftype = "SM"  # Input wftype is strong motion
     try:
@@ -37,7 +44,7 @@ def get_p_wave(data: np.ndarray, dt: int):
     return loc
 
 
-def process_mseed(mseed_file: Path):
+def process_mseed(mseed_file: Path) -> dict[str, any]:
     """
     Process an mseed file and return the phase arrival data.
 
@@ -45,6 +52,14 @@ def process_mseed(mseed_file: Path):
     ----------
     mseed_file : Path
         Path to the mseed file.
+
+    Returns
+    -------
+    new_data : dict
+        A dictionary containing the information
+        to write as a line in the phase arrival table.
+        the dictionary keys are the phase arrival
+        table's headers.
     """
 
     mseed_data = obspy.read(str(mseed_file))
@@ -96,18 +111,17 @@ def process_mseed(mseed_file: Path):
         # Get the evid
         evid = file_structure.get_event_id_from_mseed(mseed_file)
 
-        new_data = (
-            {
-                "evid": evid,
-                "datetime": datetime,
-                "net": net,
-                "sta": sta,
-                "loc": loc,
-                "chan": chan[:2],
-                "phase": phase,
-                "t_res": t_res,
-            },
-        )
+        new_data = {
+            "evid": evid,
+            "datetime": datetime,
+            "net": net,
+            "sta": sta,
+            "loc": loc,
+            "chan": chan[:2],
+            "phase": phase,
+            "t_res": t_res,
+        }
+
         return new_data
 
 
@@ -121,7 +135,7 @@ class InvalidNumberOfGeonetPicksException(Exception):
     pass
 
 
-def fetch_geonet_phases(mseed_file: Path) -> list[dict[str, typing.Any]]:
+def fetch_geonet_phases(mseed_file: Path) -> list[dict[str, any]]:
     """
     Fetch the phase arrival times from Geonet for a given mseed file.
 
@@ -132,7 +146,7 @@ def fetch_geonet_phases(mseed_file: Path) -> list[dict[str, typing.Any]]:
 
     Returns
     -------
-    phase_lines_for_table: list[dict[str, typer.Any]]
+    phase_lines_for_table: list[dict[str, any]]
         A list of phase arrival times.
 
     Raises
@@ -188,18 +202,17 @@ def fetch_geonet_phases(mseed_file: Path) -> list[dict[str, typing.Any]]:
 
     # Create the lines to write in the phase arrival table
     for mseed_arrival, pick in mseed_arrival_pick_pairs:
-        phase_line = (
-            {
-                "evid": evid,
-                "datetime": pick.time,
-                "net": mseed[0].stats.network,
-                "sta": mseed[0].stats.station,
-                "loc": mseed[0].stats.location,
-                "chan": mseed[0].stats.channel[:2],
-                "phase": mseed_arrival.phase,
-                "t_res": mseed_arrival.time_residual,
-            },
-        )
+        phase_line = {
+            "evid": evid,
+            "datetime": pick.time,
+            "net": mseed[0].stats.network,
+            "sta": mseed[0].stats.station,
+            "loc": mseed[0].stats.location,
+            "chan": mseed[0].stats.channel[:2],
+            "phase": mseed_arrival.phase,
+            "t_res": mseed_arrival.time_residual,
+        }
+
         phase_lines_for_table.append(phase_line)
 
     return phase_lines_for_table
@@ -233,7 +246,7 @@ def generate_phase_arrival_table(main_dir: Path, output_dir: Path, n_procs: int)
             if mseed_data
         ]
     # Create the dataframe for phases from picker
-    picker_phases_df = pd.DataFrame([data_list[0] for data_list in mseed_data_list])
+    picker_phases_df = pd.DataFrame(mseed_data_list)
 
     # Change picker_phases_df[t_res] from nan to 0.0 so Geonet t_res values
     # will not be substituted for the missing picker_phases_df[t_res] values
@@ -245,7 +258,7 @@ def generate_phase_arrival_table(main_dir: Path, output_dir: Path, n_procs: int)
         geonet_phase_lines.extend(fetch_geonet_phases(mseed_file))
 
     # Create a DataFrame containing Geonet phases
-    geonet_phases_df = pd.DataFrame([tup[0] for tup in geonet_phase_lines])
+    geonet_phases_df = pd.DataFrame(geonet_phase_lines)
 
     # Use other columns as a new DataFrame index
     columns_to_merge_for_new_index = ["evid", "net", "sta", "loc", "chan", "phase"]
