@@ -80,7 +80,6 @@ def batch_plot_phase_arrivals(
 
     Parameters
     ----------
-    n_procs
     main_dir : Path
         The main directory of the NZGMDB results (highest level directory)
         (glob is used to find all mseed files recursively).
@@ -88,6 +87,8 @@ def batch_plot_phase_arrivals(
         Path to the phase arrival table.
     output_dir: Path
         Output directory.
+    n_procs : int
+        The number of processes to use
     """
 
     # Find all mseed files recursively
