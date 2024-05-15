@@ -174,7 +174,7 @@ def fetch_geonet_phases(mseed_file: Path):
     if len(picks_matching_mseed) > 2:
         raise too_many_matching_geonet_picks_Exception(
             "More than two phase picks from Geonet seem to match the given mseed file."
-            "There should only be one P phase pick and sometimes one S phase pick."
+            "\nThere should only be one P phase pick and sometimes one S phase pick."
         )
 
     # Get arrival data corresponding to the given mseed file by matching pick_id
