@@ -8,10 +8,7 @@ from typing import Annotated
 
 import typer
 
-from nzgmdb.phase_arrival.phase_arrival_plotting_functions import (
-    plot_phase_arrivals_on_mseed_waveforms,
-    batch_plot_phase_arrivals,
-)
+from nzgmdb.phase_arrival import plotting
 
 app = typer.Typer()
 
@@ -43,7 +40,9 @@ def make_plot(
         ),
     ],
 ):
-    plot_phase_arrivals_on_mseed_waveforms(mseed_file, phase_arrival_table, output_dir)
+    plotting.plot_phase_arrivals_on_mseed_waveforms(
+        mseed_file, phase_arrival_table, output_dir
+    )
 
 
 @app.command(help="Plots waveform and phase arrival times for a batch of mseed files.")
@@ -75,7 +74,9 @@ def batch_plot(
     ],
     n_procs: Annotated[int, typer.Option(help="Number of processes to use")] = 1,
 ):
-    batch_plot_phase_arrivals(main_dir, phase_arrival_table, output_dir, n_procs)
+    plotting.batch_plot_phase_arrivals(
+        main_dir, phase_arrival_table, output_dir, n_procs
+    )
 
 
 if __name__ == "__main__":
