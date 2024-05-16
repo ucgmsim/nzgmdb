@@ -2,36 +2,43 @@
 File that contains the function scripts that can be called to run the NZGMDB pipeline.
 """
 
-import typer
 from datetime import datetime
 from pathlib import Path
 
-from nzgmdb.phase_arrival.gen_phase_arrival_table import (
-    generate_phase_arrival_table,
-)
+import typer
+
 from nzgmdb.data_retrieval.geonet import parse_geonet_information
 from nzgmdb.data_retrieval.tect_domain import add_tect_domain
 from nzgmdb.management import file_structure
+from nzgmdb.phase_arrival.gen_phase_arrival_table import (
+    generate_phase_arrival_table,
+)
 
 app = typer.Typer()
 
 
 @app.command()
-def gen_phase_arrival_table(main_dir: Path, output_dir: Path, n_procs: int = 1):
+def gen_phase_arrival_table(
+    main_dir: Path, output_dir: Path, n_procs: int = 1, full_output: bool = False
+):
     """
     Generate the phase arrival table, taking mseed data and finding the phase arrivals using a p_wave picker.
 
     Parameters
     ----------
     main_dir : Path
-        The main directory of the NZGMDB results (Highest level directory)
+        The main directory of the NZGMDB results (highest level directory)
         (glob is used to find all mseed files recursively)
     output_dir : Path
         The directory to save the phase arrival table
     n_procs : int (optional)
         The number of processes to use to generate the phase arrival table
+    full_output: bool (optional)
+        If True, writes an additional table that
+        contains all phase arrivals from both
+        picker and Geonet
     """
-    generate_phase_arrival_table(main_dir, output_dir, n_procs)
+    generate_phase_arrival_table(main_dir, output_dir, n_procs, full_output)
 
 
 @app.command()
