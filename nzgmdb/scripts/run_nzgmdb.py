@@ -9,36 +9,13 @@ import typer
 
 from nzgmdb.data_retrieval.geonet import parse_geonet_information
 from nzgmdb.data_retrieval.tect_domain import add_tect_domain
+from nzgmdb.calculation.snr import compute_snr_for_mseed_data
 from nzgmdb.management import file_structure
 from nzgmdb.phase_arrival.gen_phase_arrival_table import (
     generate_phase_arrival_table,
 )
 
 app = typer.Typer()
-
-
-@app.command()
-def gen_phase_arrival_table(
-    main_dir: Path, output_dir: Path, n_procs: int = 1, full_output: bool = False
-):
-    """
-    Generate the phase arrival table, taking mseed data and finding the phase arrivals using a p_wave picker.
-
-    Parameters
-    ----------
-    main_dir : Path
-        The main directory of the NZGMDB results (highest level directory)
-        (glob is used to find all mseed files recursively)
-    output_dir : Path
-        The directory to save the phase arrival table
-    n_procs : int (optional)
-        The number of processes to use to generate the phase arrival table
-    full_output: bool (optional)
-        If True, writes an additional table that
-        contains all phase arrivals from both
-        picker and Geonet
-    """
-    generate_phase_arrival_table(main_dir, output_dir, n_procs, full_output)
 
 
 @app.command()
@@ -87,6 +64,30 @@ def merge_tect_domain(
 
 
 @app.command()
+def gen_phase_arrival_table(
+    main_dir: Path, output_dir: Path, n_procs: int = 1, full_output: bool = False
+):
+    """
+    Generate the phase arrival table, taking mseed data and finding the phase arrivals using a p_wave picker.
+
+    Parameters
+    ----------
+    main_dir : Path
+        The main directory of the NZGMDB results (highest level directory)
+        (glob is used to find all mseed files recursively)
+    output_dir : Path
+        The directory to save the phase arrival table
+    n_procs : int (optional)
+        The number of processes to use to generate the phase arrival table
+    full_output: bool (optional)
+        If True, writes an additional table that
+        contains all phase arrivals from both
+        picker and Geonet
+    """
+    generate_phase_arrival_table(main_dir, output_dir, n_procs, full_output)
+
+
+@app.command()
 def run_full_nzgmdb(
     main_dir: Path, start_date: datetime, end_date: datetime, n_procs: int = 1
 ):
@@ -116,8 +117,17 @@ def run_full_nzgmdb(
     # Generate the phase arrival table
     generate_phase_arrival_table(main_dir, faltfile_dir, n_procs)
 
-    # Steps below are TODO
     # Generate SNR
+    meta_output_dir = file_structure.get_flatfile_dir(main_dir)
+    snr_fas_output_dir = file_structure.get_snr_fas_dir(main_dir)
+    phase_table_path = (
+        file_structure.get_flatfile_dir(main_dir) / "phase_arrival_table.csv"
+    )
+    calculate_snr(
+        main_dir, phase_table_path, meta_output_dir, snr_fas_output_dir, n_procs
+    )
+
+    # Steps below are TODO
     # Calculate Fmax
     # Run filtering and processing of mseeds
     # Run IM calculation
