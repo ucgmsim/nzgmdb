@@ -79,5 +79,29 @@ def batch_plot(
     )
 
 
+@app.command(
+    help="Plots a histogram of the differences in phase arrival times from picker and Geonoet"
+)
+def plot_hist(
+    phase_arrival_table: Annotated[
+        Path,
+        typer.Argument(
+            help="Path to the phase arrival table that includes columns datetime_picker and datetime_geonet.",
+            exists=True,
+            file_okay=True,
+        ),
+    ],
+    output_dir: Annotated[
+        Path,
+        typer.Argument(
+            help="The directory to save the plot in.",
+            exists=True,
+            file_okay=False,
+        ),
+    ],
+):
+    plotting.plot_historam_of_time_diffs(phase_arrival_table, output_dir)
+
+
 if __name__ == "__main__":
     app()
