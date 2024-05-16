@@ -6,6 +6,7 @@
 import multiprocessing
 from datetime import timedelta
 from pathlib import Path
+from typing import Any
 
 import numpy as np
 import obspy
@@ -44,7 +45,7 @@ def get_p_wave(data: np.ndarray, dt: int) -> int:
     return loc
 
 
-def process_mseed(mseed_file: Path) -> dict[str, any]:
+def process_mseed(mseed_file: Path) -> dict[str, Any]:
     """
     Process an mseed file and return the phase arrival data.
 
@@ -135,7 +136,7 @@ class InvalidNumberOfGeonetPicksException(Exception):
     pass
 
 
-def fetch_geonet_phases(mseed_file: Path) -> list[dict[str, any]]:
+def fetch_geonet_phases(mseed_file: Path) -> list[dict[str, Any]]:
     """
     Fetch the phase arrival times from Geonet for a given mseed file.
 
