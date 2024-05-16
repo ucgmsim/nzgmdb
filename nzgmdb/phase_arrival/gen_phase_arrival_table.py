@@ -219,7 +219,30 @@ def fetch_geonet_phases(mseed_file: Path) -> list[dict[str, Any]]:
     return phase_lines_for_table
 
 
-def generate_phase_arrival_table(main_dir: Path, output_dir: Path, n_procs: int):
+def append_label_to_all_cols(df: pd.DataFrame, label: str) -> pd.DataFrame:
+    """
+    Appends a label to all columns of df by modifying in-place
+
+    Parameters
+    ----------
+    df: pd.DataFrame
+        The DataFrame to modify
+    label: str
+        The label to append to all columns of df
+
+    Returns
+    -------
+    df: pd.DataFrame
+        The modified DataFame
+    """
+
+    df.columns = df.columns + f"_{label}"
+    return df
+
+
+def generate_phase_arrival_table(
+    main_dir: Path, output_dir: Path, n_procs: int, full_output: bool
+):
     """
     Generate the phase arrival table
 
@@ -232,6 +255,10 @@ def generate_phase_arrival_table(main_dir: Path, output_dir: Path, n_procs: int)
         The directory to save the phase arrival table
     n_procs : int
         The number of processes to use
+    full_output: bool
+        If True, writes an additional table that
+        contains all phase arrivals from both
+        picker and Geonet
     """
 
     # Find all mseed files recursively
@@ -280,3 +307,35 @@ def generate_phase_arrival_table(main_dir: Path, output_dir: Path, n_procs: int)
 
     # Save the phase arrival table
     merged_df.to_csv(output_dir / "phase_arrival_table.csv", index=False)
+
+    if full_output:
+        all_picker_and_geonet_df = pd.merge(
+            left=append_label_to_all_cols(picker_phases_df_new_index, "picker"),
+            right=append_label_to_all_cols(geonet_phases_df_new_index, "geonet"),
+            left_index=True,
+            right_index=True,
+            how="outer",
+        )
+
+        picker_time_minus_geonet_time_secs = np.zeros(all_picker_and_geonet_df.shape[0])
+        for row_index in range(all_picker_and_geonet_df.shape[0]):
+            picker_t = all_picker_and_geonet_df["datetime_picker"].values
+            geonet_t = all_picker_and_geonet_df["datetime_geonet"].values
+
+            # Catch Exceptions caused by nan values
+            try:
+                picker_time_minus_geonet_time_secs[row_index] = (
+                    picker_t[row_index] - geonet_t[row_index]
+                )
+            except:
+                picker_time_minus_geonet_time_secs[row_index] = np.nan
+
+            all_picker_and_geonet_df["picker_time_minus_geonet_time_secs"] = (
+                picker_time_minus_geonet_time_secs
+            )
+
+        all_picker_and_geonet_df = all_picker_and_geonet_df.reset_index()
+
+        all_picker_and_geonet_df.to_csv(
+            output_dir / "full_phase_arrival_table.csv", index=False
+        )

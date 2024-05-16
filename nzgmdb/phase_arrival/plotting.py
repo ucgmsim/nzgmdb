@@ -9,6 +9,7 @@ import multiprocessing
 from pathlib import Path
 
 import matplotlib.pyplot as plt
+import numpy as np
 import obspy
 import pandas as pd
 
@@ -39,19 +40,52 @@ def plot_phase_arrivals_on_mseed_waveforms(
     mseed = obspy.read(str(mseed_file))
 
     # Lookup phase arrival times in the table
-    phase_arrival_times = phase_arrival_df.loc[
-        (phase_arrival_df["evid"] == evid)
-        & (phase_arrival_df["sta"] == mseed[0].stats.station)
-        & (phase_arrival_df["chan"] == mseed[0].stats.channel[:2])
-        & (phase_arrival_df["loc"] == mseed[0].stats.location)
-    ]["datetime"]
 
-    # Creating a list of phase arrival times,
-    # formatted for plotting with matplotlib
-    arrival_times_as_list = [
-        obspy.UTCDateTime(arrival_time).matplotlib_date
-        for arrival_time in phase_arrival_times.values
-    ]
+    if "datetime" in phase_arrival_df.keys():
+        phase_arrival_times = phase_arrival_df.loc[
+            (phase_arrival_df["evid"] == evid)
+            & (phase_arrival_df["sta"] == mseed[0].stats.station)
+            & (phase_arrival_df["chan"] == mseed[0].stats.channel[:2])
+            & (phase_arrival_df["loc"] == mseed[0].stats.location)
+        ]["datetime"]
+
+        # plot picker as blue and geonet as red
+        vline_colors = []
+        vline_colors.extend(["b"] * len(phase_arrival_df))
+
+    else:
+        picker_phase_arrival_times = phase_arrival_df.loc[
+            (phase_arrival_df["evid"] == evid)
+            & (phase_arrival_df["sta"] == mseed[0].stats.station)
+            & (phase_arrival_df["chan"] == mseed[0].stats.channel[:2])
+            & (phase_arrival_df["loc"] == mseed[0].stats.location)
+        ]["datetime_picker"]
+
+        geonet_phase_arrival_times = phase_arrival_df.loc[
+            (phase_arrival_df["evid"] == evid)
+            & (phase_arrival_df["sta"] == mseed[0].stats.station)
+            & (phase_arrival_df["chan"] == mseed[0].stats.channel[:2])
+            & (phase_arrival_df["loc"] == mseed[0].stats.location)
+        ]["datetime_geonet"]
+
+        phase_arrival_times = pd.concat(
+            [picker_phase_arrival_times, geonet_phase_arrival_times]
+        )
+
+        # plot picker as blue and geonet as red
+        vline_colors = []
+        vline_colors.extend(["b"] * len(picker_phase_arrival_times))
+        vline_colors.extend(["r"] * len(geonet_phase_arrival_times))
+
+    arrival_times_as_list = []
+    for arrival_time in phase_arrival_times:
+        # Catch Exceptions raised by trying to convert nans to .matplotlib_date
+        try:
+            arrival_times_as_list.append(
+                obspy.UTCDateTime(arrival_time).matplotlib_date
+            )
+        except:
+            arrival_times_as_list.append(np.nan)
 
     if len(arrival_times_as_list) > 0:
 
@@ -60,13 +94,21 @@ def plot_phase_arrivals_on_mseed_waveforms(
         fig = mseed.plot(handle=True)
 
         # Add a title above the top subplot
-        fig.axes[0].set_title(mseed_file.stem)
+        fig.axes[0].set_title(
+            f"{mseed_file.stem}, Picker is blue, GeoNet (if present) is red"
+        )
 
         # Plot the arrival phases on all subplots
-        # using arbitrary large ymin and ymax to
-        # span the expected vertical range
         for ax in fig.axes:
-            ax.vlines(arrival_times_as_list, ymin=-1e6, ymax=1e6, linestyle="--")
+            ax.vlines(
+                arrival_times_as_list,
+                ymin=ax.get_ylim()[0],
+                ymax=ax.get_ylim()[1],
+                linestyle="--",
+                colors=vline_colors,
+            )
+            ax.legend()
+
         fig.savefig(output_dir / f"{mseed_file.stem}.png")
         plt.close()
 
@@ -104,3 +146,46 @@ def batch_plot_phase_arrivals(
             ),
             mseed_files,
         )
+
+
+def plot_historam_of_time_diffs(phase_arrival_table: Path, output_dir: Path):
+    """
+
+    Plots a histogram of the differences in phase arrival times from our picker
+    code and Geonet.
+
+    Parameters
+    ----------
+    phase_arrival_table: Path
+        Path to the phase arrival table that includes columns
+        datetime_picker and datetime_geonet.
+    output_dir: Path
+         Output directory.
+    """
+
+    num_bins = 50
+
+    phase_arrival_df = pd.read_csv(phase_arrival_table)
+
+    time_diffs = phase_arrival_df["picker_time_minus_geonet_time_secs"]
+
+    #    plt.hist(time_diffs, bins=30, alpha=0.75, color="blue", edgecolor="black")
+    plt.hist(
+        time_diffs[~np.isnan(time_diffs)],
+        bins=num_bins,
+        alpha=0.75,
+        color="blue",
+        edgecolor="black",
+    )
+
+    counts, bin_edges = np.histogram(time_diffs[~np.isnan(time_diffs)], bins=num_bins)
+    total_points = counts.sum()
+
+    # Step 3: Add titles and labels
+    plt.xlabel("Picker time - Geonet time (seconds)")
+    plt.ylabel("counts")
+    print(f"Total number of points used in the histogram: {total_points}")
+    plt.title(f"{total_points} arrival times from both Picker and Geonet")
+
+    plt.savefig(output_dir / "histogram.png", dpi=500)
+    plt.close()

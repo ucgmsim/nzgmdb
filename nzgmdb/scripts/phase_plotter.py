@@ -80,7 +80,7 @@ def batch_plot(
 
 
 @app.command(
-    help="Plots a histogram of the differences in phase arrival times from picker and Geonoet"
+    help="Plots a histogram of the differences in phase arrival times from picker and Geonet"
 )
 def plot_hist(
     phase_arrival_table: Annotated[
