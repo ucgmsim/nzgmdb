@@ -7,9 +7,9 @@ from pathlib import Path
 
 import typer
 
+from nzgmdb.calculation.snr import compute_snr_for_mseed_data
 from nzgmdb.data_retrieval.geonet import parse_geonet_information
 from nzgmdb.data_retrieval.tect_domain import add_tect_domain
-from nzgmdb.calculation.snr import compute_snr_for_mseed_data
 from nzgmdb.management import file_structure
 from nzgmdb.phase_arrival.gen_phase_arrival_table import (
     generate_phase_arrival_table,
@@ -115,7 +115,7 @@ def run_full_nzgmdb(
     add_tect_domain(eq_source_ffp, eq_tect_domain_ffp, n_procs)
 
     # Generate the phase arrival table
-    generate_phase_arrival_table(main_dir, faltfile_dir, n_procs)
+    generate_phase_arrival_table(main_dir, faltfile_dir, n_procs, False)
 
     # Generate SNR
     meta_output_dir = file_structure.get_flatfile_dir(main_dir)
@@ -123,7 +123,7 @@ def run_full_nzgmdb(
     phase_table_path = (
         file_structure.get_flatfile_dir(main_dir) / "phase_arrival_table.csv"
     )
-    calculate_snr(
+    compute_snr_for_mseed_data(
         main_dir, phase_table_path, meta_output_dir, snr_fas_output_dir, n_procs
     )
 

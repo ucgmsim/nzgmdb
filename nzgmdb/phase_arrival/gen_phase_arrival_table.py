@@ -241,7 +241,7 @@ def append_label_to_all_cols(df: pd.DataFrame, label: str) -> pd.DataFrame:
 
 
 def generate_phase_arrival_table(
-    main_dir: Path, output_dir: Path, n_procs: int, full_output: bool
+    main_dir: Path, output_dir: Path, n_procs: int, full_output: bool = False
 ):
     """
     Generate the phase arrival table
@@ -255,7 +255,7 @@ def generate_phase_arrival_table(
         The directory to save the phase arrival table
     n_procs : int
         The number of processes to use
-    full_output: bool
+    full_output: bool, optional
         If True, writes an additional table that
         contains all phase arrivals from both
         picker and Geonet
