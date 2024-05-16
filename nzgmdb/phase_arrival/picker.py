@@ -1,13 +1,13 @@
 """ P-phase Picker """
 
 import numpy as np
-import scipy.signal as sig
 import scipy.linalg as alg
+import scipy.signal as sig
 
 
 def p_phase_picker(
     x: np.ndarray, dt: int, wftype: str, Tn=0, xi=0.6, nbins=0, o="to_peak"
-):
+) -> int:
     """
     P-phase picker based on the fixed-base viscously damped single-degree-of-freedom (SDF) oscillator model
 
@@ -132,7 +132,7 @@ def p_phase_picker(
             p_wave_index = (indx[TF - 1] + 1) * dt
         else:
             p_wave_index = -1
-    return p_wave_index
+    return int(np.round(p_wave_index))
 
 
 def butter_bandpass(lowcut, highcut, fs, order=5):
