@@ -12,7 +12,7 @@ def initial_preprocessing(mseed: Stream):
     Basic pre processing of the waveform data
     This performs the following:
     - Demean and Detrend the data
-    - Taper the data by the taper_percentage in the config to each end (5% default)
+    - Taper the data by the taper_fraction in the config to each end (5% default)
     - Perform zero padding
     - Rotate the data to NEZ
     - Remove the sensitivity using the inventory response information if possible
@@ -43,11 +43,11 @@ def initial_preprocessing(mseed: Stream):
     config = cfg.Config()
     no_response_stations = config.get_value("no_response_stations")
     no_response_conversion = config.get_value("no_response_conversion")
-    taper_percentage = config.get_value("taper_percentage")
+    taper_fraction = config.get_value("taper_fraction")
     zero_padding_time = config.get_value("zero_padding_time")
 
-    # Taper the data 5% at each end
-    mseed.taper(taper_percentage, side="both", max_length=5)
+    # Taper the data by the taper_fraction
+    mseed.taper(taper_fraction, side="both", max_length=5)
 
     # Perform zero-padding
     mseed.trim(

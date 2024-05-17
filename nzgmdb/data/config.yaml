@@ -31,7 +31,7 @@ common_frequency_end: 100
 common_frequency_num: 389
 g: 9.81
 # Processing
-taper_percentage: 0.05
+taper_fraction: 0.05
 zero_padding_time: 5
 no_response_stations:
   - CPLB
