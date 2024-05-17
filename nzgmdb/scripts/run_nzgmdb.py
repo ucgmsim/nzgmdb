@@ -7,6 +7,7 @@ from pathlib import Path
 
 import typer
 
+from nzgmdb.calculation import fmax
 from nzgmdb.calculation.snr import compute_snr_for_mseed_data
 from nzgmdb.data_retrieval.geonet import parse_geonet_information
 from nzgmdb.data_retrieval.tect_domain import add_tect_domain
@@ -85,6 +86,12 @@ def gen_phase_arrival_table(
         picker and Geonet
     """
     generate_phase_arrival_table(main_dir, output_dir, n_procs, full_output)
+
+
+@app.command()
+def calc_fmax(main_dir: Path, n_procs: int = 1):
+
+    fmax.temp_fmax_call_func(main_dir, n_procs)
 
 
 @app.command()
