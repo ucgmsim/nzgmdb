@@ -12,7 +12,7 @@ def initial_preprocessing(mseed: Stream):
     Basic pre processing of the waveform data
     This performs the following:
     - Demean and Detrend the data
-    - Taper the data 5% at each end
+    - Taper the data by the taper_percentage in the config to each end (5% default)
     - Perform zero padding
     - Rotate the data to NEZ
     - Remove the sensitivity using the inventory response information if possible
@@ -217,7 +217,7 @@ def high_and_low_cut_processing(
     poly_order = config.get_value("poly_order_default")
 
     # Determine the high and low cut frequencies
-    highcut = 1 / (2.5 * dt) if fmax is None else fmax
+    highcut = fmax or 1 / (2.5 * dt)
     lowcut = config.get_value("low_cut_default") if fmin is None else fmin
 
     # Check if the lowcut is greater than the highcut
@@ -263,6 +263,7 @@ def high_and_low_cut_processing(
     disp_090 = integrate.cumtrapz(y=vel_090, dx=dt, initial=0.0)
     disp_ver = integrate.cumtrapz(y=vel_ver, dx=dt, initial=0.0)
 
+    # Next steps are to align the processing with NGA-West
     # Fit six-order polynomial to the displacement series
     coeff_000 = np.polyfit(np.arange(len(disp_000)), disp_000, poly_order)
     coeff_090 = np.polyfit(np.arange(len(disp_090)), disp_090, poly_order)
