@@ -263,7 +263,7 @@ def high_and_low_cut_processing(
     disp_090 = integrate.cumtrapz(y=vel_090, dx=dt, initial=0.0)
     disp_ver = integrate.cumtrapz(y=vel_ver, dx=dt, initial=0.0)
 
-    # Next steps are to align the processing with NGA-West
+    # The following steps were added to align the processing with NGA-West
     # Fit six-order polynomial to the displacement series
     coeff_000 = np.polyfit(np.arange(len(disp_000)), disp_000, poly_order)
     coeff_090 = np.polyfit(np.arange(len(disp_090)), disp_090, poly_order)
