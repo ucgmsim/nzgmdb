@@ -101,6 +101,19 @@ def get_waveform_dir(main_dir: Path):
     return waveform_dir
 
 
+def get_im_dir(main_dir: Path):
+    """
+    Get the directory to save the IM results
+
+    Parameters
+    ----------
+    main_dir : Path
+        The main directory of the NZGMDB results (Highest level directory)
+    """
+    im_dir = main_dir / "IM"
+    return im_dir
+
+
 def get_processed_dir_from_mseed(mseed_file: Path):
     """
     Get the directory to save the processed files

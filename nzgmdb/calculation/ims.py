@@ -148,8 +148,8 @@ def compute_ims_for_all_processed_records(
     comp_000_files = waveform_dir.rglob("*.000")
 
     if checkpoint:
-        # Get list of already completed files
-        completed_files = [f.stem for f in output_path.glob("*_IM.csv")]
+        # Get list of already completed files and remove _IM suffix
+        completed_files = [f.stem[:-3] for f in output_path.rglob("*_IM.csv")]
         # Remove completed files from the list
         comp_000_files = [f for f in comp_000_files if f.stem not in completed_files]
 
@@ -159,7 +159,7 @@ def compute_ims_for_all_processed_records(
     # Load the config and extract the IM options
     config = cfg.Config()
     ims = config.get_value("ims")
-    psa_periods = config.get_value("psa_periods")
+    psa_periods = np.asarray(config.get_value("psa_periods"))
     fas_frequencies = np.logspace(
         config.get_value("fas_start"),
         config.get_value("fas_end"),
@@ -186,9 +186,13 @@ def compute_ims_for_all_processed_records(
             comp_000_files,
         )
 
-    # Concatenate all the skipped records
-    skipped_records = pd.concat(skipped_records, ignore_index=True)
-
     # Save the skipped records
     flatfile_dir = file_structure.get_flatfile_dir(main_dir)
-    skipped_records.to_csv(flatfile_dir / "IM_calc_skipped_records.csv", index=False)
+
+    # Check that there are skipped_records dataframes that are not None
+    if not all(value is None for value in skipped_records):
+        skipped_records_df = pd.concat(skipped_records).reset_index(drop=True)
+    else:
+        print("No skipped records")
+        skipped_records_df = pd.DataFrame()
+    skipped_records_df.to_csv(flatfile_dir / "IM_calc_skipped_records.csv", index=False)
