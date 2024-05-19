@@ -15,11 +15,16 @@ def mseed_to_gmprocess(
         typer.Argument(
             help="The main directory of the NZGMDB results (Highest level directory)",
             exists=True,
+            file_okay=False,
         ),
     ],
     output_dir: Annotated[
         Path,
-        typer.Argument(help="The directory to save the gmprocessed data", exists=True),
+        typer.Argument(
+            help="The directory to save the gmprocessed data",
+            exists=True,
+            file_okay=False,
+        ),
     ],
     old_style: Annotated[
         bool, typer.Option(help="Whether the data is stored in the old style")

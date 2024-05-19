@@ -8,14 +8,12 @@ from typing import Annotated
 
 import typer
 
-from nzgmdb.calculation.snr import compute_snr_for_mseed_data
-from nzgmdb.data_processing.process_observed import process_mseeds_to_txt
-from nzgmdb.data_retrieval.geonet import parse_geonet_information
-from nzgmdb.data_retrieval.tect_domain import add_tect_domain
+from nzgmdb.calculation import snr, ims
+from nzgmdb.data_processing import process_observed
+from nzgmdb.data_retrieval import geonet
+from nzgmdb.data_retrieval import tect_domain
 from nzgmdb.management import file_structure
-from nzgmdb.phase_arrival.gen_phase_arrival_table import (
-    generate_phase_arrival_table,
-)
+from nzgmdb.phase_arrival import gen_phase_arrival_table
 
 app = typer.Typer()
 
@@ -28,7 +26,7 @@ def fetch_geonet_data(
         Path,
         typer.Argument(
             help="The main directory of the NZGMDB results (Highest level directory)",
-            exists=True,
+            file_okay=False,
         ),
     ],
     start_date: Annotated[
@@ -45,7 +43,7 @@ def fetch_geonet_data(
     ],
     n_procs: Annotated[int, typer.Option(help="Number of processes to use")] = 1,
 ):
-    parse_geonet_information(main_dir, start_date, end_date, n_procs)
+    geonet.parse_geonet_information(main_dir, start_date, end_date, n_procs)
 
 
 @app.command(help="Add tectonic domains to the earthquake source table")
@@ -62,11 +60,12 @@ def merge_tect_domain(
         Path,
         typer.Argument(
             help="The directory to save the earthquake source table with tectonic domains",
+            file_okay=False,
         ),
     ],
     n_procs: Annotated[int, typer.Option(help="Number of processes to use")] = 1,
 ):
-    add_tect_domain(eq_source_ffp, output_dir, n_procs)
+    tect_domain.add_tect_domain(eq_source_ffp, output_dir, n_procs)
 
 
 @app.command(
@@ -80,17 +79,18 @@ def gen_phase_arrival_table(
             help="The main directory of the NZGMDB results (Highest level directory) "
             "(glob is used to find all mseed files recursively)",
             exists=True,
+            file_okay=False,
         ),
     ],
     output_dir: Annotated[
         Path,
         typer.Argument(
-            help="The directory to save the phase arrival table",
+            help="The directory to save the phase arrival table", file_okay=False
         ),
     ],
     n_procs: Annotated[int, typer.Option(help="Number of processes to use")] = 1,
 ):
-    generate_phase_arrival_table(main_dir, output_dir, n_procs)
+    gen_phase_arrival_table.generate_phase_arrival_table(main_dir, output_dir, n_procs)
 
 
 @app.command(
@@ -107,6 +107,7 @@ def calculate_snr(
         typer.Argument(
             help="The main directory of the NZGMDB results (Highest level directory)",
             exists=True,
+            file_okay=False,
         ),
     ],
     phase_table_path: Annotated[
@@ -121,12 +122,14 @@ def calculate_snr(
         Path,
         typer.Option(
             help="Path to the output directory for the metadata and skipped records",
+            file_okay=False,
         ),
     ] = None,
     snr_fas_output_dir: Annotated[
         Path,
         typer.Option(
             help="Path to the output directory for the SNR and FAS data",
+            file_okay=False,
         ),
     ] = None,
     n_procs: Annotated[int, typer.Option(help="Number of processes to use")] = 1,
@@ -136,8 +139,9 @@ def calculate_snr(
     ko_matrix_path: Annotated[
         Path,
         typer.Option(
-            help="Path to the ko matrix",
+            help="Path to the ko matrix directory",
             exists=True,
+            file_okay=False,
         ),
     ] = None,
 ):
@@ -150,7 +154,7 @@ def calculate_snr(
         meta_output_dir = file_structure.get_flatfile_dir(main_dir)
     if snr_fas_output_dir is None:
         snr_fas_output_dir = file_structure.get_snr_fas_dir(main_dir)
-    compute_snr_for_mseed_data(
+    snr.compute_snr_for_mseed_data(
         main_dir,
         phase_table_path,
         meta_output_dir,
@@ -171,6 +175,7 @@ def process_records(
         typer.Argument(
             help="The main directory of the NZGMDB results (Highest level directory)",
             exists=True,
+            file_okay=False,
         ),
     ],
     gmc_ffp: Annotated[
@@ -196,7 +201,34 @@ def process_records(
     if fmax_ffp is None:
         fmax_ffp = file_structure.get_flatfile_dir(main_dir) / "fmax.csv"
 
-    process_mseeds_to_txt(main_dir, gmc_ffp, fmax_ffp, n_procs)
+    process_observed.process_mseeds_to_txt(main_dir, gmc_ffp, fmax_ffp, n_procs)
+
+
+@app.command(help="Run IM Calculation on processed waveform files")
+def run_im_calculation(
+    main_dir: Annotated[
+        Path,
+        typer.Argument(
+            help="The main directory of the NZGMDB results (Highest level directory)",
+            exists=True,
+            file_okay=False,
+        ),
+    ],
+    output_dir: Annotated[
+        Path,
+        typer.Option(help="The directory to save the IM files", file_okay=False),
+    ] = None,
+    n_procs: Annotated[int, typer.Option(help="The number of processes to use")] = 1,
+    checkpoint: Annotated[
+        bool,
+        typer.Option(
+            help="If True, the function will check for already completed files and skip them"
+        ),
+    ] = False,
+):
+    if output_dir is None:
+        output_dir = file_structure.get_im_dir(main_dir)
+    ims.compute_ims_for_all_processed_records(main_dir, output_dir, n_procs, checkpoint)
 
 
 @app.command(
@@ -212,7 +244,7 @@ def run_pre_process_nzgmdb(
         Path,
         typer.Argument(
             help="The main directory of the NZGMDB results (Highest level directory)",
-            exists=True,
+            file_okay=False,
         ),
     ],
     start_date: Annotated[
@@ -230,16 +262,18 @@ def run_pre_process_nzgmdb(
     n_procs: Annotated[int, typer.Option(help="The number of processes to use")] = 1,
 ):
     # Fetch the Geonet data
-    parse_geonet_information(main_dir, start_date, end_date, n_procs)
+    geonet.parse_geonet_information(main_dir, start_date, end_date, n_procs)
 
     # Merge the tectonic domains
     faltfile_dir = file_structure.get_flatfile_dir(main_dir)
     eq_source_ffp = faltfile_dir / "earthquake_source_table.csv"
     eq_tect_domain_ffp = faltfile_dir / "earthquake_source_table_tectdomain.csv"
-    add_tect_domain(eq_source_ffp, eq_tect_domain_ffp, n_procs)
+    tect_domain.add_tect_domain(eq_source_ffp, eq_tect_domain_ffp, n_procs)
 
     # Generate the phase arrival table
-    generate_phase_arrival_table(main_dir, faltfile_dir, n_procs)
+    gen_phase_arrival_table.generate_phase_arrival_table(
+        main_dir, faltfile_dir, n_procs
+    )
 
     # Generate SNR
     meta_output_dir = file_structure.get_flatfile_dir(main_dir)
@@ -278,8 +312,11 @@ def run_process_nzgmdb(
     fmax_ffp = flatfile_dir / "fmax.csv"
     process_records(main_dir, gmc_ffp, fmax_ffp, n_procs)
 
-    # Steps below are TODO
     # Run IM calculation
+    im_dir = file_structure.get_im_dir(main_dir)
+    run_im_calculation(main_dir, im_dir, n_procs)
+
+    # Steps below are TODO
     # Merge flat files with IM results
 
 

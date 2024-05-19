@@ -11,7 +11,7 @@ from nzgmdb.data_processing import waveform_manipulation
 from nzgmdb.management import file_structure, custom_errors
 
 
-def process_single_mseed(mseed_file: str, gmc_df: pd.DataFrame, fmax_df: pd.DataFrame):
+def process_single_mseed(mseed_file: Path, gmc_df: pd.DataFrame, fmax_df: pd.DataFrame):
     """
     Process a single mseed file and save the processed data to a txt file
     Will return a dataframe containing the skipped record name and reason why
@@ -21,7 +21,7 @@ def process_single_mseed(mseed_file: str, gmc_df: pd.DataFrame, fmax_df: pd.Data
 
     Parameters
     ----------
-    mseed_file : str
+    mseed_file : Path
         The path to the mseed file
     gmc_df : pd.DataFrame
         The GMC values containing fmin information
@@ -36,7 +36,7 @@ def process_single_mseed(mseed_file: str, gmc_df: pd.DataFrame, fmax_df: pd.Data
     """
     # Read mseed information
     mseed = obspy.read(mseed_file)
-    mseed_stem = Path(mseed_file).stem
+    mseed_stem = mseed_file.stem
 
     # Extract mseed values
     dt = mseed.traces[0].stats.delta
@@ -104,7 +104,7 @@ def process_single_mseed(mseed_file: str, gmc_df: pd.DataFrame, fmax_df: pd.Data
         return skipped_record
 
     # Create the output directory
-    output_dir = file_structure.get_processed_dir_from_mseed(Path(mseed_file))
+    output_dir = file_structure.get_processed_dir_from_mseed(mseed_file)
     output_dir.mkdir(exist_ok=True)
 
     # Write the data to the output directory
@@ -141,7 +141,7 @@ def process_mseeds_to_txt(
     """
     # Get the raw waveform mseed files
     waveform_dir = file_structure.get_waveform_dir(main_dir)
-    mseed_files = glob.glob(f"{waveform_dir}/**/*.mseed", recursive=True)
+    mseed_files = waveform_dir.rglob("*.mseed")
 
     # Load the GMC and Fmax files
     gmc_df = pd.read_csv(gmc_ffp)
