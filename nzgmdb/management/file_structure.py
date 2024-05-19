@@ -25,7 +25,8 @@ def get_mseed_dir(main_dir: Path, year: int, event_id: str):
 
 def get_processed_dir(main_dir: Path, year: int, event_id: str):
     """
-    Get the directory to save the processed waveform files
+    Get the directory to the processed waveform files
+    given the year and event id
 
     Parameters
     ----------
@@ -98,3 +99,20 @@ def get_waveform_dir(main_dir: Path):
     """
     waveform_dir = main_dir / "waveforms"
     return waveform_dir
+
+
+def get_processed_dir_from_mseed(mseed_file: Path):
+    """
+    Get the directory to save the processed files
+
+    Parameters
+    ----------
+    mseed_file : Path
+        The mseed file
+
+    Returns
+    -------
+    Path
+        The directory to save the processed files
+    """
+    return mseed_file.parent.parent / "processed"

@@ -3,8 +3,8 @@ from pathlib import Path
 import obspy
 import numpy as np
 import pandas as pd
-from IM_calculation.IM import read_waveform
 
+from IM_calculation.IM import read_waveform
 from nzgmdb.data_processing import waveform_manipulation
 
 

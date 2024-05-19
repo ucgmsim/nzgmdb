@@ -30,6 +30,15 @@ common_frequency_start: 0.01318257
 common_frequency_end: 100
 common_frequency_num: 389
 g: 9.81
+# Processing
+taper_fraction: 0.05
+zero_padding_time: 5
+no_response_stations:
+  - CPLB
+no_response_conversion: 1000000
+low_cut_default: 0.05
+order_default: 4
+poly_order_default: 6
 # IM Calculation
 ims:
   - PGA
