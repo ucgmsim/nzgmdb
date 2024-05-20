@@ -153,9 +153,6 @@ def compute_ims_for_all_processed_records(
         # Remove completed files from the list
         comp_000_files = [f for f in comp_000_files if f.stem not in completed_files]
 
-    # Set components from qcore class for IM calculation
-    components = [Components.c090, Components.c000, Components.cver]
-
     # Load the config and extract the IM options
     config = cfg.Config()
     ims = config.get_value("ims")
@@ -165,6 +162,10 @@ def compute_ims_for_all_processed_records(
         config.get_value("fas_end"),
         num=config.get_value("fas_num"),
         base=config.get_value("fas_base"),
+    )
+    # Set components from qcore class for IM calculation
+    _, components = Components.get_comps_to_calc_and_store(
+        config.get_value("components")
     )
 
     im_options = {
@@ -194,5 +195,22 @@ def compute_ims_for_all_processed_records(
         skipped_records_df = pd.concat(skipped_records).reset_index(drop=True)
     else:
         print("No skipped records")
-        skipped_records_df = pd.DataFrame()
+        skipped_record_dict = {
+            "record_id": None,
+            "reason": None,
+        }
+        skipped_records_df = pd.DataFrame([skipped_record_dict])
+
+    if checkpoint:
+        # Add the skipped records to the existing skipped records
+        try:
+            existing_skipped_records = pd.read_csv(
+                flatfile_dir / "IM_calc_skipped_records.csv"
+            )
+            skipped_records_df = pd.concat(
+                [existing_skipped_records, skipped_records_df]
+            ).reset_index(drop=True)
+        except FileNotFoundError:
+            pass
+
     skipped_records_df.to_csv(flatfile_dir / "IM_calc_skipped_records.csv", index=False)
