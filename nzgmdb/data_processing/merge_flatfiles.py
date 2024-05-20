@@ -32,26 +32,29 @@ def merge_im_data(
 
     new_df = new_df.reset_index()
 
-    # Find all the gm_all files
-    gm_all_files = im_dir.glob("**/**/gm_all.csv")
+    # Find all the IM files
+    im_files = im_dir.rglob("*IM.csv")
 
-    # Concat all the gm_all files
-    gm_all = pd.concat([pd.read_csv(file) for file in gm_all_files])
+    # Concat all the IM files
+    im_all = pd.concat([pd.read_csv(file) for file in im_files])
 
     # Merge the gm_all and new_df on record
     gm_final = pd.merge(
-        gm_all,
+        im_all,
         new_df,
-        on="record",
+        left_on="record_id",
+        right_on="record",
         how="left",
     )
 
-    # Add the chan, loc and rename event_id and station
-    record_id_split = gm_final["record"].str.split("_")
-    gm_final["evid"] = record_id_split[0]
-    gm_final["sta"] = record_id_split[1]
-    gm_final["chan"] = record_id_split[2]
-    gm_final["loc"] = record_id_split[3].astype("int")
+    # Add the chan, loc and rename event_id and station across the entire series
+    record_id_split = gm_final["record_id"].str.split("_", expand=True)
+    gm_final[["evid", "sta", "chan", "loc"]] = gm_final["record_id"].str.split(
+        "_", expand=True
+    )
+
+    # remove the record column
+    gm_final = gm_final.drop(columns=["record"])
 
     # Save the ground_motion_im_catalogue.csv
     gm_final.to_csv(flatfile_dir / "ground_motion_im_catalogue.csv", index=False)
