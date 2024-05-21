@@ -39,10 +39,13 @@ def find_fmaxs(filenames: Iterable[Path], metadata: pd.DataFrame):
         )
 
         # Read CSV file using pandas
-        snr = pd.read_csv(filename)
+        snr_all_cols = pd.read_csv(filename)
         print(f"SNR filename: {filename}")
 
-        freq = snr["frequency"].to_numpy()
+        # getting only the snr columns
+        snr = snr_all_cols[["snr_000", "snr_090", "snr_ver"]]
+
+        freq = snr_all_cols["frequency"].to_numpy()
 
         # # Smoothing data using pandas rolling mean function
         # snr_000 = (
@@ -59,6 +62,21 @@ def find_fmaxs(filenames: Iterable[Path], metadata: pd.DataFrame):
             min_periods=config.get_value("min_periods"),
             axis=0,
         ).mean()
+
+        snr_smooth_freq_interval_for_screening = snr_smooth[
+            (snr["frequency"] >= config.get_value("min_freq_Hz"))
+            & (snr["frequency"] <= config.get_value("max_freq_Hz"))
+        ]
+
+        colsum = np.sum(
+            snr_smooth
+            > [
+                config.get_value("snr_thresh_horiz"),
+                config.get_value("snr_thresh_horiz"),
+                config.get_value("snr_thresh_vert"),
+            ],
+            axis=0,
+        )
 
         print("bp")
 
