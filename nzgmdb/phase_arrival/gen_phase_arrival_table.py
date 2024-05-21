@@ -3,6 +3,7 @@
     the phase arrival table
 """
 
+import itertools
 import multiprocessing
 from datetime import timedelta
 from pathlib import Path
@@ -270,12 +271,10 @@ def generate_phase_arrival_table(
     picker_phases_df["t_res"] = 0.0
 
     # Get the Geonet phases
-    geonet_phase_lines = []
-    for mseed_file in mseed_files:
-        geonet_phase_lines.extend(fetch_geonet_phases(mseed_file))
-
-    # Create a DataFrame containing Geonet phases
-    geonet_phases_df = pd.DataFrame(geonet_phase_lines)
+    with multiprocessing.Pool(processes=n_procs) as pool:
+        geonet_phases_df = pd.DataFrame(
+            itertools.chain.from_iterable(pool.map(fetch_geonet_phases, mseed_files))
+        )
 
     # Use other columns as a new DataFrame index
     columns_to_merge_for_new_index = ["evid", "net", "sta", "loc", "chan", "phase"]
