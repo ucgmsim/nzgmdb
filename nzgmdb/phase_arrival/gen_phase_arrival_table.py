@@ -230,23 +230,20 @@ def generate_phase_arrival_table(
     # Find all mseed files recursively
     mseed_files = list(main_dir.glob("**/*.mseed"))
 
-    # Initialize a multiprocessing Pool
     with multiprocessing.Pool(processes=n_procs) as pool:
         # Map the reading function to the file list.
-        # Process_mseed could return None, so we filter this out.
-        mseed_data_list = [
-            mseed_data
-            for mseed_data in pool.map(process_mseed, mseed_files)
-            if mseed_data
-        ]
-    # Create the dataframe for phases from picker
-    picker_phases_df = pd.DataFrame(mseed_data_list)
+        # process_mseed could return None, so we filter this out.
+        picker_phases_df = pd.DataFrame(
+            pd.Series(pool.map(process_mseed, mseed_files)).dropna().to_list()
+        )
 
     # Change picker_phases_df[t_res] from nan to 0.0 so Geonet t_res values
     # will not be substituted for the missing picker_phases_df[t_res] values
     picker_phases_df["t_res"] = 0.0
 
     # Get the Geonet phases
+    # fetch_geonet_phases can return a list of length 0, 1, or 2 so
+    # itertools.chain.from_iterable is used to flatten the list of lists
     with multiprocessing.Pool(processes=n_procs) as pool:
         geonet_phases_df = pd.DataFrame(
             itertools.chain.from_iterable(pool.map(fetch_geonet_phases, mseed_files))
