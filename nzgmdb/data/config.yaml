@@ -55,3 +55,5 @@ fas_start: -1
 fas_end: 2
 fas_num: 100
 fas_base: 10
+# Filtering
+Ds595_lower_bound: 3
