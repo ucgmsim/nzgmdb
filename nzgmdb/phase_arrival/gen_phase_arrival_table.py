@@ -89,39 +89,15 @@ def process_mseed(mseed_file: Path) -> dict[str, Any]:
     if p_wave_loc >= 0:
         stats = mseed_data[0].stats
 
-        # Get the datetime
-        datetime = stats.starttime + timedelta(seconds=p_wave_loc)
-
-        # Get the net
-        net = stats.network
-
-        # Get the sta
-        sta = stats.station
-
-        # Get the loc
-        loc = stats.location
-
-        # Get the chan
-        chan = stats.channel
-
-        # Get the phase
-        phase = "P"
-
-        # Get the t_res
-        t_res = None
-
-        # Get the evid
-        evid = file_structure.get_event_id_from_mseed(mseed_file)
-
         new_data = {
-            "evid": evid,
-            "datetime": datetime,
-            "net": net,
-            "sta": sta,
-            "loc": loc,
-            "chan": chan[:2],
-            "phase": phase,
-            "t_res": t_res,
+            "evid": file_structure.get_event_id_from_mseed(mseed_file),
+            "datetime": stats.starttime + timedelta(seconds=p_wave_loc),
+            "net": stats.network,
+            "sta": stats.station,
+            "loc": stats.location,
+            "chan": stats.channel[:2],
+            "phase": "P",
+            "t_res": None,
         }
 
         return new_data
