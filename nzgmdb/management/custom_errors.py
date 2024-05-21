@@ -25,3 +25,13 @@ class TPNotInWaveformError(Exception):
     """Exception raised when the TP is not in the waveform bounds."""
 
     pass
+
+
+class InvalidNumberOfGeonetPicksException(Exception):
+    """
+    Exception raised if more than two phase picks
+    from Geonet match a given mseed file as there should
+    only be one P phase pick and sometimes one S phase pick.
+    """
+
+    pass

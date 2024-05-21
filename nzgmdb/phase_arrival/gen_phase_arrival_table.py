@@ -13,7 +13,7 @@ import obspy
 import pandas as pd
 from obspy.clients.fdsn import Client as FDSN_Client
 
-from nzgmdb.management import file_structure
+from nzgmdb.management import file_structure, custom_errors
 from nzgmdb.phase_arrival import picker
 
 
@@ -126,16 +126,6 @@ def process_mseed(mseed_file: Path) -> dict[str, Any]:
         return new_data
 
 
-class InvalidNumberOfGeonetPicksException(Exception):
-    """
-    This exception is raised if more than two phase picks
-    from Geonet match a given mseed file as there should
-    only be one P phase pick and sometimes one S phase pick.
-    """
-
-    pass
-
-
 def fetch_geonet_phases(mseed_file: Path) -> list[dict[str, Any]]:
     """
     Fetch the phase arrival times from Geonet for a given mseed file.
@@ -188,7 +178,7 @@ def fetch_geonet_phases(mseed_file: Path) -> list[dict[str, Any]]:
 
     # Check that the number of matching picks is acceptable
     if len(picks_matching_mseed) > 2:
-        raise InvalidNumberOfGeonetPicksException(
+        raise custom_errors.InvalidNumberOfGeonetPicksException(
             "More than two phase picks from Geonet seem to match the given mseed file."
             "\nThere should only be one P phase pick and sometimes one S phase pick."
         )
