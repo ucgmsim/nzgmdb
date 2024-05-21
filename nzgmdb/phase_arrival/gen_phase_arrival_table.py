@@ -137,7 +137,7 @@ def fetch_geonet_phases(mseed_file: Path) -> list[dict[str, Any]]:
 
     Returns
     -------
-    phase_lines_for_table: list[dict[str, any]]
+    phase_table_entries: list[dict[str, any]]
         A list of phase arrival times.
 
     Raises
@@ -149,7 +149,7 @@ def fetch_geonet_phases(mseed_file: Path) -> list[dict[str, Any]]:
     """
 
     # Creating an empty list that will be populated and returned
-    phase_lines_for_table = []
+    phase_table_entries = []
 
     # Get the event ID (evid) from the mseed file
     evid = file_structure.get_event_id_from_mseed(mseed_file)
@@ -193,7 +193,7 @@ def fetch_geonet_phases(mseed_file: Path) -> list[dict[str, Any]]:
 
     # Create the lines to write in the phase arrival table
     for mseed_arrival, pick in mseed_arrival_pick_pairs:
-        phase_line = {
+        phase_table_entry = {
             "evid": evid,
             "datetime": pick.time,
             "net": mseed[0].stats.network,
@@ -204,9 +204,9 @@ def fetch_geonet_phases(mseed_file: Path) -> list[dict[str, Any]]:
             "t_res": mseed_arrival.time_residual,
         }
 
-        phase_lines_for_table.append(phase_line)
+        phase_table_entries.append(phase_table_entry)
 
-    return phase_lines_for_table
+    return phase_table_entries
 
 
 def append_label_to_all_cols(df: pd.DataFrame, label: str) -> pd.DataFrame:
