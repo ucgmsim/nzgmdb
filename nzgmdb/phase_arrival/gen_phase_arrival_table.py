@@ -162,8 +162,7 @@ def fetch_geonet_phases(mseed_file: Path) -> list[dict[str, Any]]:
     # and arrival times for all combinations of
     # network, station, location, and channel
     client_NZ = FDSN_Client("GEONET")
-    cat = client_NZ.get_events(eventid=evid)
-    event = cat[0]
+    event = client_NZ.get_events(eventid=evid)[0]
 
     # Find the picks corresponding to the given mseed file (matching network, station, location, and channel)
     picks_matching_mseed = []
