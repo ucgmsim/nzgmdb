@@ -164,6 +164,10 @@ def calculate_snr(
         ko_matrix_path,
     )
 
+@app.command()
+def calc_fmax(main_dir: Path, n_procs: int = 1):
+
+    fmax.temp_fmax_call_func(main_dir, n_procs)
 
 @app.command(
     help="Process the mseed files to txt files. "
