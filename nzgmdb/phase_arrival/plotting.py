@@ -169,7 +169,6 @@ def plot_historam_of_time_diffs(phase_arrival_table: Path, output_dir: Path):
 
     time_diffs = phase_arrival_df["picker_time_minus_geonet_time_secs"]
 
-    #    plt.hist(time_diffs, bins=30, alpha=0.75, color="blue", edgecolor="black")
     plt.hist(
         time_diffs[~np.isnan(time_diffs)],
         bins=num_bins,

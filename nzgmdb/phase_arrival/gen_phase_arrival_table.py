@@ -277,25 +277,22 @@ def generate_phase_arrival_table(
             right_index=True,
             how="outer",
         )
-
-        picker_time_minus_geonet_time_secs = np.zeros(all_picker_and_geonet_df.shape[0])
-        for row_index in range(all_picker_and_geonet_df.shape[0]):
-            picker_t = all_picker_and_geonet_df["datetime_picker"].values
-            geonet_t = all_picker_and_geonet_df["datetime_geonet"].values
-
-            # Catch Exceptions caused by nan values
-            try:
-                picker_time_minus_geonet_time_secs[row_index] = (
-                    picker_t[row_index] - geonet_t[row_index]
-                )
-            except:
-                picker_time_minus_geonet_time_secs[row_index] = np.nan
-
-            all_picker_and_geonet_df["picker_time_minus_geonet_time_secs"] = (
-                picker_time_minus_geonet_time_secs
-            )
-
         all_picker_and_geonet_df = all_picker_and_geonet_df.reset_index()
+        all_picker_and_geonet_df["picker_time_minus_geonet_time_secs"] = np.nan
+
+        condition_not_nan = (
+            all_picker_and_geonet_df["datetime_picker"].notnull()
+            & all_picker_and_geonet_df["datetime_geonet"].notnull()
+        )
+
+        all_picker_and_geonet_df.loc[
+            condition_not_nan, "picker_time_minus_geonet_time_secs"
+        ] = (
+            all_picker_and_geonet_df.loc[condition_not_nan, "datetime_picker"]
+            - all_picker_and_geonet_df.loc[condition_not_nan, "datetime_geonet"]
+        ).astype(
+            np.float64
+        )
 
         all_picker_and_geonet_df.to_csv(
             output_dir / "full_phase_arrival_table.csv", index=False
