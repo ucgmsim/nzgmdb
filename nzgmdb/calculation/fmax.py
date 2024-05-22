@@ -45,15 +45,7 @@ def find_fmaxs(filenames: Iterable[Path], metadata: pd.DataFrame):
         # getting only the snr columns
         snr = snr_all_cols[["snr_000", "snr_090", "snr_ver"]]
 
-        snr_all_cols.loc[(snr_all_cols["frequency"])]
-
-        snr_all_cols.loc[
-            (snr_all_cols["frequency"] >= 0.5) & (snr_all_cols["frequency"] <= 10)
-        ]
-
-        freq = snr_all_cols["frequency"].to_numpy()
-
-        # # Smoothing data using pandas rolling mean function
+        # Smoothing data using pandas rolling mean function
         # snr_000 = (
         #     snr["snr_000"]
         #     .rolling(window=config.get_value("max_freq_Hz"), center=True, min_periods=1)
@@ -66,16 +58,20 @@ def find_fmaxs(filenames: Iterable[Path], metadata: pd.DataFrame):
             window=config.get_value("window"),
             center=config.get_value("center"),
             min_periods=config.get_value("min_periods"),
-            axis=0,
         ).mean()
 
+        # Initial screening:
+        # In all components at least min_points_above_thresh freq points
+        # between min_freq_Hz and max_freq_Hz with SNR > snr_thresh_vert
+        # or snr_thresh_horiz
+
         snr_smooth_freq_interval_for_screening = snr_smooth[
-            (snr["frequency"] >= config.get_value("min_freq_Hz"))
-            & (snr["frequency"] <= config.get_value("max_freq_Hz"))
+            (snr_all_cols["frequency"] >= config.get_value("min_freq_Hz"))
+            & (snr_all_cols["frequency"] <= config.get_value("max_freq_Hz"))
         ]
 
-        colsum = np.sum(
-            snr_smooth
+        num_valid_points_in_interval = np.sum(
+            snr_smooth_freq_interval_for_screening
             > [
                 config.get_value("snr_thresh_horiz"),
                 config.get_value("snr_thresh_horiz"),
@@ -84,45 +80,9 @@ def find_fmaxs(filenames: Iterable[Path], metadata: pd.DataFrame):
             axis=0,
         )
 
-        print("bp")
-
-        # Initial screening: at least n_min freq points btw 0.5-10 Hz with SNR>5
-
-        # freq_bool_mask = (freq > config.get_value("min_freq_Hz")) & (
-        #     freq < config.get_value("max_freq_Hz")
-        # )
-
-        n_min = config.get_value("max_freq_Hz")
-
-        ## !! ## I THINK DO ALL THIS WITH THE FULL SNR DATAFRAME INSTEAD OF
-        ## !! SEPERATING THE COMPONENTS TO MINIMIZE THE NUMBER OF LINES.
-        ## !! IF YOU GET A 3 x N array, then can compare along axis = 0 to an array of [5, 5, 3]
-        ## !! (where 3 is for the vertical which had a lower threshold for some reason)
-
-        # If any of the three components have fewer than n_min
-        # freq points between min_freq_Hz and max_freq_Hz with snr > snr_thresh
-        # skip the file and continue to the next file in the loop
-
-        if (
-            (
-                (
-                    snr_000.iloc[freq_bool_mask] > config.get_value("snr_thresh_horiz")
-                ).sum()
-                < n_min
-            )
-            or (
-                (
-                    snr_090.iloc[freq_bool_mask] > config.get_value("snr_thresh_horiz")
-                ).sum()
-                < n_min
-            )
-            or (
-                (
-                    snr_ver.iloc[freq_bool_mask] > config.get_value("snr_thresh_vert")
-                ).sum()
-                < n_min
-            )
-        ):
+        if not (
+            num_valid_points_in_interval > config.get_value("min_points_above_thresh")
+        ).all():
             ### To do: add to a list of skipped records with the reason such as "failed initial checks"
             continue
 
