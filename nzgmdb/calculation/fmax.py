@@ -3,6 +3,7 @@ fmax calculation
 TODO: Needs to be refactored to actually work with the NZGMDB
 """
 
+import functools
 from pathlib import Path
 from typing import Iterable
 
@@ -24,6 +25,7 @@ def find_fmaxs(filenames: Iterable[Path], metadata: pd.DataFrame):
 
     # Iterate over the filenames
     for idx, filename in enumerate(filenames):
+
         ev_sta_chan = str(filename.stem).replace("_snr_fas", "")[:-1]
 
         # Get Delta from the metadata
@@ -40,19 +42,9 @@ def find_fmaxs(filenames: Iterable[Path], metadata: pd.DataFrame):
 
         # Read CSV file using pandas
         snr_all_cols = pd.read_csv(filename)
-        print(f"SNR filename: {filename}")
 
         # getting only the snr columns
         snr = snr_all_cols[["snr_000", "snr_090", "snr_ver"]]
-
-        # Smoothing data using pandas rolling mean function
-        # snr_000 = (
-        #     snr["snr_000"]
-        #     .rolling(window=config.get_value("max_freq_Hz"), center=True, min_periods=1)
-        #     .mean()
-        # )
-        # snr_090 = snr["snr_090"].rolling(window=5, center=True, min_periods=1).mean()
-        # snr_ver = snr["snr_ver"].rolling(window=5, center=True, min_periods=1).mean()
 
         snr_smooth = snr.rolling(
             window=config.get_value("window"),
@@ -94,63 +86,30 @@ def find_fmaxs(filenames: Iterable[Path], metadata: pd.DataFrame):
 
         ##############################################
 
-        freq = snr_all_cols["frequency"].to_numpy()
-        snr_000 = snr_smooth["snr_000"]
-
         snr_smooth_gtr_min_freq = snr_smooth[
             snr_all_cols["frequency"] > config.get_value("min_freq_Hz")
         ]
 
-        freq_gtr_min_freq = snr_all_cols["frequency"].loc[
-            snr_all_cols["frequency"] > config.get_value("min_freq_Hz")
-        ]
-
-        fmax_000 = do_fmax_calc(
-            freq_gtr_min_freq,
-            snr_smooth_gtr_min_freq["snr_000"],
-            config.get_value("min_freq_Hz"),
-            fny,
+        freq_gtr_min_freq = (
+            snr_all_cols["frequency"]
+            .loc[snr_all_cols["frequency"] > config.get_value("min_freq_Hz")]
+            .to_numpy()
         )
 
-        print("bp")
-
-        ###############################################
-
-        # id_4hz = freq > 4.0
-        # freq_4hz = freq[id_4hz]
-
-        #### All this can be replaced by 3 calls to the function
-        #### below
-
+        do_fmax_calc_partial = functools.partial(
+            do_fmax_calc, config.get_value("snr_thresh"), fny, freq_gtr_min_freq
+        )
         # Compute fmax for each component
-        loc_000 = np.where(snr_000[id_4hz] < 3)[0]
-        if len(loc_000) != 0:
-            fmax_000 = min(freq_4hz[loc_000[0]], fny)
-        else:
-            fmax_000 = min(freq_4hz[-1], fny)
+        fmax_000_list.append(do_fmax_calc_partial(snr_smooth_gtr_min_freq["snr_000"]))
+        fmax_090_list.append(do_fmax_calc_partial(snr_smooth_gtr_min_freq["snr_090"]))
+        fmax_ver_list.append(do_fmax_calc_partial(snr_smooth_gtr_min_freq["snr_ver"]))
 
-        loc_090 = np.where(snr_090[id_4hz] < 3)[0]
-        if len(loc_090) != 0:
-            fmax_090 = min(freq_4hz[loc_090[0]], fny)
-        else:
-            fmax_090 = min(freq_4hz[-1], fny)
-
-        loc_ver = np.where(snr_ver[id_4hz] < 3)[0]
-        if len(loc_ver) != 0:
-            fmax_ver = min(freq_4hz[loc_ver[0]], fny)
-        else:
-            fmax_ver = min(freq_4hz[-1], fny)
-
-        # Storing computed fmax values for different components
-        fmax_000_list.append(fmax_000)
-        fmax_090_list.append(fmax_090)
-        fmax_ver_list.append(fmax_ver)
         ids.append(ev_sta_chan)
 
     return fmax_000_list, fmax_090_list, fmax_ver_list, ids
 
 
-def do_fmax_calc(freq, snr_component, snr_thresh, fny):
+def do_fmax_calc(snr_thresh, fny, freq, snr_component):
     """
 
     Parameters
@@ -166,7 +125,7 @@ def do_fmax_calc(freq, snr_component, snr_thresh, fny):
     """
 
     loc = np.where(snr_component < snr_thresh)[0]
-    print("bp")
+
     if len(loc) != 0:
         fmax = min(freq[loc[0]], fny)
     else:
