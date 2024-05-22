@@ -88,6 +88,60 @@ def gen_phase_arrival_table(
 
 
 @app.command()
+def calculate_snr(
+    main_dir: Path,
+    phase_table_path: Path = None,
+    meta_output_dir: Path = None,
+    snr_fas_output_dir: Path = None,
+    n_procs: int = 1,
+    apply_smoothing: bool = True,
+    ko_matrix_path: Path = None,
+):
+    """
+    Calculate the signal to noise ratio of the waveforms as well as FAS.
+    Requires the phase arrival table and mseed files to be generated.
+    Allows for custom links to the KO matrix, meta output directory, and SNR and FAS output directory.
+    If not provided, the default directories are used as if running the full NZGMDB pipeline.
+    Note: Can't have the common frequency vector as an input due to typer limitations.
+    Instead change the configuration file.
+    Parameters
+    ----------
+    main_dir : Path
+        The main directory of the NZGMDB results (Highest level directory)
+    phase_table_path : Path
+        Path to the phase arrival table
+    meta_output_dir : Path
+        Path to the output directory for the metadata and skipped records
+    snr_fas_output_dir : Path
+        Path to the output directory for the SNR and FAS data
+    n_procs : int, optional
+        Number of processes to use, by default 1
+    apply_smoothing : bool, optional
+        Whether to apply smoothing to the SNR calculation, by default True
+    ko_matrix_path : Path, optional
+        Path to the ko matrix, by default None
+    """
+    # Define the default paths if not provided
+    if phase_table_path is None:
+        phase_table_path = (
+            file_structure.get_flatfile_dir(main_dir) / "phase_arrival_table.csv"
+        )
+    if meta_output_dir is None:
+        meta_output_dir = file_structure.get_flatfile_dir(main_dir)
+    if snr_fas_output_dir is None:
+        snr_fas_output_dir = file_structure.get_snr_fas_dir(main_dir)
+    compute_snr_for_mseed_data(
+        main_dir,
+        phase_table_path,
+        meta_output_dir,
+        snr_fas_output_dir,
+        n_procs,
+        apply_smoothing,
+        ko_matrix_path,
+    )
+
+
+@app.command()
 def run_full_nzgmdb(
     main_dir: Path, start_date: datetime, end_date: datetime, n_procs: int = 1
 ):
