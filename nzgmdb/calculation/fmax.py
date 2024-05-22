@@ -22,6 +22,7 @@ def find_fmaxs(filenames: Iterable[Path], metadata: pd.DataFrame):
     fmax_090_list = []
     fmax_ver_list = []
     ids = []
+    skipped_records = []
 
     # Iterate over the filenames
     for idx, filename in enumerate(filenames):
@@ -71,18 +72,32 @@ def find_fmaxs(filenames: Iterable[Path], metadata: pd.DataFrame):
         num_valid_points_in_interval = np.sum(
             snr_smooth_freq_interval_for_screening
             > [
-                config.get_value("snr_thresh_horiz"),
-                config.get_value("snr_thresh_horiz"),
-                config.get_value("snr_thresh_vert"),
+                config.get_value("initial_screening_snr_thresh_horiz"),
+                config.get_value("initial_screening_snr_thresh_horiz"),
+                config.get_value("initial_screening_snr_thresh_vert"),
             ],
             axis=0,
         )
 
         if not (
-            num_valid_points_in_interval > config.get_value("min_points_above_thresh")
+            num_valid_points_in_interval
+            > config.get_value("initial_screening_min_points_above_thresh")
         ).all():
             ### To do: add to a list of skipped records with the reason such as "failed initial checks"
-            continue
+            # continue
+
+            # TODO replace ev_sta_chan with the updated naming convention
+            skipped_records.append(
+                {
+                    "event_id": ev_sta_chan,
+                    "station": ev_sta_chan,
+                    "mseed_file": ev_sta_chan,
+                    "reason": "File skipped in Fmax initial SNR screening",
+                }
+            )
+
+        else:
+            skipped_records.append(None)
 
         ##############################################
 
@@ -106,7 +121,7 @@ def find_fmaxs(filenames: Iterable[Path], metadata: pd.DataFrame):
 
         ids.append(ev_sta_chan)
 
-    return fmax_000_list, fmax_090_list, fmax_ver_list, ids
+    return fmax_000_list, fmax_090_list, fmax_ver_list, ids, skipped_records
 
 
 def do_fmax_calc(snr_thresh, fny, freq, snr_component):
@@ -177,6 +192,14 @@ def temp_fmax_call_func(main_dir: Path, n_procs):
     fmax_ver_list = np.concatenate([result[2] for result in results])
     ids = np.concatenate([result[3] for result in results])
 
+    skipped_records = [result[4] for result in results]
+
+    # using filter()
+    # to remove None values in list
+    skipped_records2 = list(filter(lambda item: item is not None, skipped_records[0]))
+
+    skipped_records_df = pd.DataFrame(skipped_records2)
+
     # Create fmax csv
     fmax = pd.DataFrame(
         {
@@ -188,3 +211,5 @@ def temp_fmax_call_func(main_dir: Path, n_procs):
     )
 
     fmax.to_csv(output_dir / "fmaxA2.csv", index=False)
+
+    skipped_records_df.to_csv(output_dir / "fmax_skipped_records.csv", index=False)

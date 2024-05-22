@@ -45,9 +45,9 @@ min_periods: 1
 # fmax - initial screening 
 initial_screening_min_freq_Hz: 0.5
 initial_screening_max_freq_Hz: 10
-snr_thresh_vert: 3
-snr_thresh_horiz: 5
-min_points_above_thresh: 5
+initial_screening_snr_thresh_vert: 3
+initial_screening_snr_thresh_horiz: 5
+initial_screening_min_points_above_thresh: 5
 
 # fmax - compute fmax for each component
 min_freq_Hz: 4
