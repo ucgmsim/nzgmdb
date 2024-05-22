@@ -8,6 +8,7 @@ from typing import Annotated
 
 import typer
 
+from nzgmdb.calculation import fmax
 from nzgmdb.calculation import snr
 from nzgmdb.data_processing import process_observed
 from nzgmdb.data_retrieval import geonet
