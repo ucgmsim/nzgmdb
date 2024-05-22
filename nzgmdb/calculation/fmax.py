@@ -45,6 +45,12 @@ def find_fmaxs(filenames: Iterable[Path], metadata: pd.DataFrame):
         # getting only the snr columns
         snr = snr_all_cols[["snr_000", "snr_090", "snr_ver"]]
 
+        snr_all_cols.loc[(snr_all_cols["frequency"])]
+
+        snr_all_cols.loc[
+            (snr_all_cols["frequency"] >= 0.5) & (snr_all_cols["frequency"] <= 10)
+        ]
+
         freq = snr_all_cols["frequency"].to_numpy()
 
         # # Smoothing data using pandas rolling mean function
