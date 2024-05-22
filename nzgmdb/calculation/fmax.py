@@ -66,8 +66,14 @@ def find_fmaxs(filenames: Iterable[Path], metadata: pd.DataFrame):
         # or snr_thresh_horiz
 
         snr_smooth_freq_interval_for_screening = snr_smooth[
-            (snr_all_cols["frequency"] >= config.get_value("min_freq_Hz"))
-            & (snr_all_cols["frequency"] <= config.get_value("max_freq_Hz"))
+            (
+                snr_all_cols["frequency"]
+                >= config.get_value("initial_screening_min_freq_Hz")
+            )
+            & (
+                snr_all_cols["frequency"]
+                <= config.get_value("initial_screening_max_freq_Hz")
+            )
         ]
 
         num_valid_points_in_interval = np.sum(
@@ -86,10 +92,35 @@ def find_fmaxs(filenames: Iterable[Path], metadata: pd.DataFrame):
             ### To do: add to a list of skipped records with the reason such as "failed initial checks"
             continue
 
+        ##############################################
+
+        freq = snr_all_cols["frequency"].to_numpy()
+        snr_000 = snr_smooth["snr_000"]
+
+        snr_smooth_gtr_min_freq = snr_smooth[
+            snr_all_cols["frequency"] > config.get_value("min_freq_Hz")
+        ]
+
+        freq_gtr_min_freq = snr_all_cols["frequency"].loc[
+            snr_all_cols["frequency"] > config.get_value("min_freq_Hz")
+        ]
+
+        fmax_000 = do_fmax_calc(
+            freq_gtr_min_freq,
+            snr_smooth_gtr_min_freq["snr_000"],
+            config.get_value("min_freq_Hz"),
+            fny,
+        )
+
         print("bp")
 
-        id_4hz = freq > 4.0
-        freq_4hz = freq[id_4hz]
+        ###############################################
+
+        # id_4hz = freq > 4.0
+        # freq_4hz = freq[id_4hz]
+
+        #### All this can be replaced by 3 calls to the function
+        #### below
 
         # Compute fmax for each component
         loc_000 = np.where(snr_000[id_4hz] < 3)[0]
@@ -117,6 +148,31 @@ def find_fmaxs(filenames: Iterable[Path], metadata: pd.DataFrame):
         ids.append(ev_sta_chan)
 
     return fmax_000_list, fmax_090_list, fmax_ver_list, ids
+
+
+def do_fmax_calc(freq, snr_component, snr_thresh, fny):
+    """
+
+    Parameters
+    ----------
+    freq
+    snr
+    snr_thres
+    fny
+
+    Returns
+    -------
+
+    """
+
+    loc = np.where(snr_component < snr_thresh)[0]
+    print("bp")
+    if len(loc) != 0:
+        fmax = min(freq[loc[0]], fny)
+    else:
+        fmax = min(freq[-1], fny)
+
+    return fmax
 
 
 def temp_fmax_call_func(main_dir: Path, n_procs):
