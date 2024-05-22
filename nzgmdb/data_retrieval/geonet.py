@@ -21,6 +21,7 @@ from obspy.clients.fdsn import Client as FDSN_Client
 from nzgmdb.mseed_management import creation
 from nzgmdb.management import config as cfg
 from nzgmdb.management import file_structure
+from nzgmdb.data_processing import filtering
 
 
 def get_max_magnitude(magnitudes: List[Magnitude], mag_type: str):
@@ -274,16 +275,6 @@ def fetch_sta_mag_lines(
             if st is None:
                 continue
 
-            # Create the directory structure for the given event
-            year = event_cat.origins[0].time.year
-            mseed_dir = file_structure.get_mseed_dir(main_dir, year, event_id)
-            mseed_dir.mkdir(exist_ok=True, parents=True)
-
-            # Create the mseed files
-            chan_locs = creation.create_mseed_from_waveforms(
-                st, event_id, station.code, mseed_dir
-            )
-
             for chan, loc in chan_locs:
                 # Find the station magnitude
                 # Ensures that the station codes matches and that if the channel code ends with Z then it makes
@@ -337,6 +328,19 @@ def fetch_sta_mag_lines(
                         amp_unit,
                     ]
                 )
+
+            # Calculate clip to determine if the record should be dropped
+            clip = filtering.get_clip_probability(mag, r_hyp, st)
+
+            # Create the directory structure for the given event
+            year = event_cat.origins[0].time.year
+            mseed_dir = file_structure.get_mseed_dir(main_dir, year, event_id)
+            mseed_dir.mkdir(exist_ok=True, parents=True)
+
+            # Create the mseed files
+            chan_locs = creation.create_mseed_from_waveforms(
+                st, event_id, station.code, mseed_dir
+            )
     return sta_mag_line
 
 
