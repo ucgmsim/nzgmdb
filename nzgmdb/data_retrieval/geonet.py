@@ -3,13 +3,13 @@
 """
 
 import io
-import requests
 import datetime
 from typing import List
 from pathlib import Path
 from functools import partial
 
 import obspy
+import requests
 import numpy as np
 import pandas as pd
 import multiprocessing

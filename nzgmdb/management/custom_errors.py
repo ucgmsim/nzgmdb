@@ -15,6 +15,12 @@ class InventoryNotFoundError(Exception):
     pass
 
 
+class All3ComponentsNotPresentError(Exception):
+    """Exception raised when all 3 components are not present in the mseed file."""
+
+    pass
+
+
 class NoPWaveFoundError(Exception):
     """Exception raised when no P-wave is found in the phase arrival table."""
 
@@ -23,6 +29,18 @@ class NoPWaveFoundError(Exception):
 
 class TPNotInWaveformError(Exception):
     """Exception raised when the TP is not in the waveform bounds."""
+
+    pass
+
+
+class LowcutHighcutError(Exception):
+    """Exception raised when the lowcut is greater than the highcut."""
+
+    pass
+
+
+class ComponentSelectionError(Exception):
+    """Exception raised when the component selection is invalid."""
 
     pass
 

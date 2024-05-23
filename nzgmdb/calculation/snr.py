@@ -2,11 +2,11 @@ import functools
 import multiprocessing as mp
 from pathlib import Path
 
-import IM_calculation.IM.snr_calculation as snr_calc
 import numpy as np
 import obspy
 import pandas as pd
 
+import IM_calculation.IM.snr_calculation as snr_calc
 from nzgmdb.management import file_structure, custom_errors, config as cfg
 from nzgmdb.mseed_management import reading
 from nzgmdb.phase_arrival import tp_selection
@@ -76,6 +76,15 @@ def compute_snr_for_single_mseed(
             "station": station,
             "mseed_file": mseed_file.name,
             "reason": "Failed to remove sensitivity",
+        }
+        skipped_record = pd.DataFrame([skipped_record_dict])
+        return None, skipped_record
+    except custom_errors.All3ComponentsNotPresentError:
+        skipped_record_dict = {
+            "event_id": event_id,
+            "station": station,
+            "mseed_file": mseed_file.name,
+            "reason": "File did not contain 3 components",
         }
         skipped_record = pd.DataFrame([skipped_record_dict])
         return None, skipped_record

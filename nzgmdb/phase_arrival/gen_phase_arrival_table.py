@@ -267,6 +267,7 @@ def generate_phase_arrival_table(
     merged_df = merged_df.reset_index()
 
     # Save the phase arrival table
+    output_dir.mkdir(parents=True, exist_ok=True)
     merged_df.to_csv(output_dir / "phase_arrival_table.csv", index=False)
 
     if full_output:
