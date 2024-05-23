@@ -87,7 +87,7 @@ def plot_phase_arrivals_on_mseed_waveforms(
         except:
             arrival_times_as_list.append(np.nan)
 
-    if len(arrival_times_as_list) > 0:
+    if arrival_times_as_list:
 
         # Generate most of the plot with Obspy.
         # Using handle=True returns the plot
