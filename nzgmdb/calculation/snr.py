@@ -169,6 +169,7 @@ def compute_snr_for_single_mseed(
         "evid": event_id,
         "sta": station,
         "chan": stats.channel[:2],
+        "loc": stats.location,
         "tp": tp,
         "Ds": Ds,
         "Dn": Dn,
