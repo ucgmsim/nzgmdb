@@ -148,7 +148,9 @@ def batch_plot_phase_arrivals(
         )
 
 
-def plot_historam_of_time_diffs(phase_arrival_table: Path, output_dir: Path):
+def plot_time_diffs_hist(
+    phase_arrival_table: Path, output_dir: Path, num_bins=50, dpi=500
+):
     """
 
     Plots a histogram of the differences in phase arrival times from our picker
@@ -161,9 +163,9 @@ def plot_historam_of_time_diffs(phase_arrival_table: Path, output_dir: Path):
         datetime_picker and datetime_geonet.
     output_dir: Path
          Output directory.
+    num_bins: int, optional
+        Number of bins to use in the histogram
     """
-
-    num_bins = 50
 
     phase_arrival_df = pd.read_csv(phase_arrival_table)
 
@@ -186,5 +188,5 @@ def plot_historam_of_time_diffs(phase_arrival_table: Path, output_dir: Path):
     print(f"Total number of points used in the histogram: {total_points}")
     plt.title(f"{total_points} arrival times from both Picker and Geonet")
 
-    plt.savefig(output_dir / "histogram.png", dpi=500)
+    plt.savefig(output_dir / "histogram.png", dpi=dpi)
     plt.close()

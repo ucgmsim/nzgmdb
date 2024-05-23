@@ -99,8 +99,10 @@ def plot_hist(
             file_okay=False,
         ),
     ],
+    num_bins: Annotated[int, typer.Option(help="Number of bins in the histogram")] = 50,
+    dpi: Annotated[int, typer.Option(help="dpi of saved plot")] = 500,
 ):
-    plotting.plot_historam_of_time_diffs(phase_arrival_table, output_dir)
+    plotting.plot_time_diffs_hist(phase_arrival_table, output_dir, num_bins, dpi)
 
 
 if __name__ == "__main__":
