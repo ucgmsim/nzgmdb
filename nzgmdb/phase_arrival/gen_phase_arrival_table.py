@@ -271,6 +271,7 @@ def generate_phase_arrival_table(
     merged_df.to_csv(output_dir / "phase_arrival_table.csv", index=False)
 
     if full_output:
+
         all_picker_and_geonet_df = pd.merge(
             left=append_label_to_all_cols(picker_phases_df_new_index, "picker"),
             right=append_label_to_all_cols(geonet_phases_df_new_index, "geonet"),
