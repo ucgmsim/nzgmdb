@@ -169,7 +169,7 @@ def calculate_snr(
 @app.command()
 def calc_fmax(main_dir: Path, n_procs: int = 1):
 
-    fmax.temp_fmax_call_func(main_dir, n_procs)
+    fmax.start_fmax_calc(main_dir, n_procs)
 
 
 @app.command(

@@ -13,6 +13,41 @@ import pandas as pd
 from nzgmdb.management import config as cfg
 
 
+def calculate_fmax(
+    snr_thresh: float, fny: float, freq: np.ndarray, snr_component: np.ndarray
+) -> float:
+    """
+    Calculate fmax.
+
+    Parameters
+    ----------
+    snr_thresh : float
+        The maximum SNR for considered
+        data point
+    fny : float
+        TODO What is this parameter?
+        ???????????
+    freq : np.ndarray
+        1D np.ndarray array of frequency values
+    snr_component : np.ndarray
+        1D np.ndarray array of SNR values
+    Returns
+    -------
+    fmax : float
+        Maximum frequency
+
+    """
+
+    loc = np.where(snr_component < snr_thresh)[0]
+
+    if len(loc) != 0:
+        fmax = min(freq[loc[0]], fny)
+    else:
+        fmax = min(freq[-1], fny)
+
+    return fmax
+
+
 def find_fmax(filename: Path, metadata: pd.DataFrame):
 
     config = cfg.Config()
@@ -93,63 +128,25 @@ def find_fmax(filename: Path, metadata: pd.DataFrame):
         .to_numpy()
     )
 
-    do_fmax_calc_partial = functools.partial(
-        do_fmax_calc, config.get_value("snr_thresh"), fny, freq_gtr_min_freq
+    calculate_fmax_partial = functools.partial(
+        calculate_fmax, config.get_value("snr_thresh"), fny, freq_gtr_min_freq
     )
 
     fmax_record = {
         "record_id": record_id,
-        "fmax_000": do_fmax_calc_partial(snr_smooth_gtr_min_freq["snr_000"]),
-        "fmax_090": do_fmax_calc_partial(snr_smooth_gtr_min_freq["snr_090"]),
-        "fmax_ver": do_fmax_calc_partial(snr_smooth_gtr_min_freq["snr_ver"]),
+        "fmax_000": calculate_fmax_partial(snr_smooth_gtr_min_freq["snr_000"]),
+        "fmax_090": calculate_fmax_partial(snr_smooth_gtr_min_freq["snr_090"]),
+        "fmax_ver": calculate_fmax_partial(snr_smooth_gtr_min_freq["snr_ver"]),
     }
 
     return fmax_record, skipped_record
 
 
-def do_fmax_calc(
-    snr_thresh: float, fny: float, freq: np.ndarray, snr_component: np.ndarray
-) -> float:
-    """
-    Calculate fmax.
+def start_fmax_calc(main_dir: Path, output_dir: Path = None, n_procs: int = 1):
 
-    Parameters
-    ----------
-    snr_thresh : float
-        The maximum SNR for considered
-        data point
-    fny : float
-        TODO What is this parameter?
-        ???????????
-    freq : np.ndarray
-        1D np.ndarray array of frequency values
-    snr_component : np.ndarray
-        1D np.ndarray array of SNR values
-    Returns
-    -------
-    fmax : float
-        Maximum frequency
+    if not output_dir:
+        output_dir = main_dir / "flatfiles"
 
-    """
-
-    loc = np.where(snr_component < snr_thresh)[0]
-
-    if len(loc) != 0:
-        fmax = min(freq[loc[0]], fny)
-    else:
-        fmax = min(freq[-1], fny)
-
-    return fmax
-
-
-def temp_fmax_call_func(main_dir: Path, n_procs):
-
-    output_dir = main_dir / "flatfiles"
-
-    # # File inputs
-    # metadata_df = pd.read_csv(
-    #     "/home/arr65/gmdb_A/new_struct_2022_2/flatfiles/snr_metadata.csv"
-    # )
     snr_dir = Path(main_dir / "snr_fas")
 
     metadata_df = pd.read_csv(output_dir / "snr_metadata.csv")
@@ -167,7 +164,7 @@ def temp_fmax_call_func(main_dir: Path, n_procs):
 
     grouped_results = list(zip(*results))
 
-    fmax = pd.DataFrame(grouped_results[0])
+    fmax_df = pd.DataFrame(grouped_results[0])
 
     # using filter() to remove None values in list
     skipped_records_df = pd.DataFrame(
@@ -177,6 +174,6 @@ def temp_fmax_call_func(main_dir: Path, n_procs):
         f"Skipped {len(skipped_records_df)} files as their SNR was too low (failed initial screening)"
     )
 
-    fmax.to_csv(output_dir / "fmaxA3.csv", index=False)
+    fmax_df.to_csv(output_dir / "fmaxA3.csv", index=False)
 
     skipped_records_df.to_csv(output_dir / "fmax_skipped_records.csv", index=False)
