@@ -4,8 +4,8 @@ TODO: Needs to be refactored to actually work with the NZGMDB
 """
 
 import functools
+import multiprocessing
 from pathlib import Path
-from typing import Iterable
 
 import numpy as np
 import pandas as pd
@@ -13,115 +13,95 @@ import pandas as pd
 from nzgmdb.management import config as cfg
 
 
-def find_fmaxs(filenames: Iterable[Path], metadata: pd.DataFrame):
+def find_fmax(filename: Path, metadata: pd.DataFrame):
 
     config = cfg.Config()
 
-    # Create empty lists to store fmax values
-    fmax_000_list = []
-    fmax_090_list = []
-    fmax_ver_list = []
-    record_ids = []
-    skipped_records = []
+    record_id = str(filename.stem).replace("_snr_fas", "")
 
-    # Iterate over the filenames
-    for idx, filename in enumerate(filenames):
+    # Get Delta from the metadata
+    current_row = metadata.iloc[np.where(metadata["record_id"] == record_id)[0], :]
 
-        record_id = str(filename.stem).replace("_snr_fas", "")
+    ##!! TODO Should explicitely confirm whether this should be (1/a)*b*c or 1/(a*b*c)
+    fny = (
+        1
+        / current_row["delta"].iloc[config.get_value("fny_param_index")]
+        * config.get_value("fny_param_1")
+        * config.get_value("fny_param_2")
+    )
 
-        # Get Delta from the metadata
-        current_row = metadata.iloc[np.where(metadata["record_id"] == record_id)[0], :]
+    # Read CSV file using pandas
+    snr_all_cols = pd.read_csv(filename)
 
-        ##!! Should explicitely confirm whether this should be (1/a)*b*c or 1/(a*b*c)
-        fny = (
-            1
-            / current_row["delta"].iloc[config.get_value("fny_param_index")]
-            * config.get_value("fny_param_1")
-            * config.get_value("fny_param_2")
-        )
+    # getting only the snr columns
+    snr = snr_all_cols[["snr_000", "snr_090", "snr_ver"]]
 
-        # Read CSV file using pandas
-        snr_all_cols = pd.read_csv(filename)
+    snr_smooth = snr.rolling(
+        window=config.get_value("window"),
+        center=config.get_value("center"),
+        min_periods=config.get_value("min_periods"),
+    ).mean()
 
-        # getting only the snr columns
-        snr = snr_all_cols[["snr_000", "snr_090", "snr_ver"]]
+    # Initial screening:
+    # In all components at least min_points_above_thresh freq points
+    # between min_freq_Hz and max_freq_Hz with SNR > snr_thresh_vert
+    # or snr_thresh_horiz
 
-        snr_smooth = snr.rolling(
-            window=config.get_value("window"),
-            center=config.get_value("center"),
-            min_periods=config.get_value("min_periods"),
-        ).mean()
-
-        # Initial screening:
-        # In all components at least min_points_above_thresh freq points
-        # between min_freq_Hz and max_freq_Hz with SNR > snr_thresh_vert
-        # or snr_thresh_horiz
-
-        snr_smooth_freq_interval_for_screening = snr_smooth[
-            (
-                snr_all_cols["frequency"]
-                >= config.get_value("initial_screening_min_freq_Hz")
-            )
-            & (
-                snr_all_cols["frequency"]
-                <= config.get_value("initial_screening_max_freq_Hz")
-            )
-        ]
-
-        num_valid_points_in_interval = np.sum(
-            snr_smooth_freq_interval_for_screening
-            > [
-                config.get_value("initial_screening_snr_thresh_horiz"),
-                config.get_value("initial_screening_snr_thresh_horiz"),
-                config.get_value("initial_screening_snr_thresh_vert"),
-            ],
-            axis=0,
-        )
-
-        if not (
-            num_valid_points_in_interval
-            > config.get_value("initial_screening_min_points_above_thresh")
-        ).all():
-            ### To do: add to a list of skipped records with the reason such as "failed initial checks"
-            # continue
-
-            # TODO replace ev_sta_chan with the updated naming convention
-            skipped_records.append(
-                {
-                    "record_id": record_id,
-                    "event_id": record_id.split("_")[0],
-                    "station": record_id.split("_")[1],
-                    "mseed_file": record_id + ".mseed",
-                    "reason": "File skipped in fmax initial SNR screening",
-                }
-            )
-
-        else:
-            skipped_records.append(None)
-
-        ##############################################
-
-        snr_smooth_gtr_min_freq = snr_smooth[
-            snr_all_cols["frequency"] > config.get_value("min_freq_Hz")
-        ]
-
-        freq_gtr_min_freq = (
+    snr_smooth_freq_interval_for_screening = snr_smooth[
+        (snr_all_cols["frequency"] >= config.get_value("initial_screening_min_freq_Hz"))
+        & (
             snr_all_cols["frequency"]
-            .loc[snr_all_cols["frequency"] > config.get_value("min_freq_Hz")]
-            .to_numpy()
+            <= config.get_value("initial_screening_max_freq_Hz")
         )
+    ]
 
-        do_fmax_calc_partial = functools.partial(
-            do_fmax_calc, config.get_value("snr_thresh"), fny, freq_gtr_min_freq
-        )
-        # Compute fmax for each component
-        fmax_000_list.append(do_fmax_calc_partial(snr_smooth_gtr_min_freq["snr_000"]))
-        fmax_090_list.append(do_fmax_calc_partial(snr_smooth_gtr_min_freq["snr_090"]))
-        fmax_ver_list.append(do_fmax_calc_partial(snr_smooth_gtr_min_freq["snr_ver"]))
+    num_valid_points_in_interval = np.sum(
+        snr_smooth_freq_interval_for_screening
+        > [
+            config.get_value("initial_screening_snr_thresh_horiz"),
+            config.get_value("initial_screening_snr_thresh_horiz"),
+            config.get_value("initial_screening_snr_thresh_vert"),
+        ],
+        axis=0,
+    )
 
-        record_ids.append(record_id)
+    if not (
+        num_valid_points_in_interval
+        > config.get_value("initial_screening_min_points_above_thresh")
+    ).all():
 
-    return fmax_000_list, fmax_090_list, fmax_ver_list, record_ids, skipped_records
+        skipped_record = {
+            "record_id": record_id,
+            "event_id": record_id.split("_")[0],
+            "station": record_id.split("_")[1],
+            "mseed_file": record_id + ".mseed",
+            "reason": "File skipped in fmax initial SNR screening",
+        }
+
+    else:
+        skipped_record = None
+
+    ##############################################
+
+    snr_smooth_gtr_min_freq = snr_smooth[
+        snr_all_cols["frequency"] > config.get_value("min_freq_Hz")
+    ]
+
+    freq_gtr_min_freq = (
+        snr_all_cols["frequency"]
+        .loc[snr_all_cols["frequency"] > config.get_value("min_freq_Hz")]
+        .to_numpy()
+    )
+
+    do_fmax_calc_partial = functools.partial(
+        do_fmax_calc, config.get_value("snr_thresh"), fny, freq_gtr_min_freq
+    )
+    # Compute fmax for each component
+    fmax_000 = do_fmax_calc_partial(snr_smooth_gtr_min_freq["snr_000"])
+    fmax_090 = do_fmax_calc_partial(snr_smooth_gtr_min_freq["snr_090"])
+    fmax_ver = do_fmax_calc_partial(snr_smooth_gtr_min_freq["snr_ver"])
+
+    return record_id, fmax_000, fmax_090, fmax_ver, skipped_record
 
 
 def do_fmax_calc(
@@ -172,11 +152,6 @@ def temp_fmax_call_func(main_dir: Path, n_procs):
     metadata_df = pd.read_csv(output_dir / "snr_metadata.csv")
 
     snr_filenames = snr_dir.glob("**/*snr_fas.csv")
-    # Add the ev_sta_chan column to the metadata
-
-    # metadata_df["ev_sta_chan"] = (
-    #     metadata_df["evid"] + "_" + metadata_df["sta"] + "_" + metadata_df["chan"]
-    # )
 
     metadata_df["record_id"] = (
         metadata_df["evid"]
@@ -188,44 +163,29 @@ def temp_fmax_call_func(main_dir: Path, n_procs):
         + metadata_df["loc"]
     )
 
-    # Split the filenames into n_procs chunks
-    # snr_filenames = np.array_split(list(snr_filenames), n_procs)
+    with multiprocessing.Pool(n_procs) as pool:
+        results = pool.map(
+            functools.partial(
+                find_fmax,
+                metadata=metadata_df,
+            ),
+            snr_filenames,
+        )
 
-    # with mp.Pool(n_procs) as p:
-    #     results = p.map(
-    #         functools.partial(
-    #             find_fmaxs,
-    #             metadata=metadata_df,
-    #         ),
-    #         snr_filenames,
-    #     )
-    # Write above as a for loop
-    results = []
-    for snr_filename in snr_filenames:
-        results.append(find_fmaxs(snr_filenames, metadata_df))
+    grouped_results = list(zip(*results))
 
-    # Combine the results into the 4 different lists
-    fmax_000_list = np.concatenate([result[0] for result in results])
-    fmax_090_list = np.concatenate([result[1] for result in results])
-    fmax_ver_list = np.concatenate([result[2] for result in results])
-    record_ids = np.concatenate([result[3] for result in results])
-
-    skipped_records = [result[4] for result in results]
-
-    # using filter()
-    # to remove None values in list
-    skipped_records2 = list(filter(lambda item: item is not None, skipped_records[0]))
-
-    skipped_records_df = pd.DataFrame(skipped_records2)
-
-    # Create fmax csv
     fmax = pd.DataFrame(
         {
-            "record_id": record_ids,
-            "fmax_000": fmax_000_list,
-            "fmax_090": fmax_090_list,
-            "fmax_ver": fmax_ver_list,
+            "record_id": grouped_results[0],
+            "fmax_000": grouped_results[1],
+            "fmax_090": grouped_results[2],
+            "fmax_ver": grouped_results[3],
         }
+    )
+
+    # using filter() to remove None values in list
+    skipped_records_df = pd.DataFrame(
+        filter(lambda item: item is not None, grouped_results[4])
     )
 
     fmax.to_csv(output_dir / "fmaxA2.csv", index=False)
