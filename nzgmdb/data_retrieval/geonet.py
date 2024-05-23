@@ -275,6 +275,27 @@ def fetch_sta_mag_lines(
             if st is None:
                 continue
 
+            # Get the unique channels (Using first 2 keys) and locations
+            unique_channels = set([(tr.stats.channel[:2], tr.stats.location) for tr in st])
+
+            chan_locs = []
+            for chan, loc in unique_channels:
+                # Each unique channel and location pair is a new mseed file
+                st_new = st.select(location=loc, channel=f"{chan}?")
+
+                # Extend the chan and loc to the full channel codes and loc for each trace
+                chan_locs.extend([(tr.stats.channel, tr.stats.location) for tr in st_new])
+
+            # Create the directory structure for the given event
+            year = event_cat.origins[0].time.year
+            mseed_dir = file_structure.get_mseed_dir(main_dir, year, event_id)
+            mseed_dir.mkdir(exist_ok=True, parents=True)
+
+            # Create the mseed files
+            chan_locs = creation.create_mseed_from_waveforms(
+                st, event_id, station.code, mseed_dir
+            )
+
             for chan, loc in chan_locs:
                 # Find the station magnitude
                 # Ensures that the station codes matches and that if the channel code ends with Z then it makes
@@ -330,17 +351,7 @@ def fetch_sta_mag_lines(
                 )
 
             # Calculate clip to determine if the record should be dropped
-            clip = filtering.get_clip_probability(mag, r_hyp, st)
-
-            # Create the directory structure for the given event
-            year = event_cat.origins[0].time.year
-            mseed_dir = file_structure.get_mseed_dir(main_dir, year, event_id)
-            mseed_dir.mkdir(exist_ok=True, parents=True)
-
-            # Create the mseed files
-            chan_locs = creation.create_mseed_from_waveforms(
-                st, event_id, station.code, mseed_dir
-            )
+            clip = filtering.get_clip_probability(sta_mag_mag, r_hyp, st)
     return sta_mag_line
 
 

@@ -62,6 +62,7 @@ def get_waveforms(
             "rrup": [rrup],
             "vs30": [vs30],
             "z1pt0": [z1p0],
+            "dip": 45,
         }
     )
     result_df = openquake_wrapper_vectorized.oq_run(
