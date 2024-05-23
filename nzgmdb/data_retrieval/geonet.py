@@ -276,82 +276,84 @@ def fetch_sta_mag_lines(
                 continue
 
             # Get the unique channels (Using first 2 keys) and locations
-            unique_channels = set([(tr.stats.channel[:2], tr.stats.location) for tr in st])
-
-            chan_locs = []
-            for chan, loc in unique_channels:
-                # Each unique channel and location pair is a new mseed file
-                st_new = st.select(location=loc, channel=f"{chan}?")
-
-                # Extend the chan and loc to the full channel codes and loc for each trace
-                chan_locs.extend([(tr.stats.channel, tr.stats.location) for tr in st_new])
-
-            # Create the directory structure for the given event
-            year = event_cat.origins[0].time.year
-            mseed_dir = file_structure.get_mseed_dir(main_dir, year, event_id)
-            mseed_dir.mkdir(exist_ok=True, parents=True)
-
-            # Create the mseed files
-            chan_locs = creation.create_mseed_from_waveforms(
-                st, event_id, station.code, mseed_dir
+            unique_channels = set(
+                [(tr.stats.channel[:2], tr.stats.location) for tr in st]
             )
 
-            for chan, loc in chan_locs:
-                # Find the station magnitude
-                # Ensures that the station codes matches and that if the channel code ends with Z then it makes
-                # sure that the station magnitude is for the Z channel, otherwise any that match with the first two
-                # characters of the channel code is sufficient
-                sta_mag = next(
-                    (
-                        mag
-                        for mag in event_cat.station_magnitudes
-                        if mag.waveform_id.station_code == station.code
-                        and (
-                            (chan[-1] == "Z" and mag.waveform_id.channel_code == chan)
-                            or mag.waveform_id.channel_code[:2] == chan[:2]
-                        )
-                    ),
-                    None,
-                )
-                if sta_mag:
-                    sta_mag_mag = sta_mag.mag
-                    sta_mag_type = sta_mag.station_magnitude_type
-                    amp = next(
+            mseeds = creation.split_stream_into_mseeds(st, unique_channels)
+
+            for mseed in mseeds:
+                all_chan_locs = [(tr.stats.channel, tr.stats.location) for tr in mseed]
+                for chan, loc in all_chan_locs:
+                    # Find the station magnitude
+                    # Ensures that the station codes matches and that if the channel code ends with Z then it makes
+                    # sure that the station magnitude is for the Z channel, otherwise any that match with the first two
+                    # characters of the channel code is sufficient
+                    sta_mag = next(
                         (
-                            amp
-                            for amp in event_cat.amplitudes
-                            if amp.resource_id == sta_mag.amplitude_id
+                            mag
+                            for mag in event_cat.station_magnitudes
+                            if mag.waveform_id.station_code == station.code
+                            and (
+                                (
+                                    chan[-1] == "Z"
+                                    and mag.waveform_id.channel_code == chan
+                                )
+                                or mag.waveform_id.channel_code[:2] == chan[:2]
+                            )
                         ),
                         None,
                     )
-                else:
-                    sta_mag_mag = None
-                    sta_mag_type = pref_mag_type
-                    amp = None
+                    if sta_mag:
+                        sta_mag_mag = sta_mag.mag
+                        sta_mag_type = sta_mag.station_magnitude_type
+                        amp = next(
+                            (
+                                amp
+                                for amp in event_cat.amplitudes
+                                if amp.resource_id == sta_mag.amplitude_id
+                            ),
+                            None,
+                        )
+                    else:
+                        sta_mag_mag = None
+                        sta_mag_type = pref_mag_type
+                        amp = None
 
-                # Get the amp values
-                amp_amp = amp.generic_amplitude if amp else None
-                amp_unit = amp.unit if amp and "unit" in amp else None
+                    # Get the amp values
+                    amp_amp = amp.generic_amplitude if amp else None
+                    amp_unit = amp.unit if amp and "unit" in amp else None
 
-                mag_id = f"{event_id}m{len(sta_mag_line) + 1}"
-                sta_mag_line.append(
-                    [
-                        mag_id,
-                        network.code,
-                        station.code,
-                        loc,
-                        chan,
-                        event_id,
-                        sta_mag_mag,
-                        sta_mag_type,
-                        "uncorrected",
-                        amp_amp,
-                        amp_unit,
-                    ]
-                )
+                    mag_id = f"{event_id}m{len(sta_mag_line) + 1}"
+                    sta_mag_line.append(
+                        [
+                            mag_id,
+                            network.code,
+                            station.code,
+                            loc,
+                            chan,
+                            event_id,
+                            sta_mag_mag,
+                            sta_mag_type,
+                            "uncorrected",
+                            amp_amp,
+                            amp_unit,
+                        ]
+                    )
 
-            # Calculate clip to determine if the record should be dropped
-            clip = filtering.get_clip_probability(sta_mag_mag, r_hyp, st)
+                # Calculate clip to determine if the record should be dropped
+                clip = filtering.get_clip_probability(sta_mag_mag, r_hyp, st)
+
+            # Create the directory structure for the given event
+            # year = event_cat.origins[0].time.year
+            # mseed_dir = file_structure.get_mseed_dir(main_dir, year, event_id)
+            # mseed_dir.mkdir(exist_ok=True, parents=True)
+            #
+            # # Create the mseed files
+            # chan_locs = creation.create_mseed_from_waveforms(
+            #     st, event_id, station.code, mseed_dir
+            # )
+
     return sta_mag_line
 
 

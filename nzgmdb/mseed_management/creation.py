@@ -1,6 +1,7 @@
 import warnings
 import http.client
 from pathlib import Path
+from typing import Iterable
 
 import pandas as pd
 from obspy import Stream
@@ -132,6 +133,49 @@ def get_waveforms(
             else:
                 return None
     return st
+
+
+def split_stream_into_mseeds(st: Stream, unique_channels: Iterable):
+    """
+    Split the stream object into multiple mseed files based on the unique channel and location
+
+    Parameters
+    ----------
+    st : Stream
+        The stream object containing the waveform data for every channel and location
+    unique_channels : Iterable
+        An Iterable of tuples containing the unique channel and location for each mseed file created
+        [(channel, location), ...]
+
+    Returns
+    -------
+    mseeds : list
+        A list of stream objects containing the waveform data for each mseed file created
+    """
+    mseeds = []
+    for chan, loc in unique_channels:
+        # Each unique channel and location pair is a new mseed file
+        st_new = st.select(location=loc, channel=f"{chan}?")
+
+        if len(st_new) > 3:
+            # Check if all the sample rates are the same
+            samples = [tr.stats.sampling_rate for tr in st_new]
+            if len(set(samples)) > 1:
+                # If they are different take the highest and resample with the others using interpolation
+                st_new = st_new.select(sampling_rate=max(samples))
+                st_new.merge(fill_value="interpolate")
+
+        # Ensure traces all have the same length
+        starttime_trim = max([tr.stats.starttime for tr in st_new])
+        endtime_trim = min([tr.stats.endtime for tr in st_new])
+        # Check that the start time is before the end time
+        if starttime_trim > endtime_trim:
+            continue
+        st_new.trim(starttime_trim, endtime_trim)
+
+        mseeds.append(st_new)
+
+    return mseeds
 
 
 def create_mseed_from_waveforms(st: Stream, event_id: str, sta: str, output_dir: Path):
