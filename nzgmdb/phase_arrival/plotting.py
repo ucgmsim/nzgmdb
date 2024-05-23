@@ -79,12 +79,11 @@ def plot_phase_arrivals_on_mseed_waveforms(
 
     arrival_times_as_list = []
     for arrival_time in phase_arrival_times:
-        # Catch Exceptions raised by trying to convert nans to .matplotlib_date
-        try:
+        if isinstance(arrival_time, str):
             arrival_times_as_list.append(
                 obspy.UTCDateTime(arrival_time).matplotlib_date
             )
-        except:
+        else:
             arrival_times_as_list.append(np.nan)
 
     if arrival_times_as_list:
@@ -107,7 +106,6 @@ def plot_phase_arrivals_on_mseed_waveforms(
                 linestyle="--",
                 colors=vline_colors,
             )
-            ax.legend()
 
         fig.savefig(output_dir / f"{mseed_file.stem}.png")
         plt.close()
