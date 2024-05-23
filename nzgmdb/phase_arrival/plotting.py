@@ -48,10 +48,7 @@ def plot_phase_arrivals_on_mseed_waveforms(
             & (phase_arrival_df["chan"] == mseed[0].stats.channel[:2])
             & (phase_arrival_df["loc"] == mseed[0].stats.location)
         ]["datetime"]
-
-        # plot picker as blue and geonet as red
-        vline_colors = []
-        vline_colors.extend(["b"] * len(phase_arrival_df))
+        vline_colors = ["b"] * len(phase_arrival_times)
 
     else:
         picker_phase_arrival_times = phase_arrival_df.loc[
@@ -73,8 +70,7 @@ def plot_phase_arrivals_on_mseed_waveforms(
         )
 
         # plot picker as blue and geonet as red
-        vline_colors = []
-        vline_colors.extend(["b"] * len(picker_phase_arrival_times))
+        vline_colors = ["b"] * len(picker_phase_arrival_times)
         vline_colors.extend(["r"] * len(geonet_phase_arrival_times))
 
     arrival_times_as_list = []
@@ -180,9 +176,8 @@ def plot_time_diffs_hist(
     counts, bin_edges = np.histogram(time_diffs[~np.isnan(time_diffs)], bins=num_bins)
     total_points = counts.sum()
 
-    # Step 3: Add titles and labels
     plt.xlabel("Picker time - Geonet time (seconds)")
-    plt.ylabel("counts")
+    plt.ylabel("count")
     print(f"Total number of points used in the histogram: {total_points}")
     plt.title(f"{total_points} arrival times from both Picker and Geonet")
 
