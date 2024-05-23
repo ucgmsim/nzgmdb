@@ -2,11 +2,11 @@ import functools
 import multiprocessing as mp
 from pathlib import Path
 
+import IM_calculation.IM.snr_calculation as snr_calc
 import numpy as np
 import obspy
 import pandas as pd
 
-import IM_calculation.IM.snr_calculation as snr_calc
 from nzgmdb.management import file_structure, custom_errors, config as cfg
 from nzgmdb.mseed_management import reading
 from nzgmdb.phase_arrival import tp_selection
@@ -160,7 +160,8 @@ def compute_snr_for_single_mseed(
     event_dir = year_dir / event_id
     event_dir.mkdir(parents=True, exist_ok=True)
     snr_fas_df.to_csv(
-        event_dir / f"{event_id}_{station}_{stats.channel}_snr_fas.csv",
+        event_dir
+        / f"{event_id}_{station}_{stats.channel[:2]}_{stats.location}_snr_fas.csv",
         index_label="frequency",
     )
     # Add to the metadata dataframe
