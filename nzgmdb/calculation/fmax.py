@@ -1,6 +1,6 @@
 """
 fmax calculation
-TODO: Needs to be refactored to actually work with the NZGMDB
+
 """
 
 import functools
@@ -96,12 +96,15 @@ def find_fmax(filename: Path, metadata: pd.DataFrame):
     do_fmax_calc_partial = functools.partial(
         do_fmax_calc, config.get_value("snr_thresh"), fny, freq_gtr_min_freq
     )
-    # Compute fmax for each component
-    fmax_000 = do_fmax_calc_partial(snr_smooth_gtr_min_freq["snr_000"])
-    fmax_090 = do_fmax_calc_partial(snr_smooth_gtr_min_freq["snr_090"])
-    fmax_ver = do_fmax_calc_partial(snr_smooth_gtr_min_freq["snr_ver"])
 
-    return record_id, fmax_000, fmax_090, fmax_ver, skipped_record
+    fmax_record = {
+        "record_id": record_id,
+        "fmax_000": do_fmax_calc_partial(snr_smooth_gtr_min_freq["snr_000"]),
+        "fmax_090": do_fmax_calc_partial(snr_smooth_gtr_min_freq["snr_090"]),
+        "fmax_ver": do_fmax_calc_partial(snr_smooth_gtr_min_freq["snr_ver"]),
+    }
+
+    return fmax_record, skipped_record
 
 
 def do_fmax_calc(
@@ -153,16 +156,6 @@ def temp_fmax_call_func(main_dir: Path, n_procs):
 
     snr_filenames = snr_dir.glob("**/*snr_fas.csv")
 
-    metadata_df["record_id"] = (
-        metadata_df["evid"]
-        + "_"
-        + metadata_df["sta"]
-        + "_"
-        + metadata_df["chan"]
-        + "_"
-        + metadata_df["loc"]
-    )
-
     with multiprocessing.Pool(n_procs) as pool:
         results = pool.map(
             functools.partial(
@@ -174,20 +167,16 @@ def temp_fmax_call_func(main_dir: Path, n_procs):
 
     grouped_results = list(zip(*results))
 
-    fmax = pd.DataFrame(
-        {
-            "record_id": grouped_results[0],
-            "fmax_000": grouped_results[1],
-            "fmax_090": grouped_results[2],
-            "fmax_ver": grouped_results[3],
-        }
-    )
+    fmax = pd.DataFrame(grouped_results[0])
 
     # using filter() to remove None values in list
     skipped_records_df = pd.DataFrame(
-        filter(lambda item: item is not None, grouped_results[4])
+        filter(lambda item: item is not None, grouped_results[1])
+    )
+    print(
+        f"Skipped {len(skipped_records_df)} files as their SNR was too low (failed initial screening)"
     )
 
-    fmax.to_csv(output_dir / "fmaxA2.csv", index=False)
+    fmax.to_csv(output_dir / "fmaxA3.csv", index=False)
 
     skipped_records_df.to_csv(output_dir / "fmax_skipped_records.csv", index=False)

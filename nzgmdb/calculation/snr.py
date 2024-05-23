@@ -166,6 +166,7 @@ def compute_snr_for_single_mseed(
     )
     # Add to the metadata dataframe
     meta_dict = {
+        "record_id": f"{event_id}_{station}_{stats.channel[:2]}_{stats.location}",
         "evid": event_id,
         "sta": station,
         "chan": stats.channel[:2],
