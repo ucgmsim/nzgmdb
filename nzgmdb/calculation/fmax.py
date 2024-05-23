@@ -142,16 +142,18 @@ def find_fmax(filename: Path, metadata: pd.DataFrame):
     return fmax_record, skipped_record
 
 
-def start_fmax_calc(main_dir: Path, output_dir: Path = None, n_procs: int = 1):
+def start_fmax_calc(
+    main_dir: Path, snr_fas_dir: Path, meta_dir: Path, n_procs: int = 1
+):
 
-    if not output_dir:
-        output_dir = main_dir / "flatfiles"
+    if not meta_dir:
+        meta_dir = main_dir / "flatfiles"
 
-    snr_dir = Path(main_dir / "snr_fas")
+    if not snr_fas_dir:
+        snr_fas_dir = Path(main_dir / "snr_fas")
 
-    metadata_df = pd.read_csv(output_dir / "snr_metadata.csv")
-
-    snr_filenames = snr_dir.glob("**/*snr_fas.csv")
+    metadata_df = pd.read_csv(meta_dir / "snr_metadata.csv")
+    snr_filenames = snr_fas_dir.glob("**/*snr_fas.csv")
 
     with multiprocessing.Pool(n_procs) as pool:
         results = pool.map(
@@ -174,6 +176,6 @@ def start_fmax_calc(main_dir: Path, output_dir: Path = None, n_procs: int = 1):
         f"Skipped {len(skipped_records_df)} files as their SNR was too low (failed initial screening)"
     )
 
-    fmax_df.to_csv(output_dir / "fmaxA3.csv", index=False)
+    fmax_df.to_csv(meta_dir / "fmaxA3.csv", index=False)
 
-    skipped_records_df.to_csv(output_dir / "fmax_skipped_records.csv", index=False)
+    skipped_records_df.to_csv(meta_dir / "fmax_skipped_records.csv", index=False)
