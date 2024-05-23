@@ -15,6 +15,12 @@ class InventoryNotFoundError(Exception):
     pass
 
 
+class All3ComponentsNotPresentError(Exception):
+    """Exception raised when all 3 components are not present in the mseed file."""
+
+    pass
+
+
 class NoPWaveFoundError(Exception):
     """Exception raised when no P-wave is found in the phase arrival table."""
 

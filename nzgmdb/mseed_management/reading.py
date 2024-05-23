@@ -5,6 +5,7 @@ import numpy as np
 import pandas as pd
 
 from IM_calculation.IM import read_waveform
+from nzgmdb.management import custom_errors
 from nzgmdb.data_processing import waveform_manipulation
 
 
@@ -35,9 +36,16 @@ def create_waveform_from_mseed(
         If no inventory information is found for the station and location pair
     SensitivityRemovalError
         If the sensitivity removal fails
+    All3ComponentsNotPresentError
+        If all 3 components are not present in the mseed file
     """
     # Read the mseed file
     mseed = obspy.read(str(mseed_file))
+
+    if len(mseed) != 3:
+        raise custom_errors.All3ComponentsNotPresentError(
+            f"All 3 components are not present in the mseed file {mseed_file}"
+        )
 
     # Process the data if needed
     if pre_process:
