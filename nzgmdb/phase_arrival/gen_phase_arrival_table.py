@@ -185,27 +185,6 @@ def fetch_geonet_phases(mseed_file: Path) -> list[dict[str, Any]]:
     return phase_table_entries
 
 
-def append_label_to_all_cols(df: pd.DataFrame, label: str) -> pd.DataFrame:
-    """
-    Appends a label to all columns of df by modifying in-place
-
-    Parameters
-    ----------
-    df: pd.DataFrame
-        The DataFrame to modify
-    label: str
-        The label to append to all columns of df
-
-    Returns
-    -------
-    df: pd.DataFrame
-        The modified DataFame
-    """
-
-    df.columns = df.columns + f"_{label}"
-    return df
-
-
 def generate_phase_arrival_table(
     main_dir: Path, output_dir: Path, n_procs: int, full_output: bool = False
 ):
@@ -272,9 +251,18 @@ def generate_phase_arrival_table(
 
     if full_output:
 
+        # Adding labels to the DataFrame columns so they
+        # can be distinguished after the outer merge
+        picker_phases_df_new_index.columns = (
+            picker_phases_df_new_index.columns + f"_picker"
+        )
+        geonet_phases_df_new_index.columns = (
+            geonet_phases_df_new_index.columns + f"_geonet"
+        )
+
         all_picker_and_geonet_df = pd.merge(
-            left=append_label_to_all_cols(picker_phases_df_new_index, "picker"),
-            right=append_label_to_all_cols(geonet_phases_df_new_index, "geonet"),
+            left=picker_phases_df_new_index,
+            right=geonet_phases_df_new_index,
             left_index=True,
             right_index=True,
             how="outer",
