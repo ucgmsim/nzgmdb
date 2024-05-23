@@ -21,18 +21,17 @@ def find_fmaxs(filenames: Iterable[Path], metadata: pd.DataFrame):
     fmax_000_list = []
     fmax_090_list = []
     fmax_ver_list = []
-    ids = []
+    record_ids = []
     skipped_records = []
 
     # Iterate over the filenames
     for idx, filename in enumerate(filenames):
 
-        ev_sta_chan = str(filename.stem).replace("_snr_fas", "")[:-1]
+        record_id = str(filename.stem).replace("_snr_fas", "")
 
         # Get Delta from the metadata
-        current_row = metadata.iloc[
-            np.where(metadata["ev_sta_chan"] == ev_sta_chan)[0], :
-        ]
+        current_row = metadata.iloc[np.where(metadata["record_id"] == record_id)[0], :]
+
         ##!! Should explicitely confirm whether this should be (1/a)*b*c or 1/(a*b*c)
         fny = (
             1
@@ -89,10 +88,11 @@ def find_fmaxs(filenames: Iterable[Path], metadata: pd.DataFrame):
             # TODO replace ev_sta_chan with the updated naming convention
             skipped_records.append(
                 {
-                    "event_id": ev_sta_chan,
-                    "station": ev_sta_chan,
-                    "mseed_file": ev_sta_chan,
-                    "reason": "File skipped in Fmax initial SNR screening",
+                    "record_id": record_id,
+                    "event_id": record_id.split("_")[0],
+                    "station": record_id.split("_")[1],
+                    "mseed_file": record_id + ".mseed",
+                    "reason": "File skipped in fmax initial SNR screening",
                 }
             )
 
@@ -119,23 +119,33 @@ def find_fmaxs(filenames: Iterable[Path], metadata: pd.DataFrame):
         fmax_090_list.append(do_fmax_calc_partial(snr_smooth_gtr_min_freq["snr_090"]))
         fmax_ver_list.append(do_fmax_calc_partial(snr_smooth_gtr_min_freq["snr_ver"]))
 
-        ids.append(ev_sta_chan)
+        record_ids.append(record_id)
 
-    return fmax_000_list, fmax_090_list, fmax_ver_list, ids, skipped_records
+    return fmax_000_list, fmax_090_list, fmax_ver_list, record_ids, skipped_records
 
 
-def do_fmax_calc(snr_thresh, fny, freq, snr_component):
+def do_fmax_calc(
+    snr_thresh: float, fny: float, freq: np.ndarray, snr_component: np.ndarray
+) -> float:
     """
+    Calculate fmax.
 
     Parameters
     ----------
-    freq
-    snr
-    snr_thres
-    fny
-
+    snr_thresh : float
+        The maximum SNR for considered
+        data point
+    fny : float
+        TODO What is this parameter?
+        ???????????
+    freq : np.ndarray
+        1D np.ndarray array of frequency values
+    snr_component : np.ndarray
+        1D np.ndarray array of SNR values
     Returns
     -------
+    fmax : float
+        Maximum frequency
 
     """
 
@@ -164,14 +174,22 @@ def temp_fmax_call_func(main_dir: Path, n_procs):
     snr_filenames = snr_dir.glob("**/*snr_fas.csv")
     # Add the ev_sta_chan column to the metadata
 
-    metadata_df["ev_sta_chan"] = (
-        metadata_df["evid"] + "_" + metadata_df["sta"] + "_" + metadata_df["chan"]
+    # metadata_df["ev_sta_chan"] = (
+    #     metadata_df["evid"] + "_" + metadata_df["sta"] + "_" + metadata_df["chan"]
+    # )
+
+    metadata_df["record_id"] = (
+        metadata_df["evid"]
+        + "_"
+        + metadata_df["sta"]
+        + "_"
+        + metadata_df["chan"]
+        + "_"
+        + metadata_df["loc"]
     )
 
-    # n_procs = 8
-
     # Split the filenames into n_procs chunks
-    snr_filenames = np.array_split(list(snr_filenames), n_procs)
+    # snr_filenames = np.array_split(list(snr_filenames), n_procs)
 
     # with mp.Pool(n_procs) as p:
     #     results = p.map(
@@ -183,14 +201,14 @@ def temp_fmax_call_func(main_dir: Path, n_procs):
     #     )
     # Write above as a for loop
     results = []
-    for snr_filenames_chunk in snr_filenames:
-        results.append(find_fmaxs(snr_filenames_chunk, metadata_df))
+    for snr_filename in snr_filenames:
+        results.append(find_fmaxs(snr_filenames, metadata_df))
 
     # Combine the results into the 4 different lists
     fmax_000_list = np.concatenate([result[0] for result in results])
     fmax_090_list = np.concatenate([result[1] for result in results])
     fmax_ver_list = np.concatenate([result[2] for result in results])
-    ids = np.concatenate([result[3] for result in results])
+    record_ids = np.concatenate([result[3] for result in results])
 
     skipped_records = [result[4] for result in results]
 
@@ -203,7 +221,7 @@ def temp_fmax_call_func(main_dir: Path, n_procs):
     # Create fmax csv
     fmax = pd.DataFrame(
         {
-            "ev_sta": ids,
+            "record_id": record_ids,
             "fmax_000": fmax_000_list,
             "fmax_090": fmax_090_list,
             "fmax_ver": fmax_ver_list,
