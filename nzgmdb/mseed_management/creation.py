@@ -165,6 +165,10 @@ def split_stream_into_mseeds(st: Stream, unique_channels: Iterable):
                 st_new = st_new.select(sampling_rate=max(samples))
                 st_new.merge(fill_value="interpolate")
 
+        # Check the final length of the traces
+        if len(st_new) != 3:
+            continue
+
         # Ensure traces all have the same length
         starttime_trim = max([tr.stats.starttime for tr in st_new])
         endtime_trim = min([tr.stats.endtime for tr in st_new])
