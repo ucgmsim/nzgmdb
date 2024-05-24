@@ -167,20 +167,20 @@ def find_fmax(filename: Path, metadata: pd.DataFrame):
 
 
 def start_fmax_calc(
-    main_dir: Path, snr_fas_dir: Path, meta_dir: Path, n_procs: int = 1
+    main_dir: Path, meta_dir: Path, snr_fas_dir: Path, n_procs: int = 1
 ):
     """
-
     Parameters
     ----------
-    main_dir
-    snr_fas_dir
-    meta_dir
-    n_procs
-
-    Returns
-    -------
-
+    main_dir : Path
+        The main directory of the NZGMDB results (Highest level directory)
+        (glob is used to find all mseed files recursively)
+    meta_output_dir : Path
+        Path to the directory for the metadata and skipped records
+    snr_fas_output_dir : Path
+        Path to the directory for the SNR and FAS data
+    n_procs : int, optional
+        Number of processes to use, by default 1
     """
 
     if not meta_dir:

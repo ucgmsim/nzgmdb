@@ -185,13 +185,6 @@ def calc_fmax(
             file_okay=False,
         ),
     ],
-    snr_fas_output_dir: Annotated[
-        Path,
-        typer.Option(
-            help="Path to the directory for the SNR and FAS data",
-            file_okay=False,
-        ),
-    ] = None,
     meta_dir: Annotated[
         Path,
         typer.Option(
@@ -199,9 +192,16 @@ def calc_fmax(
             file_okay=False,
         ),
     ] = None,
+    snr_fas_output_dir: Annotated[
+        Path,
+        typer.Option(
+            help="Path to the directory for the SNR and FAS data",
+            file_okay=False,
+        ),
+    ] = None,
     n_procs: Annotated[int, typer.Option(help="Number of processes to use")] = 1,
 ):
-    fmax.start_fmax_calc(main_dir, snr_fas_output_dir, meta_dir, n_procs)
+    fmax.start_fmax_calc(main_dir, meta_dir, snr_fas_output_dir, n_procs)
 
 
 @app.command(
