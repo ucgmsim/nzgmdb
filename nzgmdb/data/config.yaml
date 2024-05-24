@@ -32,9 +32,9 @@ common_frequency_num: 389
 g: 9.81
 # fmax
 # fmax - calculate fny = 1 / current_row["delta"].iloc[fny_param_index] * fny_param_1 * fny_param_2
-fny_param_index: 0
-fny_param_1: 0.5
-fny_param_2: 0.8
+nyquist_freq_limit_param_index: 0
+nyquist_freq_limit_param_1: 0.5
+nyquist_freq_limit_param_2: 0.8
 
 # fmax - smoothing data with rolling mean
 window: 5

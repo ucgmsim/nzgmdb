@@ -76,9 +76,14 @@ def find_fmax(filename: Path, metadata: pd.DataFrame):
     current_row = metadata.iloc[np.where(metadata["record_id"] == record_id)[0], :]
 
     nyquist_freq_limit = (
-        (1 / current_row["delta"].iloc[config.get_value("fny_param_index")])
-        * config.get_value("fny_param_1")
-        * config.get_value("fny_param_2")
+        (
+            1
+            / current_row["delta"].iloc[
+                config.get_value("nyquist_freq_limit_param_index")
+            ]
+        )
+        * config.get_value("nyquist_freq_limit_param_1")
+        * config.get_value("nyquist_freq_limit_param_2")
     )
 
     # Read CSV file using pandas
