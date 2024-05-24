@@ -45,8 +45,8 @@ score_min: 0.5
 fmin_max: 2
 multi_max: 0.2
 # Clipping
-max_amp_thresh: 6e6
 mag_clip_low: 3.0
 mag_clip_high: 8.8
 dist_clip_low: 0.0
 dist_clip_high: 645.0
+clip_threshold: 0.2

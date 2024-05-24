@@ -178,55 +178,29 @@ def split_stream_into_mseeds(st: Stream, unique_channels: Iterable):
     return mseeds
 
 
-def create_mseed_from_waveforms(st: Stream, event_id: str, sta: str, output_dir: Path):
+def write_mseed(mseed: Stream, event_id: str, station: str, output_directory: Path):
     """
-    Create mseed files from the waveform data
+    Write the mseed files to the output directory
 
     Parameters
     ----------
-    st : object
-        The stream object containing the waveform data from each component
+    mseed : Stream
+        The stream object containing the waveform data
     event_id : str
-        The event id
-    sta : str
-        The station name
-    output_dir : Path
+        The event id which is used in the filename
+    station : str
+        The station code which is used in the filename
+    output_directory : Path
         The directory to save the mseed files
-
-    Returns
-    -------
-    chan_locs : list
-        A list of tuples containing the channel and location for each mseed file created
-        [(channel, location), ...]
     """
-    chan_locs = []
+    # Get the channel and location from the first trace
+    channel = mseed[0].stats.channel[:2]
+    location = mseed[0].stats.location
 
-    # Get the unique channels (Using first 2 keys) and locations
-    unique_channels = set([(tr.stats.channel[:2], tr.stats.location) for tr in st])
+    # Create the filename and add it to the output directory
+    filename = f"{event_id}_{station}_{channel}_{location}.mseed"
+    mseed_ffp = output_directory / filename
+    output_directory.mkdir(exist_ok=True, parents=True)
 
-    for chan, loc in unique_channels:
-        st_new = st.select(location=loc, channel=f"{chan}?")
-        if len(st_new) > 3:
-            # Check if all the sample rates are the same
-            samples = [tr.stats.sampling_rate for tr in st_new]
-            if len(set(samples)) > 1:
-                # If they are different take the highest and resample with the others using interpolation
-                st_new = st_new.select(sampling_rate=max(samples))
-                st_new.merge(fill_value="interpolate")
-
-        # Ensure traces all have the same length
-        starttime_trim = max([tr.stats.starttime for tr in st_new])
-        endtime_trim = min([tr.stats.endtime for tr in st_new])
-        # Check that the start time is before the end time
-        if starttime_trim > endtime_trim:
-            continue
-        st_new.trim(starttime_trim, endtime_trim)
-
-        # Write the mseed file
-        filename = f"{event_id}_{sta}_{chan}_{loc}.mseed"
-        mseed_ffp = output_dir / filename
-        st_new.write(mseed_ffp, format="MSEED")
-
-        # Extend the chan and loc to the full channel codes and loc for each trace
-        chan_locs.extend([(tr.stats.channel, tr.stats.location) for tr in st_new])
-    return chan_locs
+    # Write the mseed file
+    mseed.write(str(mseed_ffp), format="MSEED")

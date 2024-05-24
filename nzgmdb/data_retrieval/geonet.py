@@ -204,6 +204,7 @@ def fetch_sta_mag_lines(
     client_NZ: FDSN_Client,
     client_IU: FDSN_Client,
     inventory: Inventory,
+    pref_mag: float,
     pref_mag_type: str,
     mags: np.ndarray,
     rrups: np.ndarray,
@@ -227,6 +228,8 @@ def fetch_sta_mag_lines(
         The geonet client to fetch the data from the International Network (necessary for station SNZO)
     inventory : Inventory
         The inventory of the stations from all networks to extract the stations from
+    pref_mag : float
+        The preferred magnitude
     pref_mag_type : str
         The preferred magnitude type
     mags : np.ndarray
@@ -243,6 +246,10 @@ def fetch_sta_mag_lines(
 
     # Get Networks / Stations within a certain radius of the event
     inv_sub_sta = get_stations_within_radius(event_cat, mags, rrups, f_rrup, inventory)
+
+    # Get the clipping threshold
+    config = cfg.Config()
+    threshold = config.get_value("clip_threshold")
 
     sta_mag_line = []
     # Loop through the Inventory Subset of Networks / Stations
@@ -280,30 +287,45 @@ def fetch_sta_mag_lines(
                 [(tr.stats.channel[:2], tr.stats.location) for tr in st]
             )
 
+            # Split the stream into mseeds
             mseeds = creation.split_stream_into_mseeds(st, unique_channels)
 
+            # Get the station magnitudes
+            station_magnitudes = [
+                mag
+                for mag in event_cat.station_magnitudes
+                if mag.waveform_id.station_code == station.code
+            ]
+
             for mseed in mseeds:
-                all_chan_locs = [(tr.stats.channel, tr.stats.location) for tr in mseed]
-                for chan, loc in all_chan_locs:
+                # Calculate clip to determine if the record should be dropped
+                clip = filtering.get_clip_probability(pref_mag, r_hyp, st)
+
+                # Check if the record should be dropped
+                if clip > threshold:
+                    continue
+
+                # Create the directory structure for the given event
+                year = event_cat.origins[0].time.year
+                mseed_dir = file_structure.get_mseed_dir(main_dir, year, event_id)
+
+                # Write the mseed file
+                creation.write_mseed(mseed, event_id, station.code, mseed_dir)
+
+                for trace in mseed:
+                    chan = trace.stats.channel
+                    loc = trace.stats.location
                     # Find the station magnitude
                     # Ensures that the station codes matches and that if the channel code ends with Z then it makes
                     # sure that the station magnitude is for the Z channel, otherwise any that match with the first two
                     # characters of the channel code is sufficient
-                    sta_mag = next(
-                        (
-                            mag
-                            for mag in event_cat.station_magnitudes
-                            if mag.waveform_id.station_code == station.code
-                            and (
-                                (
-                                    chan[-1] == "Z"
-                                    and mag.waveform_id.channel_code == chan
-                                )
-                                or mag.waveform_id.channel_code[:2] == chan[:2]
-                            )
-                        ),
-                        None,
-                    )
+                    sta_mag = None
+                    for mag in station_magnitudes:
+                        if mag.waveform_id.channel_code[:2] == chan[:2]:
+                            sta_mag = mag
+                            if chan[-1] == "Z":
+                                break
+
                     if sta_mag:
                         sta_mag_mag = sta_mag.mag
                         sta_mag_type = sta_mag.station_magnitude_type
@@ -340,19 +362,6 @@ def fetch_sta_mag_lines(
                             amp_unit,
                         ]
                     )
-
-                # Calculate clip to determine if the record should be dropped
-                clip = filtering.get_clip_probability(sta_mag_mag, r_hyp, st)
-
-            # Create the directory structure for the given event
-            # year = event_cat.origins[0].time.year
-            # mseed_dir = file_structure.get_mseed_dir(main_dir, year, event_id)
-            # mseed_dir.mkdir(exist_ok=True, parents=True)
-            #
-            # # Create the mseed files
-            # chan_locs = creation.create_mseed_from_waveforms(
-            #     st, event_id, station.code, mseed_dir
-            # )
 
     return sta_mag_line
 
@@ -406,6 +415,7 @@ def fetch_event_data(
             client_NZ,
             client_IU,
             inventory,
+            event_line[7],
             event_line[8],
             mags,
             rrups,

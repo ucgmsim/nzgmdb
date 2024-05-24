@@ -14,7 +14,6 @@ def get_clip_probability(event_mag: float, dist: float, mseed: Stream) -> float:
     """
     # Get the config values
     config = cfg.Config()
-    max_amp_thresh = config.get_value("max_amp_thresh")
     mag_clip_low = config.get_value("mag_clip_low")
     mag_clip_high = config.get_value("mag_clip_high")
     dist_clip_low = config.get_value("dist_clip_low")
@@ -25,7 +24,7 @@ def get_clip_probability(event_mag: float, dist: float, mseed: Stream) -> float:
     dist = np.clip(dist, dist_clip_low, dist_clip_high)
 
     # Get different methods for clipping
-    max_amp_method = MaxAmp(mseed, max_amp_thresh=max_amp_thresh)
+    max_amp_method = MaxAmp(mseed)
     hist_method = Histogram(mseed)
     ping_method = Ping(mseed)
 
