@@ -130,9 +130,6 @@ def find_fmax(filename: Path, metadata: pd.DataFrame):
 
         skipped_record = {
             "record_id": record_id,
-            "event_id": record_id.split("_")[0],
-            "station": record_id.split("_")[1],
-            "mseed_file": record_id + ".mseed",
             "reason": "File skipped in fmax initial SNR screening",
         }
 
@@ -202,18 +199,18 @@ def start_fmax_calc(
             snr_filenames,
         )
 
-    grouped_results = list(zip(*results))
-
-    fmax_df = pd.DataFrame(grouped_results[0])
-
     # using filter() to remove None values in list
     skipped_records_df = pd.DataFrame(
-        filter(lambda item: item is not None, grouped_results[1])
+        filter(lambda item: item is not None, list(zip(*results))[1])
     )
     print(
         f"Skipped {len(skipped_records_df)} files as their SNR was too low (failed initial screening)"
     )
 
-    fmax_df.to_csv(meta_dir / "fmaxA3.csv", index=False)
+    fmax_df = pd.DataFrame(
+        filter(lambda item: item is not None, list(zip(*results))[0])
+    )
+
+    fmax_df.to_csv(meta_dir / "fmax.csv", index=False)
 
     skipped_records_df.to_csv(meta_dir / "fmax_skipped_records.csv", index=False)
