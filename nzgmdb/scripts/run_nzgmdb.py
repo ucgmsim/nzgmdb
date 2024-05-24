@@ -176,19 +176,19 @@ def calculate_snr(
     "Requires the snr_fas files and the snr metadata."
     "Several parameters are set in the config file."
 )
-def calculate_snr(
+def calc_fmax(
     main_dir: Annotated[
         Path,
         typer.Argument(
-            help="The main directory of the NZGMDB results (highest level directory)",
+            help="The main directory of the NZGMDB results (Highest level directory)",
             exists=True,
             file_okay=False,
         ),
     ],
-    snr_fas_dir: Annotated[
+    snr_fas_output_dir: Annotated[
         Path,
         typer.Option(
-            help="Path to the directory containing the SNR and FAS data",
+            help="Path to the directory for the SNR and FAS data",
             file_okay=False,
         ),
     ] = None,
@@ -201,7 +201,7 @@ def calculate_snr(
     ] = None,
     n_procs: Annotated[int, typer.Option(help="Number of processes to use")] = 1,
 ):
-    fmax.start_fmax_calc(main_dir, snr_fas_dir, meta_dir, n_procs)
+    fmax.start_fmax_calc(main_dir, snr_fas_output_dir, meta_dir, n_procs)
 
 
 @app.command(
