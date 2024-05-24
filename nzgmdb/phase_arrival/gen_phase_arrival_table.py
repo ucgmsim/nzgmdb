@@ -38,11 +38,8 @@ def get_p_wave(data: np.ndarray, dt: int) -> int:
         Exception, loc is -1.
     """
     wftype = "SM"  # Input wftype is strong motion
-    try:
-        loc = picker.p_phase_picker(data, dt, wftype)
-    except Exception as e:
-        print(e)
-        loc = -1
+    loc = picker.p_phase_picker(data, dt, wftype)
+
     return loc
 
 
@@ -69,14 +66,17 @@ def process_mseed(mseed_file: Path) -> dict[str, Any]:
     try:
         p_comp_000 = get_p_wave(mseed_data[0].data, mseed_data[0].stats.delta)
     except:
+        print(f"picker failed on {str(mseed_file)} p_comp_000")
         p_comp_000 = -1
     try:
         p_comp_090 = get_p_wave(mseed_data[1].data, mseed_data[1].stats.delta)
     except:
+        print(f"picker failed on {str(mseed_file)} p_comp_090")
         p_comp_090 = -1
     try:
         p_comp_ver = get_p_wave(mseed_data[2].data, mseed_data[2].stats.delta)
     except:
+        print(f"picker failed on {str(mseed_file)} p_comp_ver")
         p_comp_ver = -1
 
     if p_comp_ver > 1:
