@@ -48,10 +48,7 @@ def plot_phase_arrivals_on_mseed_waveforms(
             & (phase_arrival_df["chan"] == mseed[0].stats.channel[:2])
             & (phase_arrival_df["loc"] == mseed[0].stats.location)
         ]["datetime"]
-
-        # plot picker as blue and geonet as red
-        vline_colors = []
-        vline_colors.extend(["b"] * len(phase_arrival_df))
+        vline_colors = ["b"] * len(phase_arrival_times)
 
     else:
         picker_phase_arrival_times = phase_arrival_df.loc[
@@ -73,21 +70,19 @@ def plot_phase_arrivals_on_mseed_waveforms(
         )
 
         # plot picker as blue and geonet as red
-        vline_colors = []
-        vline_colors.extend(["b"] * len(picker_phase_arrival_times))
+        vline_colors = ["b"] * len(picker_phase_arrival_times)
         vline_colors.extend(["r"] * len(geonet_phase_arrival_times))
 
     arrival_times_as_list = []
     for arrival_time in phase_arrival_times:
-        # Catch Exceptions raised by trying to convert nans to .matplotlib_date
-        try:
+        if isinstance(arrival_time, str):
             arrival_times_as_list.append(
                 obspy.UTCDateTime(arrival_time).matplotlib_date
             )
-        except:
+        else:
             arrival_times_as_list.append(np.nan)
 
-    if len(arrival_times_as_list) > 0:
+    if arrival_times_as_list:
 
         # Generate most of the plot with Obspy.
         # Using handle=True returns the plot
@@ -107,7 +102,6 @@ def plot_phase_arrivals_on_mseed_waveforms(
                 linestyle="--",
                 colors=vline_colors,
             )
-            ax.legend()
 
         fig.savefig(output_dir / f"{mseed_file.stem}.png")
         plt.close()
@@ -148,7 +142,9 @@ def batch_plot_phase_arrivals(
         )
 
 
-def plot_historam_of_time_diffs(phase_arrival_table: Path, output_dir: Path):
+def plot_time_diffs_hist(
+    phase_arrival_table: Path, output_dir: Path, num_bins=50, dpi=500
+):
     """
 
     Plots a histogram of the differences in phase arrival times from our picker
@@ -161,15 +157,14 @@ def plot_historam_of_time_diffs(phase_arrival_table: Path, output_dir: Path):
         datetime_picker and datetime_geonet.
     output_dir: Path
          Output directory.
+    num_bins: int, optional
+        Number of bins to use in the histogram
     """
-
-    num_bins = 50
 
     phase_arrival_df = pd.read_csv(phase_arrival_table)
 
     time_diffs = phase_arrival_df["picker_time_minus_geonet_time_secs"]
 
-    #    plt.hist(time_diffs, bins=30, alpha=0.75, color="blue", edgecolor="black")
     plt.hist(
         time_diffs[~np.isnan(time_diffs)],
         bins=num_bins,
@@ -181,11 +176,10 @@ def plot_historam_of_time_diffs(phase_arrival_table: Path, output_dir: Path):
     counts, bin_edges = np.histogram(time_diffs[~np.isnan(time_diffs)], bins=num_bins)
     total_points = counts.sum()
 
-    # Step 3: Add titles and labels
     plt.xlabel("Picker time - Geonet time (seconds)")
-    plt.ylabel("counts")
+    plt.ylabel("count")
     print(f"Total number of points used in the histogram: {total_points}")
     plt.title(f"{total_points} arrival times from both Picker and Geonet")
 
-    plt.savefig(output_dir / "histogram.png", dpi=500)
+    plt.savefig(output_dir / "histogram.png", dpi=dpi)
     plt.close()

@@ -3,21 +3,18 @@
     the phase arrival table
 """
 
+import itertools
 import multiprocessing
 from datetime import timedelta
 from pathlib import Path
 from typing import Any
-
-import multiprocessing
-from datetime import timedelta
-from pathlib import Path
 
 import numpy as np
 import obspy
 import pandas as pd
 from obspy.clients.fdsn import Client as FDSN_Client
 
-from nzgmdb.management import file_structure
+from nzgmdb.management import file_structure, custom_errors
 from nzgmdb.phase_arrival import picker
 
 
@@ -41,11 +38,8 @@ def get_p_wave(data: np.ndarray, dt: int) -> int:
         Exception, loc is -1.
     """
     wftype = "SM"  # Input wftype is strong motion
-    try:
-        loc = picker.p_phase_picker(data, dt, wftype)
-    except Exception as e:
-        print(e)
-        loc = -1
+    loc = picker.p_phase_picker(data, dt, wftype)
+
     return loc
 
 
@@ -72,14 +66,17 @@ def process_mseed(mseed_file: Path) -> dict[str, Any]:
     try:
         p_comp_000 = get_p_wave(mseed_data[0].data, mseed_data[0].stats.delta)
     except:
+        print(f"picker failed on {str(mseed_file)} p_comp_000")
         p_comp_000 = -1
     try:
         p_comp_090 = get_p_wave(mseed_data[1].data, mseed_data[1].stats.delta)
     except:
+        print(f"picker failed on {str(mseed_file)} p_comp_090")
         p_comp_090 = -1
     try:
         p_comp_ver = get_p_wave(mseed_data[2].data, mseed_data[2].stats.delta)
     except:
+        print(f"picker failed on {str(mseed_file)} p_comp_ver")
         p_comp_ver = -1
 
     if p_comp_ver > 1:
@@ -92,52 +89,18 @@ def process_mseed(mseed_file: Path) -> dict[str, Any]:
     if p_wave_loc >= 0:
         stats = mseed_data[0].stats
 
-        # Get the datetime
-        datetime = stats.starttime + timedelta(seconds=p_wave_loc)
-
-        # Get the net
-        net = stats.network
-
-        # Get the sta
-        sta = stats.station
-
-        # Get the loc
-        loc = stats.location
-
-        # Get the chan
-        chan = stats.channel
-
-        # Get the phase
-        phase = "P"
-
-        # Get the t_res
-        t_res = None
-
-        # Get the evid
-        evid = file_structure.get_event_id_from_mseed(mseed_file)
-
         new_data = {
-            "evid": evid,
-            "datetime": datetime,
-            "net": net,
-            "sta": sta,
-            "loc": loc,
-            "chan": chan[:2],
-            "phase": phase,
-            "t_res": t_res,
+            "evid": file_structure.get_event_id_from_mseed(mseed_file),
+            "datetime": stats.starttime + timedelta(seconds=p_wave_loc),
+            "net": stats.network,
+            "sta": stats.station,
+            "loc": stats.location,
+            "chan": stats.channel[:2],
+            "phase": "P",
+            "t_res": None,
         }
 
         return new_data
-
-
-class InvalidNumberOfGeonetPicksException(Exception):
-    """
-    This exception is raised if more than two phase picks
-    from Geonet match a given mseed file as there should
-    only be one P phase pick and sometimes one S phase pick.
-    """
-
-    pass
 
 
 def fetch_geonet_phases(mseed_file: Path) -> list[dict[str, Any]]:
@@ -151,7 +114,7 @@ def fetch_geonet_phases(mseed_file: Path) -> list[dict[str, Any]]:
 
     Returns
     -------
-    phase_lines_for_table: list[dict[str, any]]
+    phase_table_entries: list[dict[str, any]]
         A list of phase arrival times.
 
     Raises
@@ -163,7 +126,7 @@ def fetch_geonet_phases(mseed_file: Path) -> list[dict[str, Any]]:
     """
 
     # Creating an empty list that will be populated and returned
-    phase_lines_for_table = []
+    phase_table_entries = []
 
     # Get the event ID (evid) from the mseed file
     evid = file_structure.get_event_id_from_mseed(mseed_file)
@@ -176,8 +139,7 @@ def fetch_geonet_phases(mseed_file: Path) -> list[dict[str, Any]]:
     # and arrival times for all combinations of
     # network, station, location, and channel
     client_NZ = FDSN_Client("GEONET")
-    cat = client_NZ.get_events(eventid=evid)
-    event = cat[0]
+    event = client_NZ.get_events(eventid=evid)[0]
 
     # Find the picks corresponding to the given mseed file (matching network, station, location, and channel)
     picks_matching_mseed = []
@@ -192,7 +154,7 @@ def fetch_geonet_phases(mseed_file: Path) -> list[dict[str, Any]]:
 
     # Check that the number of matching picks is acceptable
     if len(picks_matching_mseed) > 2:
-        raise InvalidNumberOfGeonetPicksException(
+        raise custom_errors.InvalidNumberOfGeonetPicksException(
             "More than two phase picks from Geonet seem to match the given mseed file."
             "\nThere should only be one P phase pick and sometimes one S phase pick."
         )
@@ -205,9 +167,8 @@ def fetch_geonet_phases(mseed_file: Path) -> list[dict[str, Any]]:
         if pick.resource_id == arrival.pick_id
     ]
 
-    # Create the lines to write in the phase arrival table
-    for mseed_arrival, pick in mseed_arrival_pick_pairs:
-        phase_line = {
+    phase_table_entries = [
+        {
             "evid": evid,
             "datetime": pick.time,
             "net": mseed[0].stats.network,
@@ -217,31 +178,10 @@ def fetch_geonet_phases(mseed_file: Path) -> list[dict[str, Any]]:
             "phase": mseed_arrival.phase,
             "t_res": mseed_arrival.time_residual,
         }
+        for mseed_arrival, pick in mseed_arrival_pick_pairs
+    ]
 
-        phase_lines_for_table.append(phase_line)
-
-    return phase_lines_for_table
-
-
-def append_label_to_all_cols(df: pd.DataFrame, label: str) -> pd.DataFrame:
-    """
-    Appends a label to all columns of df by modifying in-place
-
-    Parameters
-    ----------
-    df: pd.DataFrame
-        The DataFrame to modify
-    label: str
-        The label to append to all columns of df
-
-    Returns
-    -------
-    df: pd.DataFrame
-        The modified DataFame
-    """
-
-    df.columns = df.columns + f"_{label}"
-    return df
+    return phase_table_entries
 
 
 def generate_phase_arrival_table(
@@ -268,29 +208,24 @@ def generate_phase_arrival_table(
     # Find all mseed files recursively
     mseed_files = list(main_dir.glob("**/*.mseed"))
 
-    # Initialize a multiprocessing Pool
     with multiprocessing.Pool(processes=n_procs) as pool:
         # Map the reading function to the file list.
-        # Process_mseed could return None, so we filter this out.
-        mseed_data_list = [
-            mseed_data
-            for mseed_data in pool.map(process_mseed, mseed_files)
-            if mseed_data
-        ]
-    # Create the dataframe for phases from picker
-    picker_phases_df = pd.DataFrame(mseed_data_list)
+        # process_mseed could return None, so we filter this out.
+        picker_phases_df = pd.DataFrame(
+            pd.Series(pool.map(process_mseed, mseed_files)).dropna().to_list()
+        )
 
     # Change picker_phases_df[t_res] from nan to 0.0 so Geonet t_res values
     # will not be substituted for the missing picker_phases_df[t_res] values
     picker_phases_df["t_res"] = 0.0
 
     # Get the Geonet phases
-    geonet_phase_lines = []
-    for mseed_file in mseed_files:
-        geonet_phase_lines.extend(fetch_geonet_phases(mseed_file))
-
-    # Create a DataFrame containing Geonet phases
-    geonet_phases_df = pd.DataFrame(geonet_phase_lines)
+    # fetch_geonet_phases can return a list of length 0, 1, or 2 so
+    # itertools.chain.from_iterable is used to flatten the list of lists
+    with multiprocessing.Pool(processes=n_procs) as pool:
+        geonet_phases_df = pd.DataFrame(
+            itertools.chain.from_iterable(pool.map(fetch_geonet_phases, mseed_files))
+        )
 
     # Use other columns as a new DataFrame index
     columns_to_merge_for_new_index = ["evid", "net", "sta", "loc", "chan", "phase"]
@@ -301,44 +236,50 @@ def generate_phase_arrival_table(
         columns_to_merge_for_new_index
     )
 
-    # Use the new index to include Geonet phase
-    # arrival times if there are not any conflicting
-    # phase arrival times from picker
-    merged_df = picker_phases_df_new_index.combine_first(geonet_phases_df_new_index)
+    # Create the dataframe
+    df = pd.DataFrame([tup[0] for data_list in mseed_data_list for tup in data_list])
 
     # reset the index back to normal
     merged_df = merged_df.reset_index()
 
     # Save the phase arrival table
+    output_dir.mkdir(parents=True, exist_ok=True)
     merged_df.to_csv(output_dir / "phase_arrival_table.csv", index=False)
 
     if full_output:
+
+        # Adding labels to the DataFrame columns so they
+        # can be distinguished after the outer merge
+        picker_phases_df_new_index.columns = (
+            picker_phases_df_new_index.columns + f"_picker"
+        )
+        geonet_phases_df_new_index.columns = (
+            geonet_phases_df_new_index.columns + f"_geonet"
+        )
+
         all_picker_and_geonet_df = pd.merge(
-            left=append_label_to_all_cols(picker_phases_df_new_index, "picker"),
-            right=append_label_to_all_cols(geonet_phases_df_new_index, "geonet"),
+            left=picker_phases_df_new_index,
+            right=geonet_phases_df_new_index,
             left_index=True,
             right_index=True,
             how="outer",
         )
-
-        picker_time_minus_geonet_time_secs = np.zeros(all_picker_and_geonet_df.shape[0])
-        for row_index in range(all_picker_and_geonet_df.shape[0]):
-            picker_t = all_picker_and_geonet_df["datetime_picker"].values
-            geonet_t = all_picker_and_geonet_df["datetime_geonet"].values
-
-            # Catch Exceptions caused by nan values
-            try:
-                picker_time_minus_geonet_time_secs[row_index] = (
-                    picker_t[row_index] - geonet_t[row_index]
-                )
-            except:
-                picker_time_minus_geonet_time_secs[row_index] = np.nan
-
-            all_picker_and_geonet_df["picker_time_minus_geonet_time_secs"] = (
-                picker_time_minus_geonet_time_secs
-            )
-
         all_picker_and_geonet_df = all_picker_and_geonet_df.reset_index()
+        all_picker_and_geonet_df["picker_time_minus_geonet_time_secs"] = np.nan
+
+        condition_not_nan = (
+            all_picker_and_geonet_df["datetime_picker"].notnull()
+            & all_picker_and_geonet_df["datetime_geonet"].notnull()
+        )
+
+        all_picker_and_geonet_df.loc[
+            condition_not_nan, "picker_time_minus_geonet_time_secs"
+        ] = (
+            all_picker_and_geonet_df.loc[condition_not_nan, "datetime_picker"]
+            - all_picker_and_geonet_df.loc[condition_not_nan, "datetime_geonet"]
+        ).astype(
+            np.float64
+        )
 
         all_picker_and_geonet_df.to_csv(
             output_dir / "full_phase_arrival_table.csv", index=False

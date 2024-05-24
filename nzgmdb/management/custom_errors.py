@@ -43,3 +43,13 @@ class ComponentSelectionError(Exception):
     """Exception raised when the component selection is invalid."""
 
     pass
+
+
+class InvalidNumberOfGeonetPicksException(Exception):
+    """
+    Exception raised if more than two phase picks
+    from Geonet match a given mseed file as there should
+    only be one P phase pick and sometimes one S phase pick.
+    """
+
+    pass
