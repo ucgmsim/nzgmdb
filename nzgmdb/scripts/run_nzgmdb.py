@@ -72,7 +72,7 @@ def merge_tect_domain(
     help="Generate the phase arrival table, taking mseed data and finding the phase arrivals using a p_wave picker. "
     "Requires the mseed files to be generated."
 )
-def gen_phase_arrival_table(
+def make_phase_arrival_table(
     main_dir: Annotated[
         Path,
         typer.Argument(
@@ -89,8 +89,13 @@ def gen_phase_arrival_table(
         ),
     ],
     n_procs: Annotated[int, typer.Option(help="Number of processes to use")] = 1,
+    full_output: Annotated[
+        bool, typer.Option(help="output arrival times from GeoNet and Picker")
+    ] = False,
 ):
-    gen_phase_arrival_table.generate_phase_arrival_table(main_dir, output_dir, n_procs)
+    gen_phase_arrival_table.generate_phase_arrival_table(
+        main_dir, output_dir, n_procs, full_output
+    )
 
 
 @app.command(
