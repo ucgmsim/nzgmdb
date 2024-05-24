@@ -167,9 +167,8 @@ def fetch_geonet_phases(mseed_file: Path) -> list[dict[str, Any]]:
         if pick.resource_id == arrival.pick_id
     ]
 
-    # Create the lines to write in the phase arrival table
-    for mseed_arrival, pick in mseed_arrival_pick_pairs:
-        phase_table_entry = {
+    phase_table_entries = [
+        {
             "evid": evid,
             "datetime": pick.time,
             "net": mseed[0].stats.network,
@@ -179,8 +178,8 @@ def fetch_geonet_phases(mseed_file: Path) -> list[dict[str, Any]]:
             "phase": mseed_arrival.phase,
             "t_res": mseed_arrival.time_residual,
         }
-
-        phase_table_entries.append(phase_table_entry)
+        for mseed_arrival, pick in mseed_arrival_pick_pairs
+    ]
 
     return phase_table_entries
 
