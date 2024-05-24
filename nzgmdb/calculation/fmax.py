@@ -1,5 +1,5 @@
 """
-fmax calculation
+fmax calculation ported from a MatLab script
 
 """
 
@@ -14,7 +14,10 @@ from nzgmdb.management import config as cfg
 
 
 def calculate_fmax(
-    snr_thresh: float, fny: float, freq: np.ndarray, snr_component: np.ndarray
+    snr_thresh: float,
+    nyquist_freq_limit: float,
+    freq: np.ndarray,
+    snr_component: np.ndarray,
 ) -> float:
     """
     Calculate fmax.
@@ -22,34 +25,49 @@ def calculate_fmax(
     Parameters
     ----------
     snr_thresh : float
-        The maximum SNR for considered
-        data point
-    fny : float
-        TODO What is this parameter?
-        ???????????
+        The maximum SNR for data
+        points to be considered.
+    nyquist_freq_limit : float
+        The Nyquist frequency limit.
     freq : np.ndarray
-        1D np.ndarray array of frequency values
+        1D np.ndarray array of frequency values.
     snr_component : np.ndarray
-        1D np.ndarray array of SNR values
+        1D np.ndarray array of SNR values.
     Returns
     -------
     fmax : float
-        Maximum frequency
+        Maximum frequency.
 
     """
 
     loc = np.where(snr_component < snr_thresh)[0]
 
     if len(loc) != 0:
-        fmax = min(freq[loc[0]], fny)
+        fmax = min(freq[loc[0]], nyquist_freq_limit)
     else:
-        fmax = min(freq[-1], fny)
+        fmax = min(freq[-1], nyquist_freq_limit)
 
     return fmax
 
 
 def find_fmax(filename: Path, metadata: pd.DataFrame):
+    """
+    Parameters
+    ----------
+    filename : Path
+        Path to the ___snr_fas.csv file
+    metadata : pd.DataFrame
+        Contains the SNR meta-data
 
+    Returns
+    -------
+    fmax_record : dict[str, Any]
+        contains record_id, fmax_000, fmax_090, fmax_ver
+
+        skipped_record is a dictionary containing
+        record_id, event_id, station, mseed_file, reason
+        or None if record was not skipped
+    """
     config = cfg.Config()
 
     record_id = str(filename.stem).replace("_snr_fas", "")
@@ -57,10 +75,8 @@ def find_fmax(filename: Path, metadata: pd.DataFrame):
     # Get Delta from the metadata
     current_row = metadata.iloc[np.where(metadata["record_id"] == record_id)[0], :]
 
-    ##!! TODO Should explicitely confirm whether this should be (1/a)*b*c or 1/(a*b*c)
-    fny = (
-        1
-        / current_row["delta"].iloc[config.get_value("fny_param_index")]
+    nyquist_freq_limit = (
+        (1 / current_row["delta"].iloc[config.get_value("fny_param_index")])
         * config.get_value("fny_param_1")
         * config.get_value("fny_param_2")
     )
@@ -78,7 +94,7 @@ def find_fmax(filename: Path, metadata: pd.DataFrame):
     ).mean()
 
     # Initial screening:
-    # In all components at least min_points_above_thresh freq points
+    # In all components need at least min_points_above_thresh freq points
     # between min_freq_Hz and max_freq_Hz with SNR > snr_thresh_vert
     # or snr_thresh_horiz
 
@@ -104,6 +120,8 @@ def find_fmax(filename: Path, metadata: pd.DataFrame):
         num_valid_points_in_interval
         > config.get_value("initial_screening_min_points_above_thresh")
     ).all():
+        # Skip the record
+        fmax_record = None
 
         skipped_record = {
             "record_id": record_id,
@@ -114,30 +132,32 @@ def find_fmax(filename: Path, metadata: pd.DataFrame):
         }
 
     else:
+        # keep the record
         skipped_record = None
 
-    ##############################################
+        snr_smooth_gtr_min_freq = snr_smooth[
+            snr_all_cols["frequency"] > config.get_value("min_freq_Hz")
+        ]
 
-    snr_smooth_gtr_min_freq = snr_smooth[
-        snr_all_cols["frequency"] > config.get_value("min_freq_Hz")
-    ]
+        freq_gtr_min_freq = (
+            snr_all_cols["frequency"]
+            .loc[snr_all_cols["frequency"] > config.get_value("min_freq_Hz")]
+            .to_numpy()
+        )
 
-    freq_gtr_min_freq = (
-        snr_all_cols["frequency"]
-        .loc[snr_all_cols["frequency"] > config.get_value("min_freq_Hz")]
-        .to_numpy()
-    )
+        calculate_fmax_partial = functools.partial(
+            calculate_fmax,
+            config.get_value("snr_thresh"),
+            nyquist_freq_limit,
+            freq_gtr_min_freq,
+        )
 
-    calculate_fmax_partial = functools.partial(
-        calculate_fmax, config.get_value("snr_thresh"), fny, freq_gtr_min_freq
-    )
-
-    fmax_record = {
-        "record_id": record_id,
-        "fmax_000": calculate_fmax_partial(snr_smooth_gtr_min_freq["snr_000"]),
-        "fmax_090": calculate_fmax_partial(snr_smooth_gtr_min_freq["snr_090"]),
-        "fmax_ver": calculate_fmax_partial(snr_smooth_gtr_min_freq["snr_ver"]),
-    }
+        fmax_record = {
+            "record_id": record_id,
+            "fmax_000": calculate_fmax_partial(snr_smooth_gtr_min_freq["snr_000"]),
+            "fmax_090": calculate_fmax_partial(snr_smooth_gtr_min_freq["snr_090"]),
+            "fmax_ver": calculate_fmax_partial(snr_smooth_gtr_min_freq["snr_ver"]),
+        }
 
     return fmax_record, skipped_record
 
@@ -145,6 +165,19 @@ def find_fmax(filename: Path, metadata: pd.DataFrame):
 def start_fmax_calc(
     main_dir: Path, snr_fas_dir: Path, meta_dir: Path, n_procs: int = 1
 ):
+    """
+
+    Parameters
+    ----------
+    main_dir
+    snr_fas_dir
+    meta_dir
+    n_procs
+
+    Returns
+    -------
+
+    """
 
     if not meta_dir:
         meta_dir = main_dir / "flatfiles"
