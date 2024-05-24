@@ -120,8 +120,6 @@ def calculate_im_for_record(
         waveform, ffp_000.stem, event_output_path, components, ims, im_options
     )
 
-    return None
-
 
 def compute_ims_for_all_processed_records(
     main_dir: Path,
