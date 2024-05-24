@@ -61,18 +61,20 @@ def find_fmax(filename: Path, metadata: pd.DataFrame):
 
     Returns
     -------
-    fmax_record : dict[str, Any]
-        contains record_id, fmax_000, fmax_090, fmax_ver
+    fmax_record : dict[str, Any] or None if record
+                  is not skipped or skipped, respectively
+    if not None, contains record_id, fmax_000, fmax_090, fmax_ver
 
-        skipped_record is a dictionary containing
-        record_id, event_id, station, mseed_file, reason
-        or None if record was not skipped
+    skipped_record : dict[str, Any] or None if record
+                    is skipped or not skipped, respectively
+                    is a dictionary containing
+    if not None, contains record_id, reason
     """
     config = cfg.Config()
 
     record_id = str(filename.stem).replace("_snr_fas", "")
 
-    # Get Delta from the metadata
+    # Get delta from the metadata
     current_row = metadata.iloc[np.where(metadata["record_id"] == record_id)[0], :]
 
     nyquist_freq_limit = (
