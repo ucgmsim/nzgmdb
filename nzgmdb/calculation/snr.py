@@ -63,27 +63,21 @@ def compute_snr_for_single_mseed(
         waveform = reading.create_waveform_from_mseed(mseed_file, pre_process=True)
     except custom_errors.InventoryNotFoundError:
         skipped_record_dict = {
-            "event_id": event_id,
-            "station": station,
-            "mseed_file": mseed_file.name,
+            "record_id": mseed_file.stem,
             "reason": "Failed to find inventory information",
         }
         skipped_record = pd.DataFrame([skipped_record_dict])
         return None, skipped_record
     except custom_errors.SensitivityRemovalError:
         skipped_record_dict = {
-            "event_id": event_id,
-            "station": station,
-            "mseed_file": mseed_file.name,
+            "record_id": mseed_file.stem,
             "reason": "Failed to remove sensitivity",
         }
         skipped_record = pd.DataFrame([skipped_record_dict])
         return None, skipped_record
     except custom_errors.All3ComponentsNotPresentError:
         skipped_record_dict = {
-            "event_id": event_id,
-            "station": station,
-            "mseed_file": mseed_file.name,
+            "record_id": mseed_file.stem,
             "reason": "File did not contain 3 components",
         }
         skipped_record = pd.DataFrame([skipped_record_dict])
@@ -96,18 +90,14 @@ def compute_snr_for_single_mseed(
         tp = tp_selection.get_tp_from_phase_table(phase_table_path, stats, event_id)
     except custom_errors.NoPWaveFoundError:
         skipped_record_dict = {
-            "event_id": event_id,
-            "station": station,
-            "mseed_file": mseed_file.name,
+            "record_id": mseed_file.stem,
             "reason": "No P-wave found in phase arrival table",
         }
         skipped_record = pd.DataFrame([skipped_record_dict])
         return None, skipped_record
     except custom_errors.TPNotInWaveformError:
         skipped_record_dict = {
-            "event_id": event_id,
-            "station": station,
-            "mseed_file": mseed_file.name,
+            "record_id": mseed_file.stem,
             "reason": "TP not in waveform bounds",
         }
         skipped_record = pd.DataFrame([skipped_record_dict])
@@ -131,9 +121,7 @@ def compute_snr_for_single_mseed(
 
     if snr is None:
         skipped_record_dict = {
-            "event_id": event_id,
-            "station": station,
-            "mseed_file": mseed_file.name,
+            "record_id": mseed_file.stem,
             "reason": "Noise was less than 1 second",
         }
         skipped_record = pd.DataFrame([skipped_record_dict])
