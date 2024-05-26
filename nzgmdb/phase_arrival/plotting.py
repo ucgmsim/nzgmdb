@@ -84,11 +84,11 @@ def plot_phase_arrivals_on_mseed_waveforms(
 
     if arrival_times_as_list:
 
-        if len(arrival_times_as_list) <= 2:
+        if len(pd.Series(arrival_times_as_list).dropna()) == 1:
             # Only Picker
             plot_subdir = output_dir / "only_picker"
 
-        if len(arrival_times_as_list) > 2:
+        else:
             # Picker and Geonet
             plot_subdir = output_dir / "picker_and_geonet"
 
@@ -190,7 +190,7 @@ def plot_time_diffs_hist(
     plt.xlabel("Picker time - Geonet time (seconds)")
     plt.ylabel("count")
     print(f"Total number of points used in the histogram: {total_points}")
-    plt.title(f"{total_points} arrival times from both Picker and Geonet")
+    plt.title(f"{total_points} arrival times from both Picker and GeoNet")
 
     plt.savefig(output_dir / "histogram.png", dpi=dpi)
     plt.close()
