@@ -77,6 +77,10 @@ def find_fmax(filename: Path, metadata: pd.DataFrame):
     # Get delta from the metadata
     current_row = metadata.iloc[np.where(metadata["record_id"] == record_id)[0], :]
 
+    # TODO Is this actually 80% of the Nyquist frequency (as specified in the paper)?
+    # IF so, perhaps only specify 80% in the config file instead of all the other
+    # Nyquist related parameters?
+
     nyquist_freq_limit = (
         (
             1

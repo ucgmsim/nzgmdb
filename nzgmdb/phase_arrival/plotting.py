@@ -84,6 +84,17 @@ def plot_phase_arrivals_on_mseed_waveforms(
 
     if arrival_times_as_list:
 
+        if len(arrival_times_as_list) <= 2:
+            # Only Picker
+            plot_subdir = output_dir / "only_picker"
+
+        if len(arrival_times_as_list) > 2:
+            # Picker and Geonet
+            plot_subdir = output_dir / "picker_and_geonet"
+
+        # Create the output subdirectory if it doesn't already exist
+        plot_subdir.mkdir(parents=True, exist_ok=True)
+
         # Generate most of the plot with Obspy.
         # Using handle=True returns the plot
         fig = mseed.plot(handle=True)
@@ -103,7 +114,7 @@ def plot_phase_arrivals_on_mseed_waveforms(
                 colors=vline_colors,
             )
 
-        fig.savefig(output_dir / f"{mseed_file.stem}.png")
+        fig.savefig(plot_subdir / f"{mseed_file.stem}.png")
         plt.close()
 
 
