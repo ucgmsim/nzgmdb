@@ -7,7 +7,6 @@ from pathlib import Path
 from typing import Annotated
 
 import typer
-
 from nzgmdb.calculation import fmax
 from nzgmdb.calculation import snr
 from nzgmdb.data_processing import process_observed
@@ -172,7 +171,7 @@ def calculate_snr(
 
 
 @app.command(
-    help="Calculate fmax."
+    help="Calculate the maximum useable frequency (fmax)."
     "Requires the snr_fas files and the snr metadata."
     "Several parameters are set in the config file."
 )
@@ -180,7 +179,7 @@ def calc_fmax(
     main_dir: Annotated[
         Path,
         typer.Argument(
-            help="The main directory of the NZGMDB results (Highest level directory)",
+            help="The main directory of the NZGMDB results (highest level directory)",
             exists=True,
             file_okay=False,
         ),
