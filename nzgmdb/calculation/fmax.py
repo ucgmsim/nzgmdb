@@ -1,6 +1,7 @@
 """
-fmax calculation ported from a MatLab script
-
+Calculates the maximum useable frequency.
+This Python code is based on MATLAB code
+written by Chaubin Zhu.
 """
 
 import functools
