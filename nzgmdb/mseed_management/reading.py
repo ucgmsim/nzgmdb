@@ -1,7 +1,8 @@
 from pathlib import Path
 
-import numpy as np
 import obspy
+import numpy as np
+import pandas as pd
 
 from IM_calculation.IM import read_waveform
 from nzgmdb.management import custom_errors
@@ -57,6 +58,49 @@ def create_waveform_from_mseed(
     # Create the waveform object
     waveform = read_waveform.create_waveform_from_data(
         data, NT=mseed[0].stats.npts, DT=mseed[0].stats.delta
+    )
+
+    return waveform
+
+
+def create_waveform_from_processed(
+    ffp_000: Path,
+    ffp_090: Path,
+    ffp_ver: Path,
+    delta: float,
+):
+    """
+    Create a waveform object from processed data using the 3 component files
+
+    Parameters
+    ----------
+    ffp_000 : Path
+        Path to the 000 component file
+    ffp_090 : Path
+        Path to the 090 component file
+    ffp_ver : Path
+        Path to the vertical component file
+    delta : float
+        The time step between each data point
+
+    Returns
+    -------
+    Waveform
+        The waveform object created from the data
+    """
+    # Load all components
+    comp_000 = pd.read_csv(ffp_000, sep="\s+", header=None, skiprows=2).values.ravel()
+    comp_090 = pd.read_csv(ffp_090, sep="\s+", header=None, skiprows=2).values.ravel()
+    comp_ver = pd.read_csv(ffp_ver, sep="\s+", header=None, skiprows=2).values.ravel()
+
+    # Remove NaN values
+    comp_000 = comp_000[~np.isnan(comp_000)]
+    comp_090 = comp_090[~np.isnan(comp_090)]
+    comp_ver = comp_ver[~np.isnan(comp_ver)]
+
+    # Form the waveform
+    waveform = read_waveform.create_waveform_from_data(
+        np.stack((comp_000, comp_090, comp_ver), axis=1), NT=len(comp_000), DT=delta
     )
 
     return waveform

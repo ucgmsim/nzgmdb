@@ -89,7 +89,8 @@ def get_snr_fas_dir(main_dir: Path):
 
 def get_waveform_dir(main_dir: Path):
     """
-    Get the directory to save the waveforms
+    Get the directory to where the waveforms are stored,
+    both mseed and processed files
 
     Parameters
     ----------
@@ -98,6 +99,19 @@ def get_waveform_dir(main_dir: Path):
     """
     waveform_dir = main_dir / "waveforms"
     return waveform_dir
+
+
+def get_im_dir(main_dir: Path):
+    """
+    Get the directory to save the IM results
+
+    Parameters
+    ----------
+    main_dir : Path
+        The main directory of the NZGMDB results (Highest level directory)
+    """
+    im_dir = main_dir / "IM"
+    return im_dir
 
 
 def get_processed_dir_from_mseed(mseed_file: Path):
