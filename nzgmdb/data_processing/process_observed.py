@@ -1,5 +1,4 @@
 import functools
-import glob
 import multiprocessing
 from pathlib import Path
 
@@ -8,7 +7,7 @@ import pandas as pd
 
 import qcore.timeseries as ts
 from nzgmdb.data_processing import waveform_manipulation
-from nzgmdb.management import file_structure, custom_errors
+from nzgmdb.management import file_structure, custom_errors, config as cfg
 
 
 def process_single_mseed(mseed_file: Path, gmc_df: pd.DataFrame, fmax_df: pd.DataFrame):
@@ -80,6 +79,40 @@ def process_single_mseed(mseed_file: Path, gmc_df: pd.DataFrame, fmax_df: pd.Dat
         if fmax_rows.empty
         else min(fmax_rows.loc[:, ["fmax_000", "fmax_090", "fmax_ver"]].values[0])
     )
+
+    config = cfg.Config()
+    fmax_min = config.get_value("fmax_min")
+    score_min = config.get_value("score_min")
+    fmin_max = config.get_value("fmin_max")
+    multi_min = config.get_value("multi_max")
+
+    # Filter out records that have too low of a fmax value
+    if fmax is not None and fmax <= fmax_min:
+        skipped_record_dict = {
+            "mseed_file": mseed_stem,
+            "reason": f"Fmax value is less than {fmax_min}",
+        }
+        return pd.DataFrame([skipped_record_dict])
+
+    # Filter by score, fmin and multi mean
+    if fmin is not None and fmin_rows["score_mean"].min() < score_min:
+        skipped_record_dict = {
+            "mseed_file": mseed_stem,
+            "reason": f"Score mean is less than {score_min}",
+        }
+        return pd.DataFrame([skipped_record_dict])
+    if fmin is not None and fmin > fmin_max:
+        skipped_record_dict = {
+            "mseed_file": mseed_stem,
+            "reason": f"Fmin mean is greater than {fmin_max}",
+        }
+        return pd.DataFrame([skipped_record_dict])
+    if fmin is not None and fmin_rows["multi_mean"].min() < multi_min:
+        skipped_record_dict = {
+            "mseed_file": mseed_stem,
+            "reason": f"Multi mean is less than {multi_min}",
+        }
+        return pd.DataFrame([skipped_record_dict])
 
     # Perform high and lowcut processing
     try:

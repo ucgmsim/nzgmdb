@@ -39,6 +39,17 @@ no_response_conversion: 1000000
 low_cut_default: 0.05
 order_default: 4
 poly_order_default: 6
+# Filtering
+fmax_min: 4.1
+score_min: 0.5
+fmin_max: 2
+multi_max: 0.2
+# Clipping
+mag_clip_low: 3.0
+mag_clip_high: 8.8
+dist_clip_low: 0.0
+dist_clip_high: 645.0
+clip_threshold: 0.2
 # IM Calculation
 ims:
   - PGA
