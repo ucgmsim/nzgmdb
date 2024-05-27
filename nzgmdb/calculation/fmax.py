@@ -99,9 +99,12 @@ def find_fmax(filename: Path, metadata: pd.DataFrame):
     ).mean()
 
     # Initial screening:
-    # In all components need at least min_points_above_thresh freq points
-    # between min_freq_Hz and max_freq_Hz with SNR > snr_thresh_vert
-    # or snr_thresh_horiz
+    # Need at least min_points_above_thresh freq points
+    # in the interval initial_screening_min_freq_Hz -
+    # initial_screening_max_freq_Hz
+    # with S/N > initial_screening_snr_thresh_vert
+    # for the ver component and S/N > initial_screening_snr_thresh_horiz
+    # in the 000 and 090 components
 
     snr_smooth_freq_interval_for_screening = snr_smooth[
         (snr_all_cols["frequency"] >= config.get_value("initial_screening_min_freq_Hz"))
@@ -138,8 +141,8 @@ def find_fmax(filename: Path, metadata: pd.DataFrame):
                 f"{config.get_value('initial_screening_min_freq_Hz')} - "
                 f"{config.get_value('initial_screening_max_freq_Hz')} "
                 f"with S/N > {config.get_value('initial_screening_snr_thresh_vert')} "
-                f"for the ver component or S/N > {config.get_value('initial_screening_snr_thresh_horiz')} "
-                f"in the 000 or 090 components."
+                f"for the ver component and S/N > {config.get_value('initial_screening_snr_thresh_horiz')} "
+                f"in the 000 and 090 components."
             ),
         }
 
