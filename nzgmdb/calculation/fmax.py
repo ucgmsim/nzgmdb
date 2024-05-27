@@ -9,13 +9,12 @@ from pathlib import Path
 
 import numpy as np
 import pandas as pd
-
 from nzgmdb.management import config as cfg
 
 
 def calculate_fmax(
     snr_thresh: float,
-    nyquist_freq_limit: float,
+    scaled_nyquist_freq: float,
     freq: np.ndarray,
     snr_component: np.ndarray,
 ) -> float:
@@ -27,8 +26,10 @@ def calculate_fmax(
     snr_thresh : float
         The maximum SNR for data
         points to be considered.
-    nyquist_freq_limit : float
-        The Nyquist frequency limit.
+    scaled_nyquist_freq : float
+        The Nyquist frequency scaled by
+        a factor of nyquist_freq_scaling_factor.
+        in the config file.
     freq : np.ndarray
         1D np.ndarray array of frequency values.
     snr_component : np.ndarray
@@ -43,9 +44,9 @@ def calculate_fmax(
     loc = np.where(snr_component < snr_thresh)[0]
 
     if len(loc) != 0:
-        fmax = min(freq[loc[0]], nyquist_freq_limit)
+        fmax = min(freq[loc[0]], scaled_nyquist_freq)
     else:
-        fmax = min(freq[-1], nyquist_freq_limit)
+        fmax = min(freq[-1], scaled_nyquist_freq)
 
     return fmax
 
@@ -77,19 +78,12 @@ def find_fmax(filename: Path, metadata: pd.DataFrame):
     # Get delta from the metadata
     current_row = metadata.iloc[np.where(metadata["record_id"] == record_id)[0], :]
 
-    # TODO Is this actually 80% of the Nyquist frequency (as specified in the paper)?
-    # IF so, perhaps only specify 80% in the config file instead of all the other
-    # Nyquist related parameters?
-
-    nyquist_freq_limit = (
-        (
-            1
-            / current_row["delta"].iloc[
-                config.get_value("nyquist_freq_limit_param_index")
-            ]
-        )
-        * config.get_value("nyquist_freq_limit_param_1")
-        * config.get_value("nyquist_freq_limit_param_2")
+    # current_row["delta"] is a pd.Series() containing 1 float so .iloc[0]
+    # is used to get the float from the pd.Series()
+    scaled_nyquist_freq = (
+        (1 / current_row["delta"].iloc[0])
+        * 0.5
+        * config.get_value("nyquist_freq_scaling_factor")
     )
 
     # Read CSV file using pandas
@@ -136,7 +130,17 @@ def find_fmax(filename: Path, metadata: pd.DataFrame):
 
         skipped_record = {
             "record_id": record_id,
-            "reason": "File skipped in fmax initial SNR screening",
+            "reason": (
+                f"Record skipped in fmax initial screening because "
+                f"there were not at least "
+                f"{config.get_value('initial_screening_min_points_above_thresh')} "
+                f"frequency points in the interval "
+                f"{config.get_value('initial_screening_min_freq_Hz')} - "
+                f"{config.get_value('initial_screening_max_freq_Hz')} "
+                f"with S/N > {config.get_value('initial_screening_snr_thresh_vert')} "
+                f"for the ver component or S/N > {config.get_value('initial_screening_snr_thresh_horiz')} "
+                f"in the 000 or 090 components."
+            ),
         }
 
     else:
@@ -156,7 +160,7 @@ def find_fmax(filename: Path, metadata: pd.DataFrame):
         calculate_fmax_partial = functools.partial(
             calculate_fmax,
             config.get_value("snr_thresh"),
-            nyquist_freq_limit,
+            scaled_nyquist_freq,
             freq_gtr_min_freq,
         )
 
@@ -209,9 +213,7 @@ def start_fmax_calc(
     skipped_records_df = pd.DataFrame(
         filter(lambda item: item is not None, list(zip(*results))[1])
     )
-    print(
-        f"Skipped {len(skipped_records_df)} files as their SNR was too low (failed initial screening)"
-    )
+    print(f"Skipped {len(skipped_records_df)} records")
 
     fmax_df = pd.DataFrame(
         filter(lambda item: item is not None, list(zip(*results))[0])

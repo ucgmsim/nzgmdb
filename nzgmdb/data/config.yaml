@@ -31,16 +31,12 @@ common_frequency_end: 100
 common_frequency_num: 389
 g: 9.81
 # fmax
-# fmax - calculate fny = 1 / current_row["delta"].iloc[fny_param_index] * fny_param_1 * fny_param_2
-nyquist_freq_limit_param_index: 0
-nyquist_freq_limit_param_1: 0.5
-nyquist_freq_limit_param_2: 0.8
+nyquist_freq_scaling_factor: 0.8 # multiplies the Nyquist frequency by this factor
 
 # fmax - smoothing data with rolling mean
 window: 5
 center: True
 min_periods: 1
-
 
 # fmax - initial screening 
 initial_screening_min_freq_Hz: 0.5
@@ -52,7 +48,6 @@ initial_screening_min_points_above_thresh: 5
 # fmax - compute fmax for each component
 min_freq_Hz: 4
 snr_thresh: 3
-
 
 # Processing
 taper_fraction: 0.05
