@@ -38,7 +38,7 @@ window: 5
 center: True
 min_periods: 1
 
-# fmax - initial screening 
+# fmax - initial screening
 initial_screening_min_freq_Hz: 0.5
 initial_screening_max_freq_Hz: 10
 initial_screening_snr_thresh_ver: 3
@@ -58,3 +58,37 @@ no_response_conversion: 1000000
 low_cut_default: 0.05
 order_default: 4
 poly_order_default: 6
+# Filtering
+fmax_min: 4.1
+score_min: 0.5
+fmin_max: 2
+multi_max: 0.2
+# Clipping
+mag_clip_low: 3.0
+mag_clip_high: 8.8
+dist_clip_low: 0.0
+dist_clip_high: 645.0
+clip_threshold: 0.2
+# IM Calculation
+ims:
+  - PGA
+  - PGV
+  - CAV
+  - AI
+  - Ds575
+  - Ds595
+  - MMI
+  - pSA
+  - FAS
+psa_periods: [0.01, 0.02, 0.03, 0.04, 0.05, 0.075, 0.1, 0.12, 0.15, 0.17, 0.2, 0.25, 0.3, 0.4, 0.5, 0.6, 0.7, 0.75, 0.8, 0.9, 1.0, 1.25, 1.5, 2.0, 2.5, 3.0, 4.0, 5.0, 6.0, 7.5, 10.0]
+components:
+    - "000"
+    - "090"
+    - "ver"
+    - "rotd50"
+    - "rotd100"
+fas_start: -1
+fas_end: 2
+fas_num: 100
+fas_base: 10
+

@@ -1,6 +1,7 @@
 import warnings
 import http.client
 from pathlib import Path
+from typing import Iterable
 
 import pandas as pd
 from obspy import Stream
@@ -62,6 +63,7 @@ def get_waveforms(
             "rrup": [rrup],
             "vs30": [vs30],
             "z1pt0": [z1p0],
+            "dip": 45,
         }
     )
     result_df = openquake_wrapper_vectorized.oq_run(
@@ -133,34 +135,28 @@ def get_waveforms(
     return st
 
 
-def create_mseed_from_waveforms(st: Stream, event_id: str, sta: str, output_dir: Path):
+def split_stream_into_mseeds(st: Stream, unique_channels: Iterable):
     """
-    Create mseed files from the waveform data
+    Split the stream object into multiple mseed files based on the unique channel and location
 
     Parameters
     ----------
-    st : object
-        The stream object containing the waveform data from each component
-    event_id : str
-        The event id
-    sta : str
-        The station name
-    output_dir : Path
-        The directory to save the mseed files
+    st : Stream
+        The stream object containing the waveform data for every channel and location
+    unique_channels : Iterable
+        An Iterable of tuples containing the unique channel and location for each mseed file created
+        [(channel, location), ...]
 
     Returns
     -------
-    chan_locs : list
-        A list of tuples containing the channel and location for each mseed file created
-        [(channel, location), ...]
+    mseeds : list
+        A list of stream objects containing the waveform data for each mseed file created
     """
-    chan_locs = []
-
-    # Get the unique channels (Using first 2 keys) and locations
-    unique_channels = set([(tr.stats.channel[:2], tr.stats.location) for tr in st])
-
+    mseeds = []
     for chan, loc in unique_channels:
+        # Each unique channel and location pair is a new mseed file
         st_new = st.select(location=loc, channel=f"{chan}?")
+
         if len(st_new) > 3:
             # Check if all the sample rates are the same
             samples = [tr.stats.sampling_rate for tr in st_new]
@@ -168,6 +164,10 @@ def create_mseed_from_waveforms(st: Stream, event_id: str, sta: str, output_dir:
                 # If they are different take the highest and resample with the others using interpolation
                 st_new = st_new.select(sampling_rate=max(samples))
                 st_new.merge(fill_value="interpolate")
+
+        # Check the final length of the traces
+        if len(st_new) != 3:
+            continue
 
         # Ensure traces all have the same length
         starttime_trim = max([tr.stats.starttime for tr in st_new])
@@ -177,11 +177,34 @@ def create_mseed_from_waveforms(st: Stream, event_id: str, sta: str, output_dir:
             continue
         st_new.trim(starttime_trim, endtime_trim)
 
-        # Write the mseed file
-        filename = f"{event_id}_{sta}_{chan}_{loc}.mseed"
-        mseed_ffp = output_dir / filename
-        st_new.write(mseed_ffp, format="MSEED")
+        mseeds.append(st_new)
 
-        # Extend the chan and loc to the full channel codes and loc for each trace
-        chan_locs.extend([(tr.stats.channel, tr.stats.location) for tr in st_new])
-    return chan_locs
+    return mseeds
+
+
+def write_mseed(mseed: Stream, event_id: str, station: str, output_directory: Path):
+    """
+    Write the mseed files to the output directory
+
+    Parameters
+    ----------
+    mseed : Stream
+        The stream object containing the waveform data
+    event_id : str
+        The event id which is used in the filename
+    station : str
+        The station code which is used in the filename
+    output_directory : Path
+        The directory to save the mseed files
+    """
+    # Get the channel and location from the first trace
+    channel = mseed[0].stats.channel[:2]
+    location = mseed[0].stats.location
+
+    # Create the filename and add it to the output directory
+    filename = f"{event_id}_{station}_{channel}_{location}.mseed"
+    mseed_ffp = output_directory / filename
+    output_directory.mkdir(exist_ok=True, parents=True)
+
+    # Write the mseed file
+    mseed.write(str(mseed_ffp), format="MSEED")

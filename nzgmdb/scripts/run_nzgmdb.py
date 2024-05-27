@@ -7,8 +7,7 @@ from pathlib import Path
 from typing import Annotated
 
 import typer
-from nzgmdb.calculation import fmax
-from nzgmdb.calculation import snr
+from nzgmdb.calculation import snr, ims, fmax
 from nzgmdb.data_processing import process_observed
 from nzgmdb.data_retrieval import geonet
 from nzgmdb.data_retrieval import tect_domain
@@ -242,6 +241,33 @@ def process_records(
     process_observed.process_mseeds_to_txt(main_dir, gmc_ffp, fmax_ffp, n_procs)
 
 
+@app.command(help="Run IM Calculation on processed waveform files")
+def run_im_calculation(
+    main_dir: Annotated[
+        Path,
+        typer.Argument(
+            help="The main directory of the NZGMDB results (Highest level directory)",
+            exists=True,
+            file_okay=False,
+        ),
+    ],
+    output_dir: Annotated[
+        Path,
+        typer.Option(help="The directory to save the IM files", file_okay=False),
+    ] = None,
+    n_procs: Annotated[int, typer.Option(help="The number of processes to use")] = 1,
+    checkpoint: Annotated[
+        bool,
+        typer.Option(
+            help="If True, the function will check for already completed files and skip them"
+        ),
+    ] = False,
+):
+    if output_dir is None:
+        output_dir = file_structure.get_im_dir(main_dir)
+    ims.compute_ims_for_all_processed_records(main_dir, output_dir, n_procs, checkpoint)
+
+
 @app.command(
     help="Run the first half of the NZGMDB pipeline before GMC. "
     "- Fetch Geonet data "
@@ -323,8 +349,11 @@ def run_process_nzgmdb(
     fmax_ffp = flatfile_dir / "fmax.csv"
     process_records(main_dir, gmc_ffp, fmax_ffp, n_procs)
 
-    # Steps below are TODO
     # Run IM calculation
+    im_dir = file_structure.get_im_dir(main_dir)
+    run_im_calculation(main_dir, im_dir, n_procs)
+
+    # Steps below are TODO
     # Merge flat files with IM results
 
 
