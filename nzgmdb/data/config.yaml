@@ -45,7 +45,7 @@ initial_screening_snr_thresh_ver: 3
 initial_screening_snr_thresh_horiz: 5
 initial_screening_min_points_above_thresh: 5
 
-# fmax - compute fmax for each component
+# fmax - calculation
 min_freq_Hz: 4
 snr_thresh: 3
 
