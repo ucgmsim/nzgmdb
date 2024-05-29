@@ -7,6 +7,7 @@ from pathlib import Path
 from typing import Annotated
 
 import typer
+
 from nzgmdb.calculation import snr, ims, fmax
 from nzgmdb.data_processing import process_observed
 from nzgmdb.data_retrieval import geonet
@@ -199,7 +200,9 @@ def calc_fmax(
     ] = None,
     n_procs: Annotated[int, typer.Option(help="Number of processes to use")] = 1,
 ):
-    fmax.start_fmax_calc(main_dir, meta_dir, snr_fas_output_dir, n_procs)
+    fmax.start_snr_assessment_and_fmax_procedure(
+        main_dir, meta_dir, snr_fas_output_dir, n_procs
+    )
 
 
 @app.command(
@@ -322,8 +325,8 @@ def run_pre_process_nzgmdb(
         main_dir, phase_table_path, meta_output_dir, snr_fas_output_dir, n_procs
     )
 
-    # Steps below are TODO
     # Calculate Fmax
+    calc_fmax(main_dir, meta_output_dir, snr_fas_output_dir, n_procs)
 
 
 @app.command(
