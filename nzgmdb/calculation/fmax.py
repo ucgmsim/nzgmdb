@@ -102,8 +102,8 @@ def assess_snr_and_get_fmax(
         * config.get_value("nyquist_freq_scaling_factor")
     )
 
-    snr_with_other_cols = pd.read_csv(filename)
-    snr = snr_with_other_cols[["snr_000", "snr_090", "snr_ver"]]
+    snr_with_freq_signal_noise = pd.read_csv(filename)
+    snr = snr_with_freq_signal_noise[["snr_000", "snr_090", "snr_ver"]]
 
     snr_smooth = snr.rolling(
         window=config.get_value("window"),
@@ -121,11 +121,11 @@ def assess_snr_and_get_fmax(
 
     snr_smooth_freq_interval_for_screening = snr_smooth.loc[
         (
-            snr_with_other_cols["frequency"]
+            snr_with_freq_signal_noise["frequency"]
             >= config.get_value("initial_screening_min_freq_Hz")
         )
         & (
-            snr_with_other_cols["frequency"]
+            snr_with_freq_signal_noise["frequency"]
             <= config.get_value("initial_screening_max_freq_Hz")
         )
     ]
@@ -164,12 +164,15 @@ def assess_snr_and_get_fmax(
         skipped_record = None
 
         snr_smooth_gtr_min_freq = snr_smooth.loc[
-            snr_with_other_cols["frequency"] > config.get_value("min_freq_Hz")
+            snr_with_freq_signal_noise["frequency"] > config.get_value("min_freq_Hz")
         ]
 
         freq_gtr_min_freq = (
-            snr_with_other_cols["frequency"]
-            .loc[snr_with_other_cols["frequency"] > config.get_value("min_freq_Hz")]
+            snr_with_freq_signal_noise["frequency"]
+            .loc[
+                snr_with_freq_signal_noise["frequency"]
+                > config.get_value("min_freq_Hz")
+            ]
             .to_numpy()
         )
 
@@ -221,7 +224,7 @@ def calculate_fmax(
 
     loc = np.where(snr < snr_thresh)[0]
 
-    if len(loc) != 0:
+    if loc:
         fmax = min(freq[loc[0]], scaled_nyquist_freq)
     else:
         fmax = min(freq[-1], scaled_nyquist_freq)

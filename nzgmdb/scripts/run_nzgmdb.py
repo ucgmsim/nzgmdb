@@ -171,8 +171,8 @@ def calculate_snr(
 
 
 @app.command(
-    help="Calculate the maximum useable frequency (fmax)."
-    "Requires the snr_fas files and the snr metadata."
+    help="Calculate the maximum useable frequency (fmax). "
+    "Requires the snr_fas files and the snr metadata. "
     "Several parameters are set in the config file."
 )
 def calc_fmax(
