@@ -179,30 +179,34 @@ def calc_fmax(
     main_dir: Annotated[
         Path,
         typer.Argument(
-            help="The main directory of the NZGMDB results (highest level directory)",
+            help="The main directory of the NZGMDB results (Highest level directory)",
             exists=True,
             file_okay=False,
         ),
     ],
-    meta_dir: Annotated[
+    meta_output_dir: Annotated[
         Path,
         typer.Option(
-            help="Path to the directory for the metadata and skipped records",
+            help="Path to the output directory for the metadata and skipped records",
             file_okay=False,
         ),
     ] = None,
     snr_fas_output_dir: Annotated[
         Path,
         typer.Option(
-            help="Path to the directory for the SNR and FAS data",
+            help="Path to the output directory for the SNR and FAS data",
             file_okay=False,
         ),
     ] = None,
     n_procs: Annotated[int, typer.Option(help="Number of processes to use")] = 1,
 ):
-    fmax.start_snr_assessment_and_fmax_procedure(
-        main_dir, meta_dir, snr_fas_output_dir, n_procs
-    )
+
+    if meta_output_dir is None:
+        meta_output_dir = file_structure.get_flatfile_dir(main_dir)
+    if snr_fas_output_dir is None:
+        snr_fas_output_dir = file_structure.get_snr_fas_dir(main_dir)
+
+    fmax.run_full_fmax_calc(meta_output_dir, snr_fas_output_dir, n_procs)
 
 
 @app.command(

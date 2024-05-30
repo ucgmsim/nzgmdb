@@ -10,35 +10,24 @@ from typing import Any
 import numpy as np
 import pandas as pd
 
-from nzgmdb.management import config as cfg
+from nzgmdb.management import file_structure, config as cfg
 
 
-def start_snr_assessment_and_fmax_procedure(
-    main_dir: Path, meta_dir: Path, snr_fas_dir: Path, n_procs: int = 1
-):
+def run_full_fmax_calc(meta_output_dir: Path, snr_fas_dir: Path, n_procs: int = 1):
     """
-    Start the procedure for each record to assess SNR and get the maximum usable frequency (fmax).
+    Run the full procedure for each record to assess SNR and get the maximum usable frequency (fmax).
 
     Parameters
     ----------
-    main_dir : Path
-        The main directory of the NZGMDB results (highest level directory)
-        (glob is used to find all mseed files recursively)
     meta_output_dir : Path
-        Path to the directory for the metadata and skipped records
+        Path to the output directory for the metadata and skipped records.
     snr_fas_output_dir : Path
-        Path to the directory for the SNR and FAS data
+        Path to the output directory for the SNR and FAS data.
     n_procs : int, optional
-        Number of processes to use, by default 1
+        Number of processes to use, by default 1.
     """
 
-    if not meta_dir:
-        meta_dir = main_dir / "flatfiles"
-
-    if not snr_fas_dir:
-        snr_fas_dir = Path(main_dir / "snr_fas")
-
-    metadata_df = pd.read_csv(meta_dir / "snr_metadata.csv")
+    metadata_df = pd.read_csv(meta_output_dir / "snr_metadata.csv")
     snr_filenames = snr_fas_dir.glob("**/*snr_fas.csv")
 
     with multiprocessing.Pool(n_procs) as pool:
@@ -60,9 +49,9 @@ def start_snr_assessment_and_fmax_procedure(
         filter(lambda item: item is not None, list(zip(*results))[0])
     )
 
-    fmax_df.to_csv(meta_dir / "fmax.csv", index=False)
+    fmax_df.to_csv(meta_output_dir / "fmax.csv", index=False)
 
-    skipped_records_df.to_csv(meta_dir / "fmax_skipped_records.csv", index=False)
+    skipped_records_df.to_csv(meta_output_dir / "fmax_skipped_records.csv", index=False)
 
 
 def assess_snr_and_get_fmax(
@@ -75,17 +64,17 @@ def assess_snr_and_get_fmax(
     Parameters
     ----------
     filename : Path
-        Path to the ___snr_fas.csv file
+        Path to the ___snr_fas.csv file.
     metadata : pd.DataFrame
-        Contains the SNR meta data
+        Contains the SNR meta data.
 
     Returns
     -------
     fmax_record : dict[str, Any] or None if record is not skipped or skipped, respectively
-                  if not None, contains record_id, fmax_000, fmax_090, fmax_ver
+                  if not None, contains record_id, fmax_000, fmax_090, fmax_ver.
 
     skipped_record : dict[str, Any] or None if record is skipped or not skipped, respectively
-                     if not None, contains record_id, reason
+                     if not None, contains record_id, reason.
     """
     config = cfg.Config()
 
@@ -224,7 +213,7 @@ def calculate_fmax(
 
     loc = np.where(snr < snr_thresh)[0]
 
-    if loc:
+    if len(loc) > 0:
         fmax = min(freq[loc[0]], scaled_nyquist_freq)
     else:
         fmax = min(freq[-1], scaled_nyquist_freq)
