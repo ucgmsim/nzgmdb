@@ -13,7 +13,9 @@ import pandas as pd
 from nzgmdb.management import file_structure, config as cfg
 
 
-def run_full_fmax_calc(meta_output_dir: Path, snr_fas_dir: Path, n_procs: int = 1):
+def run_full_fmax_calc(
+    meta_output_dir: Path, snr_fas_output_dir: Path, n_procs: int = 1
+):
     """
     Run the full procedure for each record to assess SNR and get the maximum usable frequency (fmax).
 
@@ -28,7 +30,7 @@ def run_full_fmax_calc(meta_output_dir: Path, snr_fas_dir: Path, n_procs: int = 
     """
 
     metadata_df = pd.read_csv(meta_output_dir / "snr_metadata.csv")
-    snr_filenames = snr_fas_dir.glob("**/*snr_fas.csv")
+    snr_filenames = snr_fas_output_dir.glob("**/*snr_fas.csv")
 
     with multiprocessing.Pool(n_procs) as pool:
         results = pool.map(
@@ -129,26 +131,11 @@ def assess_snr_and_get_fmax(
         axis=0,
     )
 
-    if not (
+    if (
         num_valid_points_in_interval
         > config.get_value("initial_screening_min_points_above_thresh")
     ).all():
-        # Skip the record
-        fmax_record = None
 
-        skipped_record = {
-            "record_id": record_id,
-            "reason": (
-                f"Record skipped in fmax calculation because there were not at least "
-                f"{config.get_value('initial_screening_min_points_above_thresh')} frequency points in the interval "
-                f"{config.get_value('initial_screening_min_freq_Hz')} - "
-                f"{config.get_value('initial_screening_max_freq_Hz')} Hz "
-                f"with SNR > {config.get_value('initial_screening_snr_thresh_ver')} for the ver component and "
-                f"SNR > {config.get_value('initial_screening_snr_thresh_horiz')} for the 000 and 090 components."
-            ),
-        }
-
-    else:
         # keep the record
         skipped_record = None
 
@@ -179,6 +166,24 @@ def assess_snr_and_get_fmax(
             "fmax_ver": calculate_fmax_partial(snr_smooth_gtr_min_freq["snr_ver"]),
         }
 
+        ############################################################################
+
+    else:
+        # Skip the record
+        fmax_record = None
+
+        skipped_record = {
+            "record_id": record_id,
+            "reason": (
+                f"Record skipped in fmax calculation because there were not at least "
+                f"{config.get_value('initial_screening_min_points_above_thresh')} frequency points in the interval "
+                f"{config.get_value('initial_screening_min_freq_Hz')} - "
+                f"{config.get_value('initial_screening_max_freq_Hz')} Hz "
+                f"with SNR > {config.get_value('initial_screening_snr_thresh_ver')} for the ver component and "
+                f"SNR > {config.get_value('initial_screening_snr_thresh_horiz')} for the 000 and 090 components."
+            ),
+        }
+
     return fmax_record, skipped_record
 
 
@@ -204,6 +209,7 @@ def calculate_fmax(
         1D array of frequency values.
     snr : np.ndarray
         1D of SNR values.
+
     Returns
     -------
     fmax : float
