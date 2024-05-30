@@ -44,10 +44,9 @@ def run_full_fmax_calc(
     # Unpack the results
     meta_dfs, skipped_record_dfs = zip(*results)
 
-    # Check that there are metadata dataframes that are not None
+    # Check that there are dataframes that are not None before concatenating
     if not all(value is None for value in meta_dfs):
         fmax_df = pd.concat(meta_dfs).reset_index(drop=True)
-
     if not all(value is None for value in skipped_record_dfs):
         skipped_records_df = pd.concat(skipped_record_dfs).reset_index(drop=True)
 
