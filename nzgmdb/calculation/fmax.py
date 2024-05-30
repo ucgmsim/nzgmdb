@@ -41,15 +41,17 @@ def run_full_fmax_calc(
             snr_filenames,
         )
 
-    # using filter() to remove None values
-    skipped_records_df = pd.DataFrame(
-        filter(lambda item: item is not None, list(zip(*results))[1])
-    )
-    print(f"Skipped {len(skipped_records_df)} records")
+    # Unpack the results
+    meta_dfs, skipped_record_dfs = zip(*results)
 
-    fmax_df = pd.DataFrame(
-        filter(lambda item: item is not None, list(zip(*results))[0])
-    )
+    # Check that there are metadata dataframes that are not None
+    if not all(value is None for value in meta_dfs):
+        fmax_df = pd.concat(meta_dfs).reset_index(drop=True)
+
+    if not all(value is None for value in skipped_record_dfs):
+        skipped_records_df = pd.concat(skipped_record_dfs).reset_index(drop=True)
+
+    print(f"Skipped {len(skipped_records_df)} records")
 
     fmax_df.to_csv(meta_output_dir / "fmax.csv", index=False)
 
@@ -58,7 +60,7 @@ def run_full_fmax_calc(
 
 def assess_snr_and_get_fmax(
     filename: Path, metadata: pd.DataFrame
-) -> tuple[dict[str, Any] | None, dict[str, Any] | None]:
+) -> tuple[pd.DataFrame | None, pd.DataFrame | None]:
     """
     Assess the record's SNR within the frequency interval specified in the config file and get the record's
     maximum usable frequency (fmax) if its SNR is above the threshold specified in the config file.
@@ -72,10 +74,10 @@ def assess_snr_and_get_fmax(
 
     Returns
     -------
-    fmax_record : dict[str, Any] or None if record is not skipped or skipped, respectively
+    fmax_record : pd.DataFrame or None if record is not skipped or skipped, respectively
                   if not None, contains record_id, fmax_000, fmax_090, fmax_ver.
 
-    skipped_record : dict[str, Any] or None if record is skipped or not skipped, respectively
+    skipped_record : pd.DataFrame or None if record is skipped or not skipped, respectively
                      if not None, contains record_id, reason.
     """
     config = cfg.Config()
@@ -159,12 +161,22 @@ def assess_snr_and_get_fmax(
             freq_gtr_min_freq,
         )
 
-        fmax_record = {
-            "record_id": record_id,
-            "fmax_000": calculate_fmax_partial(snr_smooth_gtr_min_freq["snr_000"]),
-            "fmax_090": calculate_fmax_partial(snr_smooth_gtr_min_freq["snr_090"]),
-            "fmax_ver": calculate_fmax_partial(snr_smooth_gtr_min_freq["snr_ver"]),
-        }
+        fmax_record = pd.DataFrame(
+            [
+                {
+                    "record_id": record_id,
+                    "fmax_000": calculate_fmax_partial(
+                        snr_smooth_gtr_min_freq["snr_000"]
+                    ),
+                    "fmax_090": calculate_fmax_partial(
+                        snr_smooth_gtr_min_freq["snr_090"]
+                    ),
+                    "fmax_ver": calculate_fmax_partial(
+                        snr_smooth_gtr_min_freq["snr_ver"]
+                    ),
+                }
+            ]
+        )
 
         ############################################################################
 
@@ -172,17 +184,21 @@ def assess_snr_and_get_fmax(
         # Skip the record
         fmax_record = None
 
-        skipped_record = {
-            "record_id": record_id,
-            "reason": (
-                f"Record skipped in fmax calculation because there were not at least "
-                f"{config.get_value('initial_screening_min_points_above_thresh')} frequency points in the interval "
-                f"{config.get_value('initial_screening_min_freq_Hz')} - "
-                f"{config.get_value('initial_screening_max_freq_Hz')} Hz "
-                f"with SNR > {config.get_value('initial_screening_snr_thresh_ver')} for the ver component and "
-                f"SNR > {config.get_value('initial_screening_snr_thresh_horiz')} for the 000 and 090 components."
-            ),
-        }
+        skipped_record = pd.DataFrame(
+            [
+                {
+                    "record_id": record_id,
+                    "reason": (
+                        f"Record skipped in fmax calculation because there were not at least "
+                        f"{config.get_value('initial_screening_min_points_above_thresh')} frequency points in the interval "
+                        f"{config.get_value('initial_screening_min_freq_Hz')} - "
+                        f"{config.get_value('initial_screening_max_freq_Hz')} Hz "
+                        f"with SNR > {config.get_value('initial_screening_snr_thresh_ver')} for the ver component and "
+                        f"SNR > {config.get_value('initial_screening_snr_thresh_horiz')} for the 000 and 090 components."
+                    ),
+                }
+            ]
+        )
 
     return fmax_record, skipped_record
 
