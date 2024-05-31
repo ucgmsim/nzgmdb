@@ -10,7 +10,7 @@ from typing import Optional
 import numpy as np
 import pandas as pd
 
-from nzgmdb.management import file_structure, config as cfg
+from nzgmdb.management import config as cfg
 
 
 def run_full_fmax_calc(
