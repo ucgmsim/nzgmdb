@@ -5,7 +5,7 @@ Calculates the maximum useable frequency (fmax).
 import functools
 import multiprocessing
 from pathlib import Path
-from typing import Any
+from typing import Optional
 
 import numpy as np
 import pandas as pd
@@ -59,7 +59,7 @@ def run_full_fmax_calc(
 
 def assess_snr_and_get_fmax(
     filename: Path, metadata: pd.DataFrame
-) -> tuple[pd.DataFrame | None, pd.DataFrame | None]:
+) -> tuple[Optional[pd.DataFrame], Optional[pd.DataFrame]]:
     """
     Assess the record's SNR within the frequency interval specified in the config file and get the record's
     maximum usable frequency (fmax) if its SNR is above the threshold specified in the config file.
