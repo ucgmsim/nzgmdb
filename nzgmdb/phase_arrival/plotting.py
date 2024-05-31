@@ -42,15 +42,23 @@ def plot_phase_arrivals_on_mseed_waveforms(
     # Lookup phase arrival times in the table
 
     if "datetime" in phase_arrival_df.keys():
+        # Picker P-phase and GeoNet S-phase (if present)
+        plot_subdir = output_dir / "picker_p_and_geonet_s"
+
         phase_arrival_times = phase_arrival_df.loc[
             (phase_arrival_df["evid"] == evid)
             & (phase_arrival_df["sta"] == mseed[0].stats.station)
             & (phase_arrival_df["chan"] == mseed[0].stats.channel[:2])
             & (phase_arrival_df["loc"] == mseed[0].stats.location)
         ]["datetime"]
-        vline_colors = ["b"] * len(phase_arrival_times)
+
+        # "r" color will be ignored if there is only one phase arrival time
+        vline_colors = ["b", "r"]
 
     else:
+        # All phase picks from Picker and GeoNet
+        plot_subdir = output_dir / "all_phase_from_picker_and_geonet"
+
         picker_phase_arrival_times = phase_arrival_df.loc[
             (phase_arrival_df["evid"] == evid)
             & (phase_arrival_df["sta"] == mseed[0].stats.station)
@@ -83,14 +91,6 @@ def plot_phase_arrivals_on_mseed_waveforms(
             arrival_times_as_list.append(np.nan)
 
     if arrival_times_as_list:
-
-        if len(pd.Series(arrival_times_as_list).dropna()) == 1:
-            # Only Picker
-            plot_subdir = output_dir / "only_picker"
-
-        else:
-            # Picker and Geonet
-            plot_subdir = output_dir / "picker_and_geonet"
 
         # Create the output subdirectory if it doesn't already exist
         plot_subdir.mkdir(parents=True, exist_ok=True)
