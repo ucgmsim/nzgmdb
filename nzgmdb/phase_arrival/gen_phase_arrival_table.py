@@ -236,8 +236,10 @@ def generate_phase_arrival_table(
         columns_to_merge_for_new_index
     )
 
-    # Create the dataframe
-    df = pd.DataFrame([tup[0] for data_list in mseed_data_list for tup in data_list])
+    # Use the new index to include Geonet phase
+    # arrival times if there are not any conflicting
+    # phase arrival times from picker
+    merged_df = picker_phases_df_new_index.combine_first(geonet_phases_df_new_index)
 
     # reset the index back to normal
     merged_df = merged_df.reset_index()
