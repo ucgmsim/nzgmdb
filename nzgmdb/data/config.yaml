@@ -30,6 +30,25 @@ common_frequency_start: 0.01318257
 common_frequency_end: 100
 common_frequency_num: 389
 g: 9.81
+# fmax
+nyquist_freq_scaling_factor: 0.8 # multiplies the Nyquist frequency by this factor
+
+# fmax - smoothing data with rolling mean
+window: 5
+center: True
+min_periods: 1
+
+# fmax - initial screening
+initial_screening_min_freq_Hz: 0.5
+initial_screening_max_freq_Hz: 10
+initial_screening_snr_thresh_ver: 3
+initial_screening_snr_thresh_horiz: 5
+initial_screening_min_points_above_thresh: 5
+
+# fmax - calculation
+min_freq_Hz: 4
+snr_thresh: 3
+
 # Processing
 taper_fraction: 0.05
 zero_padding_time: 5
@@ -72,3 +91,4 @@ fas_start: -1
 fas_end: 2
 fas_num: 100
 fas_base: 10
+

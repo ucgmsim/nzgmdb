@@ -42,15 +42,23 @@ def plot_phase_arrivals_on_mseed_waveforms(
     # Lookup phase arrival times in the table
 
     if "datetime" in phase_arrival_df.keys():
+        # Picker P-phase and GeoNet S-phase (if present)
+        plot_subdir = output_dir / "picker_p_and_geonet_s"
+
         phase_arrival_times = phase_arrival_df.loc[
             (phase_arrival_df["evid"] == evid)
             & (phase_arrival_df["sta"] == mseed[0].stats.station)
             & (phase_arrival_df["chan"] == mseed[0].stats.channel[:2])
             & (phase_arrival_df["loc"] == mseed[0].stats.location)
         ]["datetime"]
-        vline_colors = ["b"] * len(phase_arrival_times)
+
+        # "r" color will be ignored if there is only one phase arrival time
+        vline_colors = ["b", "r"]
 
     else:
+        # All phase picks from Picker and GeoNet
+        plot_subdir = output_dir / "all_phase_from_picker_and_geonet"
+
         picker_phase_arrival_times = phase_arrival_df.loc[
             (phase_arrival_df["evid"] == evid)
             & (phase_arrival_df["sta"] == mseed[0].stats.station)
@@ -84,6 +92,9 @@ def plot_phase_arrivals_on_mseed_waveforms(
 
     if arrival_times_as_list:
 
+        # Create the output subdirectory if it doesn't already exist
+        plot_subdir.mkdir(parents=True, exist_ok=True)
+
         # Generate most of the plot with Obspy.
         # Using handle=True returns the plot
         fig = mseed.plot(handle=True)
@@ -103,7 +114,7 @@ def plot_phase_arrivals_on_mseed_waveforms(
                 colors=vline_colors,
             )
 
-        fig.savefig(output_dir / f"{mseed_file.stem}.png")
+        fig.savefig(plot_subdir / f"{mseed_file.stem}.png")
         plt.close()
 
 
@@ -179,7 +190,7 @@ def plot_time_diffs_hist(
     plt.xlabel("Picker time - Geonet time (seconds)")
     plt.ylabel("count")
     print(f"Total number of points used in the histogram: {total_points}")
-    plt.title(f"{total_points} arrival times from both Picker and Geonet")
+    plt.title(f"{total_points} arrival times from both Picker and GeoNet")
 
     plt.savefig(output_dir / "histogram.png", dpi=dpi)
     plt.close()

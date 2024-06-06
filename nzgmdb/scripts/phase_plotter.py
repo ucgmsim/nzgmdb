@@ -68,7 +68,6 @@ def batch_plot(
         Path,
         typer.Argument(
             help="The directory to save the plot in.",
-            exists=True,
             file_okay=False,
         ),
     ],

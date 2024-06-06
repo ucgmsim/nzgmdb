@@ -8,7 +8,7 @@ from typing import Annotated
 
 import typer
 
-from nzgmdb.calculation import snr, ims
+from nzgmdb.calculation import fmax, ims, snr
 from nzgmdb.data_processing import process_observed
 from nzgmdb.data_retrieval import geonet
 from nzgmdb.data_retrieval import tect_domain
@@ -171,6 +171,45 @@ def calculate_snr(
 
 
 @app.command(
+    help="Calculate the maximum useable frequency (fmax). "
+    "Requires the snr_fas files and the snr metadata. "
+    "Several parameters are set in the config file."
+)
+def calc_fmax(
+    main_dir: Annotated[
+        Path,
+        typer.Argument(
+            help="The main directory of the NZGMDB results (Highest level directory)",
+            exists=True,
+            file_okay=False,
+        ),
+    ],
+    meta_output_dir: Annotated[
+        Path,
+        typer.Option(
+            help="Path to the output directory for the metadata and skipped records",
+            file_okay=False,
+        ),
+    ] = None,
+    snr_fas_output_dir: Annotated[
+        Path,
+        typer.Option(
+            help="Path to the output directory for the SNR and FAS data",
+            file_okay=False,
+        ),
+    ] = None,
+    n_procs: Annotated[int, typer.Option(help="Number of processes to use")] = 1,
+):
+
+    if meta_output_dir is None:
+        meta_output_dir = file_structure.get_flatfile_dir(main_dir)
+    if snr_fas_output_dir is None:
+        snr_fas_output_dir = file_structure.get_snr_fas_dir(main_dir)
+
+    fmax.run_full_fmax_calc(meta_output_dir, snr_fas_output_dir, n_procs)
+
+
+@app.command(
     help="Process the mseed files to txt files. "
     "Saves the skipped records to a csv file and gives reasons why they were skipped"
 )
@@ -290,8 +329,8 @@ def run_pre_process_nzgmdb(
         main_dir, phase_table_path, meta_output_dir, snr_fas_output_dir, n_procs
     )
 
-    # Steps below are TODO
     # Calculate Fmax
+    calc_fmax(main_dir, meta_output_dir, snr_fas_output_dir, n_procs)
 
 
 @app.command(
