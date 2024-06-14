@@ -186,14 +186,14 @@ def mech_rot(norm1, norm2, slip1, slip2):
         # If the mechanisms are very close, rotation = 0
         epsilon = 1e-4
         if phi1 < epsilon and phi2 < epsilon and phi3 < epsilon:
-            rotemp[iteration] = 0
+            rotations[iteration] = 0
         # If one vector is the same, it is the rotation axis
         elif phi1 < epsilon:
-            rotemp[iteration] = np.rad2deg(phi2)
+            rotations[iteration] = np.rad2deg(phi2)
         elif phi2 < epsilon:
-            rotemp[iteration] = np.rad2deg(phi3)
+            rotations[iteration] = np.rad2deg(phi3)
         elif phi3 < epsilon:
-            rotemp[iteration] = np.rad2deg(phi1)
+            rotations[iteration] = np.rad2deg(phi1)
 
         # Find difference vectors - the rotation axis must be orthogonal to all three of
         # these vectors
@@ -333,7 +333,7 @@ def compute_row(
         return
 
     # Get the station data
-    event_sta_df = station_df[station_df["sta"].isin(im_event_df["sta"])]
+    event_sta_df = station_df[station_df["sta"].isin(im_event_df["sta"])].reset_index()
     stations = event_sta_df[["lon", "lat", "depth"]].to_numpy()
 
     length, dip_dist, srf_points, srf_header = None, None, None, None
@@ -454,11 +454,11 @@ def compute_row(
     rrups_lat, rrups_lon = rrup_points[:, 0], rrup_points[:, 1]
 
     r_epis = geo.get_distances(
-        np.dstack([station_df.lon.values, station_df.lat.values])[0],
+        np.dstack([event_sta_df.lon.values, event_sta_df.lat.values])[0],
         event_row["lon"],
         event_row["lat"],
     )
-    r_hyps = np.sqrt(r_epis**2 + (event_row["depth"] - station_df.depth.values) ** 2)
+    r_hyps = np.sqrt(r_epis**2 + (event_row["depth"] - event_sta_df.depth.values) ** 2)
     azs = np.array(
         [
             geo.ll_bearing(event_row["lon"], event_row["lat"], station[0], station[1])
@@ -472,12 +472,13 @@ def compute_row(
         ]
     )
     tvz_lengths, boundary_dists_rjb = TVZ_path_calc(
-        station_df,
+        event_sta_df,
         taupo_polygon,
         rjbs,
         rrups_lon,
         rrups_lat,
     )
+    print(tvz_lengths)
 
 
 def TVZ_path_calc(
@@ -498,17 +499,20 @@ def TVZ_path_calc(
     nztm_num = config.get_value("nztm_num")
     wgs2nztm = Transformer.from_crs(ll_num, nztm_num)
 
+    # Transform the rrups to NZTM
     rrups_transform = wgs2nztm.transform(rrups_lat, rrups_lon)
 
     tvz_lengths = []
     boundary_dists_rjb = []
-    ii = 0
-    # REDUCE TO ONLY THE STATIONS THAT ARE IN THE CURRENT EVENT
-    for i, sta in sta_df.iterrows():
-        sta_transform = wgs2nztm.transform(sta.lat, sta.lon)
+
+    # Loop through all the stations
+    for station_index, station in sta_df.iterrows():
+
+        # Create the line between the station and the event
+        sta_transform = wgs2nztm.transform(station.lat, station.lon)
         line = LineString(
             [
-                [rrups_transform[0][ii], rrups_transform[1][ii]],
+                [rrups_transform[0][station_index], rrups_transform[1][station_index]],
                 [sta_transform[0], sta_transform[1]],
             ]
         )
@@ -516,32 +520,31 @@ def TVZ_path_calc(
         tvz_length = 0
         boundary_dist_rjb = None
 
+        # Check if the line intersects the Taupo VZ polygon
         if line.intersection(taupo_polygon):
-            polin = LineString(list(taupo_polygon.exterior.coords))
-            pt = polin.intersection(line)
+            # If it does, calculate the length of the line that goes through the Taupo VZ
+            # Get the intersection point with the boundary
+            point = taupo_polygon.boundary.intersection(line)
+
             if taupo_polygon.contains(Point(sta_transform)):
+                # If the line is completely inside the Taupo VZ polygon
                 boundary_dist_rjb = 0
             else:
-                if pt.geom_type != "LineString":
-                    if pt.geom_type == "MultiPoint":
-                        pt = pt.geoms[0]
+                # If the line intersects the boundary of the Taupo VZ polygon
+                if point.geom_type == "MultiPoint":
+                    point = point.geoms[0]
+                if point.geom_type != "LineString":
+                    # Calculate the distance from the station to the boundary
                     boundary_dist_rjb = (
-                        np.sqrt(
-                            (pt.xy[0][-1] - sta_transform[0]) ** 2
-                            + (pt.xy[1][-1] - sta_transform[1]) ** 2
-                        )
-                        / 1000
+                            np.sqrt((point.x - sta_transform[0]) ** 2 + (point.y - sta_transform[1]) ** 2)
+                            / 1000
                     )
-                else:
-                    boundary_dist_rjb = None
-            line_points = line.intersection(taupo_polygon)
-            tvz_length = line_points.length / 1000 / r_epis[ii]
 
-            if tvz_length > 1:
-                tvz_length = 1
+            line_points = line.intersection(taupo_polygon)
+            tvz_length = min(line_points.length / 1000 / r_epis[station_index], 1)
+
         tvz_lengths.append(tvz_length)
         boundary_dists_rjb.append(boundary_dist_rjb)
-        ii += 1
 
     return tvz_lengths, boundary_dists_rjb
 
@@ -650,4 +653,5 @@ def calc_distances(main_dir: Path):
 #     fmax_ffp=Path("/home/joel/local/gmdb/US_stuff/new_struct_2022/flatfiles/fmax.csv"),
 # )
 
-calc_distances(main_dir=Path("/home/joel/local/gmdb/US_stuff/new_struct_2022"))
+# calc_distances(main_dir=Path("/home/joel/local/gmdb/US_stuff/new_struct_2022"))
+calc_distances(main_dir=Path("X:/Work/nzgmdb/2022_full_test"))
