@@ -1,4 +1,6 @@
 from pathlib import Path
+import functools
+import multiprocessing as mp
 from math import sin, cos, acos, radians
 
 import numpy as np
@@ -330,13 +332,23 @@ def compute_row(
     # Check if the event doesn't have IM data
     # If it doesn't, skip the event
     if im_event_df.empty:
-        return
+        return None, None
 
     # Get the station data
     event_sta_df = station_df[station_df["sta"].isin(im_event_df["sta"])].reset_index()
     stations = event_sta_df[["lon", "lat", "depth"]].to_numpy()
 
-    length, dip_dist, srf_points, srf_header = None, None, None, None
+    if len(event_sta_df) == 0:
+        return None, None
+
+    length, dip_dist, srf_points, srf_header, ztor, dbottom = (
+        None,
+        None,
+        None,
+        None,
+        None,
+        None,
+    )
 
     # Check if the event_id is in the srf_files
     if event_id in srf_files:
@@ -345,6 +357,8 @@ def compute_row(
         srf_header = srf.read_header(srf_file, idx=True)
         f_type = "ff"
         cmt = geonet_cmt_df[geonet_cmt_df.PublicID == event_id].iloc[0]
+        ztor = srf_points[0][2]
+        dbottom = srf_points[-1][2]
 
         fault_strike = srf_header[0]["strike"]
         strike1_diff = abs(fault_strike - cmt.strike1)
@@ -364,18 +378,18 @@ def compute_row(
             dip = cmt.dip2
         length = np.sum([header["length"] for header in srf_header])
         dip_dist = np.mean([header["width"] for header in srf_header])
-    elif event_id in rupture_models:
-        # Event is in the rupture models
-        f_type = "geonet_rm"
-        (
-            ztor,
-            dbottom,
-            strike,
-            dip,
-            rake,
-            length,
-            dip_dist,
-        ) = focal.get_seismic_data_from_url(rupture_models[event_id])
+    # elif event_id in rupture_models:
+    #     # Event is in the rupture models
+    #     f_type = "geonet_rm"
+    #     (
+    #         ztor,
+    #         dbottom,
+    #         strike,
+    #         dip,
+    #         rake,
+    #         length,
+    #         dip_dist,
+    #     ) = focal.get_seismic_data_from_url(rupture_models[event_id])
     elif event_id in modified_cmt_df.PublicID.values:
         # Event is in the modified CMT data
         f_type = "cmt"
@@ -415,6 +429,13 @@ def compute_row(
         length, dip_dist = get_l_w_mag_scaling(
             event_row["mag"], rake, event_row["tect_class"]
         )
+
+    # Get the ztor and dbottom if they are None
+    # This is the case for when grabbing strike, dip, rake from the CMT files or the domain focal
+    if ztor is None or dbottom is None:
+        height = sin(radians(dip)) * dip_dist
+        ztor = max(event_row["depth"] - (height / 2), 0)
+        dbottom = ztor + height
 
     if srf_header is None or srf_points is None:
         # Calculate the corners of the plane
@@ -458,7 +479,9 @@ def compute_row(
         event_row["lon"],
         event_row["lat"],
     )
-    r_hyps = np.sqrt(r_epis**2 + (event_row["depth"] - event_sta_df.depth.values) ** 2)
+    r_hyps = np.sqrt(
+        r_epis**2 + (event_row["depth"] - event_sta_df.depth.values) ** 2
+    )
     azs = np.array(
         [
             geo.ll_bearing(event_row["lon"], event_row["lat"], station[0], station[1])
@@ -478,7 +501,53 @@ def compute_row(
         rrups_lon,
         rrups_lat,
     )
-    print(tvz_lengths)
+
+    # Create the propagation data per station
+    propagation_data = []
+    for station_index, station in event_sta_df.iterrows():
+        propagation_data.append(
+            pd.DataFrame(
+                [
+                    {
+                        "evid": event_id,
+                        "net": station.net,
+                        "sta": station.sta,
+                        "r_epi": r_epis[station_index],
+                        "r_hyp": r_hyps[station_index],
+                        "r_jb": rjbs[station_index],
+                        "r_rup": rrups[station_index],
+                        "r_x": rxs[station_index],
+                        "r_y": rys[station_index],
+                        "r_tvz": tvz_lengths[station_index],
+                        "r_xvf": boundary_dists_rjb[station_index],
+                        "az": azs[station_index],
+                        "b_az": b_azs[station_index],
+                        "f_type": f_type,
+                        "reloc": event_row["reloc"],
+                    },
+                ]
+            )
+        )
+    propagation_data_combo = pd.concat(propagation_data)
+
+    # Create the extra event data
+    extra_event_data = pd.DataFrame(
+        [
+            {
+                "evid": event_id,
+                "strike": strike,
+                "dip": dip,
+                "rake": rake,
+                "f_length": length,
+                "f_width": dip_dist,
+                "f_type": f_type,
+                "z_tor": ztor,
+                "z_bor": dbottom,
+            },
+        ]
+    )
+
+    return propagation_data_combo, extra_event_data
 
 
 def TVZ_path_calc(
@@ -507,7 +576,6 @@ def TVZ_path_calc(
 
     # Loop through all the stations
     for station_index, station in sta_df.iterrows():
-
         # Create the line between the station and the event
         sta_transform = wgs2nztm.transform(station.lat, station.lon)
         line = LineString(
@@ -536,8 +604,11 @@ def TVZ_path_calc(
                 if point.geom_type != "LineString":
                     # Calculate the distance from the station to the boundary
                     boundary_dist_rjb = (
-                            np.sqrt((point.x - sta_transform[0]) ** 2 + (point.y - sta_transform[1]) ** 2)
-                            / 1000
+                        np.sqrt(
+                            (point.x - sta_transform[0]) ** 2
+                            + (point.y - sta_transform[1]) ** 2
+                        )
+                        / 1000
                     )
 
             line_points = line.intersection(taupo_polygon)
@@ -549,7 +620,7 @@ def TVZ_path_calc(
     return tvz_lengths, boundary_dists_rjb
 
 
-def calc_distances(main_dir: Path):
+def calc_distances(main_dir: Path, n_procs: int = 1):
     """
     Stuff
     """
@@ -597,7 +668,8 @@ def calc_distances(main_dir: Path):
         srf_files[srf_file.stem] = srf_file
 
     # Get the rupture models from Geonet
-    rupture_models = focal.get_rupture_models()
+    # rupture_models = focal.get_rupture_models()
+    rupture_models = {}
 
     # Get the IM data
     im_df = pd.read_csv(flatfile_dir / "ground_motion_im_catalogue.csv")
@@ -631,19 +703,310 @@ def calc_distances(main_dir: Path):
     station_df["depth"] = station_df["elev"] / -1000
 
     # Iterate over the event data
-    for idx, event_row in event_df.iterrows():
-        compute_row(
-            event_row,
-            im_df,
-            station_df,
-            modified_cmt_df,
-            geonet_cmt_df,
-            domain_focal_df,
-            taupo_polygon,
-            srf_files,
-            rupture_models,
+    # for idx, event_row in event_df.iterrows():
+    #     propagation_results, extra_event_results = compute_row(
+    #         event_row,
+    #         im_df,
+    #         station_df,
+    #         modified_cmt_df,
+    #         geonet_cmt_df,
+    #         domain_focal_df,
+    #         taupo_polygon,
+    #         srf_files,
+    #         rupture_models,
+    #     )
+    with mp.Pool(n_procs) as p:
+        result_dfs = p.map(
+            functools.partial(
+                compute_row,
+                im_df=im_df,
+                station_df=station_df,
+                modified_cmt_df=modified_cmt_df,
+                geonet_cmt_df=geonet_cmt_df,
+                domain_focal_df=domain_focal_df,
+                taupo_polygon=taupo_polygon,
+                srf_files=srf_files,
+                rupture_models=rupture_models,
+            ),
+            [row for idx, row in event_df.iterrows()],
         )
 
+    # Combine the results
+    propagation_results, extra_event_results = zip(*result_dfs)
+    propagation_data = pd.concat(propagation_results)
+    extra_event_data = pd.concat(extra_event_results)
+
+    # Merge the extra event data with the event data
+    event_df = pd.merge(event_df, extra_event_data, on="evid", how="right")
+
+    # Save the results
+    propagation_data.to_csv(flatfile_dir / "propagation_path_table.csv", index=False)
+    event_df.to_csv(flatfile_dir / "earthquake_source_table_complete.csv", index=False)
+
+
+def merge_flatfiles(main_dir: Path):
+    # Get the flatfile directory
+    flatfile_dir = file_structure.get_flatfile_dir(main_dir)
+
+    # Load the files
+    event_df = pd.read_csv(flatfile_dir / "earthquake_source_table_complete.csv")
+    sta_mag_df = pd.read_csv(flatfile_dir / "station_magnitude_table.csv")
+    phase_table_df = pd.read_csv(flatfile_dir / "phase_arrival_table.csv")
+    prop_df = pd.read_csv(flatfile_dir / "propagation_path_table.csv")
+    im_df = pd.read_csv(flatfile_dir / "ground_motion_im_catalogue.csv")
+    # TODO ADD THE STATION DF site_table_basin.csv
+
+    # Ensure correct strike and rake values
+    event_df.loc[event_df.strike == 360, "strike"] = 0
+    event_df.loc[event_df.rake > 180, "rake"] -= 360
+
+    # Get unique events that made it to the IM calculation
+    unique_events = im_df.evid.unique()
+    # Ensure that the other dfs only have the unique events
+    event_df = event_df[event_df.evid.isin(unique_events)]
+    sta_mag_df = sta_mag_df[
+        sta_mag_df.evid.isin(unique_events)
+    ]  # INCLUDE STATION FILTER TOO
+    phase_table_df = phase_table_df[phase_table_df.evid.isin(unique_events)]
+
+    # Merge event data with the IM data
+    gm_im_df_flat = im_df.merge(
+        event_df[
+            [
+                "evid",
+                "lat",
+                "lon",
+                "depth",
+                "mag",
+                "mag_type",
+                "tect_class",
+                "reloc",
+                "domain_no",
+                "domain_type",
+                "strike",
+                "dip",
+                "rake",
+                "f_length",
+                "f_width",
+                "f_type",
+                "z_tor",
+                "z_bor",
+            ]
+        ],
+        on="evid",
+        how="left",
+    )
+    gm_im_df_flat = gm_im_df_flat.rename(
+        columns={"lat": "ev_lat", "lon": "ev_lon", "depth": "ev_depth"}
+    )
+
+    # Merge in the site data
+    # TODO
+
+    # Merge in the propagation data
+    gm_im_df_flat = gm_im_df_flat.merge(
+        prop_df[
+            [
+                "evid",
+                "sta",
+                "r_epi",
+                "r_hyp",
+                "r_jb",
+                "r_rup",
+                "r_x",
+                "r_y",
+                "r_tvz",
+                "r_xvf",
+            ]
+        ],
+        on=["evid", "sta"],
+        how="left",
+    )
+
+    # Sort the rows
+    gm_im_df_flat = gm_im_df_flat.sort_values(["datetime", "sta", "component"])
+
+    # Re-sort the columns
+    psa_columns = gm_im_df_flat.columns[
+        gm_im_df_flat.columns.str.contains("pSA")
+    ].tolist()
+    fas_columns = gm_im_df_flat.columns[
+        gm_im_df_flat.columns.str.contains("FAS")
+    ].tolist()
+    columns = (
+        [
+            "gmid",
+            "datetime",
+            "evid",
+            "sta",
+            "loc",
+            "chan",
+            "component",
+            "ev_lat",
+            "ev_lon",
+            "ev_depth",
+            "mag",
+            "mag_type",
+            "tect_class",
+            "reloc",
+            "domain_no",
+            "domain_type",
+            "strike",
+            "dip",
+            "rake",
+            "f_length",
+            "f_width",
+            "f_type",
+            "z_tor",
+            "z_bor",
+            "sta_lat",
+            "sta_lon",
+            "r_epi",
+            "r_hyp",
+            "r_jb",
+            "r_rup",
+            "r_x",
+            "r_y",
+            "r_tvz",
+            "r_xvf",
+            "Vs30",
+            "Vs30_std",
+            "Q_Vs30",
+            "T0",
+            "T0_std",
+            "Q_T0",
+            "Z1.0",
+            "Z1.0_std",
+            "Q_Z1.0",
+            "Z2.5",
+            "Z2.5_std",
+            "Q_Z2.5",
+            "site_domain_no",
+            "PGA",
+            "PGV",
+            "CAV",
+            "AI",
+            "Ds575",
+            "Ds595",
+            "MMI",
+            "score_mean_X",
+            "fmin_mean_X",
+            "fmax_mean_X",
+            "multi_mean_X",
+            "score_mean_Y",
+            "fmin_mean_Y",
+            "fmax_mean_Y",
+            "multi_mean_Y",
+            "score_mean_Z",
+            "fmin_mean_Z",
+            "fmax_mean_Z",
+            "multi_mean_Z",
+            "clip_prob",
+            "clipped",
+        ]
+        + psa_columns
+        + fas_columns
+    )
+    gm_im_df_flat = gm_im_df_flat[columns]
+
+    # Separate into different components for both flatfile and normal im data
+    df_000, df_090, df_ver, df_rotd50, df_rotd100 = seperate_components(im_df)
+    (
+        df_000_flat,
+        df_090_flat,
+        df_ver_flat,
+        df_rotd50_flat,
+        df_rotd100_flat,
+    ) = seperate_components(gm_im_df_flat)
+
+    # Save final outputs
+    event_df.to_csv(flatfile_dir / "earthquake_source_table.csv", index=False)
+    sta_mag_df.to_csv(flatfile_dir / "station_magnitude_table.csv", index=False)
+    phase_table_df.to_csv(flatfile_dir / "phase_arrival_table.csv", index=False)
+    # TODO add site basin here
+    df_000.to_csv(flatfile_dir / "ground_motion_im_table_000.csv", index=False)
+    df_090.to_csv(flatfile_dir / "ground_motion_im_table_090.csv", index=False)
+    df_ver.to_csv(flatfile_dir / "ground_motion_im_table_ver.csv", index=False)
+    df_rotd50.to_csv(flatfile_dir / "ground_motion_im_table_rotd50.csv", index=False)
+    df_rotd100.to_csv(flatfile_dir / "ground_motion_im_table_rotd100.csv", index=False)
+    df_000_flat.to_csv(
+        flatfile_dir / "ground_motion_im_table_000_flat.csv", index=False
+    )
+    df_090_flat.to_csv(
+        flatfile_dir / "ground_motion_im_table_090_flat.csv", index=False
+    )
+    df_ver_flat.to_csv(
+        flatfile_dir / "ground_motion_im_table_ver_flat.csv", index=False
+    )
+    df_rotd50_flat.to_csv(
+        flatfile_dir / "ground_motion_im_table_rotd50_flat.csv", index=False
+    )
+    df_rotd100_flat.to_csv(
+        flatfile_dir / "ground_motion_im_table_rotd100_flat.csv", index=False
+    )
+
+
+def seperate_components(df: pd.DataFrame):
+    """
+    Seperate the components into the different components and remove columns that are
+    not needed for each of the components
+    """
+    df_000 = df[df.component == "000"]
+    df_090 = df[df.component == "090"]
+    df_ver = df[df.component == "ver"]
+    df_rotd50 = df[df.component == "rotd50"]
+    df_rotd100 = df[df.component == "rotd100"]
+
+    df_000 = df_000.drop(
+        [
+            "score_mean_X",
+            "fmin_mean_X",
+            "fmax_mean_X",
+            "multi_mean_X",
+            "score_mean_Z",
+            "fmin_mean_Z",
+            "fmax_mean_Z",
+            "multi_mean_Z",
+        ],
+        axis=1,
+    )
+    df_090 = df_090.drop(
+        [
+            "score_mean_Y",
+            "fmin_mean_Y",
+            "fmax_mean_Y",
+            "multi_mean_Y",
+            "score_mean_Z",
+            "fmin_mean_Z",
+            "fmax_mean_Z",
+            "multi_mean_Z",
+        ],
+        axis=1,
+    )
+    df_ver = df_ver.drop(
+        [
+            "score_mean_X",
+            "fmin_mean_X",
+            "fmax_mean_X",
+            "multi_mean_X",
+            "score_mean_Y",
+            "fmin_mean_Y",
+            "fmax_mean_Y",
+            "multi_mean_Y",
+        ],
+        axis=1,
+    )
+    df_rotd50 = df_rotd50.drop(
+        ["score_mean_Z", "fmin_mean_Z", "fmax_mean_Z", "multi_mean_Z"], axis=1
+    )
+    df_rotd50 = df_rotd50.drop(
+        ["score_mean_Z", "fmin_mean_Z", "fmax_mean_Z", "multi_mean_Z"], axis=1
+    )
+
+    return df_000, df_090, df_ver, df_rotd50, df_rotd100
+
+
+merge_flatfiles(main_dir=Path("/home/joel/local/gmdb/US_stuff/new_struct_2022"))
 
 # merge_im_data(
 #     main_dir=Path("/home/joel/local/gmdb/US_stuff/new_struct_2022"),
@@ -653,5 +1016,7 @@ def calc_distances(main_dir: Path):
 #     fmax_ffp=Path("/home/joel/local/gmdb/US_stuff/new_struct_2022/flatfiles/fmax.csv"),
 # )
 
-# calc_distances(main_dir=Path("/home/joel/local/gmdb/US_stuff/new_struct_2022"))
-calc_distances(main_dir=Path("X:/Work/nzgmdb/2022_full_test"))
+# calc_distances(
+#     main_dir=Path("/home/joel/local/gmdb/US_stuff/new_struct_2022"), n_procs=8
+# )
+# calc_distances(main_dir=Path("X:/Work/nzgmdb/2022_full_test"))
