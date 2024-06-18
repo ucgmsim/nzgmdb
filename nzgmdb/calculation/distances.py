@@ -276,7 +276,7 @@ def get_nodal_plane_info(
     domain_focal_df: pd.DataFrame,
     srf_files: dict,
     rupture_models: dict,
-) -> [float, float, float, float, float, float, float, np.ndarray, list, str]:
+) -> dict:
     """
     Determine the correct nodal plane for the event
     First checks if the event is in the srf_files, if it is, it uses the srf file to determine the nodal plane
