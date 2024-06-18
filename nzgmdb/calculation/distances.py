@@ -369,6 +369,9 @@ def get_nodal_plane_info(
     elif event_id in rupture_models:
         # Event is in the rupture models
         f_type = "geonet_rm"
+        rupture_data = geonet_rupture_models.get_seismic_data_from_url(
+            rupture_models[event_id]
+        )
         (
             ztor,
             dbottom,
@@ -377,7 +380,15 @@ def get_nodal_plane_info(
             rake,
             length,
             dip_dist,
-        ) = geonet_rupture_models.get_seismic_data_from_url(rupture_models[event_id])
+        ) = (
+            rupture_data["ztor"],
+            rupture_data["dbottom"],
+            rupture_data["strike"],
+            rupture_data["dip"],
+            rupture_data["rake"],
+            rupture_data["length"],
+            rupture_data["dip_dist"],
+        )
     elif event_id in modified_cmt_df.PublicID.values:
         # Event is in the modified CMT data
         f_type = "cmt"
