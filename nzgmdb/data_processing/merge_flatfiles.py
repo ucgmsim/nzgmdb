@@ -774,6 +774,7 @@ def merge_flatfiles(main_dir: Path):
         event_df[
             [
                 "evid",
+                "datetime",
                 "lat",
                 "lon",
                 "depth",
@@ -835,7 +836,7 @@ def merge_flatfiles(main_dir: Path):
     ].tolist()
     columns = (
         [
-            "gmid",
+            "record_id",
             "datetime",
             "evid",
             "sta",
