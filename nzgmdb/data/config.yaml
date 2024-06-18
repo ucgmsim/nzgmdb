@@ -91,4 +91,9 @@ fas_start: -1
 fas_end: 2
 fas_num: 100
 fas_base: 10
-
+# Rupture Models
+owner: GeoNet
+repo: data
+path: rupture-models
+base_url: https://raw.githubusercontent.com
+github_api: https://api.github.com/repos
