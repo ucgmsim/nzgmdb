@@ -581,9 +581,7 @@ def compute_distances_for_event(
         event_row["lon"],
         event_row["lat"],
     )
-    r_hyps = np.sqrt(
-        r_epis**2 + (event_row["depth"] - event_sta_df.depth.values) ** 2
-    )
+    r_hyps = np.sqrt(r_epis**2 + (event_row["depth"] - event_sta_df.depth.values) ** 2)
     azs = np.array(
         [
             geo.ll_bearing(event_row["lon"], event_row["lat"], station[0], station[1])
