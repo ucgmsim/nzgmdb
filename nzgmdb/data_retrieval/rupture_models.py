@@ -94,7 +94,7 @@ def download_and_read_csv(url: str) -> pd.DataFrame:
 
 def get_seismic_data_from_url(
     url: str,
-) -> tuple[float, float, float, float, float, float, float]:
+) -> dict:
     """
     Fetch and process the seismic data from a URL.
 
@@ -105,20 +105,22 @@ def get_seismic_data_from_url(
 
     Returns:
     -------
-    ztor : float
-        The top depth of the rupture model.
-    dbottom : float
-        The bottom depth of the rupture model.
-    strike : float
-        The strike angle of the rupture model.
-    dip : float
-        The dip angle of the rupture model.
-    rake : float
-        The rake angle of the rupture model.
-    length : float
-        The total length of the rupture model.
-    width : float
-        The average width of the rupture model.
+    dict
+        A dictionary containing the following keys:
+        'ztor' : float
+            The top depth of the rupture model.
+        'dbottom' : float
+            The bottom depth of the rupture model.
+        'strike' : float
+            The strike angle of the rupture model.
+        'dip' : float
+            The dip angle of the rupture model.
+        'rake' : float
+            The rake angle of the rupture model.
+        'length' : float
+            The total length of the rupture model.
+        'width' : float
+            The average width of the rupture model.
     """
     # Get the dataframe
     df = download_and_read_csv(url)
@@ -159,7 +161,15 @@ def get_seismic_data_from_url(
     ztor = df["DEPTH"].min() / 1000
     dbottom = df["DEPTH"].max() / 1000
 
-    return ztor, dbottom, strike, dip, rake, length, width
+    return {
+        "ztor": ztor,
+        "dbottom": dbottom,
+        "strike": strike,
+        "dip": dip,
+        "rake": rake,
+        "length": length,
+        "width": width,
+    }
 
 
 def get_rupture_models() -> dict[str, str]:
