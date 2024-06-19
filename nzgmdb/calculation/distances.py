@@ -1,5 +1,5 @@
 from pathlib import Path
-from typing import Union
+from typing import Optional
 import functools
 import multiprocessing as mp
 
@@ -110,7 +110,7 @@ def mech_rot(
 
         # If the mechanisms are very close, rotation = 0
         epsilon = 1e-4
-        if np.all(np.isclose(phi, 0, atol=epsilon)):
+        if np.allclose(phi, 0, atol=epsilon):
             rotations[iteration] = 0
         # If one vector is the same, it is the rotation axis
         elif phi1 < epsilon:
@@ -453,7 +453,7 @@ def compute_distances_for_event(
     taupo_polygon: Polygon,
     srf_files: dict,
     rupture_models: dict,
-) -> tuple[Union[pd.DataFrame, None], Union[pd.DataFrame, None]]:
+) -> tuple[Optional[pd.DataFrame], Optional[pd.DataFrame]]:
     """
     Compute the distances for a given event
 
@@ -806,8 +806,7 @@ def calc_distances(main_dir: Path, n_procs: int = 1):
         srf_files[srf_file.stem] = srf_file
 
     # Get the rupture models from Geonet
-    # rupture_models = geonet_rupture_models.get_rupture_models()
-    rupture_models = {"1": 123}
+    rupture_models = geonet_rupture_models.get_rupture_models()
 
     # Get the IM data
     im_df = pd.read_csv(flatfile_dir / "ground_motion_im_catalogue.csv")
