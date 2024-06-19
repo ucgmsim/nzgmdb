@@ -18,7 +18,9 @@ from nzgmdb.data_retrieval import rupture_models as geonet_rupture_models
 from nzgmdb.management import file_structure, config as cfg
 
 
-def calc_fnorm_slip(strike: float, dip: float, rake: float) -> tuple[np.ndarray, np.ndarray]:
+def calc_fnorm_slip(
+    strike: float, dip: float, rake: float
+) -> tuple[np.ndarray, np.ndarray]:
     """
     Calculate the normal and slip vectors from strike, dip and rake
     Parameters
@@ -41,17 +43,23 @@ def calc_fnorm_slip(strike: float, dip: float, rake: float) -> tuple[np.ndarray,
     delt = np.deg2rad(dip)
     lam = np.deg2rad(rake)
 
-    fnorm = np.asarray([-np.sin(delt) * np.sin(phi), np.sin(delt) * np.cos(phi), -np.cos(delt)])
-    slip = np.asarray([
-        np.cos(lam) * np.cos(phi) + np.cos(delt) * np.sin(lam) * np.sin(phi),
-        np.cos(lam) * np.sin(phi) - np.cos(delt) * np.sin(lam) * np.cos(phi),
-        -np.sin(lam) * np.sin(delt),
-    ])
+    fnorm = np.asarray(
+        [-np.sin(delt) * np.sin(phi), np.sin(delt) * np.cos(phi), -np.cos(delt)]
+    )
+    slip = np.asarray(
+        [
+            np.cos(lam) * np.cos(phi) + np.cos(delt) * np.sin(lam) * np.sin(phi),
+            np.cos(lam) * np.sin(phi) - np.cos(delt) * np.sin(lam) * np.cos(phi),
+            -np.sin(lam) * np.sin(delt),
+        ]
+    )
 
     return fnorm, slip
 
 
-def mech_rot(norm1: np.ndarray, norm2: np.ndarray, slip1: np.ndarray, slip2: np.ndarray) -> int:
+def mech_rot(
+    norm1: np.ndarray, norm2: np.ndarray, slip1: np.ndarray, slip2: np.ndarray
+) -> int:
     """
     Determine the correct nodal plane for the event by checking 4 different
     mechanisms and determining the correct plane based on the rotation that is as close to 0 as possible
