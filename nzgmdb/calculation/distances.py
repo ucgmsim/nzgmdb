@@ -859,7 +859,3 @@ def calc_distances(main_dir: Path, n_procs: int = 1):
     # Save the results
     propagation_data.to_csv(flatfile_dir / "propagation_path_table.csv", index=False)
     event_df.to_csv(flatfile_dir / "earthquake_source_table_complete.csv", index=False)
-
-
-if __name__ == "__main__":
-    calc_distances(Path("X:/Work/nzgmdb/2022_full_test"), 1)
