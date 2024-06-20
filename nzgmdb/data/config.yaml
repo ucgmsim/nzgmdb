@@ -92,9 +92,4 @@ fas_end: 2
 fas_num: 100
 fas_base: 10
 # Site Basins
-basin_versions:
-  - "2.03"
-  - "2.04"
-  - "2.05"
-  - "2.06"
-  - "2.07"
+basin_version: "2.07"

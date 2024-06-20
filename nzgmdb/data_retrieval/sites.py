@@ -8,19 +8,20 @@ from obspy.clients.fdsn import Client as FDSN_Client
 from nzgmdb.management import file_structure, config as cfg
 from nzgmdb.data_retrieval import tect_domain
 from qcore import point_in_polygon
-# from Velocity_Model.basins import basin_outlines_dict
+from Velocity_Model.basins import basin_outlines_dict
 
 
-def create_site_table_response(main_dir: Path):
+def create_site_table_response() -> pd.DataFrame:
     """
-    Create the site table for the GMDB. This function fetches the station information from the FDSN clients, and the
+    Create the site table for the NZGMDB. This function fetches the station information from the FDSN clients, and the
     Geonet metadata summary information. It then merges the two dataframes and determines the tectonic domain for each
     station. The final dataframe is saved as a csv file in the flatfile directory.
 
-    Parameters
-    ----------
-    main_dir : Path
-        The main directory to the NZGMDB results (Highest level directory)
+    Returns
+    -------
+    pd.DataFrame
+        The site table dataframe with all Z, vs30, domain and location values for each site
+        used in the NZGMDB
     """
     # Fetch the client station information
     client_NZ = FDSN_Client("GEONET")
@@ -111,51 +112,69 @@ def create_site_table_response(main_dir: Path):
             "site_domain_no",
         ]
     ]
-    site_df["Z2.5"] /= 1000
+    site_df = site_df.astype({"Z2.5": float})
+    site_df.loc[:, "Z2.5"] /= 1000.0
 
-    flatfile_dir = file_structure.get_flatfile_dir(main_dir)
-
-    site_df.to_csv(flatfile_dir / "site_table_basin.csv", index=False)
+    return site_df
 
 
-def add_site_basins(main_dir: Path):
+def add_site_basins(site_df: pd.DataFrame) -> pd.DataFrame:
     """
     Add the site basins to the site table
 
     Parameters
     ----------
-    main_dir : Path
-        The main directory to the NZGMDB results (Highest level directory)
+    site_df : pd.DataFrame
+        The site table dataframe with at least the columns 'lon' and 'lat'
+        Ideally and in most cases, this dataframe should be the output of create_site_table_response
+
+    Returns
+    -------
+    pd.DataFrame
+        The site dataframe with the 'basin' column added
     """
-    data_dir = file_structure.get_data_dir()
-    flatfile_dir = file_structure.get_flatfile_dir(main_dir)
-
     # Get the site table and points
-    site_table = pd.read_csv(flatfile_dir / "site_table_basin.csv")
-    ll_points = site_table[["lon", "lat"]].values
-    site_table["basin"] = None
+    ll_points = site_df[["lon", "lat"]].values
+    site_df["basin"] = None
 
-    # Get all the basin versions
+    # Define rename basins
+    rename_dict = {
+        "NewCanterburyBasinBoundary": "Canterbury",
+        "BPVBoundary": "Banks Peninsula volcanics",
+        "waitaki": "Waitaki",
+        "Napier1": "Napier",
+        "mackenzie": "Mackenzie",
+        "NorthCanterbury": "North Canterbury",
+        "dun": "Dun",
+        "WakatipuBasinOutlineWGS84": "Wakatipu",
+        "WaikatoHaurakiBasinEdge": "Waikato Hauraki",
+        "HawkesBay1": "Hawkes Bay",
+        "WanakaOutlineWGS84": "Wanaka",
+        "Porirua1": "Porirua",
+        "SpringsJ": "Springs Junction",
+        "CollingwoodBasinOutline": "Collingwood",
+        "GreaterWellington4": "Greater Wellington",
+    }
+
+    # Get the basin version
     config = cfg.Config()
-    versions = config.get_value("basin_versions")
-    for version in versions:
-        # Get the basin outlines and load them into boundaries
-        basin_outlines = basin_outlines_dict[version]
-        for cur_ffp in basin_outlines:
-            basin_name = cur_ffp.stem
-            basin_outline = np.loadtxt(cur_ffp)
-            # Find sites within basin
-            is_inside_basin = point_in_polygon.is_inside_postgis_parallel(
-                np.flip(ll_points, axis=1), basin_outline
-            )  # flip the coordinates to (lon, lat) format
-            site_table[is_inside_basin] = basin_name
+    version = config.get_value("basin_version")
 
-    # Rename basins TODO
+    # Get the basin outlines
+    basin_outlines = basin_outlines_dict[version]
 
-    site_table.to_csv(flatfile_dir / "site_table_basin.csv", index=False)
+    for cur_ffp in basin_outlines:
+        # Get the basin name and its rename
+        basin_name = cur_ffp.stem.split("_")[0].split(".")[0]
+        basin_name = rename_dict.get(basin_name, basin_name)
 
+        # Get the outline
+        basin_outline = np.loadtxt(cur_ffp)
 
+        # Find sites within basin
+        is_inside_basin = point_in_polygon.is_inside_postgis_parallel(
+            ll_points, basin_outline
+        )
+        site_df.loc[is_inside_basin, "basin"] = basin_name
 
-
-# create_site_table_response(Path("/home/joel/local/gmdb/US_stuff/new_struct_2022"))
-# add_site_basins(Path("/home/joel/local/gmdb/US_stuff/new_struct_2022"))
+    return site_df
