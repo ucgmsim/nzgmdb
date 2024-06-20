@@ -2,10 +2,13 @@ from pathlib import Path
 
 import fiona
 import pandas as pd
+import numpy as np
 from obspy.clients.fdsn import Client as FDSN_Client
 
-from nzgmdb.management import file_structure
+from nzgmdb.management import file_structure, config as cfg
 from nzgmdb.data_retrieval import tect_domain
+from qcore import point_in_polygon
+# from Velocity_Model.basins import basin_outlines_dict
 
 
 def create_site_table_response(main_dir: Path):
@@ -76,6 +79,9 @@ def create_site_table_response(main_dir: Path):
     )
     tect_merged_df = tect_domain.find_domain_from_shapes(merged_df, shapes)
 
+    # Rename the domain column
+    tect_merged_df = tect_merged_df.rename(columns={"domain_no": "site_domain_no"})
+
     # Select specific columns
     site_df = tect_merged_df[
         [
@@ -109,7 +115,7 @@ def create_site_table_response(main_dir: Path):
 
     flatfile_dir = file_structure.get_flatfile_dir(main_dir)
 
-    site_df.to_csv(flatfile_dir / "site_table.csv", index=False)
+    site_df.to_csv(flatfile_dir / "site_table_basin.csv", index=False)
 
 
 def add_site_basins(main_dir: Path):
@@ -124,8 +130,32 @@ def add_site_basins(main_dir: Path):
     data_dir = file_structure.get_data_dir()
     flatfile_dir = file_structure.get_flatfile_dir(main_dir)
 
-    # Get the site table
-    site_table = pd.read_csv(flatfile_dir / "site_table.csv")
+    # Get the site table and points
+    site_table = pd.read_csv(flatfile_dir / "site_table_basin.csv")
+    ll_points = site_table[["lon", "lat"]].values
+    site_table["basin"] = None
+
+    # Get all the basin versions
+    config = cfg.Config()
+    versions = config.get_value("basin_versions")
+    for version in versions:
+        # Get the basin outlines and load them into boundaries
+        basin_outlines = basin_outlines_dict[version]
+        for cur_ffp in basin_outlines:
+            basin_name = cur_ffp.stem
+            basin_outline = np.loadtxt(cur_ffp)
+            # Find sites within basin
+            is_inside_basin = point_in_polygon.is_inside_postgis_parallel(
+                np.flip(ll_points, axis=1), basin_outline
+            )  # flip the coordinates to (lon, lat) format
+            site_table[is_inside_basin] = basin_name
+
+    # Rename basins TODO
+
+    site_table.to_csv(flatfile_dir / "site_table_basin.csv", index=False)
 
 
-create_site_table_response(Path("/home/joel/local/gmdb/US_stuff/new_struct_2022"))
+
+
+# create_site_table_response(Path("/home/joel/local/gmdb/US_stuff/new_struct_2022"))
+# add_site_basins(Path("/home/joel/local/gmdb/US_stuff/new_struct_2022"))
