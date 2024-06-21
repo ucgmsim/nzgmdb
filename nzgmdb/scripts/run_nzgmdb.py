@@ -10,8 +10,7 @@ import typer
 
 from nzgmdb.calculation import fmax, ims, snr
 from nzgmdb.data_processing import process_observed, merge_flatfiles
-from nzgmdb.data_retrieval import geonet
-from nzgmdb.data_retrieval import tect_domain
+from nzgmdb.data_retrieval import geonet, tect_domain, sites
 from nzgmdb.management import file_structure
 from nzgmdb.phase_arrival import gen_phase_arrival_table
 
@@ -329,6 +328,23 @@ def merge_flat_files(
     merge_flatfiles.merge_flatfiles(main_dir)
 
 
+@app.command(help="Generate the site table basin flatfile")
+def generate_site_table_basin(
+    main_dir: Annotated[
+        Path,
+        typer.Argument(
+            help="The main directory of the NZGMDB results (Highest level directory)",
+            exists=True,
+            file_okay=False,
+        ),
+    ],
+):
+    site_df = sites.create_site_table_response()
+    site_df = sites.add_site_basins(site_df)
+    flatfile_dir = file_structure.get_flatfile_dir(main_dir)
+    site_df.to_csv(flatfile_dir / "site_table_basin.csv", index=False)
+
+
 @app.command(
     help="Run the first half of the NZGMDB pipeline before GMC. "
     "- Fetch Geonet data "
@@ -413,6 +429,9 @@ def run_process_nzgmdb(
     # Run IM calculation
     im_dir = file_structure.get_im_dir(main_dir)
     run_im_calculation(main_dir, im_dir, n_procs)
+
+    # Generate the site basin flatfile
+    generate_site_table_basin(main_dir)
 
     # Merge IM results
     merge_im_results(im_dir, flatfile_dir, gmc_ffp, fmax_ffp)
