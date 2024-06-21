@@ -1,7 +1,7 @@
 from pathlib import Path
+from typing import Optional
 import functools
 import multiprocessing as mp
-from math import sin, cos, acos, radians
 
 import numpy as np
 import pandas as pd
@@ -18,7 +18,9 @@ from nzgmdb.data_retrieval import rupture_models as geonet_rupture_models
 from nzgmdb.management import file_structure, config as cfg
 
 
-def calc_fnorm_slip(strike: float, dip: float, rake: float) -> [np.ndarray, np.ndarray]:
+def calc_fnorm_slip(
+    strike: float, dip: float, rake: float
+) -> tuple[np.ndarray, np.ndarray]:
     """
     Calculate the normal and slip vectors from strike, dip and rake
     Parameters
@@ -41,30 +43,36 @@ def calc_fnorm_slip(strike: float, dip: float, rake: float) -> [np.ndarray, np.n
     delt = np.deg2rad(dip)
     lam = np.deg2rad(rake)
 
-    fnorm = -sin(delt) * sin(phi), sin(delt) * cos(phi), -cos(delt)
-    slip = (
-        cos(lam) * cos(phi) + cos(delt) * sin(lam) * sin(phi),
-        cos(lam) * sin(phi) - cos(delt) * sin(lam) * cos(phi),
-        -sin(lam) * sin(delt),
+    fnorm = np.asarray(
+        [-np.sin(delt) * np.sin(phi), np.sin(delt) * np.cos(phi), -np.cos(delt)]
+    )
+    slip = np.asarray(
+        [
+            np.cos(lam) * np.cos(phi) + np.cos(delt) * np.sin(lam) * np.sin(phi),
+            np.cos(lam) * np.sin(phi) - np.cos(delt) * np.sin(lam) * np.cos(phi),
+            -np.sin(lam) * np.sin(delt),
+        ]
     )
 
     return fnorm, slip
 
 
-def mech_rot(norm1: tuple, norm2: tuple, slip1: tuple, slip2: tuple) -> int:
+def mech_rot(
+    norm1: np.ndarray, norm2: np.ndarray, slip1: np.ndarray, slip2: np.ndarray
+) -> int:
     """
     Determine the correct nodal plane for the event by checking 4 different
     mechanisms and determining the correct plane based on the rotation that is as close to 0 as possible
 
     Parameters
     ----------
-    norm1 : tuple
+    norm1 : np.ndarray
         The normal vector of the first mechanism
-    norm2 : tuple
+    norm2 : np.ndarray
         The normal vector of the second mechanism
-    slip1 : tuple
+    slip1 : np.ndarray
         The slip vector of the first mechanism
-    slip2 : tuple
+    slip2 : np.ndarray
         The slip vector of the second mechanism
 
     Returns
@@ -72,7 +80,7 @@ def mech_rot(norm1: tuple, norm2: tuple, slip1: tuple, slip2: tuple) -> int:
     plane_out : int
         The plane that is closest to 0 rotation
     """
-    B1 = np.cross(norm1, slip1)
+    b1 = np.cross(norm1, slip1)
 
     rotations = np.zeros(4)
     for iteration in range(0, 4):
@@ -82,27 +90,27 @@ def mech_rot(norm1: tuple, norm2: tuple, slip1: tuple, slip2: tuple) -> int:
         else:
             norm2_temp = slip2
             slip2_temp = norm2
-        if (iteration == 1) or (iteration == 3):
+        if iteration in {1, 3}:
             norm2_temp = tuple(-x for x in norm2_temp)
             slip2_temp = tuple(-x for x in slip2_temp)
 
-        B2 = np.cross(norm2_temp, slip2_temp)
+        b2 = np.cross(norm2_temp, slip2_temp)
 
         phi1 = np.dot(norm1, norm2_temp)
         phi2 = np.dot(slip1, slip2_temp)
-        phi3 = np.dot(B1, B2)
+        phi3 = np.dot(b1, b2)
 
         # In some cases, identical dot products produce values incrementally higher than 1
-        phi1 = acos(max(min(phi1, 1), -1))
-        phi2 = acos(max(min(phi2, 1), -1))
-        phi3 = acos(max(min(phi3, 1), -1))
+        phi1 = np.arccos(np.clip(phi1, -1, 1))
+        phi2 = np.arccos(np.clip(phi2, -1, 1))
+        phi3 = np.arccos(np.clip(phi3, -1, 1))
 
         # Set array of phi for indexing reasons later
         phi = [phi1, phi2, phi3]
 
         # If the mechanisms are very close, rotation = 0
         epsilon = 1e-4
-        if phi1 < epsilon and phi2 < epsilon and phi3 < epsilon:
+        if np.allclose(phi, 0, atol=epsilon):
             rotations[iteration] = 0
         # If one vector is the same, it is the rotation axis
         elif phi1 < epsilon:
@@ -119,7 +127,7 @@ def mech_rot(norm1: tuple, norm2: tuple, slip1: tuple, slip2: tuple) -> int:
                 [
                     np.array(norm1) - np.array(norm2_temp),
                     np.array(slip1) - np.array(slip2_temp),
-                    np.array(B1) - np.array(B2),
+                    np.array(b1) - np.array(b2),
                 ]
             )
             magnitude = np.sqrt(np.sum(difference_vectors**2, axis=0))
@@ -140,7 +148,7 @@ def mech_rot(norm1: tuple, norm2: tuple, slip1: tuple, slip2: tuple) -> int:
                 (
                     index
                     for index, dot_product in enumerate(qdot)
-                    if dot_product > 0.9999
+                    if not np.isclose(dot_product, 0)
                 ),
                 np.argmin(magnitude),
             )
@@ -158,11 +166,11 @@ def mech_rot(norm1: tuple, norm2: tuple, slip1: tuple, slip2: tuple) -> int:
             # Normalize the rotation axis by dividing it by its scale
             normalized_rotation_axis = rotation_axis / np.linalg.norm(rotation_axis)
 
-            # Calculate the angles between the normalized rotation axis and the norm1, slip1, and B1 vectors
+            # Calculate the angles between the normalized rotation axis and the norm1, slip1, and b1 vectors
             angles = np.array(
                 [
                     np.arccos(np.dot(vector, normalized_rotation_axis))
-                    for vector in [norm1, slip1, B1]
+                    for vector in [norm1, slip1, b1]
                 ]
             )
 
@@ -174,8 +182,8 @@ def mech_rot(norm1: tuple, norm2: tuple, slip1: tuple, slip2: tuple) -> int:
 
             # Calculate the rotation for the current iteration
             rotation_temp = (
-                np.cos(phi[selected_index]) - np.cos(angles[selected_index]) ** 2
-            ) / (np.sin(angles[selected_index]) ** 2)
+                np.np.cos(phi[selected_index]) - np.np.cos(angles[selected_index]) ** 2
+            ) / (np.np.sin(angles[selected_index]) ** 2)
 
             # Ensure the rotation_temp is within the range [-1, 1]
             rotation_temp = np.clip(rotation_temp, -1, 1)
@@ -188,15 +196,12 @@ def mech_rot(norm1: tuple, norm2: tuple, slip1: tuple, slip2: tuple) -> int:
 
     # Find the minimum rotation index for the 4 combos to determine the rotation plane
     rotation_index = np.argmin(rotations)
-    if rotation_index < 2:
-        return 1
-    else:
-        return 2
+    return int(np.clip(rotation_index, 1, 2))
 
 
 def get_domain_focal(
     domain_no: int, domain_focal_df: pd.DataFrame
-) -> [float, float, float]:
+) -> tuple[int, int, int]:
     """
     Get the focal mechanism for a given domain
     If not found, return the default values
@@ -213,11 +218,11 @@ def get_domain_focal(
 
     Returns
     -------
-    strike : float
+    strike : int
         The strike angle of the fault in degrees
-    rake : float
+    rake : int
         The rake angle of the fault in degrees
-    dip : float
+    dip : int
         The dip angle of the fault in degrees
     """
     if domain_no == 0:
@@ -227,7 +232,9 @@ def get_domain_focal(
         return domain.strike, domain.rake, domain.dip
 
 
-def get_l_w_mag_scaling(mag: float, rake: float, tect_class: str) -> [float, float]:
+def get_l_w_mag_scaling(
+    mag: float, rake: float, tect_class: str
+) -> tuple[float, float]:
     """
     Get the length and width of the fault using magnitude scaling
 
@@ -446,7 +453,7 @@ def compute_distances_for_event(
     taupo_polygon: Polygon,
     srf_files: dict,
     rupture_models: dict,
-) -> [pd.DataFrame, pd.DataFrame]:
+) -> tuple[Optional[pd.DataFrame], Optional[pd.DataFrame]]:
     """
     Compute the distances for a given event
 
@@ -535,14 +542,14 @@ def compute_distances_for_event(
     # Get the ztor and dbottom if they are None
     # This is the case for when grabbing strike, dip, rake from the CMT files or the domain focal
     if ztor is None or dbottom is None:
-        height = sin(radians(dip)) * dip_dist
+        height = np.sin(np.radians(dip)) * dip_dist
         ztor = max(event_row["depth"] - (height / 2), 0)
         dbottom = ztor + height
 
     if srf_header is None or srf_points is None:
         # Calculate the corners of the plane
         dip_dir = (strike + 90) % 360
-        height = sin(radians(dip)) * dip_dist
+        height = np.sin(np.radians(dip)) * dip_dist
         dtop = max(0, event_row["depth"] - (height / 2))
         dbottom = dtop + height
         corner_0, corner_1, corner_2, corner_3 = grid.grid_corners(
@@ -659,7 +666,7 @@ def distance_in_taupo(
     r_epis: np.ndarray,
     rrups_lon: np.ndarray,
     rrups_lat: np.ndarray,
-) -> [list, list]:
+) -> tuple[list, list]:
     """
     Figures out if the path from the station to the event goes through the Taupo VZ
     And if it does to calculate the length of the path that goes through the Taupo VZ
