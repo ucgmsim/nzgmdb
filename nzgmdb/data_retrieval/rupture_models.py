@@ -1,5 +1,4 @@
 from io import StringIO
-from typing import Dict, List
 
 import requests
 import numpy as np
@@ -10,7 +9,7 @@ from nzgmdb.management import config as cfg
 
 def fetch_github_directory_contents(
     owner: str, repo: str, path: str
-) -> List[Dict[str, str]]:
+) -> list[dict[str, str]]:
     """
     Fetch the contents of a GitHub directory using the GitHub API.
 
@@ -25,7 +24,7 @@ def fetch_github_directory_contents(
 
     Returns:
     -------
-    json_response: List[Dict[str, str]]
+    json_response: list[dict[str, str]]
         The json response of the directory contents.
     """
     config = cfg.Config()
@@ -37,10 +36,10 @@ def fetch_github_directory_contents(
 
 
 def get_csv_file_urls(
-    contents: List[Dict[str, str]],
+    contents: list[dict[str, str]],
     owner: str,
     repo: str,
-) -> List[str]:
+) -> list[str]:
     """
     Recursively collect CSV file URLs from the directory contents.
 
@@ -57,7 +56,7 @@ def get_csv_file_urls(
 
     Returns:
     -------
-    csv_urls: List[str]
+    csv_urls: list[str]
         The list of URLs for the CSV files.
     """
     config = cfg.Config()
@@ -133,11 +132,11 @@ def get_seismic_data_from_url(
     segments = df.groupby("SEGMENT")
     for segment, df_seg in segments:
         # Calculate the length with the first and last points along strike
-        north_1, east_1 = df_seg.iloc[0]["EASTING"], df_seg.iloc[0]["NORTHING"]
+        north_1, east_1 = df_seg.iloc[0]["NORTHING"], df_seg.iloc[0]["EASTING"]
         interest_depth = df_seg.iloc[0]["DEPTH"]
         north_2, east_2 = (
-            df_seg[df_seg["DEPTH"] == interest_depth].iloc[-1]["EASTING"],
             df_seg[df_seg["DEPTH"] == interest_depth].iloc[-1]["NORTHING"],
+            df_seg[df_seg["DEPTH"] == interest_depth].iloc[-1]["EASTING"],
         )
         length += np.linalg.norm([north_2 - north_1, east_2 - east_1]) / 1000
 
