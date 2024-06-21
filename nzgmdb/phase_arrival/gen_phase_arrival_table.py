@@ -124,10 +124,6 @@ def fetch_geonet_phases(mseed_file: Path) -> list[dict[str, Any]]:
         a given mseed file as there should only be one
         P phase pick and sometimes one S phase pick.
     """
-
-    # Creating an empty list that will be populated and returned
-    phase_table_entries = []
-
     # Get the event ID (evid) from the mseed file
     evid = file_structure.get_event_id_from_mseed(mseed_file)
 
@@ -249,7 +245,6 @@ def generate_phase_arrival_table(
     merged_df.to_csv(output_dir / "phase_arrival_table.csv", index=False)
 
     if full_output:
-
         # Adding labels to the DataFrame columns so they
         # can be distinguished after the outer merge
         picker_phases_df_new_index.columns = (

@@ -13,6 +13,7 @@ cmt_url: https://raw.githubusercontent.com/GeoNet/data/main/moment-tensor/GeoNet
 nzsmdb_url: https://raw.githubusercontent.com/GeoNet/data/main/nzsmd-flatfiles/NZdatabase_flatfile_FAS_horizontal_GeoMean.csv
 ll_num: 4326
 nztm_num: 2193
+points_per_km: 10
 # Mseed Variables
 vs30: 500
 min_time_difference: 15
@@ -63,7 +64,6 @@ fmax_min: 4.1
 score_min: 0.5
 fmin_max: 2
 multi_max: 0.2
-Ds595_lower_bound: 3
 # Clipping
 mag_clip_low: 3.0
 mag_clip_high: 8.8
@@ -94,3 +94,13 @@ fas_num: 100
 fas_base: 10
 # Site Basins
 basin_version: "2.07"
+
+# Rupture Models
+owner: GeoNet
+repo: data
+path: rupture-models
+base_url: https://raw.githubusercontent.com
+github_api: https://api.github.com/repos
+# Magnitude scaling
+mag_scale_slab_min: 5.9
+mag_scale_slab_max: 7.8

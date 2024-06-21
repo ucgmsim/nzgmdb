@@ -8,7 +8,7 @@ from typing import Annotated
 
 import typer
 
-from nzgmdb.calculation import fmax, ims, snr
+from nzgmdb.calculation import fmax, ims, snr, distances
 from nzgmdb.data_processing import process_observed, merge_flatfiles
 from nzgmdb.data_retrieval import geonet, tect_domain, sites
 from nzgmdb.management import file_structure
@@ -346,6 +346,23 @@ def generate_site_table_basin(
 
 
 @app.command(
+    help="Calculate the distances between the earthquake source and the station"
+)
+def calculate_distances(
+    main_dir: Annotated[
+        Path,
+        typer.Argument(
+            help="The main directory of the NZGMDB results (Highest level directory)",
+            exists=True,
+            file_okay=False,
+        ),
+    ],
+    n_procs: Annotated[int, typer.Option(help="The number of processes to use")] = 1,
+):
+    distances.calc_distances(main_dir, n_procs)
+
+
+@app.command(
     help="Run the first half of the NZGMDB pipeline before GMC. "
     "- Fetch Geonet data "
     "- Merge tectonic domains "
@@ -438,6 +455,11 @@ def run_process_nzgmdb(
 
     # Merge flat files
     merge_flat_files(main_dir)
+    # Calculate distances
+    distances.calc_distances(main_dir, n_procs)
+
+    # Steps below are TODO
+    # Merge flat files with IM results
 
 
 if __name__ == "__main__":
