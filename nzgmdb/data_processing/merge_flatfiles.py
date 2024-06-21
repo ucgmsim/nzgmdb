@@ -12,13 +12,21 @@ def merge_im_data(
     fmax_ffp: Path,
 ):
     """
-    Merge the IM data into a single flatfile
-    """
-    # Get the flatfile directory
-    # flatfile_dir = file_structure.get_flatfile_dir(main_dir)
-    # Get the IM directory
-    # im_dir = file_structure.get_im_dir(main_dir)
+    Merge the IM data into a single flatfile. Also merges in the GMC and fmax data and
+    filters out records that are below the Ds595 lower bound
+    and then saves the skipped records to a separate file.
 
+    Parameters
+    ----------
+    im_dir : Path
+        The directory where the IM files are stored
+    ouptut_dir : Path
+        The directory to save the final IM flatfile and the skipped records
+    gmc_ffp : Path
+        The file path to the GMC results
+    fmax_ffp : Path
+        The file path to the fmax results
+    """
     # Load the GMC file
     gmc_results = pd.read_csv(gmc_ffp)
 
@@ -80,16 +88,26 @@ def merge_im_data(
         ouptut_dir / "IM_merge_skipped_records.csv", index=False
     )
 
-    # Merge in fmax TODO
+    # Merge in fmax
     gm_final = pd.merge(
         gm_final,
         fmax_results,
         left_on="record_id",
-        right_on="record",
+        right_on="record_id",
         how="left",
+    )
+    # Rename fmax columns
+    gm_final = gm_final.rename(
+        columns={
+            "fmax_000": "fmax_mean_Y",
+            "fmax_090": "fmax_mean_X",
+            "fmax_ver": "fmax_mean_Z",
+        }
     )
 
     # Sort columns nicely
+    psa_columns = gm_final.columns[gm_final.columns.str.contains("pSA")].tolist()
+    fas_columns = gm_final.columns[gm_final.columns.str.contains("FAS")].tolist()
     gm_final = gm_final[
         [
             "record_id",
@@ -106,27 +124,50 @@ def merge_im_data(
             "Ds595",
             "MMI",
             "score_mean_X",
-            "score_mean_Y",
-            "score_mean_Z",
-            "multi_mean_X",
-            "multi_mean_Y",
-            "multi_mean_Z",
             "fmin_mean_X",
+            "fmax_mean_X",
+            "multi_mean_X",
+            "score_mean_Y",
             "fmin_mean_Y",
+            "fmax_mean_Y",
+            "multi_mean_Y",
+            "score_mean_Z",
             "fmin_mean_Z",
-            "pSA",
-            "FAS",
+            "fmax_mean_Z",
+            "multi_mean_Z",
         ]
+        + psa_columns
+        + fas_columns
     ]
 
     # Save the ground_motion_im_catalogue.csv
     gm_final.to_csv(ouptut_dir / "ground_motion_im_catalogue.csv", index=False)
 
 
-def seperate_components(df: pd.DataFrame):
+def seperate_components(
+    df: pd.DataFrame,
+) -> tuple[pd.DataFrame, pd.DataFrame, pd.DataFrame, pd.DataFrame, pd.DataFrame]:
     """
-    Seperate the components into the different components and remove columns that are
+    Separate the components into the different components and remove columns that are
     not needed for each of the components
+
+    Parameters
+    ----------
+    df : pd.DataFrame
+        The dataframe to separate, merged large gm_flatfile
+
+    Returns
+    -------
+    df_000 : pd.DataFrame
+        The 000 component dataframe
+    df_090 : pd.DataFrame
+        The 090 component dataframe
+    df_ver : pd.DataFrame
+        The ver component dataframe
+    df_rotd50 : pd.DataFrame
+        The rotd50 component dataframe
+    df_rotd100 : pd.DataFrame
+        The rotd100 component dataframe
     """
     df_000 = df[df.component == "000"]
     df_090 = df[df.component == "090"]
@@ -176,7 +217,7 @@ def seperate_components(df: pd.DataFrame):
     df_rotd50 = df_rotd50.drop(
         ["score_mean_Z", "fmin_mean_Z", "fmax_mean_Z", "multi_mean_Z"], axis=1
     )
-    df_rotd50 = df_rotd50.drop(
+    df_rotd100 = df_rotd100.drop(
         ["score_mean_Z", "fmin_mean_Z", "fmax_mean_Z", "multi_mean_Z"], axis=1
     )
 
@@ -184,6 +225,15 @@ def seperate_components(df: pd.DataFrame):
 
 
 def merge_flatfiles(main_dir: Path):
+    """
+    Merge the flatfiles into the final flatfiles, separating the components
+    and ensuring that the data contains only the unique events and sites that made it to the IM calculation
+
+    Parameters
+    ----------
+    main_dir : Path
+        The main directory of the NZGMDB results (Highest level directory)
+    """
     # Get the flatfile directory
     flatfile_dir = file_structure.get_flatfile_dir(main_dir)
 
@@ -203,14 +253,15 @@ def merge_flatfiles(main_dir: Path):
     unique_events = im_df.evid.unique()
     # Ensure that the other dfs only have the unique events
     event_df = event_df[event_df.evid.isin(unique_events)]
-    sta_mag_df = sta_mag_df[
-        sta_mag_df.evid.isin(unique_events)
-    ]  # INCLUDE STATION FILTER TOO
     phase_table_df = phase_table_df[phase_table_df.evid.isin(unique_events)]
 
     # Ensure that the site_basin_df only has the unique sites found in the im_df
     unique_sites = im_df["sta"].unique()
     site_basin_df = site_basin_df[site_basin_df["sta"].isin(unique_sites)]
+
+    # Ensure the station magnitude table only has values of events and station pairs available in the im_df
+    unique_pairs_df = im_df[["evid", "sta"]].drop_duplicates()
+    sta_mag_df = pd.merge(sta_mag_df, unique_pairs_df, on=["evid", "sta"], how="inner")
 
     # Get a list of sites not found in the site basin df
     missing_sites = set(unique_sites) - set(site_basin_df["sta"].unique())
@@ -375,8 +426,6 @@ def merge_flatfiles(main_dir: Path):
             "fmin_mean_Z",
             "fmax_mean_Z",
             "multi_mean_Z",
-            "clip_prob",
-            "clipped",
         ]
         + psa_columns
         + fas_columns
@@ -397,7 +446,7 @@ def merge_flatfiles(main_dir: Path):
     event_df.to_csv(flatfile_dir / "earthquake_source_table.csv", index=False)
     sta_mag_df.to_csv(flatfile_dir / "station_magnitude_table.csv", index=False)
     phase_table_df.to_csv(flatfile_dir / "phase_arrival_table.csv", index=False)
-    # TODO add site basin here
+    site_basin_df.to_csv(flatfile_dir / "site_table_basin.csv", index=False)
     df_000.to_csv(flatfile_dir / "ground_motion_im_table_000.csv", index=False)
     df_090.to_csv(flatfile_dir / "ground_motion_im_table_090.csv", index=False)
     df_ver.to_csv(flatfile_dir / "ground_motion_im_table_ver.csv", index=False)
