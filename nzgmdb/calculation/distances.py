@@ -182,8 +182,8 @@ def mech_rot(
 
             # Calculate the rotation for the current iteration
             rotation_temp = (
-                np.np.cos(phi[selected_index]) - np.np.cos(angles[selected_index]) ** 2
-            ) / (np.np.sin(angles[selected_index]) ** 2)
+                np.cos(phi[selected_index]) - np.cos(angles[selected_index]) ** 2
+            ) / (np.sin(angles[selected_index]) ** 2)
 
             # Ensure the rotation_temp is within the range [-1, 1]
             rotation_temp = np.clip(rotation_temp, -1, 1)
