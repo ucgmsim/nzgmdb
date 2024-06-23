@@ -73,7 +73,7 @@ def process_single_mseed(mseed_file: Path, gmc_df: pd.DataFrame, fmax_df: pd.Dat
     fmin = None if fmin_rows.empty else fmin_rows["fmin_mean"].max()
     # TODO: Change the fmax_df to have the same format as the gmc_df for searching
     search_name = "_".join(mseed_stem.split("_")[:-1])
-    fmax_rows = fmax_df[fmax_df.ev_sta == search_name]
+    fmax_rows = fmax_df[fmax_df["record_id"] == search_name]
     fmax = (
         None
         if fmax_rows.empty
