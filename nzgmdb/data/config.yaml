@@ -64,6 +64,7 @@ fmax_min: 4.1
 score_min: 0.5
 fmin_max: 2
 multi_max: 0.2
+Ds595_lower_bound: 3
 # Clipping
 mag_clip_low: 3.0
 mag_clip_high: 8.8
@@ -94,7 +95,6 @@ fas_num: 100
 fas_base: 10
 # Site Basins
 basin_version: "2.07"
-
 # Rupture Models
 owner: GeoNet
 repo: data
