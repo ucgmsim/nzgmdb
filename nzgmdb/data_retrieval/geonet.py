@@ -206,6 +206,7 @@ def fetch_sta_mag_lines(
     inventory: Inventory,
     pref_mag: float,
     pref_mag_type: str,
+    site_table: pd.DataFrame,
     mags: np.ndarray,
     rrups: np.ndarray,
     f_rrup: interp1d,
@@ -232,6 +233,8 @@ def fetch_sta_mag_lines(
         The preferred magnitude
     pref_mag_type : str
         The preferred magnitude type
+    site_table : pd.DataFrame
+        The site table to extract the vs30 value from
     mags : np.ndarray
         The magnitudes from the Mw_rrup file
     rrups : np.ndarray
@@ -239,6 +242,7 @@ def fetch_sta_mag_lines(
     f_rrup : interp1d
         The cubic interpolation function for the magnitude distance relationship
     """
+    skipped_records = []
     # Get the preferred_origin
     preferred_origin = event_cat.preferred_origin()
     ev_lat = preferred_origin.latitude
@@ -268,6 +272,14 @@ def fetch_sta_mag_lines(
             ev_depth = preferred_origin.depth / 1000
             r_hyp = ((r_epi) ** 2 + (ev_depth + station.elevation) ** 2) ** 0.5
 
+            # Get the vs30 value
+            site_vs30_row = site_table.loc[
+                (site_table["net"] == network.code)
+                & (site_table["sta"] == station.code),
+                "Vs30",
+            ]
+            vs30 = None if site_vs30_row.empty else site_vs30_row.values[0]
+
             # Get the waveforms
             st = creation.get_waveforms(
                 preferred_origin,
@@ -277,9 +289,13 @@ def fetch_sta_mag_lines(
                 event_cat.preferred_magnitude().mag,
                 r_hyp,
                 r_epi,
+                vs30,
             )
             # Check that data was found
             if st is None:
+                skipped_records.append(
+                    [f"{event_id}_{station.code}", "No Waveform Data"]
+                )
                 continue
 
             # Get the unique channels (Using first 2 keys) and locations
@@ -303,6 +319,13 @@ def fetch_sta_mag_lines(
 
                 # Check if the record should be dropped
                 if clip > threshold:
+                    stats = mseed[0].stats
+                    skipped_records.append(
+                        [
+                            f"{event_id}_{stats.station}_{stats.location}_{stats.channel}",
+                            "Clipped",
+                        ]
+                    )
                     continue
 
                 # Create the directory structure for the given event
@@ -363,7 +386,7 @@ def fetch_sta_mag_lines(
                         ]
                     )
 
-    return sta_mag_line
+    return sta_mag_line, skipped_records
 
 
 def fetch_event_data(
@@ -372,6 +395,7 @@ def fetch_event_data(
     client_NZ: FDSN_Client,
     client_IU: FDSN_Client,
     inventory: Inventory,
+    site_table: pd.DataFrame,
     mags: np.ndarray,
     rrups: np.ndarray,
     f_rrup: interp1d,
@@ -391,6 +415,8 @@ def fetch_event_data(
         The geonet client to fetch the data from the International Network (necessary for station SNZO)
     inventory : Inventory
         The inventory of the stations from all networks to extract the stations from
+    site_table : pd.DataFrame
+        The site table to extract the vs30 value from
     mags : np.ndarray
         The magnitudes from the Mw_rrup file
     rrups : np.ndarray
@@ -408,7 +434,7 @@ def fetch_event_data(
 
     if event_line is not None:
         # Get the station magnitude lines
-        sta_mag_lines = fetch_sta_mag_lines(
+        sta_mag_lines, skipped_records = fetch_sta_mag_lines(
             event_cat,
             event_id,
             main_dir,
@@ -417,13 +443,14 @@ def fetch_event_data(
             inventory,
             event_line[7],
             event_line[8],
+            site_table,
             mags,
             rrups,
             f_rrup,
         )
     else:
-        sta_mag_lines = None
-    return event_line, sta_mag_lines
+        sta_mag_lines, skipped_records = None, None
+    return event_line, sta_mag_lines, skipped_records
 
 
 def download_earthquake_data(
@@ -553,8 +580,9 @@ def parse_geonet_information(
     # Generate cubic interpolation for magnitude distance relationship
     f_rrup = interp1d(mags, rrups, kind="cubic")
 
-    # Create main directory if it doesn't exist
-    main_dir.mkdir(exist_ok=True, parents=True)
+    # Get the site table
+    flatfile_dir = file_structure.get_flatfile_dir(main_dir)
+    site_table = pd.read_csv(flatfile_dir / "site_table_basin.csv")
 
     # Get each of the results for the event ids
     with multiprocessing.Pool(processes=n_procs) as pool:
@@ -565,6 +593,7 @@ def parse_geonet_information(
                 client_NZ=client_NZ,
                 client_IU=client_IU,
                 inventory=inventory,
+                site_table=site_table,
                 mags=mags,
                 rrups=rrups,
                 f_rrup=f_rrup,
@@ -575,10 +604,12 @@ def parse_geonet_information(
     # Due to uneven lengths, need to extract using a for loop
     event_data = []
     sta_mag_data = []
+    skipped_records = []
     for result in results:
         if result[0] is not None:
             event_data.append(result[0])
             sta_mag_data.extend(result[1])
+            skipped_records.extend(result[2])
 
     # Create the event df
     event_df = pd.DataFrame(
@@ -620,6 +651,11 @@ def parse_geonet_information(
             "amp",
             "amp_unit",
         ],
+    )
+
+    # Create the skipped records df
+    skipped_records_df = pd.DataFrame(
+        skipped_records, columns=["skipped_records", "reason"]
     )
 
     # Create the output directory for the flatfiles
