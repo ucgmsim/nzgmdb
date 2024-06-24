@@ -8,7 +8,7 @@ from typing import Annotated
 
 import typer
 
-from nzgmdb.calculation import fmax, ims, snr
+from nzgmdb.calculation import fmax, ims, snr, distances
 from nzgmdb.data_processing import process_observed
 from nzgmdb.data_retrieval import geonet, tect_domain, sites
 from nzgmdb.management import file_structure
@@ -199,7 +199,6 @@ def calc_fmax(
     ] = None,
     n_procs: Annotated[int, typer.Option(help="Number of processes to use")] = 1,
 ):
-
     if meta_output_dir is None:
         meta_output_dir = file_structure.get_flatfile_dir(main_dir)
     if snr_fas_output_dir is None:
@@ -292,6 +291,23 @@ def generate_site_table_basin(
 
 
 @app.command(
+    help="Calculate the distances between the earthquake source and the station"
+)
+def calculate_distances(
+    main_dir: Annotated[
+        Path,
+        typer.Argument(
+            help="The main directory of the NZGMDB results (Highest level directory)",
+            exists=True,
+            file_okay=False,
+        ),
+    ],
+    n_procs: Annotated[int, typer.Option(help="The number of processes to use")] = 1,
+):
+    distances.calc_distances(main_dir, n_procs)
+
+
+@app.command(
     help="Run the first half of the NZGMDB pipeline before GMC. "
     "- Fetch Geonet data "
     "- Merge tectonic domains "
@@ -375,9 +391,13 @@ def run_process_nzgmdb(
     # Run IM calculation
     im_dir = file_structure.get_im_dir(main_dir)
     run_im_calculation(main_dir, im_dir, n_procs)
-
+    
     # Generate the site basin flatfile
     generate_site_table_basin(main_dir)
+    
+    # Calculate distances
+    distances.calc_distances(main_dir, n_procs)
+
 
     # Steps below are TODO
     # Merge flat files with IM results
