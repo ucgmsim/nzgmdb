@@ -665,6 +665,4 @@ def parse_geonet_information(
     # Save the dataframes
     event_df.to_csv(flatfile_dir / "earthquake_source_table.csv", index=False)
     sta_mag_df.to_csv(flatfile_dir / "station_magnitude_table.csv", index=False)
-    skipped_records_df.to_csv(
-        flatfile_dir / "geonet_skipped_records.csv", index=False
-    )
+    skipped_records_df.to_csv(flatfile_dir / "geonet_skipped_records.csv", index=False)
