@@ -391,13 +391,12 @@ def run_process_nzgmdb(
     # Run IM calculation
     im_dir = file_structure.get_im_dir(main_dir)
     run_im_calculation(main_dir, im_dir, n_procs)
-    
+
     # Generate the site basin flatfile
     generate_site_table_basin(main_dir)
-    
+
     # Calculate distances
     distances.calc_distances(main_dir, n_procs)
-
 
     # Steps below are TODO
     # Merge flat files with IM results
