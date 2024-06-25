@@ -1,6 +1,7 @@
 from typing import List, Dict
 
 import matplotlib.path as mpltPath
+
 # import numba
 import numpy as np
 
@@ -37,20 +38,24 @@ def calc_rrup_rjb(srf_points: np.ndarray, locations: np.ndarray):
     rrups_depth = np.empty(locations.shape[0])
 
     for loc_ix in range(locations.shape[0]):
-        h_dist = np.atleast_2d(get_distances(srf_points[:,0:2], locations[loc_ix, 0], locations[loc_ix, 1]))
+        h_dist = np.atleast_2d(
+            get_distances(
+                srf_points[:, 0:2], locations[loc_ix, 0], locations[loc_ix, 1]
+            )
+        )
 
         v_dist = srf_points[:, 2] - locations[loc_ix, 2]
 
-        d = np.sqrt(h_dist ** 2 + v_dist ** 2)
+        d = np.sqrt(h_dist**2 + v_dist**2)
 
         rrups[loc_ix] = np.min(d)
         rjb[loc_ix] = np.min(h_dist)
-        
+
         rrup_lon, rrup_lat, rrup_depth = srf_points[np.argmin(d)]
         rrups_lon[loc_ix] = rrup_lon
         rrups_lat[loc_ix] = rrup_lat
         rrups_depth[loc_ix] = rrup_depth
-       
+
     return rrups, rjb, rrups_lon, rrups_lat, rrups_depth
 
 
@@ -139,7 +144,7 @@ def calc_rx_ry(srf_points: np.ndarray, plane_infos: List[Dict], locations: np.nd
             # If the signs are different then the point is between the lines projected along the edges of the srf
             r_y[iloc] = 0
         else:
-#             r_y[iloc] = np.min(np.abs([up_strike_dist, down_strike_dist]))
+            #             r_y[iloc] = np.min(np.abs([up_strike_dist, down_strike_dist]))
             strike_dist_array = np.array([up_strike_dist, down_strike_dist])
             r_y[iloc] = strike_dist_array[np.argmin(np.abs(strike_dist_array))]
 
