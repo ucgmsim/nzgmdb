@@ -454,7 +454,7 @@ def run_process_nzgmdb(
 
     # Calculate distances
     distances.calc_distances(main_dir, n_procs)
-    
+
     # Merge flat files
     merge_flat_files(main_dir)
 
