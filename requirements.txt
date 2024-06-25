@@ -1,0 +1,18 @@
+# Also need to install qcore, IM_calculation and EmpiricalEngine and openquake
+typer
+pandas
+numpy
+obspy
+scipy
+requests
+fiona
+pyproj
+pyyaml
+pytz
+# Below help for installing IM_calculation
+Cython
+wheel
+# Below is for Jenkins test
+pytest
+black
+pytest-black
