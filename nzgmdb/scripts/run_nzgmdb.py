@@ -9,7 +9,7 @@ from typing import Annotated
 import typer
 
 from nzgmdb.calculation import fmax, ims, snr, distances
-from nzgmdb.data_processing import process_observed
+from nzgmdb.data_processing import process_observed, merge_flatfiles
 from nzgmdb.data_retrieval import geonet, tect_domain, sites
 from nzgmdb.management import file_structure
 from nzgmdb.phase_arrival import gen_phase_arrival_table
@@ -308,6 +308,60 @@ def calculate_distances(
 
 
 @app.command(
+    help="Merge IM results together into one flatfile. As well as perform a filter for Ds595"
+)
+def merge_im_results(
+    im_dir: Annotated[
+        Path,
+        typer.Argument(
+            help="The directory containing the IM results to merge",
+            exists=True,
+            file_okay=False,
+        ),
+    ],
+    output_dir: Annotated[
+        Path,
+        typer.Argument(
+            help="The directory to save the merged IM file", file_okay=False
+        ),
+    ],
+    gmc_ffp: Annotated[
+        Path,
+        typer.Argument(
+            help="The full file path to the GMC predictions file",
+            readable=True,
+            exists=True,
+        ),
+    ],
+    fmax_ffp: Annotated[
+        Path,
+        typer.Argument(
+            help="The full file path to the Fmax file",
+            readable=True,
+            exists=True,
+        ),
+    ],
+):
+    merge_flatfiles.merge_im_data(im_dir, output_dir, gmc_ffp, fmax_ffp)
+
+
+@app.command(
+    help="Merge all flatfiles together for final output and ensure correct filtering for only results with IM values"
+)
+def merge_flat_files(
+    main_dir: Annotated[
+        Path,
+        typer.Argument(
+            help="The main directory of the NZGMDB results (Highest level directory)",
+            exists=True,
+            file_okay=False,
+        ),
+    ],
+):
+    merge_flatfiles.merge_flatfiles(main_dir)
+
+
+@app.command(
     help="Run the first half of the NZGMDB pipeline before GMC. "
     "- Fetch Geonet data "
     "- Merge tectonic domains "
@@ -392,14 +446,17 @@ def run_process_nzgmdb(
     im_dir = file_structure.get_im_dir(main_dir)
     run_im_calculation(main_dir, im_dir, n_procs)
 
+    # Merge IM results
+    merge_im_results(im_dir, flatfile_dir, gmc_ffp, fmax_ffp)
+
     # Generate the site basin flatfile
     generate_site_table_basin(main_dir)
 
     # Calculate distances
     distances.calc_distances(main_dir, n_procs)
 
-    # Steps below are TODO
-    # Merge flat files with IM results
+    # Merge flat files
+    merge_flat_files(main_dir)
 
 
 if __name__ == "__main__":
