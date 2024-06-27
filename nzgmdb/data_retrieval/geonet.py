@@ -2,6 +2,7 @@
     Functions to manage Geonet Data
 """
 
+import time
 import io
 import datetime
 from typing import List
@@ -424,6 +425,8 @@ def fetch_event_data(
     f_rrup : interp1d
         The cubic interpolation function for the magnitude distance relationship
     """
+    print(f"Processing event {event_id} starting at {time.ctime()}")
+    start_time = time.time()
 
     # Get the catalog information
     cat = client_NZ.get_events(eventid=event_id)
@@ -450,6 +453,8 @@ def fetch_event_data(
         )
     else:
         sta_mag_lines, skipped_records = None, None
+
+    print(f"Processed event {event_id} in {time.time() - start_time:.2f} seconds")
     return event_line, sta_mag_lines, skipped_records
 
 
@@ -584,6 +589,10 @@ def parse_geonet_information(
     flatfile_dir = file_structure.get_flatfile_dir(main_dir)
     site_table = pd.read_csv(flatfile_dir / "site_table_basin.csv")
 
+    print(f"Length of event ids: {len(event_ids)}")
+    print(f"Last event id: {event_ids[-1]}")
+    print(f"Starting to fetch data {time.ctime()}")
+
     # Get each of the results for the event ids
     with multiprocessing.Pool(processes=n_procs) as pool:
         results = pool.map(
@@ -600,7 +609,9 @@ def parse_geonet_information(
             ),
             event_ids,
         )
+        # results.append(result)
 
+    print(f"Finished fetching data {time.ctime()}")
     # Due to uneven lengths, need to extract using a for loop
     event_data = []
     sta_mag_data = []
@@ -611,6 +622,7 @@ def parse_geonet_information(
             sta_mag_data.extend(result[1])
             skipped_records.extend(result[2])
 
+    print(f"Finished looping output {time.ctime()}")
     # Create the event df
     event_df = pd.DataFrame(
         event_data,
@@ -666,3 +678,5 @@ def parse_geonet_information(
     event_df.to_csv(flatfile_dir / "earthquake_source_table.csv", index=False)
     sta_mag_df.to_csv(flatfile_dir / "station_magnitude_table.csv", index=False)
     skipped_records_df.to_csv(flatfile_dir / "geonet_skipped_records.csv", index=False)
+
+    print(f"Finished saving data {time.ctime()}")
