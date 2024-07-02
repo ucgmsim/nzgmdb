@@ -199,7 +199,6 @@ def calc_fmax(
     ] = None,
     n_procs: Annotated[int, typer.Option(help="Number of processes to use")] = 1,
 ):
-
     if meta_output_dir is None:
         meta_output_dir = file_structure.get_flatfile_dir(main_dir)
     if snr_fas_output_dir is None:
@@ -272,6 +271,40 @@ def run_im_calculation(
     if output_dir is None:
         output_dir = file_structure.get_im_dir(main_dir)
     ims.compute_ims_for_all_processed_records(main_dir, output_dir, n_procs, checkpoint)
+
+
+@app.command(help="Generate the site table basin flatfile")
+def generate_site_table_basin(
+    main_dir: Annotated[
+        Path,
+        typer.Argument(
+            help="The main directory of the NZGMDB results (Highest level directory)",
+            exists=True,
+            file_okay=False,
+        ),
+    ],
+):
+    site_df = sites.create_site_table_response()
+    site_df = sites.add_site_basins(site_df)
+    flatfile_dir = file_structure.get_flatfile_dir(main_dir)
+    site_df.to_csv(flatfile_dir / "site_table_basin.csv", index=False)
+
+
+@app.command(
+    help="Calculate the distances between the earthquake source and the station"
+)
+def calculate_distances(
+    main_dir: Annotated[
+        Path,
+        typer.Argument(
+            help="The main directory of the NZGMDB results (Highest level directory)",
+            exists=True,
+            file_okay=False,
+        ),
+    ],
+    n_procs: Annotated[int, typer.Option(help="The number of processes to use")] = 1,
+):
+    distances.calc_distances(main_dir, n_procs)
 
 
 @app.command(
