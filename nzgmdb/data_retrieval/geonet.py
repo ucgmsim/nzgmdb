@@ -315,6 +315,17 @@ def fetch_sta_mag_lines(
             ]
 
             for mseed in mseeds:
+                # Check the data is not all 0's
+                if all([np.allclose(tr.data, 0) for tr in mseed]):
+                    stats = mseed[0].stats
+                    skipped_records.append(
+                        [
+                            f"{event_id}_{stats.station}_{stats.location}_{stats.channel}",
+                            "All 0's",
+                        ]
+                    )
+                    continue
+
                 # Calculate clip to determine if the record should be dropped
                 clip = filtering.get_clip_probability(pref_mag, r_hyp, st)
 
