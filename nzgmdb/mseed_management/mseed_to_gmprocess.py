@@ -236,9 +236,7 @@ def get_event_dirs(main_dir: Path):
     return event_dirs
 
 
-def convert_mseed_to_gmprocess(
-    main_dir: Path, output_dir: Path, n_procs: int = 1
-):
+def convert_mseed_to_gmprocess(main_dir: Path, output_dir: Path, n_procs: int = 1):
     """
     Converts mseed data to gmprocess format and file structure.
 
