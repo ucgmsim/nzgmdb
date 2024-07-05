@@ -292,7 +292,7 @@ def generate_site_table_basin(
     site_df = sites.create_site_table_response()
     site_df = sites.add_site_basins(site_df)
 
-    site_df.to_csv(flatfile_dir / "site_table_basin.csv", index=False)
+    site_df.to_csv(flatfile_dir / "site_table.csv", index=False)
 
 
 @app.command(
@@ -408,7 +408,7 @@ def run_pre_process_nzgmdb(
 
     # Merge the tectonic domains
     eq_source_ffp = flatfile_dir / "earthquake_source_table.csv"
-    eq_tect_domain_ffp = flatfile_dir / "earthquake_source_table_tectdomain.csv"
+    eq_tect_domain_ffp = flatfile_dir / "earthquake_source_table.csv"
     tect_domain.add_tect_domain(eq_source_ffp, eq_tect_domain_ffp, n_procs)
 
     # Generate the phase arrival table

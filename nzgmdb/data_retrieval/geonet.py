@@ -593,7 +593,7 @@ def parse_geonet_information(
 
     # Get the site table
     flatfile_dir = file_structure.get_flatfile_dir(main_dir)
-    site_table = pd.read_csv(flatfile_dir / "site_table_basin.csv")
+    site_table = pd.read_csv(flatfile_dir / "site_table.csv")
 
     # Get each of the results for the event ids
     with multiprocessing.Pool(processes=n_procs) as pool:

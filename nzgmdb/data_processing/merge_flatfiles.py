@@ -238,12 +238,12 @@ def merge_flatfiles(main_dir: Path):
     flatfile_dir = file_structure.get_flatfile_dir(main_dir)
 
     # Load the files
-    event_df = pd.read_csv(flatfile_dir / "earthquake_source_table_complete.csv")
+    event_df = pd.read_csv(flatfile_dir / "earthquake_source_table.csv")
     sta_mag_df = pd.read_csv(flatfile_dir / "station_magnitude_table.csv")
     phase_table_df = pd.read_csv(flatfile_dir / "phase_arrival_table.csv")
     prop_df = pd.read_csv(flatfile_dir / "propagation_path_table.csv")
     im_df = pd.read_csv(flatfile_dir / "ground_motion_im_catalogue.csv")
-    site_basin_df = pd.read_csv(flatfile_dir / "site_table_basin.csv")
+    site_basin_df = pd.read_csv(flatfile_dir / "site_table.csv")
 
     # Ensure correct strike and rake values
     event_df.loc[event_df.strike == 360, "strike"] = 0
@@ -446,7 +446,7 @@ def merge_flatfiles(main_dir: Path):
     event_df.to_csv(flatfile_dir / "earthquake_source_table.csv", index=False)
     sta_mag_df.to_csv(flatfile_dir / "station_magnitude_table.csv", index=False)
     phase_table_df.to_csv(flatfile_dir / "phase_arrival_table.csv", index=False)
-    site_basin_df.to_csv(flatfile_dir / "site_table_basin.csv", index=False)
+    site_basin_df.to_csv(flatfile_dir / "site_table.csv", index=False)
     df_000.to_csv(flatfile_dir / "ground_motion_im_table_000.csv", index=False)
     df_090.to_csv(flatfile_dir / "ground_motion_im_table_090.csv", index=False)
     df_ver.to_csv(flatfile_dir / "ground_motion_im_table_ver.csv", index=False)
