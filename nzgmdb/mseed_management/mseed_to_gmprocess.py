@@ -148,7 +148,6 @@ def run_for_single_event(
     event_dir: Path,
     client_NZ: FDSN_Client,
     output_dir: Path,
-    old_style: bool = False,
 ):
     """
     Run the conversion for a single event.
@@ -164,16 +163,9 @@ def run_for_single_event(
         The client to get the event information
     output_dir : Path
         The directory to save the new files in the new format
-    old_style : bool
-        Whether the data is stored in the old style
     """
     # Get the event ID information
-    if old_style:
-        # Get the xml file and name for the event id
-        xml_file = list(event_dir.glob("*.xml"))[0]
-        event_id = xml_file.stem
-    else:
-        event_id = event_dir.name
+    event_id = event_dir.name
 
     # Get the catalog information
     cat = client_NZ.get_events(eventid=event_id)
@@ -220,7 +212,7 @@ def run_for_single_event(
             split_mseed(mseed, new_event_dir)
 
 
-def get_event_dirs(main_dir: Path, old_style: bool):
+def get_event_dirs(main_dir: Path):
     """
     Get the event directories
 
@@ -228,37 +220,24 @@ def get_event_dirs(main_dir: Path, old_style: bool):
     ----------
     main_dir : Path
         The main directory of the NZGMDB results (Highest level directory)
-    old_style : bool
-        Whether the data is stored in the old style
 
     Returns
     -------
     event_dirs : list
         A list of the event directories
     """
-    if old_style:
-        # First get all the mseeds found in the main dir
-        mseed_files = list(main_dir.glob("**/*.mseed"))
-
-        # Reason for looping over each mseed is due to there can sometimes be multiple sets
-        # of mseed files drawn together and then other times there isnt
-        # so this ensures no data is missed
-
-        # Loop through each mseed file and add the event directory to the set
-        event_dirs = set([mseed.parent.parent.parent for mseed in mseed_files])
-    else:
-        waveform_dir = main_dir / "waveforms"
-        event_dirs = [
-            event_dir
-            for year_dir in waveform_dir.iterdir()
-            for event_dir in year_dir.iterdir()
-        ]
+    waveform_dir = main_dir / "waveforms"
+    event_dirs = [
+        event_dir
+        for year_dir in waveform_dir.iterdir()
+        for event_dir in year_dir.iterdir()
+    ]
 
     return event_dirs
 
 
 def convert_mseed_to_gmprocess(
-    main_dir: Path, output_dir: Path, old_style: bool = False, n_procs: int = 1
+    main_dir: Path, output_dir: Path, n_procs: int = 1
 ):
     """
     Converts mseed data to gmprocess format and file structure.
@@ -269,8 +248,6 @@ def convert_mseed_to_gmprocess(
         The main directory of the NZGMDB results (Highest level directory)
     output_dir : Path
         The directory to save the gmprocessed data
-    old_style : bool (optional)
-        Whether the data is stored in the old style
     n_procs : int (optional)
         The number of processes to use for processing
     """
@@ -278,7 +255,7 @@ def convert_mseed_to_gmprocess(
     client_NZ = FDSN_Client("GEONET")
 
     # Get the event_dirs
-    event_dirs = get_event_dirs(main_dir, old_style)
+    event_dirs = get_event_dirs(main_dir)
 
     # Do multiprocessing over each event
     with multiprocessing.Pool(processes=n_procs) as pool:
@@ -287,7 +264,6 @@ def convert_mseed_to_gmprocess(
                 run_for_single_event,
                 client_NZ=client_NZ,
                 output_dir=output_dir,
-                old_style=old_style,
             ),
             event_dirs,
         )
