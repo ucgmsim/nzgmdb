@@ -1,5 +1,3 @@
-from pathlib import Path
-
 import fiona
 import pandas as pd
 import numpy as np
