@@ -15,6 +15,6 @@ jobs:
       # Install deptry
       - run: pip install deptry
       # Remove pyproject.toml so that deptry doesn't get confused
-#      - run: rm pyproject.toml
+      - run: rm pyproject.toml
       # Run deptry to check that all dependencies are present.
-      - run: deptry .
+      - run: deptry . --package-module-name-map "pyyaml=yaml"
