@@ -9,6 +9,8 @@ fiona
 pyproj
 pyyaml
 pytz
+shapely
+gmprocess
 # Below help for installing IM_calculation
 Cython
 wheel
