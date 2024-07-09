@@ -11,6 +11,8 @@ pytz
 shapely
 gmprocess
 matplotlib
+wheel
+Cython
 git+https://github.com/ucgmsim/Empirical_Engine.git
 git+https://github.com/gem/oq-engine.git
 git+https://github.com/ucgmsim/qcore.git
