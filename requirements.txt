@@ -1,7 +1,6 @@
-# Also need to install qcore, IM_calculation and EmpiricalEngine and openquake
 typer
 pandas
-numpy
+numpy<2.0.0
 obspy
 scipy
 requests
@@ -11,10 +10,9 @@ pyyaml
 pytz
 shapely
 gmprocess
-# Below help for installing IM_calculation
-Cython
-wheel
-# Below is for Jenkins test
-pytest
-black
-pytest-black
+matplotlib
+git+https://github.com/ucgmsim/Empirical_Engine.git
+git+https://github.com/gem/oq-engine.git
+git+https://github.com/ucgmsim/qcore.git
+git+https://github.com/ucgmsim/IM_calculation.git
+git+https://github.com/ucgmsim/Velocity-Model.git
