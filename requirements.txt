@@ -17,4 +17,4 @@ git+https://github.com/ucgmsim/Empirical_Engine.git
 git+https://github.com/gem/oq-engine.git
 git+https://github.com/ucgmsim/qcore.git
 git+https://github.com/ucgmsim/IM_calculation.git@install_fix
-git+https://github.com/ucgmsim/Velocity-Model.git
+git+https://github.com/ucgmsim/Velocity-Model.git@version_fix
