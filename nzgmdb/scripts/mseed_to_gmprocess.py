@@ -26,14 +26,11 @@ def mseed_to_gmprocess(
             file_okay=False,
         ),
     ],
-    old_style: Annotated[
-        bool, typer.Option(help="Whether the data is stored in the old style")
-    ] = False,
     n_procs: Annotated[
         int, typer.Option(help="The number of processes to use for processing")
     ] = 1,
 ):
-    convert_mseed_to_gmprocess(main_dir, output_dir, old_style, n_procs)
+    convert_mseed_to_gmprocess(main_dir, output_dir, n_procs)
 
 
 if __name__ == "__main__":
