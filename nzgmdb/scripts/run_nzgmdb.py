@@ -284,10 +284,15 @@ def generate_site_table_basin(
         ),
     ],
 ):
+    main_dir.mkdir(parents=True, exist_ok=True)
+    # Generate the site basin flatfile
+    flatfile_dir = file_structure.get_flatfile_dir(main_dir)
+    flatfile_dir.mkdir(parents=True, exist_ok=True)
+
     site_df = sites.create_site_table_response()
     site_df = sites.add_site_basins(site_df)
-    flatfile_dir = file_structure.get_flatfile_dir(main_dir)
-    site_df.to_csv(flatfile_dir / "site_table_basin.csv", index=False)
+
+    site_df.to_csv(flatfile_dir / "site_table.csv", index=False)
 
 
 @app.command(
@@ -391,32 +396,33 @@ def run_pre_process_nzgmdb(
     ],
     n_procs: Annotated[int, typer.Option(help="The number of processes to use")] = 1,
 ):
+    main_dir.mkdir(parents=True, exist_ok=True)
+
+    # Generate the site basin flatfile
+    flatfile_dir = file_structure.get_flatfile_dir(main_dir)
+    flatfile_dir.mkdir(parents=True, exist_ok=True)
+    generate_site_table_basin(main_dir)
+
     # Fetch the Geonet data
     geonet.parse_geonet_information(main_dir, start_date, end_date, n_procs)
 
     # Merge the tectonic domains
-    faltfile_dir = file_structure.get_flatfile_dir(main_dir)
-    eq_source_ffp = faltfile_dir / "earthquake_source_table.csv"
-    eq_tect_domain_ffp = faltfile_dir / "earthquake_source_table_tectdomain.csv"
+    eq_source_ffp = flatfile_dir / "earthquake_source_table.csv"
+    eq_tect_domain_ffp = flatfile_dir / "earthquake_source_table.csv"
     tect_domain.add_tect_domain(eq_source_ffp, eq_tect_domain_ffp, n_procs)
 
     # Generate the phase arrival table
     gen_phase_arrival_table.generate_phase_arrival_table(
-        main_dir, faltfile_dir, n_procs
+        main_dir, flatfile_dir, n_procs
     )
 
     # Generate SNR
-    meta_output_dir = file_structure.get_flatfile_dir(main_dir)
     snr_fas_output_dir = file_structure.get_snr_fas_dir(main_dir)
-    phase_table_path = (
-        file_structure.get_flatfile_dir(main_dir) / "phase_arrival_table.csv"
-    )
-    calculate_snr(
-        main_dir, phase_table_path, meta_output_dir, snr_fas_output_dir, n_procs
-    )
+    phase_table_path = flatfile_dir / "phase_arrival_table.csv"
+    calculate_snr(main_dir, phase_table_path, flatfile_dir, snr_fas_output_dir, n_procs)
 
     # Calculate Fmax
-    calc_fmax(main_dir, meta_output_dir, snr_fas_output_dir, n_procs)
+    calc_fmax(main_dir, flatfile_dir, snr_fas_output_dir, n_procs)
 
 
 @app.command(
@@ -448,9 +454,6 @@ def run_process_nzgmdb(
 
     # Merge IM results
     merge_im_results(im_dir, flatfile_dir, gmc_ffp, fmax_ffp)
-
-    # Generate the site basin flatfile
-    generate_site_table_basin(main_dir)
 
     # Calculate distances
     distances.calc_distances(main_dir, n_procs)
