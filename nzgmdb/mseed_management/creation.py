@@ -3,13 +3,14 @@ import warnings
 from pathlib import Path
 from typing import Iterable
 
+import numpy as np
 import pandas as pd
 from obspy import Stream
 from obspy.clients.fdsn import Client as FDSN_Client
 from obspy.clients.fdsn.header import FDSNNoDataException
 from obspy.core.event import Origin
 from obspy.geodetics import kilometers2degrees
-from obspy.io.mseed import ObsPyMSEEDFilesizeTooSmallError
+from obspy.io.mseed import ObsPyMSEEDFilesizeTooSmallError, InternalMSEEDError
 from obspy.taup import TauPyModel
 
 from empirical.util import (
@@ -28,6 +29,7 @@ def get_waveforms(
     mag: float,
     rrup: float,
     r_epi: float,
+    vs30: float = None,
 ):
     """
     Get the waveforms for a given event and station
@@ -49,6 +51,8 @@ def get_waveforms(
         The closest distance to the event
     r_epi : float
         The epicentral distance to the event
+    vs30 : float, optional
+        The Vs30 value for the station, by default sets to config value
 
     Returns
     -------
@@ -56,7 +60,7 @@ def get_waveforms(
         The stream object containing the waveform data or None if no data is found
     """
     config = cfg.Config()
-    vs30 = config.get_value("vs30")
+    vs30 = config.get_value("vs30") if vs30 is None else vs30
     rake = 90  # TODO get from the earthquake source table
     z1p0 = z_model_calculations.chiou_young_08_calc_z1p0(vs30)
     # Predict significant duration time from Afshari and Stewart (2016)
@@ -67,7 +71,6 @@ def get_waveforms(
             "rrup": [rrup],
             "vs30": [vs30],
             "z1pt0": [z1p0],
-            "dip": 45,
         }
     )
     result_df = openquake_wrapper_vectorized.oq_run(
@@ -76,7 +79,7 @@ def get_waveforms(
         input_df,
         "Ds595",
     )
-    ds = result_df["Ds595_mean"].values[0]
+    ds = np.exp(result_df["Ds595_mean"].values[0])
 
     deg = kilometers2degrees(r_epi)
 
@@ -131,10 +134,11 @@ def get_waveforms(
         except ObsPyMSEEDFilesizeTooSmallError:
             print(f"File too small for {net}.{sta}")
             return None
-        except http.client.IncompleteRead:
+        except (http.client.IncompleteRead, InternalMSEEDError):
             if attempt < max_retries - 1:  # i.e. not the last attempt
                 continue  # try again
             else:
+                print(f"Failed to get data for {net}.{sta}")
                 return None
     return st
 

@@ -781,7 +781,7 @@ def calc_distances(main_dir: Path, n_procs: int = 1):
     geonet_cmt_df = pd.read_csv(config.get_value("cmt_url"), low_memory=False)
 
     # Load the eq source table
-    event_df = pd.read_csv(flatfile_dir / "earthquake_source_table_tectdomain.csv")
+    event_df = pd.read_csv(flatfile_dir / "earthquake_source_table.csv")
 
     # Get the focal domain
     domain_focal_df = pd.read_csv(
@@ -869,4 +869,4 @@ def calc_distances(main_dir: Path, n_procs: int = 1):
 
     # Save the results
     propagation_data.to_csv(flatfile_dir / "propagation_path_table.csv", index=False)
-    event_df.to_csv(flatfile_dir / "earthquake_source_table_complete.csv", index=False)
+    event_df.to_csv(flatfile_dir / "earthquake_source_table.csv", index=False)

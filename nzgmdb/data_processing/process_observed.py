@@ -85,7 +85,7 @@ def process_single_mseed(mseed_file: Path, gmc_df: pd.DataFrame, fmax_df: pd.Dat
     fmax_min = config.get_value("fmax_min")
     score_min = config.get_value("score_min")
     fmin_max = config.get_value("fmin_max")
-    multi_min = config.get_value("multi_max")
+    multi_max = config.get_value("multi_max")
 
     # Filter out records that have too low of a fmax value
     if fmax is not None and fmax <= fmax_min:
@@ -108,10 +108,10 @@ def process_single_mseed(mseed_file: Path, gmc_df: pd.DataFrame, fmax_df: pd.Dat
             "reason": f"Fmin mean is greater than {fmin_max}",
         }
         return pd.DataFrame([skipped_record_dict])
-    if fmin is not None and fmin_rows["multi_mean"].min() < multi_min:
+    if fmin is not None and fmin_rows["multi_mean"].max() > multi_max:
         skipped_record_dict = {
             "mseed_file": mseed_stem,
-            "reason": f"Multi mean is less than {multi_min}",
+            "reason": f"Multi mean is greater than {multi_max}",
         }
         return pd.DataFrame([skipped_record_dict])
 

@@ -192,7 +192,7 @@ def high_and_low_cut_processing(
         When not provided will use the default value in the config
     fmax : float (optional)
         The maximum frequency to cut off at
-        When not provided will use 1 / 2.5 * dt
+        When not provided will use 1 / (2.5 * dt)
 
     Returns
     -------
