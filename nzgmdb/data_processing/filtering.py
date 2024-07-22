@@ -1,9 +1,15 @@
-from gmprocess.waveform_processing.clipping.clipping_ann import clipNet
-from gmprocess.waveform_processing.clipping.max_amp import MaxAmp
-from gmprocess.waveform_processing.clipping.histogram import Histogram
+import numpy as np
+from gmprocess.waveform_processing.clipping.clipping_ann import (
+    clipNet,
+)
+from gmprocess.waveform_processing.clipping.histogram import (
+    Histogram,
+)
+from gmprocess.waveform_processing.clipping.max_amp import (
+    MaxAmp,
+)
 from gmprocess.waveform_processing.clipping.ping import Ping
 from obspy import Stream
-import numpy as np
 
 from nzgmdb.management import config as cfg
 
