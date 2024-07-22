@@ -14,3 +14,6 @@ dynamic = ["version", "dependencies"]
 
 [tool.setuptools.dynamic]
 dependencies = {file = ["requirements.txt"]}
+
+[tool.deptry.package_module_name_map]
+yaml = "pyyaml"
