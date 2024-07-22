@@ -11,8 +11,7 @@ from shapely.geometry import Point
 from shapely.geometry.polygon import LineString, Polygon
 
 from IM_calculation.source_site_dist import src_site_dist
-from nzgmdb.data_retrieval import \
-    rupture_models as geonet_rupture_models
+from nzgmdb.data_retrieval import rupture_models as geonet_rupture_models
 from nzgmdb.management import config as cfg
 from nzgmdb.management import file_structure
 from qcore import geo, grid, srf
