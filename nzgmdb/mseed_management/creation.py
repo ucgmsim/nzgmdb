@@ -61,7 +61,7 @@ def get_waveforms(
     """
     config = cfg.Config()
     vs30 = config.get_value("vs30") if vs30 is None else vs30
-    rake = 90  # TODO get from the earthquake source table
+    rake = 90  # Assume strike-slip for now
     z1p0 = z_model_calculations.chiou_young_08_calc_z1p0(vs30)
     # Predict significant duration time from Afshari and Stewart (2016)
     input_df = pd.DataFrame(
