@@ -271,6 +271,8 @@ def get_l_w_mag_scaling(
         dip_dist = strasser_2010.mw_to_w_strasser_2010_slab(mag)
     else:
         # Use LEONARD2014
+        if rake is None:
+            print("Yes")
         length = mag_scaling.mw_to_l_leonard(mag, rake)
         dip_dist = mag_scaling.mw_to_w_leonard(mag, rake)
     return length, dip_dist
@@ -573,7 +575,7 @@ def compute_distances_for_event(
 
     # Get the station data
     event_sta_df = station_df[station_df["sta"].isin(im_event_df["sta"])].reset_index()
-    stations = event_sta_df[["lat", "lon", "depth"]].to_numpy()
+    stations = event_sta_df[["lon", "lat", "depth"]].to_numpy()
 
     # Get the nodal plane information
     nodal_plane_info = get_nodal_plane_info(
@@ -611,14 +613,14 @@ def compute_distances_for_event(
 
     # Get the length and dip_dist if they are None
     # This is the case for when grabbing strike, dip, rake from the CMT files or the domain focal
-    # if length is None or dip_dist is None:
+    # if f_type != "ff" and (length is None or dip_dist is None):
     #     length, dip_dist = get_l_w_mag_scaling(
     #         event_row["mag"], rake, event_row["tect_class"]
     #     )
 
     # Get the ztor and dbottom if they are None
     # This is the case for when grabbing strike, dip, rake from the CMT files or the domain focal
-    # if ztor is None or dbottom is None:
+    # if f_type != "ff" and (ztor is None or dbottom is None):
     #     height = np.sin(np.radians(dip)) * dip_dist
     #     ztor = max(event_row["depth"] - (height / 2), 0)
     #     dbottom = ztor + height
@@ -626,6 +628,7 @@ def compute_distances_for_event(
     if srf_header is None or srf_points is None:
         # Calculate the corners of the plane
         dip_dir = (strike + 90) % 360
+        projected_width = dip_dist * np.cos(np.radians(dip))
         corner_0, corner_1, corner_2, corner_3 = grid.grid_corners(
             np.asarray([event_row["lat"], event_row["lon"]]),
             strike,
@@ -633,7 +636,7 @@ def compute_distances_for_event(
             ztor,
             dbottom,
             length,
-            dip_dist,
+            projected_width,
         )
 
         # Utilise grid functions from qcore to get the mesh grid
@@ -644,6 +647,8 @@ def compute_distances_for_event(
         )
         # Reshape to (n, 3)
         srf_points = srf_points.reshape(-1, 3)
+        # Swap the lat and lon for the srf points
+        srf_points = srf_points[:, [1, 0, 2]]
 
         # Generate the srf header
         nstrike = int(round(length * points_per_km))
@@ -734,7 +739,7 @@ def compute_distances_for_event(
         ]
     )
 
-    return propagation_data_combo, extra_event_data
+    return propagation_data_combo, extra_event_data, rrup_points
 
 
 def distance_in_taupo(
@@ -935,12 +940,16 @@ def calc_distances(main_dir: Path, n_procs: int = 1):
         )
 
     # Combine the results
-    propagation_results, extra_event_results = zip(*result_dfs)
+    propagation_results, extra_event_results, rrup_points = zip(*result_dfs)
     propagation_data = pd.concat(propagation_results)
     extra_event_data = pd.concat(extra_event_results)
 
     # Merge the extra event data with the event data
     event_df = pd.merge(event_df, extra_event_data, on="evid", how="right")
+
+    a = np.concatenate(rrup_points)
+    df = pd.DataFrame(a)
+    df.to_csv(flatfile_dir / "rrup_points.csv", index=False)
 
     # Save the results
     propagation_data.to_csv(flatfile_dir / "propagation_path_table.csv", index=False)
