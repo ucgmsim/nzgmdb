@@ -16,4 +16,4 @@ jobs:
       # Remove pyproject.toml so that deptry doesn't get confused
       - run: rm pyproject.toml
       # Run deptry to check that all dependencies are present.
-      - run: deptry . --package-module-name-map "IM_calculation=IM_calculation"
+      - run: deptry . --package-module-name-map "IM_calculation=IM_calculation,Velocity_Model=Velocity_Model,oq_engine=oq_engine"
