@@ -10,14 +10,11 @@ from obspy.clients.fdsn import Client as FDSN_Client
 from obspy.clients.fdsn.header import FDSNNoDataException
 from obspy.core.event import Origin
 from obspy.geodetics import kilometers2degrees
-from obspy.io.mseed import ObsPyMSEEDFilesizeTooSmallError, InternalMSEEDError
+from obspy.io.mseed import InternalMSEEDError, ObsPyMSEEDFilesizeTooSmallError
 from obspy.taup import TauPyModel
 
-from empirical.util import (
-    classdef,
-    openquake_wrapper_vectorized,
-    z_model_calculations,
-)
+from empirical.util import (classdef, openquake_wrapper_vectorized,
+                            z_model_calculations)
 from nzgmdb.management import config as cfg
 
 

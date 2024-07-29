@@ -9,10 +9,7 @@ from typing import Annotated
 import typer
 
 from nzgmdb.calculation import distances, fmax, ims, snr
-from nzgmdb.data_processing import (
-    merge_flatfiles,
-    process_observed,
-)
+from nzgmdb.data_processing import merge_flatfiles, process_observed
 from nzgmdb.data_retrieval import geonet, sites, tect_domain
 from nzgmdb.management import file_structure
 from nzgmdb.phase_arrival import gen_phase_arrival_table

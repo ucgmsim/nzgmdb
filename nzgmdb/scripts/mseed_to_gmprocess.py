@@ -3,9 +3,8 @@ from typing import Annotated
 
 import typer
 
-from nzgmdb.mseed_management.mseed_to_gmprocess import (
-    convert_mseed_to_gmprocess,
-)
+from nzgmdb.mseed_management.mseed_to_gmprocess import \
+    convert_mseed_to_gmprocess
 
 app = typer.Typer()
 
