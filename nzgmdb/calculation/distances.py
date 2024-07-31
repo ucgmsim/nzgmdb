@@ -271,8 +271,6 @@ def get_l_w_mag_scaling(
         dip_dist = strasser_2010.mw_to_w_strasser_2010_slab(mag)
     else:
         # Use LEONARD2014
-        if rake is None:
-            print("Yes")
         length = mag_scaling.mw_to_l_leonard(mag, rake)
         dip_dist = mag_scaling.mw_to_w_leonard(mag, rake)
     return length, dip_dist
@@ -655,8 +653,8 @@ def compute_distances_for_event(
         ndip = int(round(dip_dist * points_per_km))
         srf_header = [{"nstrike": nstrike, "ndip": ndip, "strike": strike}]
 
-    # Divide the srf depth points by 1000
-    srf_points[:, 2] /= 1000
+        # Divide the srf depth points by 1000
+        srf_points[:, 2] /= 1000
 
     # Calculate the distances
     rrups, rjbs, rrup_points = src_site_dist.calc_rrup_rjb(
@@ -922,6 +920,10 @@ def calc_distances(main_dir: Path, n_procs: int = 1):
     im_station_df = im_df[["sta"]].drop_duplicates()
     station_df = pd.merge(im_station_df, station_df, on="sta", how="left")
     station_df["depth"] = station_df["elev"] / -1000
+    # station_df["depth"] = station_df["elev"] / -1
+
+    # Filter event df to a single event 2016p858000
+    # event_df = event_df[event_df.evid == "2016p858000"]
 
     with mp.Pool(n_procs) as p:
         result_dfs = p.map(
