@@ -15,7 +15,7 @@ The pipeline is split into many small subtasks which are described briefly below
 8. **[Process records](https://github.com/ucgmsim/nzgmdb/wiki/Process-Records)** (Filters records based on GMC results and performs wave processing to turn mseeds into text files)
 9. **[IM Calculation](https://github.com/ucgmsim/nzgmdb/wiki/IM-Calculation)** (Performs Intensity Measure Calculations such as pSA etc.)
 10. **[Merge IM results](https://github.com/ucgmsim/nzgmdb/wiki/Merge-IM-Results)** (Merges all IM result files together and applies a Ds595 filter)
-11. **[Calculate Distances](https://github.com/ucgmsim/nzgmdb/wiki/Calculate-Distances)** (Determines correct nodal plane[ccldpy.py](..%2F..%2F..%2Flocal%2Fgmdb%2Ffinite%20fault%2Fccldpy.py), ca[ccldpy.py](..%2F..%2F..%2Flocal%2Fgmdb%2Ffinite%20fault%2Fccldpy.py)lculates rrup values for propagation table)
+11. **[Calculate Distances](https://github.com/ucgmsim/nzgmdb/wiki/Calculate-Distances)** (Determines correct nodal plane to calculate rrup values for the propagation table)
 12. **[Merge flatfiles](https://github.com/ucgmsim/nzgmdb/wiki/Merge-Flatfiles)** (Merges all flatfiles to ensure to remove filtered entries and split IM results per component into different flatfiles)
 
 Currently GMC can't be run with the rest of the pipeline and requires a different environment to run.
@@ -32,6 +32,8 @@ The top level has 4 folders:
 2. **IM** (Contains all the IM.csv files that are computed per record processed)
 3. **snr_fas** (Contains all the snr_fas.csv files computed per record where there is a phase arrival)
 4. **waveforms** (Holds all the mseed and text files for raw and processed records)
+
+![](images/file structure.png)
 
 ### Lower Levels
 **IM**, **snr_fas** and **waveforms** have then a structure that is very similar underneath.

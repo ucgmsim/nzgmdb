@@ -11,6 +11,7 @@ This information is then paired with a file "Geonet  Metadata  Summary_v1.4.csv"
 ![](images/site_table_meta.png)
 
 These are merged and if the station is not in the Geonet Summary file then it will not appear in the site table.
+Currently this does mean that there are sites used in the database that don't have lat and lon values as they are not in the Geonet Summary file.
 
 The domain of each site is also added by utilizing the "TectonicDomains_Feb2021_8_NZTM.shp" file in the data directory which gets added as a field called "site_domain_no" which is the associated domain number if the site is located in the region.
 

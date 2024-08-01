@@ -2,6 +2,7 @@ Filters records based on GMC results and performs wave processing to turn mseeds
 
 # Prerequisites
 GMC
+
 mseed files from FDSN Client
 
 # Process

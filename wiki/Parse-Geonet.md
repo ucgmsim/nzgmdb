@@ -4,8 +4,8 @@ Fetches geonet data as mseed files for waveform data. Also produces the earthqua
 site_table_basin.csv in the flatfile directory
 
 # Process
-Given a date range the code now fetches directly from geonet the earthquakes that have occurred during that timeframe with a min and max mag of 4, 10 respectively.
-The FDSN Client is then used to fetch more event data such as the datetime, lat, lon, depth etc.
+Given a date range the code now fetches directly from geonet the earthquakes that have occurred during that timeframe with a min and max magnitude of 4, 10 respectively.
+The FDSN Client is then used to fetch more event data such as the datetime, lat, lon, depth etc. Uses the site_table_basin.csv to get the Vs30 values for the stations.
 
 ## Preferred Magnitude
 The preferred magnitude is then determined by the following:
