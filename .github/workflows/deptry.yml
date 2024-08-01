@@ -1,0 +1,19 @@
+name: Deptry Dependency Check
+
+on: pull_request
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      # Setup the minimum required python distribution
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      # Install deptry
+      - run: pip install deptry
+      # Remove pyproject.toml so that deptry doesn't get confused
+      - run: rm pyproject.toml
+      # Run deptry to check that all dependencies are present.
+      - run: deptry . --package-module-name-map "IM_calculation=IM_calculation,Velocity_Model=Velocity_Model" --per-rule-ignores "DEP002=oq-engine"

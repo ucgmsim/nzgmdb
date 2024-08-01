@@ -2,15 +2,15 @@ import functools
 import multiprocessing as mp
 from pathlib import Path
 
-
 import numpy as np
 import obspy
 import pandas as pd
 
-from nzgmdb.management import file_structure, custom_errors, config as cfg
+import IM_calculation.IM.snr_calculation as snr_calc
+from nzgmdb.management import config as cfg
+from nzgmdb.management import custom_errors, file_structure
 from nzgmdb.mseed_management import reading
 from nzgmdb.phase_arrival import tp_selection
-import IM_calculation.IM.snr_calculation as snr_calc
 
 
 def compute_snr_for_single_mseed(

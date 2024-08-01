@@ -2,26 +2,26 @@
     Functions to manage Geonet Data
 """
 
-import io
 import datetime
-from typing import List
-from pathlib import Path
-from functools import partial
-
-import obspy
-import requests
-import numpy as np
-import pandas as pd
+import io
 import multiprocessing
-from scipy.interpolate import interp1d
-from obspy.core.inventory import Inventory
-from obspy.core.event import Event, Magnitude
-from obspy.clients.fdsn import Client as FDSN_Client
+from functools import partial
+from pathlib import Path
+from typing import List
 
-from nzgmdb.mseed_management import creation
+import numpy as np
+import obspy
+import pandas as pd
+import requests
+from obspy.clients.fdsn import Client as FDSN_Client
+from obspy.core.event import Event, Magnitude
+from obspy.core.inventory import Inventory
+from scipy.interpolate import interp1d
+
+from nzgmdb.data_processing import filtering
 from nzgmdb.management import config as cfg
 from nzgmdb.management import file_structure
-from nzgmdb.data_processing import filtering
+from nzgmdb.mseed_management import creation
 
 
 def get_max_magnitude(magnitudes: List[Magnitude], mag_type: str):

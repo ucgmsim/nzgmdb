@@ -1,12 +1,12 @@
 from pathlib import Path
 
-import obspy
 import numpy as np
+import obspy
 import pandas as pd
 
 from IM_calculation.IM import read_waveform
-from nzgmdb.management import custom_errors
 from nzgmdb.data_processing import waveform_manipulation
+from nzgmdb.management import custom_errors
 
 
 def create_waveform_from_mseed(

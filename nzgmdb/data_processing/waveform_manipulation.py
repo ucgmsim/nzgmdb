@@ -4,7 +4,8 @@ from obspy.clients.fdsn.header import FDSNNoDataException
 from obspy.core.stream import Stream
 from scipy import integrate, signal
 
-from nzgmdb.management import custom_errors, config as cfg
+from nzgmdb.management import config as cfg
+from nzgmdb.management import custom_errors
 
 
 def initial_preprocessing(mseed: Stream):

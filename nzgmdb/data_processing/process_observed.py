@@ -7,7 +7,8 @@ import pandas as pd
 
 import qcore.timeseries as ts
 from nzgmdb.data_processing import waveform_manipulation
-from nzgmdb.management import file_structure, custom_errors, config as cfg
+from nzgmdb.management import config as cfg
+from nzgmdb.management import custom_errors, file_structure
 
 
 def process_single_mseed(mseed_file: Path, gmc_df: pd.DataFrame, fmax_df: pd.DataFrame):
