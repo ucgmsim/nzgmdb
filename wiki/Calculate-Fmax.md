@@ -22,6 +22,8 @@ If filter passes then gets the snr values that are higher than a frequency of 4 
 If there is no found frequency point then grabs the last frequency point for fmax.
 fmax then compare against the scaled_nyquist_freq and which ever is smaller is chosen for the fmax value.
 
+Code for this can be found here (https://github.com/ucgmsim/nzgmdb/blob/2fa80fa0917989c1103ed0a1e4821be7bb8f0e73/nzgmdb/calculation/fmax.py#L60)
+
 # Output
 The main fmax.csv file comtains 4 columns
 * record id (evid_station_channel_location)

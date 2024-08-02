@@ -17,6 +17,8 @@ Reads the raw mseed files and performs some processing defined below:
 * Rotate the components to NEZ (can still be XYZ?)
 * Divide the data by gravity
 
+Code can be found here (https://github.com/ucgmsim/nzgmdb/blob/2fa80fa0917989c1103ed0a1e4821be7bb8f0e73/nzgmdb/data_processing/waveform_manipulation.py#L11)
+
 ## TP Selection
 Attempts to grab the tp value (P-Wave phase arrival) from the phase arrival table, if fails will skip the record.
 Currently just tries to match the given event_id and station, so if there is records with more than one channel type or location even with the same channel then it will find the P-wave for that entry and use it for all type of that same record for the given event id and station.
@@ -37,4 +39,4 @@ Then we calculate SNR (inter_signal / inter_noise is the interpolated signal / n
 
 # Output
 The snr_fas ouptut directory is layered like "year" / "event_id" / evid_station_channel_location_snr_fas.csv
-Metadata and skipped records are outputted to the flatfiles directory.
+Metadata and skipped records are placed in the flatfiles directory.

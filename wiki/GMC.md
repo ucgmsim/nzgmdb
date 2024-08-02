@@ -5,11 +5,12 @@ mseed files generated
 Fmax
 
 # Process
-Currently a black box
+Currently a black box (Only understand input and output and unsure of the processing that occurs between)
 
-Uses PhaseNet to determine the p-wave
+PhaseNet is used to determine the p-wave however which is known, this is developed in Tensorflow v1 which causes issues
+with python enviournments which stops this process from being able to be run automatically in the pipeline.
 
-Unsure what waveform processing is performed for fmin
+Uncertain as to what waveform processing is performed for fmin calculation.
 
 # Output
 gmc_predictions.csv which contains the score_mean, fmin_mean, and multi_mean columns for each record

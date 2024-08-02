@@ -7,9 +7,11 @@ mseed files from FDSN Client
 
 # Process
 
-A quick check is done that there is all 3 components (This was a previous bug but should be fixed, will observe)
+The following is done for every mseed file in the waveforms / mseed folder:
 
-Initial pre_processing (Same as whats written in SNR) is then performed and processing is skipped if the Inventory failed to fetch or failed to remove sensitivity
+A quick check is done that there is all 3 components (This was a previous bug which should be fixed, will observe)
+
+Initial pre_processing (Same as what is written in Calculate-SNR) is then performed and processing is skipped if the Inventory failed to fetch or failed to remove sensitivity
 
 fmax and fmin values are then extracted from the gmc and fmax dataframes
 For fmin the max fmin_mean value is taken (max across all 3 components)
@@ -53,6 +55,16 @@ Example of some of the processing
     poly_000 = np.polyval(coeff_000_2nd, np.arange(len(acc_bb_000)))
 
     Subtract the polynomial from the original acc series
+
+Example of raw mseed data vs the output of the processing
+
+Raw Mseed:
+
+![](images/raw.png)
+
+Processed Waveform:
+
+![](images/processed.png)
 
 Code can be found (https://github.com/ucgmsim/nzgmdb/blob/d020c6e32a76c156c1c58ded49ca7f4c76ee0f5d/nzgmdb/data_processing/process_observed.py#L13)
 
