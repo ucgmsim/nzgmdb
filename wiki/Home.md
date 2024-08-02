@@ -33,7 +33,7 @@ The top level has 4 folders:
 3. **snr_fas** (Contains all the snr_fas.csv files computed per record where there is a phase arrival)
 4. **waveforms** (Holds all the mseed and text files for raw and processed records)
 
-![](images/file structure.png)
+![](images/file_structure.png)
 
 ### Lower Levels
 **IM**, **snr_fas** and **waveforms** have then a structure that is very similar underneath.
