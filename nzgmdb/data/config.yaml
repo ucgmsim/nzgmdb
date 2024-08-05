@@ -89,10 +89,6 @@ components:
     - "ver"
     - "rotd50"
     - "rotd100"
-fas_start: -1
-fas_end: 2
-fas_num: 100
-fas_base: 10
 # Site Basins
 basin_version: "2.07"
 # Rupture Models
