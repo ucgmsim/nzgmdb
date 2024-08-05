@@ -1,5 +1,6 @@
-name: isort import check
-on: [push, pull_request]
+name: Run isort
+on:
+  - pull_request
 
 jobs:
   build:
@@ -7,5 +8,3 @@ jobs:
     steps:
       - uses: actions/checkout@v3
       - uses: isort/isort-action@v1
-        with:
-            requirements-files: "requirements.txt requirements-test.txt"

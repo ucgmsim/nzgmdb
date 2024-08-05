@@ -2,7 +2,8 @@ from pathlib import Path
 
 import pandas as pd
 
-from nzgmdb.management import file_structure, config as cfg
+from nzgmdb.management import config as cfg
+from nzgmdb.management import file_structure
 
 
 def merge_im_data(

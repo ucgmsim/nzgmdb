@@ -1,20 +1,20 @@
-import warnings
 import http.client
+import warnings
 from pathlib import Path
 from typing import Iterable
 
 import numpy as np
 import pandas as pd
 from obspy import Stream
-from obspy.taup import TauPyModel
-from obspy.core.event import Origin
-from obspy.geodetics import kilometers2degrees
 from obspy.clients.fdsn import Client as FDSN_Client
 from obspy.clients.fdsn.header import FDSNNoDataException
-from obspy.io.mseed import ObsPyMSEEDFilesizeTooSmallError, InternalMSEEDError
+from obspy.core.event import Origin
+from obspy.geodetics import kilometers2degrees
+from obspy.io.mseed import InternalMSEEDError, ObsPyMSEEDFilesizeTooSmallError
+from obspy.taup import TauPyModel
 
-from nzgmdb.management import config as cfg
 from empirical.util import classdef, openquake_wrapper_vectorized, z_model_calculations
+from nzgmdb.management import config as cfg
 
 
 def get_waveforms(
@@ -57,7 +57,7 @@ def get_waveforms(
     """
     config = cfg.Config()
     vs30 = config.get_value("vs30") if vs30 is None else vs30
-    rake = 90  # TODO get from the earthquake source table
+    rake = 90  # Assume strike-slip for now
     z1p0 = z_model_calculations.chiou_young_08_calc_z1p0(vs30)
     # Predict significant duration time from Afshari and Stewart (2016)
     input_df = pd.DataFrame(

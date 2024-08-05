@@ -14,7 +14,7 @@ import obspy
 import pandas as pd
 from obspy.clients.fdsn import Client as FDSN_Client
 
-from nzgmdb.management import file_structure, custom_errors
+from nzgmdb.management import custom_errors, file_structure
 from nzgmdb.phase_arrival import picker
 
 

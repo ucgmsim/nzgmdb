@@ -6,13 +6,13 @@ scipy
 requests
 fiona
 pyproj
-pyyaml
+yaml @ pyyaml
 pytz
 shapely
 gmprocess
 matplotlib
-git+https://github.com/ucgmsim/Empirical_Engine.git
-git+https://github.com/gem/oq-engine.git
-git+https://github.com/ucgmsim/qcore.git@data
-git+https://github.com/ucgmsim/IM_calculation.git@install_fix
-git+https://github.com/ucgmsim/Velocity-Model.git
+empirical @ git+https://github.com/ucgmsim/Empirical_Engine.git
+oq-engine @ git+https://github.com/gem/oq-engine.git
+qcore @ git+https://github.com/ucgmsim/qcore.git
+IM_calculation @ git+https://github.com/ucgmsim/IM_calculation.git
+Velocity_Model @ git+https://github.com/ucgmsim/Velocity-Model.git
