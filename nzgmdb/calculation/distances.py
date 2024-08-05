@@ -11,16 +11,11 @@ from shapely.geometry import Point
 from shapely.geometry.polygon import LineString, Polygon
 
 from IM_calculation.source_site_dist import src_site_dist
-from nzgmdb.data_retrieval import rupture_models as geonet_rupture_models
 from nzgmdb.management import config as cfg
 from nzgmdb.management import file_structure
 from qcore import geo, grid, srf
 from qcore.uncertainties import mag_scaling
 from qcore.uncertainties.magnitude_scaling import strasser_2010
-from IM_calculation.source_site_dist import src_site_dist
-from nzgmdb.data_retrieval import rupture_models as geonet_rupture_models
-from nzgmdb.management import file_structure, config as cfg
-from nzgmdb.CCLD import ccldpy
 
 
 def calc_fnorm_slip(
@@ -280,53 +275,6 @@ def get_l_w_mag_scaling(
     return length, dip_dist
 
 
-def run_ccld_simulation(
-    event_id: str,
-    event_row: pd.Series,
-    strike: float,
-    dip: float,
-    rake: float,
-    method: str,
-    strike2: float = None,
-    dip2: float = None,
-    rake2: float = None,
-):
-    ccdl_tect_class = ccldpy.TECTONIC_MAPPING[event_row.tect_class]
-    if ccdl_tect_class == "crustal":
-        nsims = [334, 333, 333, 111, 111, 111, 0]
-    elif ccdl_tect_class == "intraslab":
-        nsims = [0, 0, 0, 0, 0, 0, 333]
-    else:
-        # Interface
-        nsims = [0, 0, 333, 0, 0, 0, 333]
-    _, selected = ccldpy.simulate_rupture_surface(
-        int(event_id.split("p")[-1]),
-        ccdl_tect_class,
-        "other",
-        event_row.lat,
-        event_row.lon,
-        event_row.depth,
-        event_row.mag,
-        method,
-        nsims,
-        strike=strike,
-        dip=dip,
-        rake=rake,
-        strike2=strike2,
-        dip2=dip2,
-        rake2=rake2,
-    )
-    strike = selected["Strike"].values[0]
-    dip = selected["Dip"].values[0]
-    rake = selected["Rake"].values[0]
-    length = selected["Length (km)"].values[0]
-    dip_dist = selected["Width (km)"].values[0]
-    ztor = selected["Rupture Top Depth (km)"].values[0]
-    dbottom = selected["Rupture Bottom Depth (km)"].values[0]
-
-    return strike, dip, rake, length, dip_dist, ztor, dbottom
-
-
 def get_nodal_plane_info(
     event_id: str,
     event_row: pd.Series,
@@ -334,13 +282,11 @@ def get_nodal_plane_info(
     modified_cmt_df: pd.DataFrame,
     domain_focal_df: pd.DataFrame,
     srf_files: dict,
-    rupture_models: dict,
 ) -> dict:
     """
     Determine the correct nodal plane for the event
     First checks if the event is in the srf_files, if it is, it uses the srf file to determine the nodal plane
     If it is not in the srf_files, it checks if the event is in the rupture_models to determine the nodal plane
-    If it is not in the rupture_models, it checks if the event is in the modified CMT data to determine the nodal plane
     If it is not in the modified CMT data, it checks if the event is in the Geonet CMT data to determine the nodal plane
     If it is not in the Geonet CMT data, it uses the domain focal to determine the nodal plane
 
@@ -361,8 +307,6 @@ def get_nodal_plane_info(
         The focal mechanism data for the different domains
     srf_files : dict
         The srf files for specific events
-    rupture_models : dict
-        The rupture models for specific events
 
     Returns
     -------
@@ -428,87 +372,39 @@ def get_nodal_plane_info(
                 dip = cmt.dip2
             length = srf_header[0]["length"]
             dip_dist = srf_header[0]["width"]
-        # length = np.sum([header["length"] for header in srf_header])
-        # dip_dist = np.mean([header["width"] for header in srf_header])
-    # elif event_id in rupture_models:
-    #     # Event is in the rupture models
-    #     f_type = "geonet_rm"
-    #     rupture_data = geonet_rupture_models.get_seismic_data_from_url(
-    #         rupture_models[event_id]
-    #     )
-    #     (
-    #         ztor,
-    #         dbottom,
-    #         strike,
-    #         dip,
-    #         rake,
-    #         length,
-    #         dip_dist,
-    #     ) = (
-    #         rupture_data["ztor"],
-    #         rupture_data["dbottom"],
-    #         rupture_data["strike"],
-    #         rupture_data["dip"],
-    #         rupture_data["rake"],
-    #         rupture_data["length"],
-    #         rupture_data["width"],
-    #     )
     elif event_id in modified_cmt_df.PublicID.values:
         # Event is in the modified CMT data
         f_type = "cmt"
         cmt = modified_cmt_df[modified_cmt_df.PublicID == event_id].iloc[0]
-        # Compute the CCLD Simulations for the event
-        strike, dip, rake, length, dip_dist, ztor, dbottom = run_ccld_simulation(
-            event_id, event_row, cmt.strike1, cmt.dip1, cmt.rake1, "A"
-        )
-        # strike = cmt.strike1
-        # dip = cmt.dip1
-        # rake = cmt.rake1
+        strike = cmt.strike1
+        dip = cmt.dip1
+        rake = cmt.rake1
 
     elif event_id in geonet_cmt_df.PublicID.values:
         # Event is in the Geonet CMT data
         # Need to determine the correct plane
         f_type = "cmt_unc"
         cmt = geonet_cmt_df[geonet_cmt_df.PublicID == event_id].iloc[0]
+        norm, slip = calc_fnorm_slip(cmt.strike1, cmt.dip1, cmt.rake1)
 
-        # Compute the CCLD Simulations for the event
-        strike, dip, rake, length, dip_dist, ztor, dbottom = run_ccld_simulation(
-            event_id,
-            event_row,
-            cmt.strike1,
-            cmt.dip1,
-            cmt.rake1,
-            "C",
-            cmt.strike2,
-            cmt.dip2,
-            cmt.rake2,
+        # Get the domain focal values
+        do_strike, do_rake, do_dip = get_domain_focal(
+            event_row["domain_no"], domain_focal_df
         )
 
-        # norm, slip = calc_fnorm_slip(cmt.strike1, cmt.dip1, cmt.rake1)
-        #
-        # # Get the domain focal values
-        # do_strike, do_rake, do_dip = get_domain_focal(
-        #     event_row["domain_no"], domain_focal_df
-        # )
-        #
-        # # Figure out the correct plane based on the rotation and the domain focal values
-        # do_norm, do_slip = calc_fnorm_slip(do_strike, do_dip, do_rake)
-        # plane_out = mech_rot(do_norm, norm, do_slip, slip)
-        #
-        # if plane_out == 1:
-        #     strike, dip, rake = cmt.strike1, cmt.dip1, cmt.rake1
-        # else:
-        #     strike, dip, rake = cmt.strike2, cmt.dip2, cmt.rake2
+        # Figure out the correct plane based on the rotation and the domain focal values
+        do_norm, do_slip = calc_fnorm_slip(do_strike, do_dip, do_rake)
+        plane_out = mech_rot(do_norm, norm, do_slip, slip)
+
+        if plane_out == 1:
+            strike, dip, rake = cmt.strike1, cmt.dip1, cmt.rake1
+        else:
+            strike, dip, rake = cmt.strike2, cmt.dip2, cmt.rake2
     else:
         # Event is not found in any of the datasets
         # Use the domain focal
         f_type = "domain"
         strike, rake, dip = get_domain_focal(event_row["domain_no"], domain_focal_df)
-
-        # Compute the CCLD Simulations for the event
-        strike, dip, rake, length, dip_dist, ztor, dbottom = run_ccld_simulation(
-            event_id, event_row, strike, dip, rake, "D"
-        )
 
     return {
         "strike": strike,
@@ -533,7 +429,6 @@ def compute_distances_for_event(
     domain_focal_df: pd.DataFrame,
     taupo_polygon: Polygon,
     srf_files: dict,
-    rupture_models: dict,
 ) -> tuple[Optional[pd.DataFrame], Optional[pd.DataFrame]]:
     """
     Compute the distances for a given event
@@ -556,8 +451,6 @@ def compute_distances_for_event(
         The Taupo VZ polygon
     srf_files : dict
         The srf files for specific events
-    rupture_models : dict
-        The rupture models for specific events
 
     Returns
     -------
@@ -587,7 +480,6 @@ def compute_distances_for_event(
         modified_cmt_df,
         domain_focal_df,
         srf_files,
-        rupture_models,
     )
     (
         strike,
@@ -615,17 +507,17 @@ def compute_distances_for_event(
 
     # Get the length and dip_dist if they are None
     # This is the case for when grabbing strike, dip, rake from the CMT files or the domain focal
-    # if f_type != "ff" and (length is None or dip_dist is None):
-    #     length, dip_dist = get_l_w_mag_scaling(
-    #         event_row["mag"], rake, event_row["tect_class"]
-    #     )
+    if f_type != "ff" and (length is None or dip_dist is None):
+        length, dip_dist = get_l_w_mag_scaling(
+            event_row["mag"], rake, event_row["tect_class"]
+        )
 
     # Get the ztor and dbottom if they are None
     # This is the case for when grabbing strike, dip, rake from the CMT files or the domain focal
-    # if f_type != "ff" and (ztor is None or dbottom is None):
-    #     height = np.sin(np.radians(dip)) * dip_dist
-    #     ztor = max(event_row["depth"] - (height / 2), 0)
-    #     dbottom = ztor + height
+    if f_type != "ff" and (ztor is None or dbottom is None):
+        height = np.sin(np.radians(dip)) * dip_dist
+        ztor = max(event_row["depth"] - (height / 2), 0)
+        dbottom = ztor + height
 
     if srf_header is None or srf_points is None:
         # Calculate the corners of the plane
@@ -741,7 +633,7 @@ def compute_distances_for_event(
         ]
     )
 
-    return propagation_data_combo, extra_event_data, rrup_points
+    return propagation_data_combo, extra_event_data
 
 
 def distance_in_taupo(
@@ -889,9 +781,6 @@ def calc_distances(main_dir: Path, n_procs: int = 1):
     for srf_file in (data_dir / "SrfSourceModels").glob("*.srf"):
         srf_files[srf_file.stem] = srf_file
 
-    # Get the rupture models from Geonet
-    # rupture_models = geonet_rupture_models.get_rupture_models()
-
     # Get the IM data
     im_df = pd.read_csv(flatfile_dir / "ground_motion_im_catalogue.csv")
     # Convert the evid to a string
@@ -924,10 +813,6 @@ def calc_distances(main_dir: Path, n_procs: int = 1):
     im_station_df = im_df[["sta"]].drop_duplicates()
     station_df = pd.merge(im_station_df, station_df, on="sta", how="left")
     station_df["depth"] = station_df["elev"] / -1000
-    # station_df["depth"] = station_df["elev"] / -1
-
-    # Filter event df to a single event 2016p858000
-    # event_df = event_df[event_df.evid == "2016p858000"]
 
     with mp.Pool(n_procs) as p:
         result_dfs = p.map(
@@ -940,23 +825,18 @@ def calc_distances(main_dir: Path, n_procs: int = 1):
                 domain_focal_df=domain_focal_df,
                 taupo_polygon=taupo_polygon,
                 srf_files=srf_files,
-                rupture_models=None,
             ),
             [row for idx, row in event_df.iterrows()],
         )
 
     # Combine the results
-    propagation_results, extra_event_results, rrup_points = zip(*result_dfs)
+    propagation_results, extra_event_results = zip(*result_dfs)
     propagation_data = pd.concat(propagation_results)
     extra_event_data = pd.concat(extra_event_results)
 
     # Merge the extra event data with the event data
     event_df = pd.merge(event_df, extra_event_data, on="evid", how="right")
 
-    a = np.concatenate(rrup_points)
-    df = pd.DataFrame(a)
-    df.to_csv(flatfile_dir / "rrup_points.csv", index=False)
-
     # Save the results
     propagation_data.to_csv(flatfile_dir / "propagation_path_table.csv", index=False)
-    event_df.to_csv(flatfile_dir / "earthquake_source_table_adjusted.csv", index=False)
+    event_df.to_csv(flatfile_dir / "earthquake_source_table.csv", index=False)
