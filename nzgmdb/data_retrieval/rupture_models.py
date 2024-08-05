@@ -142,7 +142,7 @@ def get_seismic_data_from_url(
             )
             length += np.linalg.norm([north_2 - north_1, east_2 - east_1]) / 1000
         except KeyError:
-            # This means Northing was not found in the dataframe and so need to compute the distance base don lat lon
+            # This means Northing was not found in the dataframe and so need to compute the distance based on lat lon
             lat1, lon1 = df_seg.iloc[0]["lat"], df_seg.iloc[0]["lon"]
             lat2, lon2 = df_seg.iloc[-1]["lat"], df_seg.iloc[-1]["lon"]
 
