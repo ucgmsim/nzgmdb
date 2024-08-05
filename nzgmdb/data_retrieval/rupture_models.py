@@ -4,8 +4,8 @@ import numpy as np
 import pandas as pd
 import requests
 
-from qcore import geo
 from nzgmdb.management import config as cfg
+from qcore import geo
 
 
 def fetch_github_directory_contents(
