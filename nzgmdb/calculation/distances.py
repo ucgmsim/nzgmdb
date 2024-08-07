@@ -12,7 +12,7 @@ from shapely.geometry.polygon import LineString, Polygon
 
 from nzgmdb.management import config as cfg
 from nzgmdb.management import file_structure
-from qcore import geo, grid, srf, src_site_dist
+from qcore import geo, grid, src_site_dist, srf
 from qcore.uncertainties import mag_scaling
 from qcore.uncertainties.magnitude_scaling import strasser_2010
 
