@@ -10,10 +10,9 @@ from pyproj import Transformer
 from shapely.geometry import Point
 from shapely.geometry.polygon import LineString, Polygon
 
-from IM_calculation.source_site_dist import src_site_dist
 from nzgmdb.management import config as cfg
 from nzgmdb.management import file_structure
-from qcore import geo, grid, srf
+from qcore import geo, grid, srf, src_site_dist
 from qcore.uncertainties import mag_scaling
 from qcore.uncertainties.magnitude_scaling import strasser_2010
 
