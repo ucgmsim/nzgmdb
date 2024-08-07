@@ -454,12 +454,12 @@ def get_nodal_plane_info(
         f_type = "cmt"
         cmt = modified_cmt_df[modified_cmt_df.PublicID == event_id].iloc[0]
         # Compute the CCLD Simulations for the event
-        strike, dip, rake, length, dip_dist, ztor, dbottom = run_ccld_simulation(
-            event_id, event_row, cmt.strike1, cmt.dip1, cmt.rake1, "A"
-        )
-        # strike = cmt.strike1
-        # dip = cmt.dip1
-        # rake = cmt.rake1
+        # strike, dip, rake, length, dip_dist, ztor, dbottom = run_ccld_simulation(
+        #     event_id, event_row, cmt.strike1, cmt.dip1, cmt.rake1, "A"
+        # )
+        strike = cmt.strike1
+        dip = cmt.dip1
+        rake = cmt.rake1
 
     elif event_id in geonet_cmt_df.PublicID.values:
         # Event is in the Geonet CMT data
@@ -468,33 +468,33 @@ def get_nodal_plane_info(
         cmt = geonet_cmt_df[geonet_cmt_df.PublicID == event_id].iloc[0]
 
         # Compute the CCLD Simulations for the event
-        strike, dip, rake, length, dip_dist, ztor, dbottom = run_ccld_simulation(
-            event_id,
-            event_row,
-            cmt.strike1,
-            cmt.dip1,
-            cmt.rake1,
-            "C",
-            cmt.strike2,
-            cmt.dip2,
-            cmt.rake2,
+        # strike, dip, rake, length, dip_dist, ztor, dbottom = run_ccld_simulation(
+        #     event_id,
+        #     event_row,
+        #     cmt.strike1,
+        #     cmt.dip1,
+        #     cmt.rake1,
+        #     "C",
+        #     cmt.strike2,
+        #     cmt.dip2,
+        #     cmt.rake2,
+        # )
+
+        norm, slip = calc_fnorm_slip(cmt.strike1, cmt.dip1, cmt.rake1)
+
+        # Get the domain focal values
+        do_strike, do_rake, do_dip = get_domain_focal(
+            event_row["domain_no"], domain_focal_df
         )
 
-        # norm, slip = calc_fnorm_slip(cmt.strike1, cmt.dip1, cmt.rake1)
-        #
-        # # Get the domain focal values
-        # do_strike, do_rake, do_dip = get_domain_focal(
-        #     event_row["domain_no"], domain_focal_df
-        # )
-        #
-        # # Figure out the correct plane based on the rotation and the domain focal values
-        # do_norm, do_slip = calc_fnorm_slip(do_strike, do_dip, do_rake)
-        # plane_out = mech_rot(do_norm, norm, do_slip, slip)
-        #
-        # if plane_out == 1:
-        #     strike, dip, rake = cmt.strike1, cmt.dip1, cmt.rake1
-        # else:
-        #     strike, dip, rake = cmt.strike2, cmt.dip2, cmt.rake2
+        # Figure out the correct plane based on the rotation and the domain focal values
+        do_norm, do_slip = calc_fnorm_slip(do_strike, do_dip, do_rake)
+        plane_out = mech_rot(do_norm, norm, do_slip, slip)
+
+        if plane_out == 1:
+            strike, dip, rake = cmt.strike1, cmt.dip1, cmt.rake1
+        else:
+            strike, dip, rake = cmt.strike2, cmt.dip2, cmt.rake2
     else:
         # Event is not found in any of the datasets
         # Use the domain focal
@@ -502,9 +502,9 @@ def get_nodal_plane_info(
         strike, rake, dip = get_domain_focal(event_row["domain_no"], domain_focal_df)
 
         # Compute the CCLD Simulations for the event
-        strike, dip, rake, length, dip_dist, ztor, dbottom = run_ccld_simulation(
-            event_id, event_row, strike, dip, rake, "D"
-        )
+        # strike, dip, rake, length, dip_dist, ztor, dbottom = run_ccld_simulation(
+        #     event_id, event_row, strike, dip, rake, "D"
+        # )
 
     return {
         "strike": strike,
@@ -611,17 +611,17 @@ def compute_distances_for_event(
 
     # Get the length and dip_dist if they are None
     # This is the case for when grabbing strike, dip, rake from the CMT files or the domain focal
-    # if f_type != "ff" and (length is None or dip_dist is None):
-    #     length, dip_dist = get_l_w_mag_scaling(
-    #         event_row["mag"], rake, event_row["tect_class"]
-    #     )
+    if f_type != "ff" and (length is None or dip_dist is None):
+        length, dip_dist = get_l_w_mag_scaling(
+            event_row["mag"], rake, event_row["tect_class"]
+        )
 
     # Get the ztor and dbottom if they are None
     # This is the case for when grabbing strike, dip, rake from the CMT files or the domain focal
-    # if f_type != "ff" and (ztor is None or dbottom is None):
-    #     height = np.sin(np.radians(dip)) * dip_dist
-    #     ztor = max(event_row["depth"] - (height / 2), 0)
-    #     dbottom = ztor + height
+    if f_type != "ff" and (ztor is None or dbottom is None):
+        height = np.sin(np.radians(dip)) * dip_dist
+        ztor = max(event_row["depth"] - (height / 2), 0)
+        dbottom = ztor + height
 
     if srf_header is None or srf_points is None:
         # Calculate the corners of the plane
@@ -655,6 +655,21 @@ def compute_distances_for_event(
 
         # Divide the srf depth points by 1000
         srf_points[:, 2] /= 1000
+
+    if f_type == "domain":
+        method = "D"
+    elif f_type == "cmt":
+        method = "A"
+    elif f_type == "cmt_unc":
+        method = "C"
+    else:  ## ff
+        method = "ff"
+    srf_points_df = pd.DataFrame(srf_points)
+    # Set the columns
+    srf_points_df.columns = ["lon", "lat", "depth"]
+    srf_points_df.to_csv(
+        f"/home/joel/local/gmdb/finite_fault/srf_points_filtered/srf_{event_row['tect_class']}_{event_id}_{method}.csv"
+    )
 
     # Calculate the distances
     rrups, rjbs, rrup_points = src_site_dist.calc_rrup_rjb(
@@ -923,7 +938,18 @@ def calc_distances(main_dir: Path, n_procs: int = 1):
     # station_df["depth"] = station_df["elev"] / -1
 
     # Filter event df to a single event 2016p858000
-    # event_df = event_df[event_df.evid == "2016p858000"]
+    event_ids_to_filter = [
+        "2150536",
+        "2326055",
+        "3630601",
+        "2012p498491",
+        "2013p447224",
+        "2014p051675",
+        "2014p864702",
+        "2016p858055",
+        "2016p858260",
+    ]
+    event_df = event_df[event_df.evid.isin(event_ids_to_filter)]
 
     with mp.Pool(n_procs) as p:
         result_dfs = p.map(
