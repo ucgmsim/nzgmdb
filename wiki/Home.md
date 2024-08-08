@@ -1,6 +1,6 @@
 # Welcome to the NZGMDB WIKI
 
-This wiki will explain all the processes and steps of the pipeline in details from start to finish.
+This wiki will explain all the processes and steps of the pipeline in detail from start to finish.
 
 
 # Overview
@@ -24,7 +24,7 @@ Therefore the pipeline is split into 3 sections (Pre GMC, GMC, Post GMC) where P
 ![](images/pipeline.png)
 
 # File Structure
-Below explain the file structure of the current NZGMDB after a successful run of the pipeline. This will also go over filename conventions.
+The section below explains the file structure of the current NZGMDB after a successful run of the pipeline. This will also go over filename conventions.
 
 ## Top Level
 The top level has 4 folders:
@@ -39,7 +39,7 @@ The top level has 4 folders:
 **IM**, **snr_fas** and **waveforms** have then a structure that is very similar underneath.
 This is followed by a year folder such as "2022" and then an event folder which is the same as the evid such as "2022p002924".
 
-After that it differs between as **IM** stores IM.csv files in the event folder per record with the naming convention evid_station_channel_location_IM.csv for example "2022p002924_DCZ_HN_20_IM.csv".
+After that it differs as **IM** stores IM.csv files in the event folder per record with the naming convention evid_station_channel_location_IM.csv for example "2022p002924_DCZ_HN_20_IM.csv".
 
 **snr_fas** is similar in which the same naming convention is used except with the suffix snr_fas.csv for example "2022p002924_DCZ_HN_20_snr_fas.csv" and are placed in the event directory too.
 

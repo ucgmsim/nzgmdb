@@ -1,19 +1,19 @@
-Merges all flatfiles to ensure to remove filtered entries and split IM results per component into different flatfiles
+Merges all flatfiles to ensure to removal of filtered entries and splits IM results per component into different flatfiles
 
 # Prerequisites
 
-Distances calculated
+- Distances calculated
 
 # Process
 
-Reads all the flatfiles to ensure that only events that are fully passed all the filtering steps applied to the ground_motion_im_catalogue.
+Reads all the flatfiles to ensure that only events that fully passed all the filtering steps are applied to the ground_motion_im_catalogue.
 
 Splits the ground_motion_im_catalogue table into 5 different tables for each component (000, 090, ver, rotd50, rotd100).
 Also creates a duplicated version of these that contain a flatfile version with merged data from the event, site and propagation flatfiles.
 
 # Output
 
-Saves a file called "missing_cites.csv" which contains sites that have IM data but the is no record of them in the site_table.
+Saves a file called "missing_sites.csv" which contains sites that have IM data but there is no record of them in the site_table.
 
 Below is a list of all the flatfile csvs which are saved:
 - earthquake_source_table

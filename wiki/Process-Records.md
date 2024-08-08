@@ -1,15 +1,14 @@
 Filters records based on GMC results and performs wave processing to turn mseeds into text files
 
 # Prerequisites
-GMC
-
-mseed files from FDSN Client
+- GMC
+- Parse Geonet (mseed files from FDSN Client)
 
 # Process
 
 The following is done for every mseed file in the waveforms / mseed folder:
 
-A quick check is done that there is all 3 components (This was a previous bug which should be fixed, will observe)
+A quick check is done that there are all 3 components (this was a previous bug that should be fixed, will observe)
 
 Initial pre_processing (Same as what is written in Calculate-SNR) is then performed and processing is skipped if the Inventory failed to fetch or failed to remove sensitivity
 
@@ -18,7 +17,7 @@ For fmin the max fmin_mean value is taken (max across all 3 components)
 fmax is the min of all 3 components
 
 If these values are not found then for the fmin, lowcut is set to 0.05 and if fmax is missing then the highcut is set to 1 / (2.5 * dt)
-A simple check is performed that the lowcut is not higher than the highcut, if so the record is skipped
+If these values are not found then the fmin lowcut is set to 0.05. Similarly, if fmax is missing then the highcut is set to 1 / (2.5 * dt)
 
 Then the 000, 090 and ver components are selected from the initial processed mseed (rotated)
 Tries to grab NE if not then tries XY and if not then skips record
@@ -66,8 +65,8 @@ Processed Waveform:
 
 ![](images/processed.png)
 
-Code can be found (https://github.com/ucgmsim/nzgmdb/blob/d020c6e32a76c156c1c58ded49ca7f4c76ee0f5d/nzgmdb/data_processing/process_observed.py#L13)
+Code can be found [here](https://github.com/ucgmsim/nzgmdb/blob/d020c6e32a76c156c1c58ded49ca7f4c76ee0f5d/nzgmdb/data_processing/process_observed.py#L13)
 
 
 # Output
-If successfully passed all checks saves as individual component files named the same as the mseed but with the extentions of .000 .090 and .ver in the waveforms directory but under "processed"
+If all checks are successfully passed, saves as individual component files named the same as the mseed but with the extensions of .000 .090 and .ver in the waveforms directory but under "processed".

@@ -2,7 +2,7 @@ Merges all IM result files together and applies a Ds595 filter
 
 # Prerequisites
 
-Calculated IM files for each record
+- Calculated IM files for each record
 
 # Process
 
