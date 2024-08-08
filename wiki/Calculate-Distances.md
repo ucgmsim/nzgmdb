@@ -23,22 +23,22 @@ The code for this function can be found [here](https://github.com/ucgmsim/nzgmdb
 
 ## Length and Width adjustments
 After the strike dip and rake are determined, if the length and width are not defined then the following is used to get the Length and Width variables
-```
+```python
 mag_scale_slab_min = 5.9
 mag_scale_slab_max = 7.8
- Get the width and length using magnitude scaling
-    if tect_class == "Interface":
-        # Use SKARLATOUDIS2016
-        dip_dist = np.sqrt(mag_scaling.mw_to_a_skarlatoudis(mag))
-        length = dip_dist
-    elif tect_class == "Slab" and mag_scale_slab_min <= mag <= mag_scale_slab_max:
-        # Use STRASSER2010SLAB
-        length = strasser_2010.mw_to_l_strasser_2010_slab(mag)
-        dip_dist = strasser_2010.mw_to_w_strasser_2010_slab(mag)
-    else:
-        # Use LEONARD2014
-        length = mag_scaling.mw_to_l_leonard(mag, rake)
-        dip_dist = mag_scaling.mw_to_w_leonard(mag, rake)
+# Get the width and length using magnitude scaling
+if tect_class == "Interface":
+    # Use SKARLATOUDIS2016
+    dip_dist = np.sqrt(mag_scaling.mw_to_a_skarlatoudis(mag))
+    length = dip_dist
+elif tect_class == "Slab" and mag_scale_slab_min <= mag <= mag_scale_slab_max:
+    # Use STRASSER2010SLAB
+    length = strasser_2010.mw_to_l_strasser_2010_slab(mag)
+    dip_dist = strasser_2010.mw_to_w_strasser_2010_slab(mag)
+else:
+    # Use LEONARD2014
+    length = mag_scaling.mw_to_l_leonard(mag, rake)
+    dip_dist = mag_scaling.mw_to_w_leonard(mag, rake)
 ```
 
 ## SRF points to rrup

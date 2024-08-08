@@ -36,9 +36,11 @@ We then set values to NaN for the frequencies that are outside the bounds of the
 
 Then we calculate SNR (inter_signal / inter_noise is the interpolated signal / noise)
 
-`snr = (inter_signal / np.sqrt(signal_duration)) / (`
-        `inter_noise / np.sqrt(noise_duration)`
-    `)`
+```python
+snr = (inter_signal / np.sqrt(signal_duration)) / (
+        inter_noise / np.sqrt(noise_duration)
+    )
+```
 
 # Output
 The snr_fas ouptut directory is layered like "year" / "event_id" / evid_station_channel_location_snr_fas.csv.
