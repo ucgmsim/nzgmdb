@@ -10,7 +10,7 @@ from obspy.clients.fdsn import Client as FDSN_Client
 from shapely.geometry import Point
 from shapely.geometry.polygon import Polygon, LineString
 
-from qcore import srf, geo, grid, src_site_dist
+from qcore import srf, geo, grid, src_site_dist, coordinates
 from qcore.uncertainties import mag_scaling
 from qcore.uncertainties.magnitude_scaling import strasser_2010
 from nzgmdb.data_retrieval import rupture_models as geonet_rupture_models
@@ -318,8 +318,26 @@ def run_ccld_simulation(
     dip_dist = selected["Width (km)"].values[0]
     ztor = selected["Rupture Top Depth (km)"].values[0]
     dbottom = selected["Rupture Bottom Depth (km)"].values[0]
+    hyp_lat = selected["Hypocenter Latitude"].values[0]
+    hyp_lon = selected["Hypocenter Longitude"].values[0]
+    hyp_depth = selected["Hypocenter Depth (km)"].values[0]
+    hyp_strike = selected["Hypocenter Along-Strike Position"].values[0]
+    hyp_dip = selected["Hypocenter Down-Dip Position"].values[0]
 
-    return strike, dip, rake, length, dip_dist, ztor, dbottom
+    return (
+        strike,
+        dip,
+        rake,
+        length,
+        dip_dist,
+        ztor,
+        dbottom,
+        hyp_lat,
+        hyp_lon,
+        hyp_depth,
+        hyp_strike,
+        hyp_dip,
+    )
 
 
 def get_nodal_plane_info(
@@ -330,6 +348,7 @@ def get_nodal_plane_info(
     domain_focal_df: pd.DataFrame,
     srf_files: dict,
     rupture_models: dict,
+    ccld: bool,
 ) -> dict:
     """
     Determine the correct nodal plane for the event
@@ -384,14 +403,19 @@ def get_nodal_plane_info(
         'f_type' : str
             The focal type that determined the nodal plane (ff, geonet_rm, cmt, cmt_unc, domain)
     """
-    length, dip_dist, srf_points, srf_header, ztor, dbottom = (
-        None,
-        None,
-        None,
-        None,
-        None,
-        None,
-    )
+    (
+        length,
+        dip_dist,
+        srf_points,
+        srf_header,
+        ztor,
+        dbottom,
+        hyp_lat,
+        hyp_lon,
+        hyp_depth,
+        hyp_strike,
+        hyp_dip,
+    ) = (None, None, None, None, None, None, None, None, None, None, None)
     # Check if the event_id is in the srf_files
     if event_id in srf_files:
         srf_file = str(srf_files[event_id])
@@ -452,13 +476,28 @@ def get_nodal_plane_info(
         # Event is in the modified CMT data
         f_type = "cmt"
         cmt = modified_cmt_df[modified_cmt_df.PublicID == event_id].iloc[0]
-        # Compute the CCLD Simulations for the event
-        strike, dip, rake, length, dip_dist, ztor, dbottom = run_ccld_simulation(
-            event_id, event_row, cmt.strike1, cmt.dip1, cmt.rake1, "A"
-        )
-        # strike = cmt.strike1
-        # dip = cmt.dip1
-        # rake = cmt.rake1
+        if ccld:
+            # Compute the CCLD Simulations for the event
+            (
+                strike,
+                dip,
+                rake,
+                length,
+                dip_dist,
+                ztor,
+                dbottom,
+                hyp_lat,
+                hyp_lon,
+                hyp_depth,
+                hyp_strike,
+                hyp_dip,
+            ) = run_ccld_simulation(
+                event_id, event_row, cmt.strike1, cmt.dip1, cmt.rake1, "A"
+            )
+        else:
+            strike = cmt.strike1
+            dip = cmt.dip1
+            rake = cmt.rake1
 
     elif event_id in geonet_cmt_df.PublicID.values:
         # Event is in the Geonet CMT data
@@ -466,44 +505,70 @@ def get_nodal_plane_info(
         f_type = "cmt_unc"
         cmt = geonet_cmt_df[geonet_cmt_df.PublicID == event_id].iloc[0]
 
-        # Compute the CCLD Simulations for the event
-        strike, dip, rake, length, dip_dist, ztor, dbottom = run_ccld_simulation(
-            event_id,
-            event_row,
-            cmt.strike1,
-            cmt.dip1,
-            cmt.rake1,
-            "C",
-            cmt.strike2,
-            cmt.dip2,
-            cmt.rake2,
-        )
+        if ccld:
+            # Compute the CCLD Simulations for the event
+            (
+                strike,
+                dip,
+                rake,
+                length,
+                dip_dist,
+                ztor,
+                dbottom,
+                hyp_lat,
+                hyp_lon,
+                hyp_depth,
+                hyp_strike,
+                hyp_dip,
+            ) = run_ccld_simulation(
+                event_id,
+                event_row,
+                cmt.strike1,
+                cmt.dip1,
+                cmt.rake1,
+                "C",
+                cmt.strike2,
+                cmt.dip2,
+                cmt.rake2,
+            )
+        else:
+            norm, slip = calc_fnorm_slip(cmt.strike1, cmt.dip1, cmt.rake1)
 
-        # norm, slip = calc_fnorm_slip(cmt.strike1, cmt.dip1, cmt.rake1)
-        #
-        # # Get the domain focal values
-        # do_strike, do_rake, do_dip = get_domain_focal(
-        #     event_row["domain_no"], domain_focal_df
-        # )
-        #
-        # # Figure out the correct plane based on the rotation and the domain focal values
-        # do_norm, do_slip = calc_fnorm_slip(do_strike, do_dip, do_rake)
-        # plane_out = mech_rot(do_norm, norm, do_slip, slip)
-        #
-        # if plane_out == 1:
-        #     strike, dip, rake = cmt.strike1, cmt.dip1, cmt.rake1
-        # else:
-        #     strike, dip, rake = cmt.strike2, cmt.dip2, cmt.rake2
+            # Get the domain focal values
+            do_strike, do_rake, do_dip = get_domain_focal(
+                event_row["domain_no"], domain_focal_df
+            )
+
+            # Figure out the correct plane based on the rotation and the domain focal values
+            do_norm, do_slip = calc_fnorm_slip(do_strike, do_dip, do_rake)
+            plane_out = mech_rot(do_norm, norm, do_slip, slip)
+
+            if plane_out == 1:
+                strike, dip, rake = cmt.strike1, cmt.dip1, cmt.rake1
+            else:
+                strike, dip, rake = cmt.strike2, cmt.dip2, cmt.rake2
     else:
         # Event is not found in any of the datasets
         # Use the domain focal
         f_type = "domain"
         strike, rake, dip = get_domain_focal(event_row["domain_no"], domain_focal_df)
 
-        # Compute the CCLD Simulations for the event
-        strike, dip, rake, length, dip_dist, ztor, dbottom = run_ccld_simulation(
-            event_id, event_row, strike, dip, rake, "D"
-        )
+        if ccld:
+            # Compute the CCLD Simulations for the event
+            (
+                strike,
+                dip,
+                rake,
+                length,
+                dip_dist,
+                ztor,
+                dbottom,
+                hyp_lat,
+                hyp_lon,
+                hyp_depth,
+                hyp_strike,
+                hyp_dip,
+            ) = run_ccld_simulation(event_id, event_row, strike, dip, rake, "D")
 
     return {
         "strike": strike,
@@ -516,6 +581,11 @@ def get_nodal_plane_info(
         "srf_points": srf_points,
         "srf_header": srf_header,
         "f_type": f_type,
+        "hyp_lat": hyp_lat,
+        "hyp_lon": hyp_lon,
+        "hyp_depth": hyp_depth,
+        "hyp_strike": hyp_strike,
+        "hyp_dip": hyp_dip,
     }
 
 
@@ -561,6 +631,8 @@ def compute_distances_for_event(
     extra_event_data : pd.DataFrame
         The extra event data for the event which includes the correct nodal plane information
     """
+    ccld = True
+
     # Extract out the relevant event_row data
     event_id = event_row["evid"]
     im_event_df = im_df[im_df["evid"] == event_id]
@@ -583,6 +655,7 @@ def compute_distances_for_event(
         domain_focal_df,
         srf_files,
         rupture_models,
+        ccld,
     )
     (
         strike,
@@ -595,6 +668,11 @@ def compute_distances_for_event(
         ztor,
         dbottom,
         f_type,
+        hyp_lat,
+        hyp_lon,
+        hyp_depth,
+        hyp_strike,
+        hyp_dip,
     ) = (
         nodal_plane_info["strike"],
         nodal_plane_info["rake"],
@@ -606,28 +684,72 @@ def compute_distances_for_event(
         nodal_plane_info["ztor"],
         nodal_plane_info["dbottom"],
         nodal_plane_info["f_type"],
+        nodal_plane_info["hyp_lat"],
+        nodal_plane_info["hyp_lon"],
+        nodal_plane_info["hyp_depth"],
+        nodal_plane_info["hyp_strike"],
+        nodal_plane_info["hyp_dip"],
     )
 
     # Get the length and dip_dist if they are None
     # This is the case for when grabbing strike, dip, rake from the CMT files or the domain focal
-    # if f_type != "ff" and (length is None or dip_dist is None):
-    #     length, dip_dist = get_l_w_mag_scaling(
-    #         event_row["mag"], rake, event_row["tect_class"]
-    #     )
+    if not ccld:
+        if f_type != "ff" and (length is None or dip_dist is None):
+            length, dip_dist = get_l_w_mag_scaling(
+                event_row["mag"], rake, event_row["tect_class"]
+            )
 
     # Get the ztor and dbottom if they are None
     # This is the case for when grabbing strike, dip, rake from the CMT files or the domain focal
-    # if f_type != "ff" and (ztor is None or dbottom is None):
-    #     height = np.sin(np.radians(dip)) * dip_dist
-    #     ztor = max(event_row["depth"] - (height / 2), 0)
-    #     dbottom = ztor + height
+    if not ccld:
+        if f_type != "ff" and (ztor is None or dbottom is None):
+            height = np.sin(np.radians(dip)) * dip_dist
+            ztor = max(event_row["depth"] - (height / 2), 0)
+            dbottom = ztor + height
 
     if srf_header is None or srf_points is None:
         # Calculate the corners of the plane
         dip_dir = (strike + 90) % 360
         projected_width = dip_dist * np.cos(np.radians(dip))
+
+        config = cfg.Config()
+        points_per_km = config.get_value("points_per_km")
+
+        if not ccld:
+            centroid_lat_lon = np.asarray([event_row["lat"], event_row["lon"]])
+        else:
+            # Find the center of the plane based on the hypocentre location
+            strike_direction = np.array(
+                [np.cos(np.radians(strike)), np.sin(np.radians(strike))]
+            )
+            dip_direction = np.array(
+                [np.cos(np.radians(dip_dir)), np.sin(np.radians(dip_dir))]
+            )
+
+            # Convert the hypocentre location to NZTM
+            hyp_nztm = coordinates.wgs_depth_to_nztm(np.asarray([hyp_lat, hyp_lon]))
+
+            # Calculate the distance needed to travel in the strike direction
+            strike_centroid_dist = (length * 1000) / 2
+            strike_hyp_dist = hyp_strike * (length * 1000)
+            strike_diff_dist = strike_centroid_dist - strike_hyp_dist
+
+            # Calculate the distance needed to travel in the dip direction
+            dip_centroid_dist = (projected_width * 1000) / 2
+            dip_hyp_dist = hyp_dip * (projected_width * 1000)
+            dip_diff_dist = dip_centroid_dist - dip_hyp_dist
+
+            # Calculate the centre of the plane
+            centroid = hyp_nztm + np.array(
+                [strike_diff_dist, dip_diff_dist]
+            ) @ np.array([strike_direction, dip_direction])
+
+            # Convert back to lat, lon
+            centroid_lat_lon = coordinates.nztm_to_wgs_depth(centroid)
+
+        # Get the corners of the srf points
         corner_0, corner_1, corner_2, corner_3 = grid.grid_corners(
-            np.asarray([event_row["lat"], event_row["lon"]]),
+            centroid_lat_lon,
             strike,
             dip_dir,
             ztor,
@@ -637,11 +759,10 @@ def compute_distances_for_event(
         )
 
         # Utilise grid functions from qcore to get the mesh grid
-        config = cfg.Config()
-        points_per_km = config.get_value("points_per_km")
         srf_points = grid.coordinate_meshgrid(
             corner_0, corner_1, corner_2, 1000 / points_per_km
         )
+
         # Reshape to (n, 3)
         srf_points = srf_points.reshape(-1, 3)
         # Swap the lat and lon for the srf points
@@ -655,6 +776,7 @@ def compute_distances_for_event(
         # Divide the srf depth points by 1000
         srf_points[:, 2] /= 1000
 
+    # Saving the SRF points
     if f_type == "domain":
         method = "D"
     elif f_type == "cmt":
@@ -667,7 +789,18 @@ def compute_distances_for_event(
     # Set the columns
     srf_points_df.columns = ["lon", "lat", "depth"]
     srf_points_df.to_csv(
-        f"/home/joel/local/gmdb/finite_fault/srf_points_filtered/srf_{event_row['tect_class']}_{event_id}_{method}_ccld.csv"
+        f"/home/joel/local/gmdb/finite_fault/srf_points_filtered_hyp/srf_{event_row['tect_class']}_{event_id}_{method}_ccld.csv"
+    )
+
+    # Save the event_id and the strike and dip distances
+    strike_dists = pd.DataFrame(
+        [
+            {
+                "evid": event_id,
+                "strike": 0 if hyp_strike is None else np.abs(hyp_strike - 0.5),
+                "dip": 0 if hyp_dip is None else np.abs(hyp_dip - 0.5),
+            },
+        ]
     )
 
     # Calculate the distances
@@ -751,7 +884,7 @@ def compute_distances_for_event(
         ]
     )
 
-    return propagation_data_combo, extra_event_data, rrup_points
+    return propagation_data_combo, extra_event_data, rrup_points, strike_dists
 
 
 def distance_in_taupo(
@@ -938,15 +1071,16 @@ def calc_distances(main_dir: Path, n_procs: int = 1):
 
     # Filter event df to a single event 2016p858000
     event_ids_to_filter = [
-        "1515206",
-        "2150536",
-        "2808461",
-        "2012p498491",
-        "2014p051675",
-        "2016p858021",
-        "2016p858055",
-        "2016p858260",
-        "2016p858951",
+        # "1515206",
+        # "2150536",
+        # "2808461",
+        # "2012p498491",
+        # "2014p051675",
+        # "2016p858021",
+        # "2016p858055",
+        # "2016p858260",
+        # "2016p858951",
+        "2614071",
     ]
     event_df = event_df[event_df.evid.isin(event_ids_to_filter)]
 
@@ -967,7 +1101,9 @@ def calc_distances(main_dir: Path, n_procs: int = 1):
         )
 
     # Combine the results
-    propagation_results, extra_event_results, rrup_points = zip(*result_dfs)
+    propagation_results, extra_event_results, rrup_points, strike_dists = zip(
+        *result_dfs
+    )
     propagation_data = pd.concat(propagation_results)
     extra_event_data = pd.concat(extra_event_results)
 
@@ -978,6 +1114,14 @@ def calc_distances(main_dir: Path, n_procs: int = 1):
     df = pd.DataFrame(a)
     df.to_csv(flatfile_dir / "rrup_points.csv", index=False)
 
-    # Save the results
-    propagation_data.to_csv(flatfile_dir / "propagation_path_table.csv", index=False)
-    event_df.to_csv(flatfile_dir / "earthquake_source_table_adjusted.csv", index=False)
+    b = pd.concat(strike_dists)
+    # b.to_csv(flatfile_dir / "strike_dists.csv", index=False)
+
+    # Find the largest value of strike and sort
+    # max_strike = b.strike.max()
+    # b["strike"] = b["strike"].apply(lambda x: x if x <= max_strike else x - max_strike)
+    # b = b.sort_values(by=["strike", "dip"])
+    #
+    # # Save the results
+    # propagation_data.to_csv(flatfile_dir / "propagation_path_table.csv", index=False)
+    # event_df.to_csv(flatfile_dir / "earthquake_source_table_adjusted.csv", index=False)
