@@ -10,11 +10,9 @@ from pyproj import Transformer
 from shapely.geometry import Point
 from shapely.geometry.polygon import LineString, Polygon
 
-from IM_calculation.source_site_dist import src_site_dist
-from nzgmdb.data_retrieval import rupture_models as geonet_rupture_models
 from nzgmdb.management import config as cfg
 from nzgmdb.management import file_structure
-from qcore import geo, grid, srf
+from qcore import geo, grid, src_site_dist, srf
 from qcore.uncertainties import mag_scaling
 from qcore.uncertainties.magnitude_scaling import strasser_2010
 
@@ -283,13 +281,11 @@ def get_nodal_plane_info(
     modified_cmt_df: pd.DataFrame,
     domain_focal_df: pd.DataFrame,
     srf_files: dict,
-    rupture_models: dict,
 ) -> dict:
     """
     Determine the correct nodal plane for the event
     First checks if the event is in the srf_files, if it is, it uses the srf file to determine the nodal plane
     If it is not in the srf_files, it checks if the event is in the rupture_models to determine the nodal plane
-    If it is not in the rupture_models, it checks if the event is in the modified CMT data to determine the nodal plane
     If it is not in the modified CMT data, it checks if the event is in the Geonet CMT data to determine the nodal plane
     If it is not in the Geonet CMT data, it uses the domain focal to determine the nodal plane
 
@@ -310,8 +306,6 @@ def get_nodal_plane_info(
         The focal mechanism data for the different domains
     srf_files : dict
         The srf files for specific events
-    rupture_models : dict
-        The rupture models for specific events
 
     Returns
     -------
@@ -356,47 +350,27 @@ def get_nodal_plane_info(
         ztor = srf_points[0][2]
         dbottom = srf_points[-1][2]
 
-        fault_strike = srf_header[0]["strike"]
-        strike1_diff = abs(fault_strike - cmt.strike1)
-        if strike1_diff > 180:
-            strike1_diff = 360 - strike1_diff
-        strike2_diff = abs(fault_strike - cmt.strike2)
-        if strike2_diff > 180:
-            strike2_diff = 360 - strike2_diff
-
-        if strike1_diff < strike2_diff:
-            strike = cmt.strike1
-            rake = cmt.rake1
-            dip = cmt.dip1
+        if len(srf_header) > 1:
+            strike, rake, dip, length, dip_dist = None, None, None, None, None
         else:
-            strike = cmt.strike2
-            rake = cmt.rake2
-            dip = cmt.dip2
-        length = np.sum([header["length"] for header in srf_header])
-        dip_dist = np.mean([header["width"] for header in srf_header])
-    elif event_id in rupture_models:
-        # Event is in the rupture models
-        f_type = "geonet_rm"
-        rupture_data = geonet_rupture_models.get_seismic_data_from_url(
-            rupture_models[event_id]
-        )
-        (
-            ztor,
-            dbottom,
-            strike,
-            dip,
-            rake,
-            length,
-            dip_dist,
-        ) = (
-            rupture_data["ztor"],
-            rupture_data["dbottom"],
-            rupture_data["strike"],
-            rupture_data["dip"],
-            rupture_data["rake"],
-            rupture_data["length"],
-            rupture_data["dip_dist"],
-        )
+            fault_strike = srf_header[0]["strike"]
+            strike1_diff = abs(fault_strike - cmt.strike1)
+            if strike1_diff > 180:
+                strike1_diff = 360 - strike1_diff
+            strike2_diff = abs(fault_strike - cmt.strike2)
+            if strike2_diff > 180:
+                strike2_diff = 360 - strike2_diff
+
+            if strike1_diff < strike2_diff:
+                strike = cmt.strike1
+                rake = cmt.rake1
+                dip = cmt.dip1
+            else:
+                strike = cmt.strike2
+                rake = cmt.rake2
+                dip = cmt.dip2
+            length = srf_header[0]["length"]
+            dip_dist = srf_header[0]["width"]
     elif event_id in modified_cmt_df.PublicID.values:
         # Event is in the modified CMT data
         f_type = "cmt"
@@ -404,6 +378,7 @@ def get_nodal_plane_info(
         strike = cmt.strike1
         dip = cmt.dip1
         rake = cmt.rake1
+
     elif event_id in geonet_cmt_df.PublicID.values:
         # Event is in the Geonet CMT data
         # Need to determine the correct plane
@@ -453,7 +428,6 @@ def compute_distances_for_event(
     domain_focal_df: pd.DataFrame,
     taupo_polygon: Polygon,
     srf_files: dict,
-    rupture_models: dict,
 ) -> tuple[Optional[pd.DataFrame], Optional[pd.DataFrame]]:
     """
     Compute the distances for a given event
@@ -476,8 +450,6 @@ def compute_distances_for_event(
         The Taupo VZ polygon
     srf_files : dict
         The srf files for specific events
-    rupture_models : dict
-        The rupture models for specific events
 
     Returns
     -------
@@ -507,7 +479,6 @@ def compute_distances_for_event(
         modified_cmt_df,
         domain_focal_df,
         srf_files,
-        rupture_models,
     )
     (
         strike,
@@ -535,14 +506,14 @@ def compute_distances_for_event(
 
     # Get the length and dip_dist if they are None
     # This is the case for when grabbing strike, dip, rake from the CMT files or the domain focal
-    if length is None or dip_dist is None:
+    if f_type != "ff" and (length is None or dip_dist is None):
         length, dip_dist = get_l_w_mag_scaling(
             event_row["mag"], rake, event_row["tect_class"]
         )
 
     # Get the ztor and dbottom if they are None
     # This is the case for when grabbing strike, dip, rake from the CMT files or the domain focal
-    if ztor is None or dbottom is None:
+    if f_type != "ff" and (ztor is None or dbottom is None):
         height = np.sin(np.radians(dip)) * dip_dist
         ztor = max(event_row["depth"] - (height / 2), 0)
         dbottom = ztor + height
@@ -550,17 +521,15 @@ def compute_distances_for_event(
     if srf_header is None or srf_points is None:
         # Calculate the corners of the plane
         dip_dir = (strike + 90) % 360
-        height = np.sin(np.radians(dip)) * dip_dist
-        dtop = max(0, event_row["depth"] - (height / 2))
-        dbottom = dtop + height
+        projected_width = dip_dist * np.cos(np.radians(dip))
         corner_0, corner_1, corner_2, corner_3 = grid.grid_corners(
             np.asarray([event_row["lat"], event_row["lon"]]),
             strike,
             dip_dir,
-            dtop,
+            ztor,
             dbottom,
             length,
-            dip_dist,
+            projected_width,
         )
 
         # Utilise grid functions from qcore to get the mesh grid
@@ -571,11 +540,16 @@ def compute_distances_for_event(
         )
         # Reshape to (n, 3)
         srf_points = srf_points.reshape(-1, 3)
+        # Swap the lat and lon for the srf points
+        srf_points = srf_points[:, [1, 0, 2]]
 
         # Generate the srf header
         nstrike = int(round(length * points_per_km))
         ndip = int(round(dip_dist * points_per_km))
         srf_header = [{"nstrike": nstrike, "ndip": ndip, "strike": strike}]
+
+        # Divide the srf depth points by 1000
+        srf_points[:, 2] /= 1000
 
     # Calculate the distances
     rrups, rjbs, rrup_points = src_site_dist.calc_rrup_rjb(
@@ -806,11 +780,10 @@ def calc_distances(main_dir: Path, n_procs: int = 1):
     for srf_file in (data_dir / "SrfSourceModels").glob("*.srf"):
         srf_files[srf_file.stem] = srf_file
 
-    # Get the rupture models from Geonet
-    rupture_models = geonet_rupture_models.get_rupture_models()
-
     # Get the IM data
     im_df = pd.read_csv(flatfile_dir / "ground_motion_im_catalogue.csv")
+    # Convert the evid to a string
+    im_df["evid"] = im_df["evid"].astype(str)
 
     # Get the station information
     client_NZ = FDSN_Client("GEONET")
@@ -851,7 +824,6 @@ def calc_distances(main_dir: Path, n_procs: int = 1):
                 domain_focal_df=domain_focal_df,
                 taupo_polygon=taupo_polygon,
                 srf_files=srf_files,
-                rupture_models=rupture_models,
             ),
             [row for idx, row in event_df.iterrows()],
         )

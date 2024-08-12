@@ -5,6 +5,7 @@ import pandas as pd
 import requests
 
 from nzgmdb.management import config as cfg
+from qcore import geo
 
 
 def fetch_github_directory_contents(
@@ -132,13 +133,20 @@ def get_seismic_data_from_url(
     segments = df.groupby("SEGMENT")
     for segment, df_seg in segments:
         # Calculate the length with the first and last points along strike
-        north_1, east_1 = df_seg.iloc[0]["NORTHING"], df_seg.iloc[0]["EASTING"]
-        interest_depth = df_seg.iloc[0]["DEPTH"]
-        north_2, east_2 = (
-            df_seg[df_seg["DEPTH"] == interest_depth].iloc[-1]["NORTHING"],
-            df_seg[df_seg["DEPTH"] == interest_depth].iloc[-1]["EASTING"],
-        )
-        length += np.linalg.norm([north_2 - north_1, east_2 - east_1]) / 1000
+        try:
+            north_1, east_1 = df_seg.iloc[0]["NORTHING"], df_seg.iloc[0]["EASTING"]
+            interest_depth = df_seg.iloc[0]["DEPTH"]
+            north_2, east_2 = (
+                df_seg[df_seg["DEPTH"] == interest_depth].iloc[-1]["NORTHING"],
+                df_seg[df_seg["DEPTH"] == interest_depth].iloc[-1]["EASTING"],
+            )
+            length += np.linalg.norm([north_2 - north_1, east_2 - east_1]) / 1000
+        except KeyError:
+            # This means Northing was not found in the dataframe and so need to compute the distance based on lat lon
+            lat1, lon1 = df_seg.iloc[0]["lat"], df_seg.iloc[0]["lon"]
+            lat2, lon2 = df_seg.iloc[-1]["lat"], df_seg.iloc[-1]["lon"]
+
+            length += geo.ll_dist(lat1, lon1, lat2, lon2)
 
         # Calculate the width
         dtop = df_seg["DEPTH"].min() / 1000

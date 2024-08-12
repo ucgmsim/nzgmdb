@@ -157,10 +157,9 @@ def compute_ims_for_all_processed_records(
     ims = config.get_value("ims")
     psa_periods = np.asarray(config.get_value("psa_periods"))
     fas_frequencies = np.logspace(
-        config.get_value("fas_start"),
-        config.get_value("fas_end"),
-        num=config.get_value("fas_num"),
-        base=config.get_value("fas_base"),
+        np.log10(config.get_value("common_frequency_start")),
+        np.log10(config.get_value("common_frequency_end")),
+        num=config.get_value("common_frequency_num"),
     )
     # Set components from qcore class for IM calculation
     _, components = Components.get_comps_to_calc_and_store(
