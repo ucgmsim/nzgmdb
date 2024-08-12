@@ -36,7 +36,7 @@ The top level has 4 folders:
 ![](images/file_structure.png)
 
 ### Lower Levels
-**IM**, **snr_fas** and **waveforms** have then a structure that is very similar underneath.
+The **IM**, **snr_fas** and **waveforms** directories have a structure that is very similar underneath.
 This is followed by a year folder such as "2022" and then an event folder which is the same as the evid such as "2022p002924".
 
 After that it differs as **IM** stores IM.csv files in the event folder per record with the naming convention evid_station_channel_location_IM.csv for example "2022p002924_DCZ_HN_20_IM.csv".

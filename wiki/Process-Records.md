@@ -28,33 +28,31 @@ Then applies the following for processing:
 ![](images/processing.png)
 
 Example of some of the processing
+```python
+    # butter bandpass filter - order of 4 fs = 1 / dt
+    acc_bb_000 = butter_bandpass_filter(acc_000, lowcut, highcut, fs, order)
 
-    butter bandpass filter - order of 4 fs = 1 / dt
+    # Remove zero padding
+    mseed.trim(mseed[0].stats.starttime, mseed[0].stats.endtime)
 
-    Remove zero padding
-
-    Calculate velocity 
-
+    # Calculate velocity 
     vel_000 = integrate.cumtrapz(y=acc_bb_000, dx=dt, initial=0.0) * g / 10.0
 
-    Calculate displacement 
-
+    # Calculate displacement 
     disp_000 = integrate.cumtrapz(y=vel_000, dx=dt, initial=0.0)
 
-    Fit a six-order polynomial 
-
+    # Fit a six-order polynomial 
     coeff_000 = np.polyfit(np.arange(len(disp_000)), disp_000, poly_order)
 
-    Find the 2nd derivative of the coefficients 
-
+    # Find the 2nd derivative of the coefficients 
     coeff_000_2nd = np.polyder(coeff_000, 2)
 
-    generate polynomial from the coefficients
-
+    # generate polynomial from the coefficients
     poly_000 = np.polyval(coeff_000_2nd, np.arange(len(acc_bb_000)))
 
-    Subtract the polynomial from the original acc series
-
+    # Subtract the polynomial from the original acc series
+    acc_bb_000 -= poly_000
+```
 Example of raw mseed data vs the output of the processing
 
 Raw Mseed:
