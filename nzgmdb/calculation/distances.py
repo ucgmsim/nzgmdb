@@ -631,7 +631,6 @@ def compute_distances_for_event(
     extra_event_data : pd.DataFrame
         The extra event data for the event which includes the correct nodal plane information
     """
-    ccld = True
 
     # Extract out the relevant event_row data
     event_id = event_row["evid"]
@@ -655,7 +654,6 @@ def compute_distances_for_event(
         domain_focal_df,
         srf_files,
         rupture_models,
-        ccld,
     )
     (
         strike,
@@ -775,22 +773,6 @@ def compute_distances_for_event(
 
         # Divide the srf depth points by 1000
         srf_points[:, 2] /= 1000
-
-    # Saving the SRF points
-    if f_type == "domain":
-        method = "D"
-    elif f_type == "cmt":
-        method = "A"
-    elif f_type == "cmt_unc":
-        method = "C"
-    else:  ## ff
-        method = "ff"
-    srf_points_df = pd.DataFrame(srf_points)
-    # Set the columns
-    srf_points_df.columns = ["lon", "lat", "depth"]
-    srf_points_df.to_csv(
-        f"/home/joel/local/gmdb/finite_fault/srf_points_filtered_hyp/srf_{event_row['tect_class']}_{event_id}_{method}_ccld.csv"
-    )
 
     # Save the event_id and the strike and dip distances
     strike_dists = pd.DataFrame(
@@ -1071,16 +1053,25 @@ def calc_distances(main_dir: Path, n_procs: int = 1):
 
     # Filter event df to a single event 2016p858000
     event_ids_to_filter = [
-        # "1515206",
-        # "2150536",
-        # "2808461",
-        # "2012p498491",
-        # "2014p051675",
-        # "2016p858021",
-        # "2016p858055",
-        # "2016p858260",
-        # "2016p858951",
-        "2614071",
+        "2281164",
+        "2398629",
+        "2808461",
+        "3468581",
+        "3468635",
+        "3525264",
+        "3528810",
+        "3528839",
+        "3533107",
+        "3631359",
+        "3631380",
+        "2016p858021",
+        "2016p858058",
+        "2016p858094",
+        "2016p858508",
+        "2016p859524",
+        "2016p860215",
+        "2016p862339",
+        "2016p913880",
     ]
     event_df = event_df[event_df.evid.isin(event_ids_to_filter)]
 
