@@ -1,10 +1,11 @@
 import fiona
-import pandas as pd
 import numpy as np
+import pandas as pd
 from obspy.clients.fdsn import Client as FDSN_Client
 
-from nzgmdb.management import file_structure, config as cfg
 from nzgmdb.data_retrieval import tect_domain
+from nzgmdb.management import config as cfg
+from nzgmdb.management import file_structure
 from qcore import point_in_polygon
 from Velocity_Model.basins import basin_outlines_dict
 

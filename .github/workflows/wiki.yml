@@ -1,4 +1,3 @@
-# .github/workflows/deploy-wiki.yml
 name: deploy-wiki
 on:
   push:
@@ -12,5 +11,5 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - uses: actions4gh/configure-wiki@v1
+      - run: perl -i -pe 's;(\[.*?\])\((?!https:\/\/)(.*?)\.md\);\1(\2);g' wiki/*.md
       - uses: actions4gh/deploy-wiki@v1

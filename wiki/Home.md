@@ -1,6 +1,6 @@
 # Welcome to the NZGMDB WIKI
 
-This wiki will explain all the processes and steps of the pipeline in details from start to finish.
+This wiki will explain all the processes and steps of the pipeline in detail from start to finish.
 
 
 # Overview
@@ -15,7 +15,7 @@ The pipeline is split into many small subtasks which are described briefly below
 8. **[Process records](https://github.com/ucgmsim/nzgmdb/wiki/Process-Records)** (Filters records based on GMC results and performs wave processing to turn mseeds into text files)
 9. **[IM Calculation](https://github.com/ucgmsim/nzgmdb/wiki/IM-Calculation)** (Performs Intensity Measure Calculations such as pSA etc.)
 10. **[Merge IM results](https://github.com/ucgmsim/nzgmdb/wiki/Merge-IM-Results)** (Merges all IM result files together and applies a Ds595 filter)
-11. **[Calculate Distances](https://github.com/ucgmsim/nzgmdb/wiki/Calculate-Distances)** (Determines correct nodal plane[ccldpy.py](..%2F..%2F..%2Flocal%2Fgmdb%2Ffinite%20fault%2Fccldpy.py), ca[ccldpy.py](..%2F..%2F..%2Flocal%2Fgmdb%2Ffinite%20fault%2Fccldpy.py)lculates rrup values for propagation table)
+11. **[Calculate Distances](https://github.com/ucgmsim/nzgmdb/wiki/Calculate-Distances)** (Determines correct nodal plane to calculate rrup values for the propagation table)
 12. **[Merge flatfiles](https://github.com/ucgmsim/nzgmdb/wiki/Merge-Flatfiles)** (Merges all flatfiles to ensure to remove filtered entries and split IM results per component into different flatfiles)
 
 Currently GMC can't be run with the rest of the pipeline and requires a different environment to run.
@@ -24,7 +24,7 @@ Therefore the pipeline is split into 3 sections (Pre GMC, GMC, Post GMC) where P
 ![](images/pipeline.png)
 
 # File Structure
-Below explain the file structure of the current NZGMDB after a successful run of the pipeline. This will also go over filename conventions.
+The section below explains the file structure of the current NZGMDB after a successful run of the pipeline. This will also go over filename conventions.
 
 ## Top Level
 The top level has 4 folders:
@@ -33,11 +33,13 @@ The top level has 4 folders:
 3. **snr_fas** (Contains all the snr_fas.csv files computed per record where there is a phase arrival)
 4. **waveforms** (Holds all the mseed and text files for raw and processed records)
 
+![](images/file_structure.png)
+
 ### Lower Levels
-**IM**, **snr_fas** and **waveforms** have then a structure that is very similar underneath.
+The **IM**, **snr_fas** and **waveforms** directories have a structure that is very similar underneath.
 This is followed by a year folder such as "2022" and then an event folder which is the same as the evid such as "2022p002924".
 
-After that it differs between as **IM** stores IM.csv files in the event folder per record with the naming convention evid_station_channel_location_IM.csv for example "2022p002924_DCZ_HN_20_IM.csv".
+After that it differs as **IM** stores IM.csv files in the event folder per record with the naming convention evid_station_channel_location_IM.csv for example "2022p002924_DCZ_HN_20_IM.csv".
 
 **snr_fas** is similar in which the same naming convention is used except with the suffix snr_fas.csv for example "2022p002924_DCZ_HN_20_snr_fas.csv" and are placed in the event directory too.
 

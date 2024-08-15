@@ -1,17 +1,18 @@
 import functools
-from pathlib import Path
 import multiprocessing as mp
-from typing import List, Dict
+from pathlib import Path
+from typing import Dict, List
 
-import obspy
 import numpy as np
+import obspy
 import pandas as pd
 
-from qcore.constants import Components
-from nzgmdb.mseed_management import reading
-from nzgmdb.management import file_structure, config as cfg
 from IM_calculation.IM import im_calculation
 from IM_calculation.IM.read_waveform import Waveform
+from nzgmdb.management import config as cfg
+from nzgmdb.management import file_structure
+from nzgmdb.mseed_management import reading
+from qcore.constants import Components
 
 
 def compute_im_for_waveform(
@@ -156,10 +157,9 @@ def compute_ims_for_all_processed_records(
     ims = config.get_value("ims")
     psa_periods = np.asarray(config.get_value("psa_periods"))
     fas_frequencies = np.logspace(
-        config.get_value("fas_start"),
-        config.get_value("fas_end"),
-        num=config.get_value("fas_num"),
-        base=config.get_value("fas_base"),
+        np.log10(config.get_value("common_frequency_start")),
+        np.log10(config.get_value("common_frequency_end")),
+        num=config.get_value("common_frequency_num"),
     )
     # Set components from qcore class for IM calculation
     _, components = Components.get_comps_to_calc_and_store(

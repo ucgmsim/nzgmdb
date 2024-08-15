@@ -2,17 +2,18 @@
     Contains the functions to add tectonic domain to the data
 """
 
-from pathlib import Path
+import multiprocessing
 from functools import partial
+from pathlib import Path
 
 import fiona
 import numpy as np
 import pandas as pd
-import multiprocessing
 from pyproj import Transformer
 
+from nzgmdb.management import config as cfg
+from nzgmdb.management import file_structure
 from qcore import geo, point_in_polygon
-from nzgmdb.management import file_structure, config as cfg
 
 
 def merge_NZSMDB_flatfile_on_events(

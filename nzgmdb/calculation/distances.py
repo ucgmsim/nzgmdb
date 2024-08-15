@@ -1,15 +1,18 @@
-from pathlib import Path
-from typing import Optional
 import functools
 import multiprocessing as mp
+from pathlib import Path
+from typing import Optional
 
 import numpy as np
 import pandas as pd
-from pyproj import Transformer
 from obspy.clients.fdsn import Client as FDSN_Client
+from pyproj import Transformer
 from shapely.geometry import Point
-from shapely.geometry.polygon import Polygon, LineString
+from shapely.geometry.polygon import LineString, Polygon
 
+from nzgmdb.management import config as cfg
+from nzgmdb.management import file_structure
+from qcore import geo, grid, src_site_dist, srf
 from qcore import srf, geo, grid, src_site_dist, coordinates
 from qcore.uncertainties import mag_scaling
 from qcore.uncertainties.magnitude_scaling import strasser_2010
@@ -347,14 +350,11 @@ def get_nodal_plane_info(
     modified_cmt_df: pd.DataFrame,
     domain_focal_df: pd.DataFrame,
     srf_files: dict,
-    rupture_models: dict,
-    ccld: bool,
 ) -> dict:
     """
     Determine the correct nodal plane for the event
     First checks if the event is in the srf_files, if it is, it uses the srf file to determine the nodal plane
     If it is not in the srf_files, it checks if the event is in the rupture_models to determine the nodal plane
-    If it is not in the rupture_models, it checks if the event is in the modified CMT data to determine the nodal plane
     If it is not in the modified CMT data, it checks if the event is in the Geonet CMT data to determine the nodal plane
     If it is not in the Geonet CMT data, it uses the domain focal to determine the nodal plane
 
@@ -375,8 +375,6 @@ def get_nodal_plane_info(
         The focal mechanism data for the different domains
     srf_files : dict
         The srf files for specific events
-    rupture_models : dict
-        The rupture models for specific events
 
     Returns
     -------
@@ -447,31 +445,6 @@ def get_nodal_plane_info(
                 dip = cmt.dip2
             length = srf_header[0]["length"]
             dip_dist = srf_header[0]["width"]
-        # length = np.sum([header["length"] for header in srf_header])
-        # dip_dist = np.mean([header["width"] for header in srf_header])
-    # elif event_id in rupture_models:
-    #     # Event is in the rupture models
-    #     f_type = "geonet_rm"
-    #     rupture_data = geonet_rupture_models.get_seismic_data_from_url(
-    #         rupture_models[event_id]
-    #     )
-    #     (
-    #         ztor,
-    #         dbottom,
-    #         strike,
-    #         dip,
-    #         rake,
-    #         length,
-    #         dip_dist,
-    #     ) = (
-    #         rupture_data["ztor"],
-    #         rupture_data["dbottom"],
-    #         rupture_data["strike"],
-    #         rupture_data["dip"],
-    #         rupture_data["rake"],
-    #         rupture_data["length"],
-    #         rupture_data["width"],
-    #     )
     elif event_id in modified_cmt_df.PublicID.values:
         # Event is in the modified CMT data
         f_type = "cmt"
@@ -598,7 +571,6 @@ def compute_distances_for_event(
     domain_focal_df: pd.DataFrame,
     taupo_polygon: Polygon,
     srf_files: dict,
-    rupture_models: dict,
 ) -> tuple[Optional[pd.DataFrame], Optional[pd.DataFrame]]:
     """
     Compute the distances for a given event
@@ -621,8 +593,6 @@ def compute_distances_for_event(
         The Taupo VZ polygon
     srf_files : dict
         The srf files for specific events
-    rupture_models : dict
-        The rupture models for specific events
 
     Returns
     -------
@@ -653,7 +623,6 @@ def compute_distances_for_event(
         modified_cmt_df,
         domain_focal_df,
         srf_files,
-        rupture_models,
     )
     (
         strike,
@@ -688,22 +657,6 @@ def compute_distances_for_event(
         nodal_plane_info["hyp_strike"],
         nodal_plane_info["hyp_dip"],
     )
-
-    # Get the length and dip_dist if they are None
-    # This is the case for when grabbing strike, dip, rake from the CMT files or the domain focal
-    if not ccld:
-        if f_type != "ff" and (length is None or dip_dist is None):
-            length, dip_dist = get_l_w_mag_scaling(
-                event_row["mag"], rake, event_row["tect_class"]
-            )
-
-    # Get the ztor and dbottom if they are None
-    # This is the case for when grabbing strike, dip, rake from the CMT files or the domain focal
-    if not ccld:
-        if f_type != "ff" and (ztor is None or dbottom is None):
-            height = np.sin(np.radians(dip)) * dip_dist
-            ztor = max(event_row["depth"] - (height / 2), 0)
-            dbottom = ztor + height
 
     if srf_header is None or srf_points is None:
         # Calculate the corners of the plane
@@ -773,17 +726,6 @@ def compute_distances_for_event(
 
         # Divide the srf depth points by 1000
         srf_points[:, 2] /= 1000
-
-    # Save the event_id and the strike and dip distances
-    strike_dists = pd.DataFrame(
-        [
-            {
-                "evid": event_id,
-                "strike": 0 if hyp_strike is None else np.abs(hyp_strike - 0.5),
-                "dip": 0 if hyp_dip is None else np.abs(hyp_dip - 0.5),
-            },
-        ]
-    )
 
     # Calculate the distances
     rrups, rjbs, rrup_points = src_site_dist.calc_rrup_rjb(
@@ -866,7 +808,7 @@ def compute_distances_for_event(
         ]
     )
 
-    return propagation_data_combo, extra_event_data, rrup_points, strike_dists
+    return propagation_data_combo, extra_event_data
 
 
 def distance_in_taupo(
@@ -1014,9 +956,6 @@ def calc_distances(main_dir: Path, n_procs: int = 1):
     for srf_file in (data_dir / "SrfSourceModels").glob("*.srf"):
         srf_files[srf_file.stem] = srf_file
 
-    # Get the rupture models from Geonet
-    # rupture_models = geonet_rupture_models.get_rupture_models()
-
     # Get the IM data
     im_df = pd.read_csv(flatfile_dir / "ground_motion_im_catalogue.csv")
     # Convert the evid to a string
@@ -1049,31 +988,6 @@ def calc_distances(main_dir: Path, n_procs: int = 1):
     im_station_df = im_df[["sta"]].drop_duplicates()
     station_df = pd.merge(im_station_df, station_df, on="sta", how="left")
     station_df["depth"] = station_df["elev"] / -1000
-    # station_df["depth"] = station_df["elev"] / -1
-
-    # Filter event df to a single event 2016p858000
-    event_ids_to_filter = [
-        "2281164",
-        "2398629",
-        "2808461",
-        "3468581",
-        "3468635",
-        "3525264",
-        "3528810",
-        "3528839",
-        "3533107",
-        "3631359",
-        "3631380",
-        "2016p858021",
-        "2016p858058",
-        "2016p858094",
-        "2016p858508",
-        "2016p859524",
-        "2016p860215",
-        "2016p862339",
-        "2016p913880",
-    ]
-    event_df = event_df[event_df.evid.isin(event_ids_to_filter)]
 
     with mp.Pool(n_procs) as p:
         result_dfs = p.map(
@@ -1086,33 +1000,18 @@ def calc_distances(main_dir: Path, n_procs: int = 1):
                 domain_focal_df=domain_focal_df,
                 taupo_polygon=taupo_polygon,
                 srf_files=srf_files,
-                rupture_models=None,
             ),
             [row for idx, row in event_df.iterrows()],
         )
 
     # Combine the results
-    propagation_results, extra_event_results, rrup_points, strike_dists = zip(
-        *result_dfs
-    )
+    propagation_results, extra_event_results = zip(*result_dfs)
     propagation_data = pd.concat(propagation_results)
     extra_event_data = pd.concat(extra_event_results)
 
     # Merge the extra event data with the event data
     event_df = pd.merge(event_df, extra_event_data, on="evid", how="right")
 
-    a = np.concatenate(rrup_points)
-    df = pd.DataFrame(a)
-    df.to_csv(flatfile_dir / "rrup_points.csv", index=False)
-
-    b = pd.concat(strike_dists)
-    # b.to_csv(flatfile_dir / "strike_dists.csv", index=False)
-
-    # Find the largest value of strike and sort
-    # max_strike = b.strike.max()
-    # b["strike"] = b["strike"].apply(lambda x: x if x <= max_strike else x - max_strike)
-    # b = b.sort_values(by=["strike", "dip"])
-    #
-    # # Save the results
-    # propagation_data.to_csv(flatfile_dir / "propagation_path_table.csv", index=False)
-    # event_df.to_csv(flatfile_dir / "earthquake_source_table_adjusted.csv", index=False)
+    # Save the results
+    propagation_data.to_csv(flatfile_dir / "propagation_path_table.csv", index=False)
+    event_df.to_csv(flatfile_dir / "earthquake_source_table.csv", index=False)
