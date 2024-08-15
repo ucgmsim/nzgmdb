@@ -449,28 +449,23 @@ def get_nodal_plane_info(
         # Event is in the modified CMT data
         f_type = "cmt"
         cmt = modified_cmt_df[modified_cmt_df.PublicID == event_id].iloc[0]
-        if ccld:
-            # Compute the CCLD Simulations for the event
-            (
-                strike,
-                dip,
-                rake,
-                length,
-                dip_dist,
-                ztor,
-                dbottom,
-                hyp_lat,
-                hyp_lon,
-                hyp_depth,
-                hyp_strike,
-                hyp_dip,
-            ) = run_ccld_simulation(
-                event_id, event_row, cmt.strike1, cmt.dip1, cmt.rake1, "A"
-            )
-        else:
-            strike = cmt.strike1
-            dip = cmt.dip1
-            rake = cmt.rake1
+        # Compute the CCLD Simulations for the event
+        (
+            strike,
+            dip,
+            rake,
+            length,
+            dip_dist,
+            ztor,
+            dbottom,
+            hyp_lat,
+            hyp_lon,
+            hyp_depth,
+            hyp_strike,
+            hyp_dip,
+        ) = run_ccld_simulation(
+            event_id, event_row, cmt.strike1, cmt.dip1, cmt.rake1, "A"
+        )
 
     elif event_id in geonet_cmt_df.PublicID.values:
         # Event is in the Geonet CMT data
@@ -478,70 +473,52 @@ def get_nodal_plane_info(
         f_type = "cmt_unc"
         cmt = geonet_cmt_df[geonet_cmt_df.PublicID == event_id].iloc[0]
 
-        if ccld:
-            # Compute the CCLD Simulations for the event
-            (
-                strike,
-                dip,
-                rake,
-                length,
-                dip_dist,
-                ztor,
-                dbottom,
-                hyp_lat,
-                hyp_lon,
-                hyp_depth,
-                hyp_strike,
-                hyp_dip,
-            ) = run_ccld_simulation(
-                event_id,
-                event_row,
-                cmt.strike1,
-                cmt.dip1,
-                cmt.rake1,
-                "C",
-                cmt.strike2,
-                cmt.dip2,
-                cmt.rake2,
-            )
-        else:
-            norm, slip = calc_fnorm_slip(cmt.strike1, cmt.dip1, cmt.rake1)
-
-            # Get the domain focal values
-            do_strike, do_rake, do_dip = get_domain_focal(
-                event_row["domain_no"], domain_focal_df
-            )
-
-            # Figure out the correct plane based on the rotation and the domain focal values
-            do_norm, do_slip = calc_fnorm_slip(do_strike, do_dip, do_rake)
-            plane_out = mech_rot(do_norm, norm, do_slip, slip)
-
-            if plane_out == 1:
-                strike, dip, rake = cmt.strike1, cmt.dip1, cmt.rake1
-            else:
-                strike, dip, rake = cmt.strike2, cmt.dip2, cmt.rake2
+        # Compute the CCLD Simulations for the event
+        (
+            strike,
+            dip,
+            rake,
+            length,
+            dip_dist,
+            ztor,
+            dbottom,
+            hyp_lat,
+            hyp_lon,
+            hyp_depth,
+            hyp_strike,
+            hyp_dip,
+        ) = run_ccld_simulation(
+            event_id,
+            event_row,
+            cmt.strike1,
+            cmt.dip1,
+            cmt.rake1,
+            "C",
+            cmt.strike2,
+            cmt.dip2,
+            cmt.rake2,
+        )
     else:
         # Event is not found in any of the datasets
         # Use the domain focal
         f_type = "domain"
         strike, rake, dip = get_domain_focal(event_row["domain_no"], domain_focal_df)
 
-        if ccld:
-            # Compute the CCLD Simulations for the event
-            (
-                strike,
-                dip,
-                rake,
-                length,
-                dip_dist,
-                ztor,
-                dbottom,
-                hyp_lat,
-                hyp_lon,
-                hyp_depth,
-                hyp_strike,
-                hyp_dip,
-            ) = run_ccld_simulation(event_id, event_row, strike, dip, rake, "D")
+        # Compute the CCLD Simulations for the event
+        (
+            strike,
+            dip,
+            rake,
+            length,
+            dip_dist,
+            ztor,
+            dbottom,
+            hyp_lat,
+            hyp_lon,
+            hyp_depth,
+            hyp_strike,
+            hyp_dip,
+        ) = run_ccld_simulation(event_id, event_row, strike, dip, rake, "D")
 
     return {
         "strike": strike,
@@ -666,37 +643,34 @@ def compute_distances_for_event(
         config = cfg.Config()
         points_per_km = config.get_value("points_per_km")
 
-        if not ccld:
-            centroid_lat_lon = np.asarray([event_row["lat"], event_row["lon"]])
-        else:
-            # Find the center of the plane based on the hypocentre location
-            strike_direction = np.array(
-                [np.cos(np.radians(strike)), np.sin(np.radians(strike))]
-            )
-            dip_direction = np.array(
-                [np.cos(np.radians(dip_dir)), np.sin(np.radians(dip_dir))]
-            )
+        # Find the center of the plane based on the hypocentre location
+        strike_direction = np.array(
+            [np.cos(np.radians(strike)), np.sin(np.radians(strike))]
+        )
+        dip_direction = np.array(
+            [np.cos(np.radians(dip_dir)), np.sin(np.radians(dip_dir))]
+        )
 
-            # Convert the hypocentre location to NZTM
-            hyp_nztm = coordinates.wgs_depth_to_nztm(np.asarray([hyp_lat, hyp_lon]))
+        # Convert the hypocentre location to NZTM
+        hyp_nztm = coordinates.wgs_depth_to_nztm(np.asarray([hyp_lat, hyp_lon]))
 
-            # Calculate the distance needed to travel in the strike direction
-            strike_centroid_dist = (length * 1000) / 2
-            strike_hyp_dist = hyp_strike * (length * 1000)
-            strike_diff_dist = strike_centroid_dist - strike_hyp_dist
+        # Calculate the distance needed to travel in the strike direction
+        strike_centroid_dist = (length * 1000) / 2
+        strike_hyp_dist = hyp_strike * (length * 1000)
+        strike_diff_dist = strike_centroid_dist - strike_hyp_dist
 
-            # Calculate the distance needed to travel in the dip direction
-            dip_centroid_dist = (projected_width * 1000) / 2
-            dip_hyp_dist = hyp_dip * (projected_width * 1000)
-            dip_diff_dist = dip_centroid_dist - dip_hyp_dist
+        # Calculate the distance needed to travel in the dip direction
+        dip_centroid_dist = (projected_width * 1000) / 2
+        dip_hyp_dist = hyp_dip * (projected_width * 1000)
+        dip_diff_dist = dip_centroid_dist - dip_hyp_dist
 
-            # Calculate the centre of the plane
-            centroid = hyp_nztm + np.array(
-                [strike_diff_dist, dip_diff_dist]
-            ) @ np.array([strike_direction, dip_direction])
+        # Calculate the centre of the plane
+        centroid = hyp_nztm + np.array([strike_diff_dist, dip_diff_dist]) @ np.array(
+            [strike_direction, dip_direction]
+        )
 
-            # Convert back to lat, lon
-            centroid_lat_lon = coordinates.nztm_to_wgs_depth(centroid)
+        # Convert back to lat, lon
+        centroid_lat_lon = coordinates.nztm_to_wgs_depth(centroid)
 
         # Get the corners of the srf points
         corner_0, corner_1, corner_2, corner_3 = grid.grid_corners(
