@@ -6,14 +6,16 @@ Determines correct nodal plane, calculates rrup values for propagation table
 
 # Process
 
+For every event in the NZGMDB an SRF is generated to then be used to compute the rrup distances.
+The SRF is generated different ways based on the information available for the event.
+
 Events from the NZGMDB fall under 4 Categories.
 
-- FF: Finite Fault (We diretcly have a SRF generated for this)
+- FF: Finite Fault (We directly have an SRF generated for this)
 - CMT: Centroid Moment Tensor (We have a preferred nodal plane for this)
 - CMT_UNC: Centroid Moment Tensor with Uncertainty (We have 2 Nodal Plane Solutions)
 - Domain: General Domain (We have no nodal plane information, except for the general domain strike, dip and rake)
 
-For each of these categories there is a different approach to generating a SRF plane which is then used to calculate rrup distances to stations.
 For Finite Faults we can use the SRF directly, but for the other methods we utilise a method used by NGA-West3 called CCLD which is explained below and how we map our other 3 categories to their approaches.
 
 ## CCLD Method
@@ -21,7 +23,7 @@ For Finite Faults we can use the SRF directly, but for the other methods we util
 ### Magnitude Scaling Relations
 
 CCLD implements branching with different magnitude scaling relations to determine the Area, Aspect Ratio, Length and Width of a nodal plane.
-The models used for each Tecotonic type are described in the image below:
+The models used for each Tectonic type are described in the image below:
 
 ![CCLD Models](images/ccld_models.png)
 
@@ -34,19 +36,19 @@ CCLD uses the following method to calculate the selected nodal plane for an even
 - Finds the optimal nodal plane that minimizes the following expression:
 ![CCLD Equation](images/ccld_eq.png)
 
-Below is an image that shows an example of pseudo-stations distributed around the fault plane that are then used in the calculation to find the selected nodal plane.
+Below is an image that shows an example of pseudo-stations distributed around the fault plane that is then used in the calculation to find the selected nodal plane.
 
 ![CCLD Example](images/ccld_stations.png)
 
 ### Categories
-CCLD have 5 different categories for getting the nodal Plane which are meant to be used differently depending on the information you have available to you.
+CCLD has 5 different categories for getting the nodal Plane which are meant to be used differently depending on the information you have available to you.
 
 Category A and B both use the same method for getting the nodal plane and are meant to be used if there is 1 nodal plane that is preferred between 2 possible, A uses the first plane and B uses the second plane.
 This method keeps the strike, dip and rake values the same as the preferred nodal plane, but the area, aspect ratio and hypocentre locations are randomly selected from the distributions.
 
-Category C if you have 2 nodal plane solutions but neither is preffered. In this case in each simulation a coin is flipped 50/50 for which plane is selected but still the area, aspect ratio and hypocentre locations are randomly selected from the distributions.
+Category C if you have 2 nodal plane solutions but neither is preferred. In this case in each simulation a coin is flipped 50/50 for which plane is selected but, still the area, aspect ratio and hypocentre locations are randomly selected from the distributions.
 
-Category D is used if you have just 1 nodal plane solution but there is uncertainty in the strike, dip and rake values. In this case the strike is adjusted each simulation by +-30 degrees, dip by +-10 degrees and rake is used to determine the rupture mechanism. The area, aspect ratio and hypocentre locations are also randomly selected from the distributions.
+Category D is used if you have just 1 nodal plane solution but there is uncertainty in the strike, dip and rake values. In this case the strike is adjusted in each simulation by +-30 degrees, dip by +-10 degrees and rake is used to determine the rupture mechanism. The area, aspect ratio and hypocentre locations are also randomly selected from the distributions.
 
 Category E is used when you have 0 nodal plane information and so the strike, dip and rake are randomly selected from the distributions as well as the area, aspect ratio and hypocentre locations.
 
@@ -56,7 +58,7 @@ Below is an image that shows an illustration of the different methods.
 
 ### Mappings to CCLD
 
-In the NZGMDB we make use of 3 catergories (A, C and D). Below is an image which shows the mapping of each event category to the CCLD method.
+In the NZGMDB we make use of 3 categories (A, C and D). Below is an image that shows the mapping of each event category to the CCLD method.
 
 ![CCLD Mapping](images/ccld_events.png)
 

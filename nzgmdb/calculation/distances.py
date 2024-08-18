@@ -90,49 +90,6 @@ def get_domain_focal(
         return domain.strike, domain.rake, domain.dip
 
 
-def get_l_w_mag_scaling(
-    mag: float, rake: float, tect_class: str
-) -> tuple[float, float]:
-    """
-    Get the length and width of the fault using magnitude scaling
-
-    Parameters
-    ----------
-    mag : float
-        The magnitude of the event
-    rake : float
-        The rake angle of the fault in degrees
-    tect_class : str
-        The tectonic class of the event
-
-    Returns
-    -------
-    length : float
-        The length of the fault along strike in km
-    dip_dist : float
-        The width of the fault down dip in km
-    """
-    # Load the config
-    config = cfg.Config()
-    mag_scale_slab_min = config.get_value("mag_scale_slab_min")
-    mag_scale_slab_max = config.get_value("mag_scale_slab_max")
-
-    # Get the width and length using magnitude scaling
-    if tect_class == "Interface":
-        # Use SKARLATOUDIS2016
-        dip_dist = np.sqrt(mag_scaling.mw_to_a_skarlatoudis(mag))
-        length = dip_dist
-    elif tect_class == "Slab" and mag_scale_slab_min <= mag <= mag_scale_slab_max:
-        # Use STRASSER2010SLAB
-        length = strasser_2010.mw_to_l_strasser_2010_slab(mag)
-        dip_dist = strasser_2010.mw_to_w_strasser_2010_slab(mag)
-    else:
-        # Use LEONARD2014
-        length = mag_scaling.mw_to_l_leonard(mag, rake)
-        dip_dist = mag_scaling.mw_to_w_leonard(mag, rake)
-    return length, dip_dist
-
-
 def run_ccld_simulation(
     event_id: str,
     event_row: pd.Series,
@@ -200,8 +157,13 @@ def run_ccld_simulation(
     ccdl_tect_class = ccldpy.TECTONIC_MAPPING[event_row.tect_class]
     # Extra check for undetermined tectonic class
     if event_row.tect_class == "Undetermined":
+        config = cfg.Config()
         # Check if the depth is greater than 50km and if so set it to slab
-        ccdl_tect_class = "crustal" if event_row.depth <= 50 else "intraslab"
+        ccdl_tect_class = (
+            "crustal"
+            if event_row.depth <= config.get_value("crustal_depth")
+            else "intraslab"
+        )
     if ccdl_tect_class == "crustal":
         nsims = [334, 333, 333, 111, 111, 111, 0]
     elif ccdl_tect_class == "intraslab":
