@@ -125,16 +125,16 @@ def get_waveforms(
                 )
             break
         except FDSNNoDataException:
-            print(f"No data for {net}.{sta}")
+            # print(f"No data for {net}.{sta}")
             return None
         except ObsPyMSEEDFilesizeTooSmallError:
-            print(f"File too small for {net}.{sta}")
+            # print(f"File too small for {net}.{sta}")
             return None
         except (http.client.IncompleteRead, InternalMSEEDError):
             if attempt < max_retries - 1:  # i.e. not the last attempt
                 continue  # try again
             else:
-                print(f"Failed to get data for {net}.{sta}")
+                # print(f"Failed to get data for {net}.{sta}")
                 return None
     return st
 

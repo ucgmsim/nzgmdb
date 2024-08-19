@@ -3,9 +3,11 @@
 """
 
 import datetime
+import traceback
 import io
 import multiprocessing
 from functools import partial
+from inspect import trace
 from pathlib import Path
 from typing import List
 
@@ -65,11 +67,31 @@ def fetch_event_line(event_cat: Event, event_id: str):
     ev_lat = preferred_origin.latitude
     ev_lon = preferred_origin.longitude
     ev_depth = preferred_origin.depth / 1000
-    ev_loc_type = str(preferred_origin.method_id).split("/")[1]
-    ev_loc_grid = str(preferred_origin.earth_model_id).split("/")[1]
-    ev_ndef = preferred_origin.quality.used_phase_count
-    ev_nsta = preferred_origin.quality.used_station_count
-    std = preferred_origin.quality.standard_error
+    ev_loc_type = (
+        None
+        if preferred_origin.method_id is None
+        else str(preferred_origin.method_id).split("/")[1]
+    )
+    ev_loc_grid = (
+        None
+        if preferred_origin.earth_model_id is None
+        else str(preferred_origin.earth_model_id).split("/")[1]
+    )
+    ev_ndef = (
+        None
+        if preferred_origin.quality.used_phase_count is None
+        else preferred_origin.quality.used_phase_count
+    )
+    ev_nsta = (
+        None
+        if preferred_origin.quality.used_station_count is None
+        else preferred_origin.quality.used_station_count
+    )
+    std = (
+        None
+        if preferred_origin.quality.standard_error is None
+        else preferred_origin.quality.standard_error
+    )
 
     pref_mag_type = preferred_magnitude.magnitude_type
 
@@ -464,6 +486,7 @@ def fetch_event_data(
     except Exception as e:
         event_line, sta_mag_lines, skipped_records = None, None, None
         print(f"Error for event {event_id}: {e}")
+        traceback.print_exc()
 
     return event_line, sta_mag_lines, skipped_records
 
