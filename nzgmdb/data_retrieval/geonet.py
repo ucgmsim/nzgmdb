@@ -435,31 +435,35 @@ def fetch_event_data(
     f_rrup : interp1d
         The cubic interpolation function for the magnitude distance relationship
     """
-    # Get the catalog information
-    cat = client_NZ.get_events(eventid=event_id)
-    event_cat = cat[0]
+    try:
+        # Get the catalog information
+        cat = client_NZ.get_events(eventid=event_id)
+        event_cat = cat[0]
 
-    # Get the event line
-    event_line = fetch_event_line(event_cat, event_id)
+        # Get the event line
+        event_line = fetch_event_line(event_cat, event_id)
 
-    if event_line is not None:
-        # Get the station magnitude lines
-        sta_mag_lines, skipped_records = fetch_sta_mag_lines(
-            event_cat,
-            event_id,
-            main_dir,
-            client_NZ,
-            client_IU,
-            inventory,
-            event_line[7],
-            event_line[8],
-            site_table,
-            mags,
-            rrups,
-            f_rrup,
-        )
-    else:
-        sta_mag_lines, skipped_records = None, None
+        if event_line is not None:
+            # Get the station magnitude lines
+            sta_mag_lines, skipped_records = fetch_sta_mag_lines(
+                event_cat,
+                event_id,
+                main_dir,
+                client_NZ,
+                client_IU,
+                inventory,
+                event_line[7],
+                event_line[8],
+                site_table,
+                mags,
+                rrups,
+                f_rrup,
+            )
+        else:
+            sta_mag_lines, skipped_records = None, None
+    except Exception as e:
+        event_line, sta_mag_lines, skipped_records = None, None, None
+        print(f"Error for event {event_id}: {e}")
 
     return event_line, sta_mag_lines, skipped_records
 
