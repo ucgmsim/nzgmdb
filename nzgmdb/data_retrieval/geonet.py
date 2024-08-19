@@ -616,6 +616,8 @@ def parse_geonet_information(
             event_ids,
         )
 
+    print("Finished writing mseeds")
+
     # Due to uneven lengths, need to extract using a for loop
     event_data = []
     sta_mag_data = []
