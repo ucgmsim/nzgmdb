@@ -462,10 +462,6 @@ def fetch_event_data(
         cat = client_NZ.get_events(eventid=event_id)
         event_cat = cat[0]
 
-        print("Starting")
-        a = [1,2]
-        b = a[7] # Produce error
-
         # Get the event line
         event_line = fetch_event_line(event_cat, event_id)
 
@@ -627,20 +623,37 @@ def parse_geonet_information(
     site_table = pd.read_csv(flatfile_dir / "site_table.csv")
 
     # Get each of the results for the event ids
-    with multiprocessing.Pool(processes=n_procs) as pool:
-        results = pool.map(
-            partial(
-                fetch_event_data,
-                main_dir=main_dir,
-                client_NZ=client_NZ,
-                client_IU=client_IU,
-                inventory=inventory,
-                site_table=site_table,
-                mags=mags,
-                rrups=rrups,
-                f_rrup=f_rrup,
-            ),
-            event_ids,
+    # with multiprocessing.Pool(processes=n_procs) as pool:
+    #     results = pool.map(
+    #         partial(
+    #             fetch_event_data,
+    #             main_dir=main_dir,
+    #             client_NZ=client_NZ,
+    #             client_IU=client_IU,
+    #             inventory=inventory,
+    #             site_table=site_table,
+    #             mags=mags,
+    #             rrups=rrups,
+    #             f_rrup=f_rrup,
+    #         ),
+    #         event_ids,
+    #     )
+
+    # Run above but without multiprocessing
+    results = []
+    for event_id in event_ids:
+        results.append(
+            fetch_event_data(
+                event_id,
+                main_dir,
+                client_NZ,
+                client_IU,
+                inventory,
+                site_table,
+                mags,
+                rrups,
+                f_rrup,
+            )
         )
 
     print("Finished writing mseeds")
