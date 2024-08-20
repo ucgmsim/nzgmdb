@@ -622,6 +622,9 @@ def parse_geonet_information(
     flatfile_dir = file_structure.get_flatfile_dir(main_dir)
     site_table = pd.read_csv(flatfile_dir / "site_table.csv")
 
+    # Shuffle event_ids
+    np.random.shuffle(event_ids)
+
     # Get each of the results for the event ids
     # with multiprocessing.Pool(processes=n_procs) as pool:
     #     results = pool.map(
@@ -641,7 +644,12 @@ def parse_geonet_information(
 
     # Run above but without multiprocessing
     results = []
-    for event_id in event_ids:
+    times = []
+    import time
+
+    for i, event_id in enumerate(event_ids):
+        print(f"Processing event {i + 1}/{len(event_ids)} Event ID: {event_id}")
+        start = time.time()
         results.append(
             fetch_event_data(
                 event_id,
@@ -655,8 +663,15 @@ def parse_geonet_information(
                 f_rrup,
             )
         )
+        end = time.time()
+        times.append(
+            pd.DataFrame({"event_id": event_id, "time": end - start}, index=[i])
+        )
 
     print("Finished writing mseeds")
+    # Concat and save times
+    times_df = pd.concat(times)
+    times_df.to_csv(main_dir / "times.csv")
 
     # Due to uneven lengths, need to extract using a for loop
     event_data = []
