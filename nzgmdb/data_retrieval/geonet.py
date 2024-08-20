@@ -462,6 +462,10 @@ def fetch_event_data(
         cat = client_NZ.get_events(eventid=event_id)
         event_cat = cat[0]
 
+        print("Starting")
+        a = [1,2]
+        b = a[7] # Produce error
+
         # Get the event line
         event_line = fetch_event_line(event_cat, event_id)
 
