@@ -6,7 +6,7 @@ Determines correct nodal plane, calculates rrup values for propagation table
 
 # Process
 
-For every event in the NZGMDB an SRF is generated to then be used to compute the rrup distances.
+For every event in the NZGMDB an SRF is generated to compute rrup distances.
 The SRF is generated different ways based on the information available for the event.
 
 Events from the NZGMDB fall under 4 Categories.
@@ -22,8 +22,8 @@ For Finite Faults we can use the SRF directly, but for the other methods we util
 
 ### Magnitude Scaling Relations
 
-CCLD implements branching with different magnitude scaling relations to determine the Area, Aspect Ratio, Length and Width of a nodal plane.
-The models used for each Tectonic type are described in the image below:
+CCLD implements branching with different magnitude scaling relations to determine the area, aspect ratio, length and width of a nodal plane.
+The models used for each tectonic type are described in the image below:
 
 ![CCLD Models](images/ccld_models.png)
 
@@ -48,7 +48,7 @@ This method keeps the strike, dip and rake values the same as the preferred noda
 
 Category C if you have 2 nodal plane solutions but neither is preferred. In this case in each simulation a coin is flipped 50/50 for which plane is selected but, still the area, aspect ratio and hypocentre locations are randomly selected from the distributions.
 
-Category D is used if you have just 1 nodal plane solution but there is uncertainty in the strike, dip and rake values. In this case the strike is adjusted in each simulation by +-30 degrees, dip by +-10 degrees and rake is used to determine the rupture mechanism. The area, aspect ratio and hypocentre locations are also randomly selected from the distributions.
+Category D is used if you have just 1 nodal plane solution but there is uncertainty in the strike, dip and rake values. In this case the strike is adjusted in each simulation by ±30 degrees, dip by ±10 degrees and rake is used to determine the rupture mechanism. The area, aspect ratio and hypocentre locations are also randomly selected from the distributions.
 
 Category E is used when you have 0 nodal plane information and so the strike, dip and rake are randomly selected from the distributions as well as the area, aspect ratio and hypocentre locations.
 
@@ -62,7 +62,7 @@ In the NZGMDB we make use of 3 categories (A, C and D). Below is an image that s
 
 ![CCLD Mapping](images/ccld_events.png)
 
-There also is a Tectonic type mapping to CCLD. The NZGMDB has 5 Tecotonic types and CCLD has 3. To map them we did the following shown in the image below.
+There also is a tectonic type mapping to CCLD. The NZGMDB has 5 tectonic types and CCLD has 3. To map them we did the following shown in the image below.
 
 ![CCLD Mapping](images/tect_mapping_ccld.png)
 

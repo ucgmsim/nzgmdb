@@ -1,5 +1,6 @@
 import functools
 import multiprocessing as mp
+from collections import defaultdict
 from pathlib import Path
 from typing import Optional
 
@@ -14,8 +15,6 @@ from nzgmdb.CCLD import ccldpy
 from nzgmdb.management import config as cfg
 from nzgmdb.management import file_structure
 from qcore import coordinates, geo, grid, src_site_dist, srf
-from qcore.uncertainties import mag_scaling
-from qcore.uncertainties.magnitude_scaling import strasser_2010
 
 
 def calc_fnorm_slip(
@@ -262,24 +261,10 @@ def get_nodal_plane_info(
         'f_type' : str
             The focal type that determined the nodal plane (ff, geonet_rm, cmt, cmt_unc, domain)
     """
-    # Create the default return to be filled
-    nodal_plane_info = {
-        "strike": None,
-        "rake": None,
-        "dip": None,
-        "ztor": None,
-        "dbottom": None,
-        "length": None,
-        "dip_dist": None,
-        "srf_points": None,
-        "srf_header": None,
-        "f_type": None,
-        "hyp_lat": None,
-        "hyp_lon": None,
-        "hyp_strike": None,
-        "hyp_dip": None,
-    }
+    # Create the default return to be filled using defaultdict
+    nodal_plane_info = defaultdict(lambda: None)
     ccld_info = None
+
     # Check if the event_id is in the srf_files
     if event_id in srf_files:
         srf_file = str(srf_files[event_id])
@@ -469,13 +454,13 @@ def compute_distances_for_event(
         hyp_nztm = coordinates.wgs_depth_to_nztm(np.asarray([hyp_lat, hyp_lon]))
 
         # Calculate the distance needed to travel in the strike direction
-        strike_centroid_dist = (length * 1000) / 2
-        strike_hyp_dist = hyp_strike * (length * 1000)
+        strike_centroid_dist = length * 1000 / 2
+        strike_hyp_dist = hyp_strike * length * 1000
         strike_diff_dist = strike_centroid_dist - strike_hyp_dist
 
         # Calculate the distance needed to travel in the dip direction
-        dip_centroid_dist = (projected_width * 1000) / 2
-        dip_hyp_dist = hyp_dip * (projected_width * 1000)
+        dip_centroid_dist = projected_width * 1000 / 2
+        dip_hyp_dist = hyp_dip * projected_width * 1000
         dip_diff_dist = dip_centroid_dist - dip_hyp_dist
 
         # Calculate the centre of the plane
