@@ -100,3 +100,5 @@ github_api: https://api.github.com/repos
 # Magnitude scaling
 mag_scale_slab_min: 5.9
 mag_scale_slab_max: 7.8
+# CCLD
+crustal_depth: 50
