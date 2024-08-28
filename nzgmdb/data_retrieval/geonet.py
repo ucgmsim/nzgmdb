@@ -2,10 +2,12 @@
     Functions to manage Geonet Data
 """
 
+import asyncio
 import datetime
-import traceback
 import io
 import multiprocessing
+import traceback
+from concurrent.futures import ProcessPoolExecutor
 from functools import partial
 from inspect import trace
 from pathlib import Path
@@ -569,6 +571,64 @@ def download_earthquake_data(
     return geonet
 
 
+async def async_worker(
+    event_id, main_dir, client_NZ, client_IU, inventory, site_table, mags, rrups, f_rrup
+):
+    loop = asyncio.get_running_loop()
+    result = await loop.run_in_executor(
+        None,
+        fetch_event_data,
+        event_id,
+        main_dir,
+        client_NZ,
+        client_IU,
+        inventory,
+        site_table,
+        mags,
+        rrups,
+        f_rrup,
+    )
+    return result
+
+
+async def get_geonet_results(
+    event_ids,
+    main_dir,
+    client_NZ,
+    client_IU,
+    inventory,
+    site_table,
+    mags,
+    rrups,
+    f_rrup,
+    n_procs,
+):
+    loop = asyncio.get_running_loop()
+    tasks = []
+
+    with ProcessPoolExecutor(max_workers=n_procs) as executor:
+        for event_id in event_ids:
+            tasks.append(
+                loop.run_in_executor(
+                    executor,
+                    fetch_event_data,
+                    event_id,
+                    main_dir,
+                    client_NZ,
+                    client_IU,
+                    inventory,
+                    site_table,
+                    mags,
+                    rrups,
+                    f_rrup,
+                )
+            )
+
+        results = await asyncio.gather(*tasks)
+
+    return results
+
+
 def parse_geonet_information(
     main_dir: Path,
     start_date: datetime,
@@ -622,56 +682,21 @@ def parse_geonet_information(
     flatfile_dir = file_structure.get_flatfile_dir(main_dir)
     site_table = pd.read_csv(flatfile_dir / "site_table.csv")
 
-    # Shuffle event_ids
-    np.random.shuffle(event_ids)
-
-    # Get each of the results for the event ids
-    # with multiprocessing.Pool(processes=n_procs) as pool:
-    #     results = pool.map(
-    #         partial(
-    #             fetch_event_data,
-    #             main_dir=main_dir,
-    #             client_NZ=client_NZ,
-    #             client_IU=client_IU,
-    #             inventory=inventory,
-    #             site_table=site_table,
-    #             mags=mags,
-    #             rrups=rrups,
-    #             f_rrup=f_rrup,
-    #         ),
-    #         event_ids,
-    #     )
-
-    # Run above but without multiprocessing
-    results = []
-    times = []
-    import time
-
-    for i, event_id in enumerate(event_ids):
-        print(f"Processing event {i + 1}/{len(event_ids)} Event ID: {event_id}")
-        start = time.time()
-        results.append(
-            fetch_event_data(
-                event_id,
-                main_dir,
-                client_NZ,
-                client_IU,
-                inventory,
-                site_table,
-                mags,
-                rrups,
-                f_rrup,
-            )
+    results = asyncio.run(
+        get_geonet_results(
+            event_ids,
+            main_dir,
+            client_NZ,
+            client_IU,
+            inventory,
+            site_table,
+            mags,
+            rrups,
+            f_rrup,
+            n_procs,
         )
-        end = time.time()
-        times.append(
-            pd.DataFrame({"event_id": event_id, "time": end - start}, index=[i])
-        )
-
+    )
     print("Finished writing mseeds")
-    # Concat and save times
-    times_df = pd.concat(times)
-    times_df.to_csv(main_dir / "times.csv")
 
     # Due to uneven lengths, need to extract using a for loop
     event_data = []
@@ -681,7 +706,7 @@ def parse_geonet_information(
         if result[0] is not None:
             event_data.append(result[0])
             sta_mag_data.extend(result[1])
-            skipped_records.append(result[2])
+            skipped_records.extend(result[2])
 
     # Create the event df
     event_df = pd.DataFrame(
@@ -738,3 +763,5 @@ def parse_geonet_information(
     event_df.to_csv(flatfile_dir / "earthquake_source_table.csv", index=False)
     sta_mag_df.to_csv(flatfile_dir / "station_magnitude_table.csv", index=False)
     skipped_records_df.to_csv(flatfile_dir / "geonet_skipped_records.csv", index=False)
+
+    print("Finished writing dataframes")
