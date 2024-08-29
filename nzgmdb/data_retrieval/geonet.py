@@ -573,26 +573,6 @@ def download_earthquake_data(
     return geonet
 
 
-async def async_worker(
-    event_id, main_dir, client_NZ, client_IU, inventory, site_table, mags, rrups, f_rrup
-):
-    loop = asyncio.get_running_loop()
-    result = await loop.run_in_executor(
-        None,
-        fetch_event_data,
-        event_id,
-        main_dir,
-        client_NZ,
-        client_IU,
-        inventory,
-        site_table,
-        mags,
-        rrups,
-        f_rrup,
-    )
-    return result
-
-
 async def get_geonet_results(
     event_ids,
     main_dir,
@@ -610,7 +590,6 @@ async def get_geonet_results(
 
     with ProcessPoolExecutor(max_workers=n_procs) as executor:
         for event_id in event_ids:
-            print("Adding event to tasks")
             tasks.append(
                 loop.run_in_executor(
                     executor,
