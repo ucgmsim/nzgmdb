@@ -459,6 +459,7 @@ def fetch_event_data(
     f_rrup : interp1d
         The cubic interpolation function for the magnitude distance relationship
     """
+    print(f"Starting event {event_id}")
     try:
         # Get the catalog information
         cat = client_NZ.get_events(eventid=event_id)
@@ -490,6 +491,7 @@ def fetch_event_data(
         print(f"Error for event {event_id}: {e}")
         traceback.print_exc()
 
+    print(f"Finished event {event_id}")
     return event_line, sta_mag_lines, skipped_records
 
 
@@ -608,6 +610,7 @@ async def get_geonet_results(
 
     with ProcessPoolExecutor(max_workers=n_procs) as executor:
         for event_id in event_ids:
+            print("Adding event to tasks")
             tasks.append(
                 loop.run_in_executor(
                     executor,
