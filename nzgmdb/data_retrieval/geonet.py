@@ -586,27 +586,33 @@ async def get_geonet_results(
     n_procs,
 ):
     loop = asyncio.get_running_loop()
-    tasks = []
+    results = []
+    batch_size = n_procs * 2
 
-    with ProcessPoolExecutor(max_workers=n_procs) as executor:
-        for event_id in event_ids:
-            tasks.append(
-                loop.run_in_executor(
-                    executor,
-                    fetch_event_data,
-                    event_id,
-                    main_dir,
-                    client_NZ,
-                    client_IU,
-                    inventory,
-                    site_table,
-                    mags,
-                    rrups,
-                    f_rrup,
+    for i in range(0, len(event_ids), batch_size):
+        batch = event_ids[i:i + batch_size]
+        tasks = []
+
+        with ProcessPoolExecutor(max_workers=n_procs) as executor:
+            for event_id in batch:
+                tasks.append(
+                    loop.run_in_executor(
+                        executor,
+                        fetch_event_data,
+                        event_id,
+                        main_dir,
+                        client_NZ,
+                        client_IU,
+                        inventory,
+                        site_table,
+                        mags,
+                        rrups,
+                        f_rrup,
+                    )
                 )
-            )
 
-        results = await asyncio.gather(*tasks)
+            batch_results = await asyncio.gather(*tasks)
+            results.extend(batch_results)
 
     return results
 
