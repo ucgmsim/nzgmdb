@@ -459,7 +459,6 @@ def fetch_event_data(
     f_rrup : interp1d
         The cubic interpolation function for the magnitude distance relationship
     """
-    print(f"Starting event {event_id}")
     try:
         # Get the catalog information
         cat = client_NZ.get_events(eventid=event_id)
@@ -491,7 +490,6 @@ def fetch_event_data(
         print(f"Error for event {event_id}: {e}")
         traceback.print_exc()
 
-    print(f"Finished event {event_id}")
     return event_line, sta_mag_lines, skipped_records
 
 
@@ -590,7 +588,7 @@ async def get_geonet_results(
     batch_size = n_procs * 2
 
     for i in range(0, len(event_ids), batch_size):
-        batch = event_ids[i:i + batch_size]
+        batch = event_ids[i : i + batch_size]
         tasks = []
 
         with ProcessPoolExecutor(max_workers=n_procs) as executor:
@@ -670,9 +668,29 @@ def parse_geonet_information(
     flatfile_dir = file_structure.get_flatfile_dir(main_dir)
     site_table = pd.read_csv(flatfile_dir / "site_table.csv")
 
-    results = asyncio.run(
-        get_geonet_results(
-            event_ids,
+    # results = asyncio.run(
+    #     get_geonet_results(
+    #         event_ids,
+    #         main_dir,
+    #         client_NZ,
+    #         client_IU,
+    #         inventory,
+    #         site_table,
+    #         mags,
+    #         rrups,
+    #         f_rrup,
+    #         n_procs,
+    #     )
+    # )
+    print("Finished writing mseeds")
+    event_data = []
+    sta_mag_data = []
+    skipped_records = []
+    # Do above as basic for loop for fetch event data
+    for index, event_id in enumerate(event_ids):
+        print(f"Processing event {event_id} {index + 1}/{len(event_ids)}")
+        event_line, sta_mag_lines, skipped_records = fetch_event_data(
+            event_id,
             main_dir,
             client_NZ,
             client_IU,
@@ -681,20 +699,18 @@ def parse_geonet_information(
             mags,
             rrups,
             f_rrup,
-            n_procs,
         )
-    )
-    print("Finished writing mseeds")
+        if event_line is not None:
+            event_data.append(event_line)
+            sta_mag_data.extend(sta_mag_lines)
+            skipped_records.extend(skipped_records)
 
-    # Due to uneven lengths, need to extract using a for loop
-    event_data = []
-    sta_mag_data = []
-    skipped_records = []
-    for result in results:
-        if result[0] is not None:
-            event_data.append(result[0])
-            sta_mag_data.extend(result[1])
-            skipped_records.extend(result[2])
+    # # Due to uneven lengths, need to extract using a for loop
+    # for result in results:
+    #     if result[0] is not None:
+    #         event_data.append(result[0])
+    #         sta_mag_data.extend(result[1])
+    #         skipped_records.extend(result[2])
 
     # Create the event df
     event_df = pd.DataFrame(
