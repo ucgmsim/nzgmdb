@@ -26,7 +26,6 @@ from nzgmdb.data_processing import filtering
 from nzgmdb.management import config as cfg
 from nzgmdb.management import file_structure
 from nzgmdb.mseed_management import creation
-from testing.fmin.fmin_investigate import flatfile_dir
 
 
 def get_max_magnitude(magnitudes: List[Magnitude], mag_type: str):
