@@ -793,7 +793,7 @@ def parse_geonet_information(
     processed_suffixes = set(int(f.stem.split("_")[-1]) for f in processed_files)
 
     # Create batches from the event_ids in sizes of 200
-    batch_length = 20
+    batch_length = 200
     batches = [
         event_ids[i : i + batch_length] for i in range(0, len(event_ids), batch_length)
     ]
