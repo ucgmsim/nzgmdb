@@ -821,13 +821,24 @@ def parse_geonet_information(
     sta_mag_dfs = []
     skipped_records_dfs = []
 
+    from pandas.errors import EmptyDataError
+
     for file in batch_dir.iterdir():
         if "earthquake_source_table" in file.stem:
-            event_dfs.append(pd.read_csv(file))
+            try:
+                event_dfs.append(pd.read_csv(file))
+            except EmptyDataError:
+                print(f"Warning: {file} is empty or has no valid columns to parse.")
         elif "station_magnitude_table" in file.stem:
-            sta_mag_dfs.append(pd.read_csv(file))
+            try:
+                sta_mag_dfs.append(pd.read_csv(file))
+            except EmptyDataError:
+                print(f"Warning: {file} is empty or has no valid columns to parse.")
         elif "geonet_skipped_records" in file.stem:
-            skipped_records_dfs.append(pd.read_csv(file))
+            try:
+                skipped_records_dfs.append(pd.read_csv(file))
+            except EmptyDataError:
+                print(f"Warning: {file} is empty or has no valid columns to parse.")
 
     event_df = pd.concat(event_dfs, ignore_index=True)
     sta_mag_df = pd.concat(sta_mag_dfs, ignore_index=True)
