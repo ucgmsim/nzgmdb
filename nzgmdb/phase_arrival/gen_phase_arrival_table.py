@@ -150,10 +150,11 @@ def fetch_geonet_phases(mseed_file: Path) -> list[dict[str, Any]]:
 
     # Check that the number of matching picks is acceptable
     if len(picks_matching_mseed) > 2:
-        raise custom_errors.InvalidNumberOfGeonetPicksException(
-            "More than two phase picks from Geonet seem to match the given mseed file."
-            "\nThere should only be one P phase pick and sometimes one S phase pick."
-        )
+        print(f"More than two phase picks from Geonet match {str(mseed_file)}")
+        # raise custom_errors.InvalidNumberOfGeonetPicksException(
+        #     "More than two phase picks from Geonet seem to match the given mseed file."
+        #     "\nThere should only be one P phase pick and sometimes one S phase pick."
+        # )
 
     # Get arrival data corresponding to the given mseed file by matching pick_id
     mseed_arrival_pick_pairs = [
