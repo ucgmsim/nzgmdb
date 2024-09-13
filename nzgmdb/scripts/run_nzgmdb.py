@@ -410,7 +410,7 @@ def run_pre_process_nzgmdb(
     print("Merging tectonic domains")
     eq_source_ffp = flatfile_dir / "earthquake_source_table.csv"
     eq_tect_domain_ffp = flatfile_dir / "earthquake_source_table.csv"
-    tect_domain.add_tect_domain(eq_source_ffp, eq_tect_domain_ffp, n_procs)
+    # tect_domain.add_tect_domain(eq_source_ffp, eq_tect_domain_ffp, n_procs)
 
     # Generate the phase arrival table
     print("Generating phase arrival table")
