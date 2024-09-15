@@ -395,6 +395,17 @@ def run_pre_process_nzgmdb(
         ),
     ],
     n_procs: Annotated[int, typer.Option(help="The number of processes to use")] = 1,
+    apply_smoothing: Annotated[
+        bool, typer.Option(help="Whether to apply smoothing to the SNR calculation")
+    ] = True,
+    ko_matrix_path: Annotated[
+        Path,
+        typer.Option(
+            help="Path to the ko matrix directory",
+            exists=True,
+            file_okay=False,
+        ),
+    ] = None,
 ):
     main_dir.mkdir(parents=True, exist_ok=True)
 
@@ -422,7 +433,15 @@ def run_pre_process_nzgmdb(
     print("Calculating SNR")
     snr_fas_output_dir = file_structure.get_snr_fas_dir(main_dir)
     phase_table_path = flatfile_dir / "phase_arrival_table.csv"
-    calculate_snr(main_dir, phase_table_path, flatfile_dir, snr_fas_output_dir, n_procs)
+    calculate_snr(
+        main_dir,
+        phase_table_path,
+        flatfile_dir,
+        snr_fas_output_dir,
+        n_procs,
+        apply_smoothing=apply_smoothing,
+        ko_matrix_path=ko_matrix_path,
+    )
 
     # Calculate Fmax
     print("Calculating Fmax")

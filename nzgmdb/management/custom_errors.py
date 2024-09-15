@@ -15,6 +15,12 @@ class InventoryNotFoundError(Exception):
     pass
 
 
+class RotationError(Exception):
+    """Exception raised when the rotation fails."""
+
+    pass
+
+
 class All3ComponentsNotPresentError(Exception):
     """Exception raised when all 3 components are not present in the mseed file."""
 

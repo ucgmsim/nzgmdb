@@ -87,7 +87,13 @@ def initial_preprocessing(mseed: Stream):
                 )
 
         # Rotate
-        mseed.rotate("->ZNE", inventory=inv)
+        try:
+            mseed.rotate("->ZNE", inventory=inv)
+        except Exception: # Due to obspy raising an Exception instead of a specific error
+            # Error for no matching channel metadata found
+            raise custom_errors.RotationError(
+                f"Failed to rotate for station {station} with location {location}"
+            )
 
         # Add the response (Same for all channels)
         # this is done so that the sensitivity can be removed otherwise it tries to find the exact same channel
