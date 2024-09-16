@@ -5,6 +5,7 @@ from pathlib import Path
 import numpy as np
 import obspy
 import pandas as pd
+from pandas.errors import EmptyDataError
 
 import IM_calculation.IM.snr_calculation as snr_calc
 from nzgmdb.management import config as cfg
@@ -80,6 +81,13 @@ def compute_snr_for_single_mseed(
         skipped_record_dict = {
             "record_id": mseed_file.stem,
             "reason": "File did not contain 3 components",
+        }
+        skipped_record = pd.DataFrame([skipped_record_dict])
+        return None, skipped_record
+    except custom_errors.RotationError:
+        skipped_record_dict = {
+            "record_id": mseed_file.stem,
+            "reason": "Failed to rotate the data",
         }
         skipped_record = pd.DataFrame([skipped_record_dict])
         return None, skipped_record
@@ -181,6 +189,7 @@ def compute_snr_for_mseed_data(
     apply_smoothing: bool = True,
     ko_matrix_path: Path = None,
     common_frequency_vector: np.ndarray = None,
+    batch_size: int = 500,
 ):
     """
     Compute the SNR for the data in the data_dir
@@ -204,10 +213,14 @@ def compute_snr_for_mseed_data(
     common_frequency_vector : np.ndarray, optional
         Common frequency vector to use for all the waveforms, by default None
         Uses a default frequency vector if not specified defined in the configuration file
+    batch_size : int, optional
+        Number of mseed files to process in a single batch, by default 500
     """
     # Create the output directories
     meta_output_dir.mkdir(parents=True, exist_ok=True)
     snr_fas_output_dir.mkdir(parents=True, exist_ok=True)
+    batch_dir = meta_output_dir / "snr_batch_files"
+    batch_dir.mkdir(parents=True, exist_ok=True)
 
     # Creating the common frequency vector if not provided
     if common_frequency_vector is None:
@@ -225,40 +238,77 @@ def compute_snr_for_mseed_data(
     # Get all the mseed files
     mseed_files = [mseed_file for mseed_file in data_dir.glob("**/*.mseed")]
 
+    # Find files that have already been processed and get the suffix indexes and remove them from the event_ids
+    processed_files = [f for f in batch_dir.iterdir() if f.is_file()]
+    processed_suffixes = set(int(f.stem.split("_")[-1]) for f in processed_files)
+
     print(f"Total number of mseed files to process: {len(mseed_files)}")
 
-    # Plot using multiprocessing all that are added to the plot_queue
-    with mp.Pool(n_procs) as p:
-        df_rows = p.map(
-            functools.partial(
-                compute_snr_for_single_mseed,
-                phase_table_path=phase_table_path,
-                output_dir=snr_fas_output_dir,
-                apply_smoothing=apply_smoothing,
-                ko_matrix_path=ko_matrix_path,
-                common_frequency_vector=common_frequency_vector,
-            ),
-            mseed_files,
-        )
+    # Create batches of mseed files for checkpointing
+    mseed_batches = [
+        mseed_files[i : i + batch_size] for i in range(0, len(mseed_files), batch_size)
+    ]
 
-    # Unpack the results
-    meta_dfs, skipped_record_dfs = zip(*df_rows)
+    for index, batch in enumerate(mseed_batches):
+        if index not in processed_suffixes:
+            print(f"Processing batch {index + 1}/{len(mseed_batches)}")
+            # Plot using multiprocessing all that are added to the plot_queue
+            with mp.Pool(n_procs) as p:
+                df_rows = p.map(
+                    functools.partial(
+                        compute_snr_for_single_mseed,
+                        phase_table_path=phase_table_path,
+                        output_dir=snr_fas_output_dir,
+                        apply_smoothing=apply_smoothing,
+                        ko_matrix_path=ko_matrix_path,
+                        common_frequency_vector=common_frequency_vector,
+                    ),
+                    mseed_files,
+                )
 
-    # Check that there are metadata dataframes that are not None
-    if not all(value is None for value in meta_dfs):
-        meta_df = pd.concat(meta_dfs).reset_index(drop=True)
-    else:
-        print("No metadata dataframes")
-        meta_df = pd.DataFrame()
+            # Unpack the results
+            meta_dfs, skipped_record_dfs = zip(*df_rows)
+
+            # Check that there are metadata dataframes that are not None
+            if not all(value is None for value in meta_dfs):
+                meta_df = pd.concat(meta_dfs).reset_index(drop=True)
+            else:
+                print("No metadata dataframes")
+                meta_df = pd.DataFrame()
+            meta_df.to_csv(batch_dir / f"snr_metadata_{index}.csv", index=False)
+
+            # Check that there are skipped records that are not None
+            if not all(value is None for value in skipped_record_dfs):
+                skipped_records = pd.concat(skipped_record_dfs).reset_index(drop=True)
+                print(f"Skipped {len(skipped_records)} records")
+            else:
+                print("No skipped records")
+                skipped_records = pd.DataFrame()
+            skipped_records.to_csv(
+                batch_dir / f"snr_skipped_records_{index}.csv", index=False
+            )
+
+    # Join all the batch files
+    meta_dfs = []
+    skipped_records_dfs = []
+
+    for file in batch_dir.iterdir():
+        if "snr_metadata" in file.stem:
+            try:
+                meta_dfs.append(pd.read_csv(file))
+            except EmptyDataError:
+                print(f"Warning: {file} is empty or has no valid columns to parse.")
+        elif "snr_skipped_records" in file.stem:
+            try:
+                skipped_records_dfs.append(pd.read_csv(file))
+            except EmptyDataError:
+                print(f"Warning: {file} is empty or has no valid columns to parse.")
+
+    meta_df = pd.concat(meta_dfs, ignore_index=True)
+    skipped_records_df = pd.concat(skipped_records_dfs, ignore_index=True)
+
+    # Save the dataframes
     meta_df.to_csv(meta_output_dir / "snr_metadata.csv", index=False)
-
-    # Check that there are skipped records that are not None
-    if not all(value is None for value in skipped_record_dfs):
-        skipped_records = pd.concat(skipped_record_dfs).reset_index(drop=True)
-        print(f"Skipped {len(skipped_records)} records")
-    else:
-        print("No skipped records")
-        skipped_records = pd.DataFrame()
-    skipped_records.to_csv(meta_output_dir / "snr_skipped_records.csv", index=False)
+    skipped_records_df.to_csv(meta_output_dir / "snr_skipped_records.csv", index=False)
 
     print(f"Finished, output data found in {meta_output_dir}")

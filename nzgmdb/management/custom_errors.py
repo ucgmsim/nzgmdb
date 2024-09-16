@@ -3,6 +3,12 @@ Contains custom exceptions for the NZGMDB.
 """
 
 
+class EventIDNotFoundError(Exception):
+    """Exception raised when the event ID is not found."""
+
+    pass
+
+
 class SensitivityRemovalError(Exception):
     """Exception raised when sensitivity removal fails."""
 

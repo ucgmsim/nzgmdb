@@ -4,7 +4,7 @@ File that contains the function scripts that can be called to run the NZGMDB pip
 
 from datetime import datetime
 from pathlib import Path
-from typing import Annotated
+from typing import Annotated, List
 
 import typer
 
@@ -41,8 +41,30 @@ def fetch_geonet_data(
         ),
     ],
     n_procs: Annotated[int, typer.Option(help="Number of processes to use")] = 1,
+    batch_size: Annotated[
+        int,
+        typer.Option(
+            help="The batch size for the Geonet data retrieval for how many events to process at a time",
+        ),
+    ] = 200,
+    only_event_ids: Annotated[
+        List[str],
+        typer.Option(
+            help="A list of event ids to filter the earthquake data, separated by commas",
+            callback=lambda x: x[0].split(",") if x else None,
+        ),
+    ] = None,
+    only_sites: Annotated[
+        List[str],
+        typer.Option(
+            help="A list of site names to filter the earthquake data, separated by commas",
+            callback=lambda x: x[0].split(",") if x else None,
+        ),
+    ] = None,
 ):
-    geonet.parse_geonet_information(main_dir, start_date, end_date, n_procs)
+    geonet.parse_geonet_information(
+        main_dir, start_date, end_date, n_procs, batch_size, only_event_ids, only_sites
+    )
 
 
 @app.command(help="Add tectonic domains to the earthquake source table")
@@ -148,6 +170,12 @@ def calculate_snr(
             file_okay=False,
         ),
     ] = None,
+    batch_size: Annotated[
+        int,
+        typer.Option(
+            help="The batch size for the SNR calculation for how many mseeds to process at a time",
+        ),
+    ] = 500,
 ):
     # Define the default paths if not provided
     if phase_table_path is None:
@@ -166,6 +194,7 @@ def calculate_snr(
         n_procs,
         apply_smoothing,
         ko_matrix_path,
+        batch_size=batch_size,
     )
 
 
@@ -406,22 +435,56 @@ def run_pre_process_nzgmdb(
             file_okay=False,
         ),
     ] = None,
+    only_event_ids: Annotated[
+        List[str],
+        typer.Option(
+            help="A list of event ids to filter the earthquake data",
+            callback=lambda x: x.split(",") if x else None,
+        ),
+    ] = None,
+    only_sites: Annotated[
+        List[str],
+        typer.Option(
+            help="A list of site names to filter the earthquake data",
+            callback=lambda x: x.split(",") if x else None,
+        ),
+    ] = None,
+    geonet_batch_size: Annotated[
+        int,
+        typer.Option(
+            help="The batch size for the Geonet data retrieval for how many events to process at a time",
+        ),
+    ] = 200,
+    snr_batch_size: Annotated[
+        int,
+        typer.Option(
+            help="The batch size for the SNR calculation for how many mseeds to process at a time",
+        ),
+    ] = 500,
 ):
     main_dir.mkdir(parents=True, exist_ok=True)
 
     # Generate the site basin flatfile
     flatfile_dir = file_structure.get_flatfile_dir(main_dir)
     flatfile_dir.mkdir(parents=True, exist_ok=True)
-    # generate_site_table_basin(main_dir)
+    generate_site_table_basin(main_dir)
 
     # Fetch the Geonet data
-    # geonet.parse_geonet_information(main_dir, start_date, end_date, n_procs)
+    geonet.parse_geonet_information(
+        main_dir,
+        start_date,
+        end_date,
+        n_procs,
+        geonet_batch_size,
+        only_event_ids,
+        only_sites,
+    )
 
     # Merge the tectonic domains
     print("Merging tectonic domains")
     eq_source_ffp = flatfile_dir / "earthquake_source_table.csv"
     eq_tect_domain_ffp = flatfile_dir / "earthquake_source_table.csv"
-    # tect_domain.add_tect_domain(eq_source_ffp, eq_tect_domain_ffp, n_procs)
+    tect_domain.add_tect_domain(eq_source_ffp, eq_tect_domain_ffp, n_procs)
 
     # Generate the phase arrival table
     print("Generating phase arrival table")
@@ -441,6 +504,7 @@ def run_pre_process_nzgmdb(
         n_procs,
         apply_smoothing=apply_smoothing,
         ko_matrix_path=ko_matrix_path,
+        batch_size=snr_batch_size,
     )
 
     # Calculate Fmax

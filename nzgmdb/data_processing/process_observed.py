@@ -68,6 +68,13 @@ def process_single_mseed(mseed_file: Path, gmc_df: pd.DataFrame, fmax_df: pd.Dat
         }
         skipped_record = pd.DataFrame([skipped_record_dict])
         return skipped_record
+    except custom_errors.RotationError:
+        skipped_record_dict = {
+            "mseed_file": mseed_stem,
+            "reason": "Failed to rotate the data",
+        }
+        skipped_record = pd.DataFrame([skipped_record_dict])
+        return skipped_record
 
     # Get the GMC fmin and fmax values
     fmin_rows = gmc_df[gmc_df["record"] == mseed_stem]

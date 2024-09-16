@@ -35,6 +35,8 @@ def initial_preprocessing(mseed: Stream):
         If no inventory information is found for the station and location pair
     SensitivityRemovalError
         If the sensitivity removal fails
+    RotationError
+        If the rotation fails
     """
     # Small Processing
     mseed.detrend("demean")
@@ -89,7 +91,9 @@ def initial_preprocessing(mseed: Stream):
         # Rotate
         try:
             mseed.rotate("->ZNE", inventory=inv)
-        except Exception: # Due to obspy raising an Exception instead of a specific error
+        except (
+            Exception
+        ):  # Due to obspy raising an Exception instead of a specific error
             # Error for no matching channel metadata found
             raise custom_errors.RotationError(
                 f"Failed to rotate for station {station} with location {location}"

@@ -2,19 +2,18 @@
     Functions to manage Geonet Data
 """
 
-import asyncio
 import datetime
 import io
 import multiprocessing
 import traceback
 from functools import partial
-from inspect import trace
 from pathlib import Path
 from typing import List
 
 import numpy as np
 import obspy
 import pandas as pd
+from pandas.errors import EmptyDataError
 import requests
 from obspy.clients.fdsn import Client as FDSN_Client
 from obspy.core.event import Event, Magnitude
@@ -23,7 +22,7 @@ from scipy.interpolate import interp1d
 
 from nzgmdb.data_processing import filtering
 from nzgmdb.management import config as cfg
-from nzgmdb.management import file_structure
+from nzgmdb.management import file_structure, custom_errors
 from nzgmdb.mseed_management import creation
 
 
@@ -392,6 +391,7 @@ def fetch_sta_mag_lines(
     rrups: np.ndarray,
     f_rrup: interp1d,
     n_procs: int = 1,
+    only_sites: List[str] = None,
 ):
     """
     Fetch the station magnitude lines from the geonet client to be added to the sta_mag_df
@@ -423,6 +423,10 @@ def fetch_sta_mag_lines(
         The rrups from the Mw_rrup file
     f_rrup : interp1d
         The cubic interpolation function for the magnitude distance relationship
+    n_procs : int (optional)
+        The number of processes to run
+    only_sites : list[str] (optional)
+        Will only fetch the data for the sites in the list
     """
     skipped_records = []
     # Get the preferred_origin
@@ -460,7 +464,14 @@ def fetch_sta_mag_lines(
                 ev_lat=ev_lat,
                 ev_lon=ev_lon,
             )
-            results = pool.map(partial_run_station, [station for station in network])
+            results = pool.map(
+                partial_run_station,
+                [
+                    station
+                    for station in network
+                    if only_sites is None or station.code in only_sites
+                ],
+            )
 
         # Get results and extend the sta_mag_line and skipped_records
         sta_mag_lines_network, skipped_records_network = zip(*results)
@@ -485,6 +496,7 @@ def fetch_event_data(
     rrups: np.ndarray,
     f_rrup: interp1d,
     n_procs: int = 1,
+    only_sites: List[str] = None,
 ):
     """
     Fetch the event data from the geonet client to form the event and magnitude dataframes
@@ -509,6 +521,10 @@ def fetch_event_data(
         The rrups from the Mw_rrup file
     f_rrup : interp1d
         The cubic interpolation function for the magnitude distance relationship
+    n_procs : int (optional)
+        The number of processes to run
+    only_sites : list[str] (optional)
+        Will only fetch the data for the sites in the list
     """
     try:
         # Get the catalog information
@@ -534,6 +550,7 @@ def fetch_event_data(
                 rrups,
                 f_rrup,
                 n_procs,
+                only_sites,
             )
         else:
             sta_mag_lines, skipped_records = None, None
@@ -634,6 +651,7 @@ def process_batch(
     rrups,
     f_rrup,
     n_procs,
+    only_sites: List[str] = None,
 ):
     event_data = []
     sta_mag_data = []
@@ -655,6 +673,7 @@ def process_batch(
             rrups,
             f_rrup,
             n_procs,
+            only_sites,
         )
         if event_line is not None:
             event_data.append(event_line)
@@ -736,6 +755,9 @@ def parse_geonet_information(
     start_date: datetime,
     end_date: datetime,
     n_procs: int = 1,
+    batch_size: int = 200,
+    only_event_ids: List[str] = None,
+    only_sites: List[str] = None,
 ):
     """
     Read the geonet information and manage the fetching of more data to create the mseed files
@@ -750,12 +772,27 @@ def parse_geonet_information(
         The end date for the data extraction from the earthquake csv
     n_procs : int (optional)
         The number of processes to run
+    batch_size : int (optional)
+        The size of the batches to run, default is 200
+    only_event_ids : list[str] (optional)
+        Will only fetch the data for the event ids in the list (Must be in the start and end date range)
+    only_sites : list[str] (optional)
+        Will only fetch the data for the sites in the list
     """
     # Get the earthquake data
     geonet = download_earthquake_data(start_date, end_date)
 
     # Get all event ids
     event_ids = geonet.publicid.unique().astype(str)
+
+    # Filter the event ids if only_event_ids is given
+    if only_event_ids:
+        for event_id in only_event_ids:
+            if event_id not in event_ids:
+                raise custom_errors.EventIDNotFoundError(
+                    f"Warning: {event_id} not in the earthquake data"
+                )
+        event_ids = only_event_ids
 
     # Set constants
     config = cfg.Config()
@@ -791,10 +828,9 @@ def parse_geonet_information(
     processed_files = [f for f in batch_dir.iterdir() if f.is_file()]
     processed_suffixes = set(int(f.stem.split("_")[-1]) for f in processed_files)
 
-    # Create batches from the event_ids in sizes of 200
-    batch_length = 200
+    # Create batches from the event_ids
     batches = [
-        event_ids[i : i + batch_length] for i in range(0, len(event_ids), batch_length)
+        event_ids[i : i + batch_size] for i in range(0, len(event_ids), batch_size)
     ]
 
     for index, batch in enumerate(batches):
@@ -812,6 +848,7 @@ def parse_geonet_information(
                 rrups,
                 f_rrup,
                 n_procs,
+                only_sites,
             )
 
     print("Finished writing mseeds")
@@ -820,8 +857,6 @@ def parse_geonet_information(
     event_dfs = []
     sta_mag_dfs = []
     skipped_records_dfs = []
-
-    from pandas.errors import EmptyDataError
 
     for file in batch_dir.iterdir():
         if "earthquake_source_table" in file.stem:
