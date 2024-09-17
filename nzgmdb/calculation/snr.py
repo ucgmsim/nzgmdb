@@ -53,7 +53,6 @@ def compute_snr_for_single_mseed(
         or noise was less than 1 second
 
     """
-    start_time = time.time()
     skipped_record = None
 
     # Get the station from the filename
@@ -179,7 +178,6 @@ def compute_snr_for_single_mseed(
         "endtime": stats.endtime,
     }
     meta_df = pd.DataFrame([meta_dict])
-    print(f"Time for full record: {time.time() - start_time}")
     return meta_df, skipped_record
 
 
@@ -256,6 +254,7 @@ def compute_snr_for_mseed_data(
     for index, batch in enumerate(mseed_batches):
         if index not in processed_suffixes:
             print(f"Processing batch {index + 1}/{len(mseed_batches)}")
+            cur_time = time.time()
             # Plot using multiprocessing all that are added to the plot_queue
             with mp.Pool(n_procs) as p:
                 df_rows = p.map(
@@ -269,6 +268,7 @@ def compute_snr_for_mseed_data(
                     ),
                     batch,
                 )
+            print(f"Batch {index + 1} took {time.time() - cur_time} seconds")
 
             # Unpack the results
             meta_dfs, skipped_record_dfs = zip(*df_rows)
@@ -316,6 +316,4 @@ def compute_snr_for_mseed_data(
     skipped_records_df.to_csv(meta_output_dir / "snr_skipped_records.csv", index=False)
 
     print(f"Finished, output data found in {meta_output_dir}")
-    print(
-        f"Finished processing took {time.time() - start_time} seconds"
-    )
+    print(f"Finished processing took {time.time() - start_time} seconds")
