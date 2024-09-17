@@ -52,10 +52,15 @@ def initial_preprocessing(mseed: Stream):
     # Taper the data by the taper_fraction
     mseed.taper(taper_fraction, side="both", max_length=5)
 
+    # Get the start and end times for the data
+    # (This is because obspy trim function does not update start and end times)
+    starttime_trim = max([tr.stats.starttime for tr in mseed])
+    endtime_trim = min([tr.stats.endtime for tr in mseed])
+
     # Perform zero-padding
     mseed.trim(
-        mseed[0].stats.starttime - zero_padding_time,
-        mseed[0].stats.endtime + zero_padding_time,
+        starttime_trim - zero_padding_time,
+        endtime_trim + zero_padding_time,
         pad=True,
         fill_value=0,
     )
@@ -261,8 +266,13 @@ def high_and_low_cut_processing(
     acc_bb_090 = butter_bandpass_filter(acc_090, lowcut, highcut, fs, order)
     acc_bb_ver = butter_bandpass_filter(acc_ver, lowcut, highcut, fs, order)
 
+    # Get the start and end times for the data
+    # (This is because obspy trim function does not update start and end times)
+    starttime_trim = max([tr.stats.starttime for tr in mseed])
+    endtime_trim = min([tr.stats.endtime for tr in mseed])
+
     # Remove Zero padding
-    mseed.trim(mseed[0].stats.starttime, mseed[0].stats.endtime)
+    mseed.trim(starttime_trim, endtime_trim)
 
     # Calculate the velocity
     vel_000 = integrate.cumtrapz(y=acc_bb_000, dx=dt, initial=0.0) * g / 10.0
