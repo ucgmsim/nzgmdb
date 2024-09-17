@@ -159,9 +159,12 @@ def calculate_snr(
         ),
     ] = None,
     n_procs: Annotated[int, typer.Option(help="Number of processes to use")] = 1,
-    apply_smoothing: Annotated[
-        bool, typer.Option(help="Whether to apply smoothing to the SNR calculation")
-    ] = True,
+    no_smoothing: Annotated[
+        bool,
+        typer.Option(
+            help="Enable to disable smoothing to the SNR calculation", is_flag=True
+        ),
+    ] = False,
     ko_matrix_path: Annotated[
         Path,
         typer.Option(
@@ -192,8 +195,8 @@ def calculate_snr(
         meta_output_dir,
         snr_fas_output_dir,
         n_procs,
-        apply_smoothing,
-        ko_matrix_path,
+        apply_smoothing=not no_smoothing,
+        ko_matrix_path=ko_matrix_path,
         batch_size=batch_size,
     )
 
@@ -424,9 +427,12 @@ def run_pre_process_nzgmdb(
         ),
     ],
     n_procs: Annotated[int, typer.Option(help="The number of processes to use")] = 1,
-    apply_smoothing: Annotated[
-        bool, typer.Option(help="Whether to apply smoothing to the SNR calculation")
-    ] = True,
+    no_smoothing: Annotated[
+        bool,
+        typer.Option(
+            help="Enable to disable smoothing to the SNR calculation", is_flag=True
+        ),
+    ] = False,
     ko_matrix_path: Annotated[
         Path,
         typer.Option(
@@ -502,7 +508,7 @@ def run_pre_process_nzgmdb(
         flatfile_dir,
         snr_fas_output_dir,
         n_procs,
-        apply_smoothing=apply_smoothing,
+        apply_smoothing=not no_smoothing,
         ko_matrix_path=ko_matrix_path,
         batch_size=snr_batch_size,
     )

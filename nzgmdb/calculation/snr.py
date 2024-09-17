@@ -1,6 +1,7 @@
 import functools
 import multiprocessing as mp
 from pathlib import Path
+import time
 
 import numpy as np
 import obspy
@@ -52,6 +53,7 @@ def compute_snr_for_single_mseed(
         or noise was less than 1 second
 
     """
+    start_time = time.time()
     skipped_record = None
 
     # Get the station from the filename
@@ -177,6 +179,7 @@ def compute_snr_for_single_mseed(
         "endtime": stats.endtime,
     }
     meta_df = pd.DataFrame([meta_dict])
+    print(f"Time for full record: {time.time() - start_time}")
     return meta_df, skipped_record
 
 
@@ -216,6 +219,7 @@ def compute_snr_for_mseed_data(
     batch_size : int, optional
         Number of mseed files to process in a single batch, by default 500
     """
+    start_time = time.time()
     # Create the output directories
     meta_output_dir.mkdir(parents=True, exist_ok=True)
     snr_fas_output_dir.mkdir(parents=True, exist_ok=True)
@@ -263,7 +267,7 @@ def compute_snr_for_mseed_data(
                         ko_matrix_path=ko_matrix_path,
                         common_frequency_vector=common_frequency_vector,
                     ),
-                    mseed_files,
+                    batch,
                 )
 
             # Unpack the results
@@ -312,3 +316,6 @@ def compute_snr_for_mseed_data(
     skipped_records_df.to_csv(meta_output_dir / "snr_skipped_records.csv", index=False)
 
     print(f"Finished, output data found in {meta_output_dir}")
+    print(
+        f"Finished processing took {time.time() - start_time} seconds"
+    )
