@@ -57,7 +57,9 @@ def create_waveform_from_mseed(
         data = data.astype(np.float64)
     except ValueError:
         print(f"Error reading data from {mseed_file}")
-        raise ValueError
+        raise custom_errors.InvalidTraceLengthError(
+            f"Error reading data from {mseed_file}"
+        )
 
     # Create the waveform object
     waveform = read_waveform.create_waveform_from_data(

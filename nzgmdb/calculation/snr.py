@@ -92,6 +92,13 @@ def compute_snr_for_single_mseed(
         }
         skipped_record = pd.DataFrame([skipped_record_dict])
         return None, skipped_record
+    except custom_errors.InvalidTraceLengthError:
+        skipped_record_dict = {
+            "record_id": mseed_file.stem,
+            "reason": "Invalid trace length from mseed file",
+        }
+        skipped_record = pd.DataFrame([skipped_record_dict])
+        return None, skipped_record
 
     stats = obspy.read(str(mseed_file))[0].stats
 

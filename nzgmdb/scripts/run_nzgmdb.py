@@ -51,14 +51,14 @@ def fetch_geonet_data(
         List[str],
         typer.Option(
             help="A list of event ids to filter the earthquake data, separated by commas",
-            callback=lambda x: x[0].split(",") if x else None,
+            callback=lambda x: [] if x is None else x[0].split(","),
         ),
     ] = None,
     only_sites: Annotated[
         List[str],
         typer.Option(
             help="A list of site names to filter the earthquake data, separated by commas",
-            callback=lambda x: x[0].split(",") if x else None,
+            callback=lambda x: [] if x is None else x[0].split(","),
         ),
     ] = None,
 ):
@@ -444,15 +444,15 @@ def run_pre_process_nzgmdb(
     only_event_ids: Annotated[
         List[str],
         typer.Option(
-            help="A list of event ids to filter the earthquake data",
-            callback=lambda x: x.split(",") if x else None,
+            help="A list of event ids to filter the earthquake data, separated by commas",
+            callback=lambda x: [] if x is None else x[0].split(","),
         ),
     ] = None,
     only_sites: Annotated[
         List[str],
         typer.Option(
-            help="A list of site names to filter the earthquake data",
-            callback=lambda x: x.split(",") if x else None,
+            help="A list of site names to filter the earthquake data, separated by commas",
+            callback=lambda x: [] if x is None else x[0].split(","),
         ),
     ] = None,
     geonet_batch_size: Annotated[

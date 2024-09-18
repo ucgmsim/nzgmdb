@@ -65,3 +65,9 @@ class InvalidNumberOfGeonetPicksException(Exception):
     """
 
     pass
+
+
+class InvalidTraceLengthError(Exception):
+    """Exception raised when the trace length is invalid for an mseed file."""
+
+    pass
