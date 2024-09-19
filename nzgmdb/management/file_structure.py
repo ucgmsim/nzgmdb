@@ -129,3 +129,16 @@ def get_processed_dir_from_mseed(mseed_file: Path):
         The directory to save the processed files
     """
     return mseed_file.parent.parent / "processed"
+
+
+def get_gmc_dir(main_dir: Path):
+    """
+    Get the directory to save the GMC results
+
+    Parameters
+    ----------
+    main_dir : Path
+        The main directory of the NZGMDB results (Highest level directory)
+    """
+    gmc_dir = main_dir / "gmc"
+    return gmc_dir
