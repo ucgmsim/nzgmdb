@@ -4,6 +4,7 @@ import pandas as pd
 
 from nzgmdb.management import config as cfg
 from nzgmdb.management import file_structure
+from nzgmdb.data_retrieval import github
 
 
 def merge_im_data(
@@ -245,6 +246,16 @@ def merge_flatfiles(main_dir: Path):
     prop_df = pd.read_csv(flatfile_dir / "propagation_path_table.csv")
     im_df = pd.read_csv(flatfile_dir / "ground_motion_im_catalogue.csv")
     site_basin_df = pd.read_csv(flatfile_dir / "site_table.csv")
+
+    # Get the recorders information for location codes
+    # Convert the GitHub URL to the raw content URL
+    github_url = "https://github.com/GeoNet/delta/blob/main/install/recorders.csv"
+    raw_url = github_url.replace("github.com", "raw.githubusercontent.com").replace(
+        "/blob/", "/"
+    )
+
+    # Use the function to download and read the CSV
+    locations_df = github.download_and_read_csv(raw_url)
 
     # Ensure correct strike and rake values
     event_df.loc[event_df.strike == 360, "strike"] = 0

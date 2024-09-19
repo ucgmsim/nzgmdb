@@ -94,7 +94,7 @@ def run_gmc_processing(
     waveform_dir = file_structure.get_waveform_dir(main_dir)
     gmc_scripts_path = gm_classifier_dir / "gm_classifier/scripts"
     flatfile_dir = file_structure.get_flatfile_dir(main_dir)
-    predictions_output = flatfile_dir / "gmc_predictions.csv"
+    final_predictions_output = flatfile_dir / "gmc_predictions.csv"
 
     # Get all subfolders in the waveform directory (every year)
     subfolders = [f for f in waveform_dir.iterdir() if f.is_dir()]
@@ -126,7 +126,7 @@ def run_gmc_processing(
                 f"Failed to find {predictions_output} for {gmc_subfolder}. Please check logs in this folder or try a re-run"
             )
     combined_df = pd.concat(dfs)
-    combined_df.to_csv(predictions_output, index=False)
+    combined_df.to_csv(final_predictions_output, index=False)
 
 
 if __name__ == "__main__":
