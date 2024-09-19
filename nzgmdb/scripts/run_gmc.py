@@ -22,9 +22,7 @@ def run_command(command, env_sh, env_activate_command):
         shell=True,
         executable="/bin/bash",
     )
-    print("Exectued 2016")
     stdout, stderr = process.communicate()
-    print("Finished 2016")
     if process.returncode != 0:
         raise Exception(f"Command failed with error: {stderr.decode('utf-8')}")
     return stdout.decode("utf-8")
@@ -46,14 +44,26 @@ def process_subfolder(
         # Construct paths for output
         predictions_output = gmc_subfolder / "gmc_predictions.csv"
 
-        # Activate gmc environment and extract features for the subfolder
-        # features_command = f"python {gmc_scripts_path}/extract_features.py {gmc_subfolder} {subfolder} mseed --ko_matrices_dir {ko_matrices_dir}"
-        # run_command(features_command, conda_sh, gmc_activate)
+        # Check if features already exist
+        if (gmc_subfolder / "features_comp_X.csv").exists():
+            print(
+                f"Skipping extract features for {subfolder} as features already exist"
+            )
+        else:
+            # Activate gmc environment and extract features for the subfolder
+            features_command = f"python {gmc_scripts_path}/extract_features.py {gmc_subfolder} {subfolder} mseed --ko_matrices_dir {ko_matrices_dir}"
+            run_command(features_command, conda_sh, gmc_activate)
+
+        # Check if the gmc_predictions.csv file already exists
+        if predictions_output.exists():
+            print(f"Skipping {subfolder} as gmc_predictions.csv already exists")
+            return
 
         # Activate gmc_predict environment and run prediction
-        if subfolder.stem == "2016":
-            predict_command = f"python {gmc_scripts_path}/predict.py {gmc_subfolder} {predictions_output}"
-            run_command(predict_command, conda_sh, gmc_predict_activate)
+        predict_command = (
+            f"python {gmc_scripts_path}/predict.py {gmc_subfolder} {predictions_output}"
+        )
+        run_command(predict_command, conda_sh, gmc_predict_activate)
 
         print(f"Successfully processed {subfolder}")
     except Exception as e:
