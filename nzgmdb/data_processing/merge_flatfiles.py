@@ -248,14 +248,9 @@ def merge_flatfiles(main_dir: Path):
     site_basin_df = pd.read_csv(flatfile_dir / "site_table.csv")
 
     # Get the recorders information for location codes
-    # Convert the GitHub URL to the raw content URL
-    github_url = "https://github.com/GeoNet/delta/blob/main/install/recorders.csv"
-    raw_url = github_url.replace("github.com", "raw.githubusercontent.com").replace(
-        "/blob/", "/"
-    )
-
-    # Use the function to download and read the CSV
-    locations_df = github.download_and_read_csv(raw_url)
+    config = cfg.Config()
+    locations_url = config.get_value("locations_url")
+    locations_df = github.download_and_read_csv(locations_url)
 
     # Ensure correct strike and rake values
     event_df.loc[event_df.strike == 360, "strike"] = 0
@@ -320,6 +315,7 @@ def merge_flatfiles(main_dir: Path):
                 "sta",
                 "lat",
                 "lon",
+                "elev",
                 "Vs30",
                 "Vs30_std",
                 "Q_Vs30",
@@ -339,6 +335,20 @@ def merge_flatfiles(main_dir: Path):
         how="left",
     )
     gm_im_df_flat = gm_im_df_flat.rename(columns={"lat": "sta_lat", "lon": "sta_lon"})
+
+    # Merge in the location codes extra depth information where the station and location line up
+    # locations_df has the column "Station" and "Location" and "Depth"
+    gm_im_df_flat = gm_im_df_flat.merge(
+        locations_df[["Station", "Location", "Depth"]],
+        left_on=["sta", "loc"],
+        right_on=["Station", "Location"],
+        how="left",
+    )
+    # Remove the Station and Location columns
+    gm_im_df_flat = gm_im_df_flat.drop(columns=["Station", "Location"])
+    # Rename the Depth column to loc_elev and flip the sign
+    gm_im_df_flat = gm_im_df_flat.rename(columns={"Depth": "loc_elev"})
+    gm_im_df_flat["loc_elev"] = -gm_im_df_flat["loc_elev"]
 
     # Merge in the propagation data
     gm_im_df_flat = gm_im_df_flat.merge(
