@@ -63,6 +63,7 @@ def compute_im_for_waveform(
 def calculate_im_for_record(
     ffp_000: Path,
     output_path: Path,
+    output_queue: mp.Queue,
     components: List[Components],
     ims: List[str],
     im_options: Dict[str, List[float]],
@@ -93,7 +94,8 @@ def calculate_im_for_record(
             "reason": "Failed to find the mseed file",
         }
         skipped_record = pd.DataFrame([skipped_record_dict])
-        return skipped_record
+        # return skipped_record
+        output_queue.put(skipped_record)
 
     # Get the 090 and ver components full file paths
     ffp_090 = ffp_000.parent / f"{ffp_000.stem}.090"
@@ -109,7 +111,8 @@ def calculate_im_for_record(
             "reason": "Failed to find all components",
         }
         skipped_record = pd.DataFrame([skipped_record_dict])
-        return skipped_record
+        # return skipped_record
+        output_queue.put(skipped_record)
 
     # Get the event_id and create the output directory
     event_id = file_structure.get_event_id_from_mseed(mseed_file)
@@ -198,39 +201,43 @@ def compute_ims_for_all_processed_records(
     #         comp_000_files,
     #     )
     # print("Finished calculating IMs")
-    # Initialize a manager to handle shared data between processes
-    manager = mp.Manager()
-    result_list = manager.list()
-
-    # Create a semaphore to limit the number of concurrent processes
-    semaphore = mp.Semaphore(20)
-
-    # Create a list to keep track of processes
     processes = []
+    output_queue = mp.Queue()
 
-    # Create and start processes
-    for ffp_000 in comp_000_files:
-        p = mp.Process(
-            target=process_record_wrapper,
+    for comp_000_file in comp_000_files:
+        # If we have reached the limit, wait for some processes to finish
+        while len(processes) >= n_procs:
+            for p in processes:
+                p.join(0.1)  # Check if any process has finished, without blocking
+                if not p.is_alive():
+                    processes.remove(p)
+
+            # Start a new process
+        process = mp.Process(
+            target=calculate_im_for_record,
             args=(
-                ffp_000,
+                comp_000_file,
                 output_path,
+                output_queue,
                 components,
                 ims,
                 im_options,
-                result_list,
-                semaphore,
             ),
         )
-        processes.append(p)
-        p.start()
+        processes.append(process)
+        process.start()
 
-    # Join processes to ensure completion
-    for p in processes:
-        p.join()
+    # Wait for all remaining processes to finish
+    for process in processes:
+        process.join()
 
-    # Convert the result list to a regular list
-    skipped_records = list(result_list)
+    # Collect all results from the queue
+    skipped_records = []
+    while not output_queue.empty():
+        result = output_queue.get()
+        skipped_records.append(result)
+
+    print("All files have been processed.")
 
     print("Finished calculating IMs")
 
