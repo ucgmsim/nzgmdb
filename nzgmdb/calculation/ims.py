@@ -121,9 +121,14 @@ def calculate_im_for_record(
         waveform, ffp_000.stem, event_output_path, components, ims, im_options
     )
 
-def process_record_wrapper(ffp_000, output_path, components, ims, im_options, result_list, semaphore):
+
+def process_record_wrapper(
+    ffp_000, output_path, components, ims, im_options, result_list, semaphore
+):
     with semaphore:
-        result = calculate_im_for_record(ffp_000, output_path, components, ims, im_options)
+        result = calculate_im_for_record(
+            ffp_000, output_path, components, ims, im_options
+        )
         result_list.append(result)
 
 
@@ -207,7 +212,15 @@ def compute_ims_for_all_processed_records(
     for ffp_000 in comp_000_files:
         p = mp.Process(
             target=process_record_wrapper,
-            args=(ffp_000, output_path, components, ims, im_options, result_list, semaphore)
+            args=(
+                ffp_000,
+                output_path,
+                components,
+                ims,
+                im_options,
+                result_list,
+                semaphore,
+            ),
         )
         processes.append(p)
         p.start()
