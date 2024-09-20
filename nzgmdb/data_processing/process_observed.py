@@ -34,9 +34,21 @@ def process_single_mseed(mseed_file: Path, gmc_df: pd.DataFrame, fmax_df: pd.Dat
         Dataframe containing the skipped record name and reason why
         or None if the record was processed successfully
     """
+    # Check if the mseed file is in the GMC predictions
+    mseed_stem = mseed_file.stem
+    gmc_rows = gmc_df[gmc_df["record"] == mseed_stem]
+
+    # Check if there is any row, if not skip
+    if gmc_rows.empty:
+        skipped_record_dict = {
+            "mseed_file": mseed_stem,
+            "reason": "No record found in GMC predictions",
+        }
+        skipped_record = pd.DataFrame([skipped_record_dict])
+        return skipped_record
+
     # Read mseed information
     mseed = obspy.read(mseed_file)
-    mseed_stem = mseed_file.stem
 
     # Extract mseed values
     dt = mseed.traces[0].stats.delta
@@ -77,9 +89,7 @@ def process_single_mseed(mseed_file: Path, gmc_df: pd.DataFrame, fmax_df: pd.Dat
         return skipped_record
 
     # Get the GMC fmin and fmax values
-    fmin_rows = gmc_df[gmc_df["record"] == mseed_stem]
-    fmin = None if fmin_rows.empty else fmin_rows["fmin_mean"].max()
-    # TODO: Change the fmax_df to have the same format as the gmc_df for searching
+    fmin = gmc_rows["fmin_mean"].max()
     search_name = "_".join(mseed_stem.split("_")[:-1])
     fmax_rows = fmax_df[fmax_df["record_id"] == search_name]
     fmax = (
@@ -103,19 +113,19 @@ def process_single_mseed(mseed_file: Path, gmc_df: pd.DataFrame, fmax_df: pd.Dat
         return pd.DataFrame([skipped_record_dict])
 
     # Filter by score, fmin and multi mean
-    if fmin is not None and fmin_rows["score_mean"].min() < score_min:
+    if gmc_rows["score_mean"].min() < score_min:
         skipped_record_dict = {
             "mseed_file": mseed_stem,
             "reason": f"Score mean is less than {score_min}",
         }
         return pd.DataFrame([skipped_record_dict])
-    if fmin is not None and fmin > fmin_max:
+    if fmin > fmin_max:
         skipped_record_dict = {
             "mseed_file": mseed_stem,
             "reason": f"Fmin mean is greater than {fmin_max}",
         }
         return pd.DataFrame([skipped_record_dict])
-    if fmin is not None and fmin_rows["multi_mean"].max() > multi_max:
+    if gmc_rows["multi_mean"].max() > multi_max:
         skipped_record_dict = {
             "mseed_file": mseed_stem,
             "reason": f"Multi mean is greater than {multi_max}",
