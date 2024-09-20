@@ -7,10 +7,12 @@ import multiprocessing
 from pathlib import Path
 from typing import Optional
 
+import obspy
 import numpy as np
 import pandas as pd
 
 from nzgmdb.management import config as cfg
+from nzgmdb.management import file_structure
 
 
 def run_full_fmax_calc(
@@ -96,7 +98,20 @@ def assess_snr_and_get_fmax(
         )
     except IndexError:
         print(f"Record {record_id} not found in metadata")
-        raise IndexError
+        # Find the value from the mseed file
+        # This is a temporary fix until the metadata issue is fixed
+        main_dir = filename.parent.parent.parent.parent
+        year = int(filename.parent.parent.name)
+        event_id = filename.parent.name
+        mseed_dir = file_structure.get_mseed_dir(main_dir, year, event_id)
+        mseed_file = mseed_dir / f"{record_id}.mseed"
+        # read the mseed file to get the delta
+        mseed = obspy.read(str(mseed_file))
+        scaled_nyquist_freq = (
+            (1 / mseed[0].stats.delta)
+            * 0.5
+            * config.get_value("nyquist_freq_scaling_factor")
+        )
 
     snr_with_freq_signal_noise = pd.read_csv(filename)
     snr = snr_with_freq_signal_noise[["snr_000", "snr_090", "snr_ver"]]
