@@ -296,7 +296,7 @@ def run_im_calculation(
     checkpoint: Annotated[
         bool,
         typer.Option(
-            help="If True, the function will check for already completed files and skip them"
+            help="If True, the function will check for already completed files and skip them", is_flag=True
         ),
     ] = False,
 ):
@@ -535,7 +535,7 @@ def run_process_nzgmdb(
     checkpoint: Annotated[
         bool,
         typer.Option(
-            help="If True, the function will check for already completed files and skip them"
+            help="If True, the function will check for already completed files and skip them", is_flag=True
         ),
     ] = False,
     n_procs: Annotated[int, typer.Option(help="The number of processes to use")] = 1,
