@@ -121,6 +121,11 @@ def calculate_im_for_record(
         waveform, ffp_000.stem, event_output_path, components, ims, im_options
     )
 
+def process_record_wrapper(ffp_000, output_path, components, ims, im_options, result_list, semaphore):
+    with semaphore:
+        result = calculate_im_for_record(ffp_000, output_path, components, ims, im_options)
+        result_list.append(result)
+
 
 def compute_ims_for_all_processed_records(
     main_dir: Path,
@@ -176,17 +181,44 @@ def compute_ims_for_all_processed_records(
     }
 
     # Create the pool of processes
-    with mp.Pool(n_procs) as pool:
-        skipped_records = pool.map(
-            functools.partial(
-                calculate_im_for_record,
-                output_path=output_path,
-                components=components,
-                ims=ims,
-                im_options=im_options,
-            ),
-            comp_000_files,
+    # with mp.Pool(n_procs) as pool:
+    #     skipped_records = pool.map(
+    #         functools.partial(
+    #             calculate_im_for_record,
+    #             output_path=output_path,
+    #             components=components,
+    #             ims=ims,
+    #             im_options=im_options,
+    #         ),
+    #         comp_000_files,
+    #     )
+    # print("Finished calculating IMs")
+    # Initialize a manager to handle shared data between processes
+    manager = mp.Manager()
+    result_list = manager.list()
+
+    # Create a semaphore to limit the number of concurrent processes
+    semaphore = mp.Semaphore(20)
+
+    # Create a list to keep track of processes
+    processes = []
+
+    # Create and start processes
+    for ffp_000 in comp_000_files:
+        p = mp.Process(
+            target=process_record_wrapper,
+            args=(ffp_000, output_path, components, ims, im_options, result_list, semaphore)
         )
+        processes.append(p)
+        p.start()
+
+    # Join processes to ensure completion
+    for p in processes:
+        p.join()
+
+    # Convert the result list to a regular list
+    skipped_records = list(result_list)
+
     print("Finished calculating IMs")
 
     # Save the skipped records
