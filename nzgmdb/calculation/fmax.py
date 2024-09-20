@@ -88,11 +88,15 @@ def assess_snr_and_get_fmax(
 
     # current_row["delta"] is a pd.Series() containing 1 float so .iloc[0]
     # is used to get the float from the pd.Series()
-    scaled_nyquist_freq = (
-        (1 / current_row["delta"].iloc[0])
-        * 0.5
-        * config.get_value("nyquist_freq_scaling_factor")
-    )
+    try:
+        scaled_nyquist_freq = (
+            (1 / current_row["delta"].iloc[0])
+            * 0.5
+            * config.get_value("nyquist_freq_scaling_factor")
+        )
+    except IndexError:
+        print(f"Record {record_id} not found in metadata")
+        raise IndexError
 
     snr_with_freq_signal_noise = pd.read_csv(filename)
     snr = snr_with_freq_signal_noise[["snr_000", "snr_090", "snr_ver"]]
