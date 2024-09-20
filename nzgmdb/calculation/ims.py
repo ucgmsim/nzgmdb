@@ -145,12 +145,15 @@ def compute_ims_for_all_processed_records(
     # Get the waveform directory and all the 000 files
     waveform_dir = file_structure.get_waveform_dir(main_dir)
     comp_000_files = waveform_dir.rglob("*.000")
+    print("Found all records")
 
     if checkpoint:
         # Get list of already completed files and remove _IM suffix
         completed_files = [f.stem[:-3] for f in output_path.rglob("*_IM.csv")]
         # Remove completed files from the list
         comp_000_files = [f for f in comp_000_files if f.stem not in completed_files]
+
+    print(f"Calculating IMs for {len(comp_000_files)} records")
 
     # Load the config and extract the IM options
     config = cfg.Config()
@@ -184,6 +187,7 @@ def compute_ims_for_all_processed_records(
             ),
             comp_000_files,
         )
+    print("Finished calculating IMs")
 
     # Save the skipped records
     flatfile_dir = file_structure.get_flatfile_dir(main_dir)
