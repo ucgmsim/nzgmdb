@@ -551,7 +551,7 @@ def run_process_nzgmdb(
 
     # Run IM calculation
     im_dir = file_structure.get_im_dir(main_dir)
-    run_im_calculation(main_dir, im_dir, n_procs, checkpoint)
+    # run_im_calculation(main_dir, im_dir, n_procs, checkpoint)
 
     # Merge IM results
     merge_im_results(im_dir, flatfile_dir, gmc_ffp, fmax_ffp)
