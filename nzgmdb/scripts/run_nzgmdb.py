@@ -532,6 +532,12 @@ def run_process_nzgmdb(
             exists=True,
         ),
     ],
+    checkpoint: Annotated[
+        bool,
+        typer.Option(
+            help="If True, the function will check for already completed files and skip them"
+        ),
+    ] = False,
     n_procs: Annotated[int, typer.Option(help="The number of processes to use")] = 1,
 ):
     flatfile_dir = file_structure.get_flatfile_dir(main_dir)
@@ -543,7 +549,7 @@ def run_process_nzgmdb(
 
     # Run IM calculation
     im_dir = file_structure.get_im_dir(main_dir)
-    run_im_calculation(main_dir, im_dir, n_procs)
+    run_im_calculation(main_dir, im_dir, n_procs, checkpoint)
 
     # Merge IM results
     merge_im_results(im_dir, flatfile_dir, gmc_ffp, fmax_ffp)
