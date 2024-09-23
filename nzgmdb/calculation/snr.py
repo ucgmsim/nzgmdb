@@ -19,6 +19,7 @@ def compute_snr_for_single_mseed(
     mseed_file: Path,
     phase_table_path: Path,
     output_dir: Path,
+    output_queue: mp.Queue,
     apply_smoothing: bool = True,
     ko_matrix_path: Path = None,
     common_frequency_vector: np.ndarray = None,
@@ -34,6 +35,8 @@ def compute_snr_for_single_mseed(
         Path to the phase arrival table
     output_dir : Path
         Path to the output directory
+    output_queue : mp.Queue
+        Queue to store the output data, meta_df and skipped_record
     apply_smoothing : bool, optional
         Whether to apply smoothing to the SNR calculation, by default True
     ko_matrix_path : Path, optional
@@ -185,7 +188,7 @@ def compute_snr_for_single_mseed(
         "endtime": stats.endtime,
     }
     meta_df = pd.DataFrame([meta_dict])
-    return meta_df, skipped_record
+    output_queue.put((meta_df, skipped_record))
 
 
 def compute_snr_for_mseed_data(
@@ -197,7 +200,7 @@ def compute_snr_for_mseed_data(
     apply_smoothing: bool = True,
     ko_matrix_path: Path = None,
     common_frequency_vector: np.ndarray = None,
-    batch_size: int = 500,
+    batch_size: int = 5000,
 ):
     """
     Compute the SNR for the data in the data_dir
@@ -222,7 +225,7 @@ def compute_snr_for_mseed_data(
         Common frequency vector to use for all the waveforms, by default None
         Uses a default frequency vector if not specified defined in the configuration file
     batch_size : int, optional
-        Number of mseed files to process in a single batch, by default 500
+        Number of mseed files to process in a single batch, by default 5000
     """
     start_time = time.time()
     # Create the output directories
@@ -262,27 +265,52 @@ def compute_snr_for_mseed_data(
         if index not in processed_suffixes:
             print(f"Processing batch {index + 1}/{len(mseed_batches)}")
             cur_time = time.time()
-            # Plot using multiprocessing all that are added to the plot_queue
-            with mp.Pool(n_procs) as p:
-                df_rows = p.map(
-                    functools.partial(
-                        compute_snr_for_single_mseed,
-                        phase_table_path=phase_table_path,
-                        output_dir=snr_fas_output_dir,
-                        apply_smoothing=apply_smoothing,
-                        ko_matrix_path=ko_matrix_path,
-                        common_frequency_vector=common_frequency_vector,
-                    ),
-                    batch,
-                )
-            print(f"Batch {index + 1} took {time.time() - cur_time} seconds")
+            processes = []
+            output_queue = mp.Queue()
 
-            # Unpack the results
-            meta_dfs, skipped_record_dfs = zip(*df_rows)
+            for mseed_file in batch:
+                # If we have reached the limit, wait for some processes to finish
+                while len(processes) >= n_procs:
+                    for p in processes:
+                        p.join(
+                            0.1
+                        )  # Check if any process has finished, without blocking
+                        if not p.is_alive():
+                            processes.remove(p)
+
+                # Start a new process
+                process = mp.Process(
+                    target=compute_snr_for_single_mseed,
+                    args=(
+                        mseed_file,
+                        phase_table_path,
+                        snr_fas_output_dir,
+                        output_queue,
+                        apply_smoothing,
+                        ko_matrix_path,
+                        common_frequency_vector,
+                    ),
+                )
+                processes.append(process)
+                process.start()
+
+            # Wait for all remaining processes to finish
+            for process in processes:
+                process.join()
+
+            # Collect all results from the queue
+            meta_dfs = []
+            skipped_record_dfs = []
+            while not output_queue.empty():
+                result = output_queue.get()
+                meta_dfs.append(result[0])
+                skipped_record_dfs.append(result[1])
+
+            print(f"Batch {index + 1} took {time.time() - cur_time} seconds")
 
             # Check that there are metadata dataframes that are not None
             if not all(value is None for value in meta_dfs):
-                meta_df = pd.concat(meta_dfs).reset_index(drop=True)
+                meta_df = pd.concat(meta_dfs, ignore_index=True)
             else:
                 print("No metadata dataframes")
                 meta_df = pd.DataFrame()
@@ -290,7 +318,7 @@ def compute_snr_for_mseed_data(
 
             # Check that there are skipped records that are not None
             if not all(value is None for value in skipped_record_dfs):
-                skipped_records = pd.concat(skipped_record_dfs).reset_index(drop=True)
+                skipped_records = pd.concat(skipped_record_dfs, ignore_index=True)
                 print(f"Skipped {len(skipped_records)} records")
             else:
                 print("No skipped records")
@@ -315,8 +343,19 @@ def compute_snr_for_mseed_data(
             except EmptyDataError:
                 print(f"Warning: {file} is empty or has no valid columns to parse.")
 
-    meta_df = pd.concat(meta_dfs, ignore_index=True)
-    skipped_records_df = pd.concat(skipped_records_dfs, ignore_index=True)
+    # Check that there are metadata dataframes that are not None
+    if not all(value is None for value in meta_dfs):
+        meta_df = pd.concat(meta_dfs, ignore_index=True)
+    else:
+        print("No metadata dataframes")
+        meta_df = pd.DataFrame()
+    # Check that there are skipped records that are not None
+    if not all(value is None for value in skipped_record_dfs):
+        skipped_records_df = pd.concat(skipped_record_dfs, ignore_index=True)
+        print(f"Skipped {len(skipped_records_df)} records")
+    else:
+        print("No skipped records")
+        skipped_records_df = pd.DataFrame()
 
     # Save the dataframes
     meta_df.to_csv(meta_output_dir / "snr_metadata.csv", index=False)

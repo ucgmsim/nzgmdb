@@ -178,7 +178,7 @@ def calculate_snr(
         typer.Option(
             help="The batch size for the SNR calculation for how many mseeds to process at a time",
         ),
-    ] = 500,
+    ] = 5000,
 ):
     # Define the default paths if not provided
     if phase_table_path is None:
@@ -467,7 +467,7 @@ def run_pre_process_nzgmdb(
         typer.Option(
             help="The batch size for the SNR calculation for how many mseeds to process at a time",
         ),
-    ] = 500,
+    ] = 5000,
 ):
     main_dir.mkdir(parents=True, exist_ok=True)
 
@@ -509,7 +509,7 @@ def run_pre_process_nzgmdb(
         flatfile_dir,
         snr_fas_output_dir,
         n_procs,
-        apply_smoothing=not no_smoothing,
+        no_smoothing=no_smoothing,
         ko_matrix_path=ko_matrix_path,
         batch_size=snr_batch_size,
     )
