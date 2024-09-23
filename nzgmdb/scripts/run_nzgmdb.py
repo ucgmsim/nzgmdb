@@ -46,7 +46,7 @@ def fetch_geonet_data(
         typer.Option(
             help="The batch size for the Geonet data retrieval for how many events to process at a time",
         ),
-    ] = 200,
+    ] = 500,
     only_event_ids: Annotated[
         List[str],
         typer.Option(
@@ -461,7 +461,7 @@ def run_pre_process_nzgmdb(
         typer.Option(
             help="The batch size for the Geonet data retrieval for how many events to process at a time",
         ),
-    ] = 200,
+    ] = 500,
     snr_batch_size: Annotated[
         int,
         typer.Option(
