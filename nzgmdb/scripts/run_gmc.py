@@ -88,6 +88,7 @@ def run_gmc_processing(
         1, help="Number of processes to use for multiprocessing."
     ),
 ):
+    print("Running GMC")
     # Obtain other paths
     gmc_dir = file_structure.get_gmc_dir(main_dir)
     gmc_dir.mkdir(exist_ok=True, parents=True)

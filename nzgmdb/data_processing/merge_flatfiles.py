@@ -177,51 +177,51 @@ def seperate_components(
     df_rotd50 = df[df.component == "rotd50"]
     df_rotd100 = df[df.component == "rotd100"]
 
-    df_000 = df_000.drop(
-        [
-            "score_mean_X",
-            "fmin_mean_X",
-            "fmax_mean_X",
-            "multi_mean_X",
-            "score_mean_Z",
-            "fmin_mean_Z",
-            "fmax_mean_Z",
-            "multi_mean_Z",
-        ],
-        axis=1,
-    )
-    df_090 = df_090.drop(
-        [
-            "score_mean_Y",
-            "fmin_mean_Y",
-            "fmax_mean_Y",
-            "multi_mean_Y",
-            "score_mean_Z",
-            "fmin_mean_Z",
-            "fmax_mean_Z",
-            "multi_mean_Z",
-        ],
-        axis=1,
-    )
-    df_ver = df_ver.drop(
-        [
-            "score_mean_X",
-            "fmin_mean_X",
-            "fmax_mean_X",
-            "multi_mean_X",
-            "score_mean_Y",
-            "fmin_mean_Y",
-            "fmax_mean_Y",
-            "multi_mean_Y",
-        ],
-        axis=1,
-    )
-    df_rotd50 = df_rotd50.drop(
-        ["score_mean_Z", "fmin_mean_Z", "fmax_mean_Z", "multi_mean_Z"], axis=1
-    )
-    df_rotd100 = df_rotd100.drop(
-        ["score_mean_Z", "fmin_mean_Z", "fmax_mean_Z", "multi_mean_Z"], axis=1
-    )
+    # df_000 = df_000.drop(
+    #     [
+    #         "score_mean_X",
+    #         "fmin_mean_X",
+    #         "fmax_mean_X",
+    #         "multi_mean_X",
+    #         "score_mean_Z",
+    #         "fmin_mean_Z",
+    #         "fmax_mean_Z",
+    #         "multi_mean_Z",
+    #     ],
+    #     axis=1,
+    # )
+    # df_090 = df_090.drop(
+    #     [
+    #         "score_mean_Y",
+    #         "fmin_mean_Y",
+    #         "fmax_mean_Y",
+    #         "multi_mean_Y",
+    #         "score_mean_Z",
+    #         "fmin_mean_Z",
+    #         "fmax_mean_Z",
+    #         "multi_mean_Z",
+    #     ],
+    #     axis=1,
+    # )
+    # df_ver = df_ver.drop(
+    #     [
+    #         "score_mean_X",
+    #         "fmin_mean_X",
+    #         "fmax_mean_X",
+    #         "multi_mean_X",
+    #         "score_mean_Y",
+    #         "fmin_mean_Y",
+    #         "fmax_mean_Y",
+    #         "multi_mean_Y",
+    #     ],
+    #     axis=1,
+    # )
+    # df_rotd50 = df_rotd50.drop(
+    #     ["score_mean_Z", "fmin_mean_Z", "fmax_mean_Z", "multi_mean_Z"], axis=1
+    # )
+    # df_rotd100 = df_rotd100.drop(
+    #     ["score_mean_Z", "fmin_mean_Z", "fmax_mean_Z", "multi_mean_Z"], axis=1
+    # )
 
     return df_000, df_090, df_ver, df_rotd50, df_rotd100
 
@@ -251,6 +251,8 @@ def merge_flatfiles(main_dir: Path):
     config = cfg.Config()
     locations_url = config.get_value("locations_url")
     locations_df = github.download_and_read_csv(locations_url)
+    # Ensure the Station and Location pairings are unique
+    locations_df = locations_df.drop_duplicates(subset=["Station", "Location"])
 
     # Ensure correct strike and rake values
     event_df.loc[event_df.strike == 360, "strike"] = 0
@@ -275,6 +277,24 @@ def merge_flatfiles(main_dir: Path):
     # Save the missing sites
     missing_sites_df = pd.DataFrame(missing_sites, columns=["sta"])
     missing_sites_df.to_csv(flatfile_dir / "missing_sites.csv", index=False)
+
+    # Rename all the gmc column names to remove the middle _mean
+    im_df = im_df.rename(
+        columns={
+            "score_mean_X": "score_X",
+            "fmin_mean_X": "fmin_X",
+            "fmax_mean_X": "fmax_X",
+            "multi_mean_X": "multi_X",
+            "score_mean_Y": "score_Y",
+            "fmin_mean_Y": "fmin_Y",
+            "fmax_mean_Y": "fmax_Y",
+            "multi_mean_Y": "multi_Y",
+            "score_mean_Z": "score_Z",
+            "fmin_mean_Z": "fmin_Z",
+            "fmax_mean_Z": "fmax_Z",
+            "multi_mean_Z": "multi_Z",
+        }
+    )
 
     # Merge event data with the IM data
     gm_im_df_flat = im_df.merge(
@@ -334,7 +354,9 @@ def merge_flatfiles(main_dir: Path):
         on="sta",
         how="left",
     )
-    gm_im_df_flat = gm_im_df_flat.rename(columns={"lat": "sta_lat", "lon": "sta_lon"})
+    gm_im_df_flat = gm_im_df_flat.rename(
+        columns={"lat": "sta_lat", "lon": "sta_lon", "elev": "sta_elev"}
+    )
 
     # Merge in the location codes extra depth information where the station and location line up
     # locations_df has the column "Station" and "Location" and "Depth"
@@ -349,6 +371,45 @@ def merge_flatfiles(main_dir: Path):
     # Rename the Depth column to loc_elev and flip the sign
     gm_im_df_flat = gm_im_df_flat.rename(columns={"Depth": "loc_elev"})
     gm_im_df_flat["loc_elev"] = -gm_im_df_flat["loc_elev"]
+
+    # Add in a flag for when the location elevation is 0
+    # Group by 'evid', 'sta', and 'chan'
+    grouped = gm_im_df_flat.groupby(["evid", "sta", "chan"])
+
+    # Custom function to handle NaN values and find the index of the row with the loc_elev value closest to 0
+    def custom_idxmin(group):
+        # Filter out loc_elev values greater than 5 meters (In either direction)
+        group = group[group["loc_elev"].abs() <= config.get_value("locations_max_elev")]
+        if group["loc_elev"].isna().all():
+            return None
+        # Find the index of the row with the loc_elev value closest to 0
+        return (group["loc_elev"].abs()).idxmin(skipna=True)
+
+    # Find the index of the row with the smallest loc_elev value for each group, excluding NaN values
+    idx_min_loc_elev = grouped.apply(custom_idxmin)
+
+    gm_im_df_flat["is_ground_level"] = False
+    # Set the flag to True for the rows with the smallest loc_elev value
+    record_ids = gm_im_df_flat.loc[idx_min_loc_elev.dropna(), "record_id"]
+    gm_im_df_flat.loc[
+        gm_im_df_flat["record_id"].isin(record_ids), "is_ground_level"
+    ] = True
+
+    # For Locations not found in the dataframe, set the loc_elev to 0 only if there is just 1 location
+    gm_im_df_flat.loc[
+        gm_im_df_flat["loc_elev"].isna()
+        & gm_im_df_flat.groupby(["evid", "sta", "chan"])["loc"]
+        .transform("nunique")
+        .eq(1),
+        ["is_ground_level", "loc_elev"],
+    ] = [True, 0.0]
+    # Replace -0.0 with 0.0 in the DataFrame
+    gm_im_df_flat = gm_im_df_flat.replace(-0.0, 0.0)
+
+    # Remove duplicated columns in prop_df
+    prop_df["evid_sta"] = prop_df["evid"].astype(str) + "_" + prop_df["sta"].astype(str)
+    prop_df = prop_df.drop_duplicates(subset=["evid_sta"])
+    prop_df = prop_df.drop(columns=["evid_sta"])
 
     # Merge in the propagation data
     gm_im_df_flat = gm_im_df_flat.merge(
@@ -369,6 +430,12 @@ def merge_flatfiles(main_dir: Path):
         on=["evid", "sta"],
         how="left",
     )
+
+    # Add in colunms for fmin_max and fmin_highpass
+    gm_im_df_flat["fmin_max"] = gm_im_df_flat[
+        ["fmin_X", "fmin_Y", "fmin_Z"]
+    ].apply(max, axis=1)
+    gm_im_df_flat["HPF"] = gm_im_df_flat["fmin_max"] / 1.25
 
     # Sort the rows
     gm_im_df_flat = gm_im_df_flat.sort_values(["datetime", "sta", "component"])
@@ -408,6 +475,9 @@ def merge_flatfiles(main_dir: Path):
             "z_bor",
             "sta_lat",
             "sta_lon",
+            "sta_elev",
+            "loc_elev",
+            "is_ground_level",
             "r_epi",
             "r_hyp",
             "r_jb",
@@ -436,18 +506,20 @@ def merge_flatfiles(main_dir: Path):
             "Ds575",
             "Ds595",
             "MMI",
-            "score_mean_X",
-            "fmin_mean_X",
-            "fmax_mean_X",
-            "multi_mean_X",
-            "score_mean_Y",
-            "fmin_mean_Y",
-            "fmax_mean_Y",
-            "multi_mean_Y",
-            "score_mean_Z",
-            "fmin_mean_Z",
-            "fmax_mean_Z",
-            "multi_mean_Z",
+            "score_X",
+            "fmin_X",
+            "fmax_X",
+            "multi_X",
+            "score_Y",
+            "fmin_Y",
+            "fmax_Y",
+            "multi_Y",
+            "score_Z",
+            "fmin_Z",
+            "fmax_Z",
+            "multi_Z",
+            "fmin_max",
+            "HPF",
         ]
         + psa_columns
         + fas_columns
@@ -469,6 +541,7 @@ def merge_flatfiles(main_dir: Path):
     sta_mag_df.to_csv(flatfile_dir / "station_magnitude_table.csv", index=False)
     phase_table_df.to_csv(flatfile_dir / "phase_arrival_table.csv", index=False)
     site_basin_df.to_csv(flatfile_dir / "site_table.csv", index=False)
+    prop_df.to_csv(flatfile_dir / "propagation_path_table.csv", index=False)
     df_000.to_csv(flatfile_dir / "ground_motion_im_table_000.csv", index=False)
     df_090.to_csv(flatfile_dir / "ground_motion_im_table_090.csv", index=False)
     df_ver.to_csv(flatfile_dir / "ground_motion_im_table_ver.csv", index=False)
