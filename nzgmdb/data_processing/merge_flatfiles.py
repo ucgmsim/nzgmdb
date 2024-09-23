@@ -432,9 +432,9 @@ def merge_flatfiles(main_dir: Path):
     )
 
     # Add in colunms for fmin_max and fmin_highpass
-    gm_im_df_flat["fmin_max"] = gm_im_df_flat[
-        ["fmin_X", "fmin_Y", "fmin_Z"]
-    ].apply(max, axis=1)
+    gm_im_df_flat["fmin_max"] = gm_im_df_flat[["fmin_X", "fmin_Y", "fmin_Z"]].apply(
+        max, axis=1
+    )
     gm_im_df_flat["HPF"] = gm_im_df_flat["fmin_max"] / 1.25
 
     # Sort the rows

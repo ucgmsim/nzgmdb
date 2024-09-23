@@ -547,11 +547,11 @@ def run_process_nzgmdb(
     # Run filtering and processing of mseeds
     gmc_ffp = flatfile_dir / "gmc_predictions.csv"
     fmax_ffp = flatfile_dir / "fmax.csv"
-    # process_records(main_dir, gmc_ffp, fmax_ffp, n_procs)
+    process_records(main_dir, gmc_ffp, fmax_ffp, n_procs)
 
     # Run IM calculation
     im_dir = file_structure.get_im_dir(main_dir)
-    # run_im_calculation(main_dir, im_dir, n_procs, checkpoint)
+    run_im_calculation(main_dir, im_dir, n_procs, checkpoint)
 
     # Merge IM results
     merge_im_results(im_dir, flatfile_dir, gmc_ffp, fmax_ffp)
