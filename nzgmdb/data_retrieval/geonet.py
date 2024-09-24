@@ -7,6 +7,7 @@ import io
 import multiprocessing
 from pathlib import Path
 from typing import List
+import os
 
 import numpy as np
 import obspy
@@ -494,6 +495,8 @@ def fetch_event_data(
         sta_mag_lines, skipped_records = None, None
 
     output_queue.put((event_line, sta_mag_lines, skipped_records))
+    print(f"Finished processing event {event_id}")
+    os._exit(0)
 
 
 def process_batch(
@@ -543,7 +546,7 @@ def process_batch(
     processes = []
     output_queue = multiprocessing.Queue()
 
-    for event_id in batch_events:
+    for idx, event_id in enumerate(batch_events):
         # If we have reached the limit, wait for some processes to finish
         while len(processes) >= n_procs:
             for p in processes:
@@ -551,6 +554,9 @@ def process_batch(
                 if not p.is_alive():
                     processes.remove(p)
         # Start a new process
+        print(
+            f"Starting new process for event {event_id} {idx + 1}/{len(batch_events)}"
+        )
         process = multiprocessing.Process(
             target=fetch_event_data,
             args=(

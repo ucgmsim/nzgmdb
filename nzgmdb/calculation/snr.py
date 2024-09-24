@@ -1,4 +1,4 @@
-import functools
+import os
 import multiprocessing as mp
 from pathlib import Path
 import time
@@ -189,6 +189,7 @@ def compute_snr_for_single_mseed(
     }
     meta_df = pd.DataFrame([meta_dict])
     output_queue.put((meta_df, skipped_record))
+    os._exit(0)
 
 
 def compute_snr_for_mseed_data(
