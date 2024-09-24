@@ -189,6 +189,8 @@ def compute_snr_for_single_mseed(
     }
     meta_df = pd.DataFrame([meta_dict])
     output_queue.put((meta_df, skipped_record))
+    # Forcfully Kill the process to ensure when the p.is_alive() check is done
+    # the process is not still running and so continues to the next record
     os._exit(0)
 
 

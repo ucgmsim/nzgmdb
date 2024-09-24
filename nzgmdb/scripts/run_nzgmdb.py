@@ -474,24 +474,24 @@ def run_pre_process_nzgmdb(
     # Generate the site basin flatfile
     flatfile_dir = file_structure.get_flatfile_dir(main_dir)
     flatfile_dir.mkdir(parents=True, exist_ok=True)
-    generate_site_table_basin(main_dir)
+    # generate_site_table_basin(main_dir)
 
     # Fetch the Geonet data
-    geonet.parse_geonet_information(
-        main_dir,
-        start_date,
-        end_date,
-        n_procs,
-        geonet_batch_size,
-        only_event_ids,
-        only_sites,
-    )
+    # geonet.parse_geonet_information(
+    #     main_dir,
+    #     start_date,
+    #     end_date,
+    #     n_procs,
+    #     geonet_batch_size,
+    #     only_event_ids,
+    #     only_sites,
+    # )
 
     # Merge the tectonic domains
     print("Merging tectonic domains")
     eq_source_ffp = flatfile_dir / "earthquake_source_table.csv"
     eq_tect_domain_ffp = flatfile_dir / "earthquake_source_table.csv"
-    tect_domain.add_tect_domain(eq_source_ffp, eq_tect_domain_ffp, n_procs)
+    # tect_domain.add_tect_domain(eq_source_ffp, eq_tect_domain_ffp, n_procs)
 
     # Generate the phase arrival table
     print("Generating phase arrival table")

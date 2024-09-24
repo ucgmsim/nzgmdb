@@ -496,6 +496,8 @@ def fetch_event_data(
 
     output_queue.put((event_line, sta_mag_lines, skipped_records))
     print(f"Finished processing event {event_id}")
+    # Forcfully Kill the process to ensure when the p.is_alive() check is done
+    # the process is not still running and so continues to the next event
     os._exit(0)
 
 
