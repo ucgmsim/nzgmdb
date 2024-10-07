@@ -22,6 +22,7 @@ def compute_im_for_waveform(
     components: List[Components],
     ims: List[str],
     im_options: Dict[str, List[float]],
+    ko_matrices_path: Path = None,
 ):
     """
     Compute the IMs for a single waveform and save the results to a csv file
@@ -40,6 +41,8 @@ def compute_im_for_waveform(
         The IMs to calculate
     im_options : Dict[str, List[float]]
         The options for the IMs
+    ko_matrices_path : Path, optional
+        The path to the KO matrices, by default None
     """
     im_result = im_calculation.compute_measure_single(
         (waveform, None),
@@ -47,6 +50,7 @@ def compute_im_for_waveform(
         components,
         im_options,
         components,
+        ko_matrices_path=ko_matrices_path,
     )
 
     # Turn the results into a dataframe
@@ -67,6 +71,7 @@ def calculate_im_for_record(
     components: List[Components],
     ims: List[str],
     im_options: Dict[str, List[float]],
+    ko_matrices_path: Path = None,
 ):
     """
     Calculate the IMs for a single record and save the results to a csv file
@@ -83,6 +88,8 @@ def calculate_im_for_record(
         The IMs to calculate
     im_options : Dict[str, List[float]]
         The options for the IMs
+    ko_matrices_path : Path, optional
+        The path to the KO matrices, by default None
     """
     # Load the mseed file
     try:
@@ -121,18 +128,14 @@ def calculate_im_for_record(
 
     # Calculate the IMs
     compute_im_for_waveform(
-        waveform, ffp_000.stem, event_output_path, components, ims, im_options
+        waveform,
+        ffp_000.stem,
+        event_output_path,
+        components,
+        ims,
+        im_options,
+        ko_matrices_path,
     )
-
-
-def process_record_wrapper(
-    ffp_000, output_path, components, ims, im_options, result_list, semaphore
-):
-    with semaphore:
-        result = calculate_im_for_record(
-            ffp_000, output_path, components, ims, im_options
-        )
-        result_list.append(result)
 
 
 def compute_ims_for_all_processed_records(
@@ -140,6 +143,7 @@ def compute_ims_for_all_processed_records(
     output_path: Path,
     n_procs: int = 1,
     checkpoint: bool = False,
+    ko_matrices_path: Path = None,
 ):
     """
     Compute the IMs for all processed records in the main directory
@@ -154,11 +158,12 @@ def compute_ims_for_all_processed_records(
         The number of processes to use
     checkpoint : bool, optional
         If True, the function will check for already completed files and skip them
+    ko_matrices_path : Path, optional
+        The path to the KO matrices, by default None
     """
     # Get the waveform directory and all the 000 files
     waveform_dir = file_structure.get_waveform_dir(main_dir)
     comp_000_files = waveform_dir.rglob("*.000")
-    print("Found all records")
 
     if checkpoint:
         # Get list of already completed files and remove _IM suffix
@@ -188,24 +193,12 @@ def compute_ims_for_all_processed_records(
         "FAS": im_calculation.validate_fas_frequency(fas_frequencies),
     }
 
-    # Create the pool of processes
-    # with mp.Pool(n_procs) as pool:
-    #     skipped_records = pool.map(
-    #         functools.partial(
-    #             calculate_im_for_record,
-    #             output_path=output_path,
-    #             components=components,
-    #             ims=ims,
-    #             im_options=im_options,
-    #         ),
-    #         comp_000_files,
-    #     )
-    # print("Finished calculating IMs")
+    # Create the Process and Queue for output results
     processes = []
     output_queue = mp.Queue()
 
     for comp_000_file in comp_000_files:
-        # If we have reached the limit, wait for some processes to finish
+        # If we have reached the limit of n_procs, wait for some processes to finish
         while len(processes) >= n_procs:
             for p in processes:
                 p.join(0.1)  # Check if any process has finished, without blocking
@@ -222,6 +215,7 @@ def compute_ims_for_all_processed_records(
                 components,
                 ims,
                 im_options,
+                ko_matrices_path,
             ),
         )
         processes.append(process)
@@ -236,8 +230,6 @@ def compute_ims_for_all_processed_records(
     while not output_queue.empty():
         result = output_queue.get()
         skipped_records.append(result)
-
-    print("All files have been processed.")
 
     print("Finished calculating IMs")
 

@@ -13,6 +13,7 @@ from nzgmdb.data_processing import merge_flatfiles, process_observed
 from nzgmdb.data_retrieval import geonet, sites, tect_domain
 from nzgmdb.management import file_structure
 from nzgmdb.phase_arrival import gen_phase_arrival_table
+from nzgmdb.scripts import run_gmc
 
 app = typer.Typer()
 
@@ -300,10 +301,20 @@ def run_im_calculation(
             is_flag=True,
         ),
     ] = False,
+    ko_matrix_path: Annotated[
+        Path,
+        typer.Option(
+            help="Path to the ko matrix directory",
+            exists=True,
+            file_okay=False,
+        ),
+    ] = None,
 ):
     if output_dir is None:
         output_dir = file_structure.get_im_dir(main_dir)
-    ims.compute_ims_for_all_processed_records(main_dir, output_dir, n_procs, checkpoint)
+    ims.compute_ims_for_all_processed_records(
+        main_dir, output_dir, n_procs, checkpoint, ko_matrix_path
+    )
 
 
 @app.command(help="Generate the site table basin flatfile")
@@ -400,14 +411,20 @@ def merge_flat_files(
 
 
 @app.command(
-    help="Run the first half of the NZGMDB pipeline before GMC. "
+    help="Run the Entire NZGMDB pipeline."
     "- Fetch Geonet data "
     "- Merge tectonic domains "
     "- Generate phase arrival table "
     "- Calculate SNR "
     "- Calculate Fmax"
+    "- Run GMC"
+    "- Process and filter waveform data to txt files "
+    "- Calculate IM's "
+    "- Merge IM results into flatfiles"
+    "- Calculate distances"
+    "- Merge flat files"
 )
-def run_pre_process_nzgmdb(
+def run_full_nzgmdb(
     main_dir: Annotated[
         Path,
         typer.Argument(
@@ -427,6 +444,30 @@ def run_pre_process_nzgmdb(
             help="The end date to filter the earthquake data",
         ),
     ],
+    gm_classifier_dir: Annotated[
+        Path,
+        typer.Argument(
+            help="Directory for gm_classifier.",
+        ),
+    ],
+    conda_sh: Annotated[
+        Path,
+        typer.Argument(
+            help="Path to activate your mamba conda.sh script.",
+        ),
+    ],
+    gmc_activate: Annotated[
+        str,
+        typer.Argument(
+            help="Command to activate gmc environment for extracting features.",
+        ),
+    ],
+    gmc_predict_activate: Annotated[
+        str,
+        typer.Argument(
+            help="Command to activate gmc_predict environment to run the predictions.",
+        ),
+    ],
     n_procs: Annotated[int, typer.Option(help="The number of processes to use")] = 1,
     no_smoothing: Annotated[
         bool,
@@ -442,6 +483,13 @@ def run_pre_process_nzgmdb(
             file_okay=False,
         ),
     ] = None,
+    checkpoint: Annotated[
+        bool,
+        typer.Option(
+            help="If True, the function will check for already completed files and skip them",
+            is_flag=True,
+        ),
+    ] = False,
     only_event_ids: Annotated[
         List[str],
         typer.Option(
@@ -474,24 +522,26 @@ def run_pre_process_nzgmdb(
     # Generate the site basin flatfile
     flatfile_dir = file_structure.get_flatfile_dir(main_dir)
     flatfile_dir.mkdir(parents=True, exist_ok=True)
-    # generate_site_table_basin(main_dir)
+    print("Generating site table basin flatfile")
+    generate_site_table_basin(main_dir)
 
     # Fetch the Geonet data
-    # geonet.parse_geonet_information(
-    #     main_dir,
-    #     start_date,
-    #     end_date,
-    #     n_procs,
-    #     geonet_batch_size,
-    #     only_event_ids,
-    #     only_sites,
-    # )
+    print("Fetching Geonet data")
+    geonet.parse_geonet_information(
+        main_dir,
+        start_date,
+        end_date,
+        n_procs,
+        geonet_batch_size,
+        only_event_ids,
+        only_sites,
+    )
 
     # Merge the tectonic domains
     print("Merging tectonic domains")
     eq_source_ffp = flatfile_dir / "earthquake_source_table.csv"
     eq_tect_domain_ffp = flatfile_dir / "earthquake_source_table.csv"
-    # tect_domain.add_tect_domain(eq_source_ffp, eq_tect_domain_ffp, n_procs)
+    tect_domain.add_tect_domain(eq_source_ffp, eq_tect_domain_ffp, n_procs)
 
     # Generate the phase arrival table
     print("Generating phase arrival table")
@@ -518,48 +568,39 @@ def run_pre_process_nzgmdb(
     print("Calculating Fmax")
     calc_fmax(main_dir, flatfile_dir, snr_fas_output_dir, n_procs)
 
-
-@app.command(
-    help="Run the processing part of the NZGMDB pipeline, everything after GMC. "
-    "- Process and filter waveform data to txt files "
-    "- Calculate IM's "
-    "- Merge IM results into flatfiles"
-)
-def run_process_nzgmdb(
-    main_dir: Annotated[
-        Path,
-        typer.Argument(
-            help="The main directory of the NZGMDB results (Highest level directory)",
-            exists=True,
-        ),
-    ],
-    checkpoint: Annotated[
-        bool,
-        typer.Option(
-            help="If True, the function will check for already completed files and skip them",
-            is_flag=True,
-        ),
-    ] = False,
-    n_procs: Annotated[int, typer.Option(help="The number of processes to use")] = 1,
-):
-    flatfile_dir = file_structure.get_flatfile_dir(main_dir)
+    # Run GMC
+    print("Running GMC")
+    run_gmc.run_gmc_processing(
+        main_dir,
+        gm_classifier_dir,
+        ko_matrix_path,
+        conda_sh,
+        gmc_activate,
+        gmc_predict_activate,
+        n_procs,
+    )
 
     # Run filtering and processing of mseeds
     gmc_ffp = flatfile_dir / "gmc_predictions.csv"
     fmax_ffp = flatfile_dir / "fmax.csv"
+    print("Processing records")
     process_records(main_dir, gmc_ffp, fmax_ffp, n_procs)
 
     # Run IM calculation
     im_dir = file_structure.get_im_dir(main_dir)
-    run_im_calculation(main_dir, im_dir, n_procs, checkpoint)
+    print("Calculating IMs")
+    run_im_calculation(main_dir, im_dir, n_procs, checkpoint, ko_matrix_path)
 
     # Merge IM results
+    print("Merging IM results")
     merge_im_results(im_dir, flatfile_dir, gmc_ffp, fmax_ffp)
 
     # Calculate distances
+    print("Calculating distances")
     distances.calc_distances(main_dir, n_procs)
 
     # Merge flat files
+    print("Merging flat files")
     merge_flat_files(main_dir)
 
 

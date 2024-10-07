@@ -1,7 +1,6 @@
-import os
 import multiprocessing as mp
+import sys
 from pathlib import Path
-import time
 
 import numpy as np
 import obspy
@@ -189,9 +188,9 @@ def compute_snr_for_single_mseed(
     }
     meta_df = pd.DataFrame([meta_dict])
     output_queue.put((meta_df, skipped_record))
-    # Forcfully Kill the process to ensure when the p.is_alive() check is done
+    # Kill the process to ensure when the p.is_alive() check is done
     # the process is not still running and so continues to the next record
-    os._exit(0)
+    sys.exit(0)
 
 
 def compute_snr_for_mseed_data(
@@ -230,7 +229,6 @@ def compute_snr_for_mseed_data(
     batch_size : int, optional
         Number of mseed files to process in a single batch, by default 5000
     """
-    start_time = time.time()
     # Create the output directories
     meta_output_dir.mkdir(parents=True, exist_ok=True)
     snr_fas_output_dir.mkdir(parents=True, exist_ok=True)
@@ -251,9 +249,9 @@ def compute_snr_for_mseed_data(
         )
 
     # Get all the mseed files
-    mseed_files = [mseed_file for mseed_file in data_dir.glob("**/*.mseed")]
+    mseed_files = [mseed_file for mseed_file in data_dir.rglob(".mseed")]
 
-    # Find files that have already been processed and get the suffix indexes and remove them from the event_ids
+    # Find files that have already been processed and get the suffix indexes
     processed_files = [f for f in batch_dir.iterdir() if f.is_file()]
     processed_suffixes = set(int(f.stem.split("_")[-1]) for f in processed_files)
 
@@ -267,7 +265,6 @@ def compute_snr_for_mseed_data(
     for index, batch in enumerate(mseed_batches):
         if index not in processed_suffixes:
             print(f"Processing batch {index + 1}/{len(mseed_batches)}")
-            cur_time = time.time()
             processes = []
             output_queue = mp.Queue()
 
@@ -308,8 +305,6 @@ def compute_snr_for_mseed_data(
                 result = output_queue.get()
                 meta_dfs.append(result[0])
                 skipped_record_dfs.append(result[1])
-
-            print(f"Batch {index + 1} took {time.time() - cur_time} seconds")
 
             # Check that there are metadata dataframes that are not None
             if not all(value is None for value in meta_dfs):
@@ -365,4 +360,3 @@ def compute_snr_for_mseed_data(
     skipped_records_df.to_csv(meta_output_dir / "snr_skipped_records.csv", index=False)
 
     print(f"Finished, output data found in {meta_output_dir}")
-    print(f"Finished processing took {time.time() - start_time} seconds")

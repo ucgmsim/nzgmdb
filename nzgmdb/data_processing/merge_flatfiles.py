@@ -150,8 +150,7 @@ def seperate_components(
     df: pd.DataFrame,
 ) -> tuple[pd.DataFrame, pd.DataFrame, pd.DataFrame, pd.DataFrame, pd.DataFrame]:
     """
-    Separate the components into the different components and remove columns that are
-    not needed for each of the components
+    Separate the components into the different component dataframes
 
     Parameters
     ----------
@@ -176,53 +175,6 @@ def seperate_components(
     df_ver = df[df.component == "ver"]
     df_rotd50 = df[df.component == "rotd50"]
     df_rotd100 = df[df.component == "rotd100"]
-
-    # df_000 = df_000.drop(
-    #     [
-    #         "score_mean_X",
-    #         "fmin_mean_X",
-    #         "fmax_mean_X",
-    #         "multi_mean_X",
-    #         "score_mean_Z",
-    #         "fmin_mean_Z",
-    #         "fmax_mean_Z",
-    #         "multi_mean_Z",
-    #     ],
-    #     axis=1,
-    # )
-    # df_090 = df_090.drop(
-    #     [
-    #         "score_mean_Y",
-    #         "fmin_mean_Y",
-    #         "fmax_mean_Y",
-    #         "multi_mean_Y",
-    #         "score_mean_Z",
-    #         "fmin_mean_Z",
-    #         "fmax_mean_Z",
-    #         "multi_mean_Z",
-    #     ],
-    #     axis=1,
-    # )
-    # df_ver = df_ver.drop(
-    #     [
-    #         "score_mean_X",
-    #         "fmin_mean_X",
-    #         "fmax_mean_X",
-    #         "multi_mean_X",
-    #         "score_mean_Y",
-    #         "fmin_mean_Y",
-    #         "fmax_mean_Y",
-    #         "multi_mean_Y",
-    #     ],
-    #     axis=1,
-    # )
-    # df_rotd50 = df_rotd50.drop(
-    #     ["score_mean_Z", "fmin_mean_Z", "fmax_mean_Z", "multi_mean_Z"], axis=1
-    # )
-    # df_rotd100 = df_rotd100.drop(
-    #     ["score_mean_Z", "fmin_mean_Z", "fmax_mean_Z", "multi_mean_Z"], axis=1
-    # )
-
     return df_000, df_090, df_ver, df_rotd50, df_rotd100
 
 
@@ -396,6 +348,7 @@ def merge_flatfiles(main_dir: Path):
     ] = True
 
     # For Locations not found in the dataframe, set the loc_elev to 0 only if there is just 1 location
+    # Also set the is_ground_level to True
     gm_im_df_flat.loc[
         gm_im_df_flat["loc_elev"].isna()
         & gm_im_df_flat.groupby(["evid", "sta", "chan"])["loc"]

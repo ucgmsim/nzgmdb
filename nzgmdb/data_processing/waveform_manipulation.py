@@ -40,7 +40,7 @@ def initial_preprocessing(mseed: Stream):
     """
     # Small Processing
     mseed.detrend("demean")
-    mseed.detrend()
+    mseed.detrend("linear")
 
     # Load config
     config = cfg.Config()
@@ -246,9 +246,8 @@ def high_and_low_cut_processing(
     except IndexError:
         try:
             # If the N and E components are not found, try the X and Y components
-            # TODO Check that this is valid with brendon later
-            acc_000 = mseed.select(channel="*X")[0]
-            acc_090 = mseed.select(channel="*Y")[0]
+            acc_000 = mseed.select(channel="*Y")[0]
+            acc_090 = mseed.select(channel="*X")[0]
         except IndexError:
             raise custom_errors.ComponentSelectionError(
                 "No N, X or E, Y components found in the mseed"
@@ -267,14 +266,20 @@ def high_and_low_cut_processing(
         tr.trim(tr_starttime_trim, tr_endtime_trim)
 
     # Calculate the velocity
-    vel_000 = integrate.cumtrapz(y=acc_bb_000, dx=dt, initial=0.0) * g / 10.0
-    vel_090 = integrate.cumtrapz(y=acc_bb_090, dx=dt, initial=0.0) * g / 10.0
-    vel_ver = integrate.cumtrapz(y=acc_bb_ver, dx=dt, initial=0.0) * g / 10.0
+    vel_000 = (
+        integrate.cumulative_trapezoid(y=acc_bb_000, dx=dt, initial=0.0) * g / 10.0
+    )
+    vel_090 = (
+        integrate.cumulative_trapezoid(y=acc_bb_090, dx=dt, initial=0.0) * g / 10.0
+    )
+    vel_ver = (
+        integrate.cumulative_trapezoid(y=acc_bb_ver, dx=dt, initial=0.0) * g / 10.0
+    )
 
     # Calculate the displacement
-    disp_000 = integrate.cumtrapz(y=vel_000, dx=dt, initial=0.0)
-    disp_090 = integrate.cumtrapz(y=vel_090, dx=dt, initial=0.0)
-    disp_ver = integrate.cumtrapz(y=vel_ver, dx=dt, initial=0.0)
+    disp_000 = integrate.cumulative_trapezoid(y=vel_000, dx=dt, initial=0.0)
+    disp_090 = integrate.cumulative_trapezoid(y=vel_090, dx=dt, initial=0.0)
+    disp_ver = integrate.cumulative_trapezoid(y=vel_ver, dx=dt, initial=0.0)
 
     # The following steps were added to align the processing with NGA-West
     # Fit six-order polynomial to the displacement series

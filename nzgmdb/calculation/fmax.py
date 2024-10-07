@@ -7,8 +7,8 @@ import multiprocessing
 from pathlib import Path
 from typing import Optional
 
-import obspy
 import numpy as np
+import obspy
 import pandas as pd
 
 from nzgmdb.management import config as cfg
@@ -88,30 +88,23 @@ def assess_snr_and_get_fmax(
     # Get delta from the metadata
     current_row = metadata.iloc[np.where(metadata["record_id"] == record_id)[0], :]
 
-    # current_row["delta"] is a pd.Series() containing 1 float so .iloc[0]
-    # is used to get the float from the pd.Series()
-    try:
-        scaled_nyquist_freq = (
-            (1 / current_row["delta"].iloc[0])
-            * 0.5
-            * config.get_value("nyquist_freq_scaling_factor")
-        )
-    except IndexError:
+    # Check the length of the current_row
+    if len(current_row) == 0:
         print(f"Record {record_id} not found in metadata")
         # Find the value from the mseed file
-        # This is a temporary fix until the metadata issue is fixed
-        main_dir = filename.parent.parent.parent.parent
-        year = int(filename.parent.parent.name)
-        event_id = filename.parent.name
-        mseed_dir = file_structure.get_mseed_dir(main_dir, year, event_id)
+        mseed_dir = file_structure.get_mseed_dir_from_snrfas(filename)
         mseed_file = mseed_dir / f"{record_id}.mseed"
         # read the mseed file to get the delta
         mseed = obspy.read(str(mseed_file))
-        scaled_nyquist_freq = (
-            (1 / mseed[0].stats.delta)
-            * 0.5
-            * config.get_value("nyquist_freq_scaling_factor")
-        )
+        dt = mseed[0].stats.delta
+    else:
+        dt = current_row["delta"].iloc[0]
+
+    # current_row["delta"] is a pd.Series() containing 1 float so .iloc[0]
+    # is used to get the float from the pd.Series()
+    scaled_nyquist_freq = (
+        (1 / dt) * 0.5 * config.get_value("nyquist_freq_scaling_factor")
+    )
 
     snr_with_freq_signal_noise = pd.read_csv(filename)
     snr = snr_with_freq_signal_noise[["snr_000", "snr_090", "snr_ver"]]

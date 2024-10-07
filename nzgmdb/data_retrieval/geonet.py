@@ -4,10 +4,12 @@
 
 import datetime
 import io
+import time
 import multiprocessing
 from pathlib import Path
 from typing import List
 import os
+import sys
 
 import numpy as np
 import obspy
@@ -496,9 +498,9 @@ def fetch_event_data(
 
     output_queue.put((event_line, sta_mag_lines, skipped_records))
     print(f"Finished processing event {event_id}")
-    # Forcfully Kill the process to ensure when the p.is_alive() check is done
+    # Kill the process to ensure when the p.is_alive() check is done
     # the process is not still running and so continues to the next event
-    os._exit(0)
+    sys.exit(0)
 
 
 def process_batch(
@@ -589,8 +591,10 @@ def process_batch(
     while not output_queue.empty():
         result = output_queue.get()
         event_data.append(result[0])
-        sta_mag_data.extend(result[1])
-        skipped_records.extend(result[2])
+        if result[1]:
+            sta_mag_data.extend(result[1])
+        if result[2]:
+            skipped_records.extend(result[2])
 
     # Create the output directory for the batch files
     flatfile_dir = file_structure.get_flatfile_dir(main_dir)
