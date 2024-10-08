@@ -251,7 +251,8 @@ def compute_ims_for_all_processed_records(
         # Add the skipped records to the existing skipped records
         try:
             existing_skipped_records = pd.read_csv(
-                flatfile_dir / "IM_calc_skipped_records.csv"
+                flatfile_dir
+                / file_structure.SkippedRecordFilenames.IM_CALC_SKIPPED_RECORDS
             )
             skipped_records_df = pd.concat(
                 [existing_skipped_records, skipped_records_df]
@@ -259,4 +260,7 @@ def compute_ims_for_all_processed_records(
         except FileNotFoundError:
             pass
 
-    skipped_records_df.to_csv(flatfile_dir / "IM_calc_skipped_records.csv", index=False)
+    skipped_records_df.to_csv(
+        flatfile_dir / file_structure.SkippedRecordFilenames.IM_CALC_SKIPPED_RECORDS,
+        index=False,
+    )

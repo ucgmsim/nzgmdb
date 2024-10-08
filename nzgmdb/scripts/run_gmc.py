@@ -87,7 +87,7 @@ def process_batch(
                 f.write(f"{mseed_file.stem}\n")
 
         # Construct paths for output
-        predictions_output = gmc_dir / "gmc_predictions.csv"
+        predictions_output = gmc_dir / file_structure.FlatfileNames.GMC_PREDICTIONS
         log_file_path_features = gmc_dir / "extract_features.log"
         log_file_path_predict = gmc_dir / "predict.log"
 
@@ -179,7 +179,9 @@ def run_gmc_processing(
     waveform_dir = file_structure.get_waveform_dir(main_dir)
     gmc_scripts_path = gm_classifier_dir / "gm_classifier/scripts"
     flatfile_dir = file_structure.get_flatfile_dir(main_dir)
-    final_predictions_output = flatfile_dir / "gmc_predictions.csv"
+    final_predictions_output = (
+        flatfile_dir / file_structure.FlatfileNames.GMC_PREDICTIONS
+    )
 
     # Get all subfolders in the waveform directory (every year)
     # subfolders = [f for f in waveform_dir.iterdir() if f.is_dir()]
@@ -220,7 +222,9 @@ def run_gmc_processing(
     # For each subfolder combine the gmc_predictions.csv into a single file
     dfs = []
     for gmc_subfolder in gmc_dir.iterdir():
-        predictions_output = gmc_subfolder / "gmc_predictions.csv"
+        predictions_output = (
+            gmc_subfolder / file_structure.FlatfileNames.GMC_PREDICTIONS
+        )
         if predictions_output.exists():
             df = pd.read_csv(predictions_output)
             dfs.append(df)

@@ -4,12 +4,12 @@
 
 import datetime
 import io
-import time
 import multiprocessing
-from pathlib import Path
-from typing import List
 import os
 import sys
+import time
+from pathlib import Path
+from typing import List
 
 import numpy as np
 import obspy
@@ -814,7 +814,7 @@ def parse_geonet_information(
 
     # Get the site table
     flatfile_dir = file_structure.get_flatfile_dir(main_dir)
-    site_table = pd.read_csv(flatfile_dir / "site_table.csv")
+    site_table = pd.read_csv(flatfile_dir / file_structure.PreFlatfileNames.SITE_TABLE)
 
     batch_dir = flatfile_dir / "geonet_batch_files"
     batch_dir.mkdir(exist_ok=True, parents=True)
@@ -873,7 +873,15 @@ def parse_geonet_information(
     skipped_records_df = pd.concat(skipped_records_dfs, ignore_index=True)
 
     # Save the dataframes
-    event_df.to_csv(flatfile_dir / "earthquake_source_table.csv", index=False)
-    sta_mag_df.to_csv(flatfile_dir / "station_magnitude_table.csv", index=False)
-    skipped_records_df.to_csv(flatfile_dir / "geonet_skipped_records.csv", index=False)
-    print("Finished writing dataframes")
+    event_df.to_csv(
+        flatfile_dir / file_structure.PreFlatfileNames.EARTHQUAKE_SOURCE_TABLE_GEONET,
+        index=False,
+    )
+    sta_mag_df.to_csv(
+        flatfile_dir / file_structure.PreFlatfileNames.STATION_MAGNITUDE_TABLE_GEONET,
+        index=False,
+    )
+    skipped_records_df.to_csv(
+        flatfile_dir / file_structure.SkippedRecordFilenames.GEONET_SKIPPED_RECORDS,
+        index=False,
+    )

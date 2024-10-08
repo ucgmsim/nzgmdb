@@ -356,7 +356,12 @@ def compute_snr_for_mseed_data(
         skipped_records_df = pd.DataFrame()
 
     # Save the dataframes
-    meta_df.to_csv(meta_output_dir / "snr_metadata.csv", index=False)
-    skipped_records_df.to_csv(meta_output_dir / "snr_skipped_records.csv", index=False)
+    meta_df.to_csv(
+        meta_output_dir / file_structure.FlatfileNames.SNR_METADATA, index=False
+    )
+    skipped_records_df.to_csv(
+        meta_output_dir / file_structure.SkippedRecordFilenames.SNR_SKIPPED_RECORDS,
+        index=False,
+    )
 
     print(f"Finished, output data found in {meta_output_dir}")

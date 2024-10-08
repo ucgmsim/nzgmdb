@@ -184,7 +184,8 @@ def calculate_snr(
     # Define the default paths if not provided
     if phase_table_path is None:
         phase_table_path = (
-            file_structure.get_flatfile_dir(main_dir) / "phase_arrival_table.csv"
+            file_structure.get_flatfile_dir(main_dir)
+            / file_structure.PreFlatfileNames.PHASE_ARRIVAL_TABLE
         )
     if meta_output_dir is None:
         meta_output_dir = file_structure.get_flatfile_dir(main_dir)
@@ -272,9 +273,15 @@ def process_records(
     n_procs: Annotated[int, typer.Option(help="The number of processes to use")] = 1,
 ):
     if gmc_ffp is None:
-        gmc_ffp = file_structure.get_flatfile_dir(main_dir) / "gmc_predictions.csv"
+        gmc_ffp = (
+            file_structure.get_flatfile_dir(main_dir)
+            / file_structure.FlatfileNames.GMC_PREDICTIONS
+        )
     if fmax_ffp is None:
-        fmax_ffp = file_structure.get_flatfile_dir(main_dir) / "fmax.csv"
+        fmax_ffp = (
+            file_structure.get_flatfile_dir(main_dir)
+            / file_structure.FlatfileNames.FMAX
+        )
 
     process_observed.process_mseeds_to_txt(main_dir, gmc_ffp, fmax_ffp, n_procs)
 
@@ -336,7 +343,9 @@ def generate_site_table_basin(
     site_df = sites.create_site_table_response()
     site_df = sites.add_site_basins(site_df)
 
-    site_df.to_csv(flatfile_dir / "site_table.csv", index=False)
+    site_df.to_csv(
+        flatfile_dir / file_structure.PreFlatfileNames.SITE_TABLE, index=False
+    )
 
 
 @app.command(
@@ -539,8 +548,12 @@ def run_full_nzgmdb(
 
     # Merge the tectonic domains
     print("Merging tectonic domains")
-    eq_source_ffp = flatfile_dir / "earthquake_source_table.csv"
-    eq_tect_domain_ffp = flatfile_dir / "earthquake_source_table.csv"
+    eq_source_ffp = (
+        flatfile_dir / file_structure.PreFlatfileNames.EARTHQUAKE_SOURCE_TABLE_GEONET
+    )
+    eq_tect_domain_ffp = (
+        flatfile_dir / file_structure.PreFlatfileNames.EARTHQUAKE_SOURCE_TABLE_TECTONIC
+    )
     tect_domain.add_tect_domain(eq_source_ffp, eq_tect_domain_ffp, n_procs)
 
     # Generate the phase arrival table
@@ -552,7 +565,9 @@ def run_full_nzgmdb(
     # Generate SNR
     print("Calculating SNR")
     snr_fas_output_dir = file_structure.get_snr_fas_dir(main_dir)
-    phase_table_path = flatfile_dir / "phase_arrival_table.csv"
+    phase_table_path = (
+        flatfile_dir / file_structure.PreFlatfileNames.PHASE_ARRIVAL_TABLE
+    )
     calculate_snr(
         main_dir,
         phase_table_path,
@@ -581,8 +596,8 @@ def run_full_nzgmdb(
     )
 
     # Run filtering and processing of mseeds
-    gmc_ffp = flatfile_dir / "gmc_predictions.csv"
-    fmax_ffp = flatfile_dir / "fmax.csv"
+    gmc_ffp = flatfile_dir / file_structure.FlatfileNames.GMC_PREDICTIONS
+    fmax_ffp = flatfile_dir / file_structure.FlatfileNames.FMAX
     print("Processing records")
     process_records(main_dir, gmc_ffp, fmax_ffp, n_procs)
 

@@ -31,7 +31,9 @@ def run_full_fmax_calc(
         Number of processes to use, by default 1.
     """
 
-    metadata_df = pd.read_csv(meta_output_dir / "snr_metadata.csv")
+    metadata_df = pd.read_csv(
+        meta_output_dir / file_structure.FlatfileNames.SNR_METADATA
+    )
     snr_filenames = snr_fas_output_dir.glob("**/*snr_fas.csv")
 
     with multiprocessing.Pool(n_procs) as pool:
@@ -54,9 +56,12 @@ def run_full_fmax_calc(
 
     print(f"Skipped {len(skipped_records_df)} records")
 
-    fmax_df.to_csv(meta_output_dir / "fmax.csv", index=False)
+    fmax_df.to_csv(meta_output_dir / file_structure.FlatfileNames.FMAX, index=False)
 
-    skipped_records_df.to_csv(meta_output_dir / "fmax_skipped_records.csv", index=False)
+    skipped_records_df.to_csv(
+        meta_output_dir / file_structure.SkippedRecordFilenames.FMAX_SKIPPED_RECORDS,
+        index=False,
+    )
 
 
 def assess_snr_and_get_fmax(

@@ -214,4 +214,7 @@ def process_mseeds_to_txt(
 
     # Save the skipped records
     flatfile_dir = file_structure.get_flatfile_dir(main_dir)
-    skipped_records.to_csv(flatfile_dir / "processing_skipped_records.csv", index=False)
+    skipped_records.to_csv(
+        flatfile_dir / file_structure.SkippedRecordFilenames.PROCESSING_SKIPPED_RECORDS,
+        index=False,
+    )

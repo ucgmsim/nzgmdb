@@ -2,9 +2,9 @@ from pathlib import Path
 
 import pandas as pd
 
+from nzgmdb.data_retrieval import github
 from nzgmdb.management import config as cfg
 from nzgmdb.management import file_structure
-from nzgmdb.data_retrieval import github
 
 
 def merge_im_data(
@@ -87,7 +87,8 @@ def merge_im_data(
     # Create a skipped IM merge file for records that are below the Ds595 lower bound
     Ds595_filter_records["reason"] = f"Ds595 below lower bound of {Ds595_lower_bound}"
     Ds595_filter_records.to_csv(
-        ouptut_dir / "IM_merge_skipped_records.csv", index=False
+        ouptut_dir / file_structure.SkippedRecordFilenames.IM_MERGE_SKIPPED_RECORDS,
+        index=False,
     )
 
     # Merge in fmax
@@ -143,7 +144,10 @@ def merge_im_data(
     ]
 
     # Save the ground_motion_im_catalogue.csv
-    gm_final.to_csv(ouptut_dir / "ground_motion_im_catalogue.csv", index=False)
+    gm_final.to_csv(
+        ouptut_dir / file_structure.PreFlatfileNames.GROUND_MOTION_IM_CATALOGUE,
+        index=False,
+    )
 
 
 def seperate_components(
@@ -192,12 +196,24 @@ def merge_flatfiles(main_dir: Path):
     flatfile_dir = file_structure.get_flatfile_dir(main_dir)
 
     # Load the files
-    event_df = pd.read_csv(flatfile_dir / "earthquake_source_table.csv")
-    sta_mag_df = pd.read_csv(flatfile_dir / "station_magnitude_table.csv")
-    phase_table_df = pd.read_csv(flatfile_dir / "phase_arrival_table.csv")
-    prop_df = pd.read_csv(flatfile_dir / "propagation_path_table.csv")
-    im_df = pd.read_csv(flatfile_dir / "ground_motion_im_catalogue.csv")
-    site_basin_df = pd.read_csv(flatfile_dir / "site_table.csv")
+    event_df = pd.read_csv(
+        flatfile_dir / file_structure.PreFlatfileNames.EARTHQUAKE_SOURCE_TABLE_DISTANCES
+    )
+    sta_mag_df = pd.read_csv(
+        flatfile_dir / file_structure.PreFlatfileNames.STATION_MAGNITUDE_TABLE_GEONET
+    )
+    phase_table_df = pd.read_csv(
+        flatfile_dir / file_structure.PreFlatfileNames.PHASE_ARRIVAL_TABLE
+    )
+    prop_df = pd.read_csv(
+        flatfile_dir / file_structure.PreFlatfileNames.PROPAGATION_TABLE
+    )
+    im_df = pd.read_csv(
+        flatfile_dir / file_structure.PreFlatfileNames.GROUND_MOTION_IM_CATALOGUE
+    )
+    site_basin_df = pd.read_csv(
+        flatfile_dir / file_structure.PreFlatfileNames.SITE_TABLE
+    )
 
     # Get the recorders information for location codes
     config = cfg.Config()
@@ -228,7 +244,9 @@ def merge_flatfiles(main_dir: Path):
     missing_sites = set(unique_sites) - set(site_basin_df["sta"].unique())
     # Save the missing sites
     missing_sites_df = pd.DataFrame(missing_sites, columns=["sta"])
-    missing_sites_df.to_csv(flatfile_dir / "missing_sites.csv", index=False)
+    missing_sites_df.to_csv(
+        flatfile_dir / file_structure.SkippedRecordFilenames.MISSING_SITES, index=False
+    )
 
     # Rename all the gmc column names to remove the middle _mean
     im_df = im_df.rename(
@@ -490,28 +508,54 @@ def merge_flatfiles(main_dir: Path):
     ) = seperate_components(gm_im_df_flat)
 
     # Save final outputs
-    event_df.to_csv(flatfile_dir / "earthquake_source_table.csv", index=False)
-    sta_mag_df.to_csv(flatfile_dir / "station_magnitude_table.csv", index=False)
-    phase_table_df.to_csv(flatfile_dir / "phase_arrival_table.csv", index=False)
-    site_basin_df.to_csv(flatfile_dir / "site_table.csv", index=False)
-    prop_df.to_csv(flatfile_dir / "propagation_path_table.csv", index=False)
-    df_000.to_csv(flatfile_dir / "ground_motion_im_table_000.csv", index=False)
-    df_090.to_csv(flatfile_dir / "ground_motion_im_table_090.csv", index=False)
-    df_ver.to_csv(flatfile_dir / "ground_motion_im_table_ver.csv", index=False)
-    df_rotd50.to_csv(flatfile_dir / "ground_motion_im_table_rotd50.csv", index=False)
-    df_rotd100.to_csv(flatfile_dir / "ground_motion_im_table_rotd100.csv", index=False)
+    event_df.to_csv(
+        flatfile_dir / file_structure.FlatfileNames.EARTHQUAKE_SOURCE_TABLE, index=False
+    )
+    sta_mag_df.to_csv(
+        flatfile_dir / file_structure.FlatfileNames.STATION_MAGNITUDE_TABLE, index=False
+    )
+    phase_table_df.to_csv(
+        flatfile_dir / file_structure.FlatfileNames.PHASE_ARRIVAL_TABLE, index=False
+    )
+    site_basin_df.to_csv(
+        flatfile_dir / file_structure.FlatfileNames.SITE_TABLE, index=False
+    )
+    prop_df.to_csv(
+        flatfile_dir / file_structure.FlatfileNames.PROPAGATION_TABLE, index=False
+    )
+    df_000.to_csv(
+        flatfile_dir / file_structure.FlatfileNames.GROUND_MOTION_IM_000, index=False
+    )
+    df_090.to_csv(
+        flatfile_dir / file_structure.FlatfileNames.GROUND_MOTION_IM_090, index=False
+    )
+    df_ver.to_csv(
+        flatfile_dir / file_structure.FlatfileNames.GROUND_MOTION_IM_VER, index=False
+    )
+    df_rotd50.to_csv(
+        flatfile_dir / file_structure.FlatfileNames.GROUND_MOTION_IM_ROTD50, index=False
+    )
+    df_rotd100.to_csv(
+        flatfile_dir / file_structure.FlatfileNames.GROUND_MOTION_IM_ROTD100,
+        index=False,
+    )
     df_000_flat.to_csv(
-        flatfile_dir / "ground_motion_im_table_000_flat.csv", index=False
+        flatfile_dir / file_structure.FlatfileNames.GROUND_MOTION_IM_000_FLAT,
+        index=False,
     )
     df_090_flat.to_csv(
-        flatfile_dir / "ground_motion_im_table_090_flat.csv", index=False
+        flatfile_dir / file_structure.FlatfileNames.GROUND_MOTION_IM_090_FLAT,
+        index=False,
     )
     df_ver_flat.to_csv(
-        flatfile_dir / "ground_motion_im_table_ver_flat.csv", index=False
+        flatfile_dir / file_structure.FlatfileNames.GROUND_MOTION_IM_VER_FLAT,
+        index=False,
     )
     df_rotd50_flat.to_csv(
-        flatfile_dir / "ground_motion_im_table_rotd50_flat.csv", index=False
+        flatfile_dir / file_structure.FlatfileNames.GROUND_MOTION_IM_ROTD50_FLAT,
+        index=False,
     )
     df_rotd100_flat.to_csv(
-        flatfile_dir / "ground_motion_im_table_rotd100_flat.csv", index=False
+        flatfile_dir / file_structure.FlatfileNames.GROUND_MOTION_IM_ROTD100_FLAT,
+        index=False,
     )

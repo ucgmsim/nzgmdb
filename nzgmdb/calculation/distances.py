@@ -752,7 +752,9 @@ def calc_distances(main_dir: Path, n_procs: int = 1):
     geonet_cmt_df = pd.read_csv(config.get_value("cmt_url"), low_memory=False)
 
     # Load the eq source table
-    event_df = pd.read_csv(flatfile_dir / "earthquake_source_table.csv")
+    event_df = pd.read_csv(
+        flatfile_dir / file_structure.PreFlatfileNames.EARTHQUAKE_SOURCE_TABLE_TECTONIC
+    )
 
     # Get the focal domain
     domain_focal_df = pd.read_csv(
@@ -781,7 +783,9 @@ def calc_distances(main_dir: Path, n_procs: int = 1):
         srf_files[srf_file.stem] = srf_file
 
     # Get the IM data
-    im_df = pd.read_csv(flatfile_dir / "ground_motion_im_catalogue.csv")
+    im_df = pd.read_csv(
+        flatfile_dir / file_structure.PreFlatfileNames.GROUND_MOTION_IM_CATALOGUE
+    )
     # Convert the evid to a string
     im_df["evid"] = im_df["evid"].astype(str)
 
@@ -837,5 +841,11 @@ def calc_distances(main_dir: Path, n_procs: int = 1):
     event_df = pd.merge(event_df, extra_event_data, on="evid", how="right")
 
     # Save the results
-    propagation_data.to_csv(flatfile_dir / "propagation_path_table.csv", index=False)
-    event_df.to_csv(flatfile_dir / "earthquake_source_table.csv", index=False)
+    propagation_data.to_csv(
+        flatfile_dir / file_structure.PreFlatfileNames.PROPAGATION_TABLE, index=False
+    )
+    event_df.to_csv(
+        flatfile_dir
+        / file_structure.PreFlatfileNames.EARTHQUAKE_SOURCE_TABLE_DISTANCES,
+        index=False,
+    )

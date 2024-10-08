@@ -1,7 +1,7 @@
 import numpy as np
 
-from nzgmdb.management import config as cfg
 from nzgmdb.data_retrieval import github
+from nzgmdb.management import config as cfg
 from qcore import geo
 
 

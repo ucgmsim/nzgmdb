@@ -251,7 +251,9 @@ def generate_phase_arrival_table(
 
     # Save the phase arrival table
     output_dir.mkdir(parents=True, exist_ok=True)
-    merged_df.to_csv(output_dir / "phase_arrival_table.csv", index=False)
+    merged_df.to_csv(
+        output_dir / file_structure.PreFlatfileNames.PHASE_ARRIVAL_TABLE, index=False
+    )
 
     if full_output:
         # Adding labels to the DataFrame columns so they
