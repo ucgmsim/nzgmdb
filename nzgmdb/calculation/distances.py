@@ -1,5 +1,6 @@
 import functools
 import multiprocessing as mp
+from collections import defaultdict
 from pathlib import Path
 from typing import Optional
 
@@ -10,11 +11,10 @@ from pyproj import Transformer
 from shapely.geometry import Point
 from shapely.geometry.polygon import LineString, Polygon
 
+from nzgmdb.CCLD import ccldpy
 from nzgmdb.management import config as cfg
 from nzgmdb.management import file_structure
-from qcore import geo, grid, src_site_dist, srf
-from qcore.uncertainties import mag_scaling
-from qcore.uncertainties.magnitude_scaling import strasser_2010
+from qcore import coordinates, geo, grid, src_site_dist, srf
 
 
 def calc_fnorm_slip(
@@ -56,148 +56,6 @@ def calc_fnorm_slip(
     return fnorm, slip
 
 
-def mech_rot(
-    norm1: np.ndarray, norm2: np.ndarray, slip1: np.ndarray, slip2: np.ndarray
-) -> int:
-    """
-    Determine the correct nodal plane for the event by checking 4 different
-    mechanisms and determining the correct plane based on the rotation that is as close to 0 as possible
-
-    Parameters
-    ----------
-    norm1 : np.ndarray
-        The normal vector of the first mechanism
-    norm2 : np.ndarray
-        The normal vector of the second mechanism
-    slip1 : np.ndarray
-        The slip vector of the first mechanism
-    slip2 : np.ndarray
-        The slip vector of the second mechanism
-
-    Returns
-    -------
-    plane_out : int
-        The plane that is closest to 0 rotation
-    """
-    b1 = np.cross(norm1, slip1)
-
-    rotations = np.zeros(4)
-    for iteration in range(0, 4):
-        if iteration < 2:
-            norm2_temp = norm2
-            slip2_temp = slip2
-        else:
-            norm2_temp = slip2
-            slip2_temp = norm2
-        if iteration in {1, 3}:
-            norm2_temp = tuple(-x for x in norm2_temp)
-            slip2_temp = tuple(-x for x in slip2_temp)
-
-        b2 = np.cross(norm2_temp, slip2_temp)
-
-        phi1 = np.dot(norm1, norm2_temp)
-        phi2 = np.dot(slip1, slip2_temp)
-        phi3 = np.dot(b1, b2)
-
-        # In some cases, identical dot products produce values incrementally higher than 1
-        phi1 = np.arccos(np.clip(phi1, -1, 1))
-        phi2 = np.arccos(np.clip(phi2, -1, 1))
-        phi3 = np.arccos(np.clip(phi3, -1, 1))
-
-        # Set array of phi for indexing reasons later
-        phi = [phi1, phi2, phi3]
-
-        # If the mechanisms are very close, rotation = 0
-        epsilon = 1e-4
-        if np.allclose(phi, 0, atol=epsilon):
-            rotations[iteration] = 0
-        # If one vector is the same, it is the rotation axis
-        elif phi1 < epsilon:
-            rotations[iteration] = np.rad2deg(phi2)
-        elif phi2 < epsilon:
-            rotations[iteration] = np.rad2deg(phi3)
-        elif phi3 < epsilon:
-            rotations[iteration] = np.rad2deg(phi1)
-
-        # Find difference vectors - the rotation axis must be orthogonal to all three of
-        # these vectors
-        else:
-            difference_vectors = np.array(
-                [
-                    np.array(norm1) - np.array(norm2_temp),
-                    np.array(slip1) - np.array(slip2_temp),
-                    np.array(b1) - np.array(b2),
-                ]
-            )
-            magnitude = np.sqrt(np.sum(difference_vectors**2, axis=0))
-            normalized_vectors = difference_vectors / magnitude
-
-            # Find the dot product of the vectors
-            qdot = [
-                normalized_vectors[0][(i + 1) % 3] * normalized_vectors[0][(i + 2) % 3]
-                + normalized_vectors[1][(i + 1) % 3]
-                * normalized_vectors[1][(i + 2) % 3]
-                + normalized_vectors[2][(i + 1) % 3]
-                * normalized_vectors[2][(i + 2) % 3]
-                for i in range(3)
-            ]
-
-            # Find the index of the vector that is not orthogonal to the others
-            non_orthogonal_index = next(
-                (
-                    index
-                    for index, dot_product in enumerate(qdot)
-                    if not np.isclose(dot_product, 0)
-                ),
-                np.argmin(magnitude),
-            )
-
-            # Select the two vectors that are not the one found before
-            selected_vectors = [
-                vec
-                for i, vec in enumerate(difference_vectors.T)
-                if i != non_orthogonal_index
-            ]
-
-            # Calculate the cross product of the selected vectors to find the rotation axis
-            rotation_axis = np.cross(selected_vectors[0], selected_vectors[1])
-
-            # Normalize the rotation axis by dividing it by its scale
-            normalized_rotation_axis = rotation_axis / np.linalg.norm(rotation_axis)
-
-            # Calculate the angles between the normalized rotation axis and the norm1, slip1, and b1 vectors
-            angles = np.array(
-                [
-                    np.arccos(np.dot(vector, normalized_rotation_axis))
-                    for vector in [norm1, slip1, b1]
-                ]
-            )
-
-            # Calculate the absolute differences between the angles and pi/2
-            angle_differences = np.abs(angles - np.pi / 2)
-
-            # Select the minimum difference from either the norm or slip axes
-            selected_index = np.argmin(angle_differences[:2])
-
-            # Calculate the rotation for the current iteration
-            rotation_temp = (
-                np.cos(phi[selected_index]) - np.cos(angles[selected_index]) ** 2
-            ) / (np.sin(angles[selected_index]) ** 2)
-
-            # Ensure the rotation_temp is within the range [-1, 1]
-            rotation_temp = np.clip(rotation_temp, -1, 1)
-
-            # Convert the rotation from radians to degrees
-            rotation_degrees = np.rad2deg(np.arccos(rotation_temp))
-
-            # Store the rotation degrees for the current iteration
-            rotations[iteration] = rotation_degrees
-
-    # Find the minimum rotation index for the 4 combos to determine the rotation plane
-    rotation_index = np.argmin(rotations)
-    return int(np.clip(rotation_index, 1, 2))
-
-
 def get_domain_focal(
     domain_no: int, domain_focal_df: pd.DataFrame
 ) -> tuple[int, int, int]:
@@ -231,47 +89,118 @@ def get_domain_focal(
         return domain.strike, domain.rake, domain.dip
 
 
-def get_l_w_mag_scaling(
-    mag: float, rake: float, tect_class: str
-) -> tuple[float, float]:
+def run_ccld_simulation(
+    event_id: str,
+    event_row: pd.Series,
+    strike: float,
+    dip: float,
+    rake: float,
+    method: str,
+    strike2: float = None,
+    dip2: float = None,
+    rake2: float = None,
+):
     """
-    Get the length and width of the fault using magnitude scaling
+    Run the CCLD simulation for an event.
+    Uses default values for the number of simulations based on the tectonic class mentioned
+    in the CCLDpy Documentation.
 
     Parameters
     ----------
-    mag : float
-        The magnitude of the event
+    event_id : str
+        The event id
+    event_row : pd.Series
+        The event row from the earthquake source table (Must contain the following columns: lat, lon, depth, mag, tect_class)
+    strike : float
+        The strike angle of the fault in degrees for the first plane
+    dip : float
+        The dip angle of the fault in degrees for the first plane
     rake : float
-        The rake angle of the fault in degrees
-    tect_class : str
-        The tectonic class of the event
+        The rake angle of the fault in degrees for the first plane
+    method : str
+        The method to use for the simulation (A, B, C, D or E)
+    strike2 : float, optional
+        The strike angle of the fault in degrees of a potential second plane, by default None
+    dip2 : float, optional
+        The dip angle of the fault in degrees of a potential second plane, by default None
+    rake2 : float, optional
+        The rake angle of the fault in degrees of a potential second plane, by default None
 
     Returns
     -------
-    length : float
-        The length of the fault along strike in km
-    dip_dist : float
-        The width of the fault down dip in km
+    dict
+        A dictionary containing the following keys:
+        'strike' : float
+            The strike angle of the fault in degrees
+        'dip' : float
+            The dip angle of the fault in degrees
+        'rake' : float
+            The rake angle of the fault in degrees
+        'ztor' : float
+            The depth to the top of the rupture in km
+        'dbottom' : float
+            The depth to the bottom of the rupture in km
+        'length' : float
+            The length of the fault along strike in km
+        'dip_dist' : float
+            The width of the fault down dip in km
+        'hyp_lat' : float
+            The latitude of the hypocenter
+        'hyp_lon' : float
+            The longitude of the hypocenter
+        'hyp_strike' : float
+            The hypocenter along-strike position (0 - 1)
+        'hyp_dip' : float
+            The hypocenter down-dip position (0 - 1)
     """
-    # Load the config
-    config = cfg.Config()
-    mag_scale_slab_min = config.get_value("mag_scale_slab_min")
-    mag_scale_slab_max = config.get_value("mag_scale_slab_max")
-
-    # Get the width and length using magnitude scaling
-    if tect_class == "Interface":
-        # Use SKARLATOUDIS2016
-        dip_dist = np.sqrt(mag_scaling.mw_to_a_skarlatoudis(mag))
-        length = dip_dist
-    elif tect_class == "Slab" and mag_scale_slab_min <= mag <= mag_scale_slab_max:
-        # Use STRASSER2010SLAB
-        length = strasser_2010.mw_to_l_strasser_2010_slab(mag)
-        dip_dist = strasser_2010.mw_to_w_strasser_2010_slab(mag)
+    ccdl_tect_class = ccldpy.TECTONIC_MAPPING[event_row.tect_class]
+    # Extra check for undetermined tectonic class
+    if event_row.tect_class == "Undetermined":
+        config = cfg.Config()
+        # Check if the depth is greater than 50km and if so set it to slab
+        ccdl_tect_class = (
+            "crustal"
+            if event_row.depth <= config.get_value("crustal_depth")
+            else "intraslab"
+        )
+    if ccdl_tect_class == "crustal":
+        nsims = [334, 333, 333, 111, 111, 111, 0]
+    elif ccdl_tect_class == "intraslab":
+        nsims = [0, 0, 0, 0, 0, 0, 333]
     else:
-        # Use LEONARD2014
-        length = mag_scaling.mw_to_l_leonard(mag, rake)
-        dip_dist = mag_scaling.mw_to_w_leonard(mag, rake)
-    return length, dip_dist
+        # Interface
+        nsims = [0, 0, 333, 0, 0, 0, 333]
+    _, selected = ccldpy.simulate_rupture_surface(
+        int(event_id.split("p")[-1]),
+        ccdl_tect_class,
+        "other",
+        event_row.lat,
+        event_row.lon,
+        event_row.depth,
+        event_row.mag,
+        method,
+        nsims,
+        strike=strike,
+        dip=dip,
+        rake=rake,
+        strike2=strike2,
+        dip2=dip2,
+        rake2=rake2,
+    )
+
+    return {
+        "strike": selected["Strike"].values[0],
+        "dip": selected["Dip"].values[0],
+        "rake": selected["Rake"].values[0],
+        "ztor": selected["Rupture Top Depth (km)"].values[0],
+        "dbottom": selected["Rupture Bottom Depth (km)"].values[0],
+        "length": selected["Length (km)"].values[0],
+        "dip_dist": selected["Width (km)"].values[0],
+        "hyp_lat": selected["Hypocenter Latitude"].values[0],
+        "hyp_lon": selected["Hypocenter Longitude"].values[0],
+        "hyp_strike": selected["Hypocenter Along-Strike Position"].values[0],
+        "hyp_dip": selected["Hypocenter Down-Dip Position"].values[0],
+    }
 
 
 def get_nodal_plane_info(
@@ -332,28 +261,23 @@ def get_nodal_plane_info(
         'f_type' : str
             The focal type that determined the nodal plane (ff, geonet_rm, cmt, cmt_unc, domain)
     """
-    length, dip_dist, srf_points, srf_header, ztor, dbottom = (
-        None,
-        None,
-        None,
-        None,
-        None,
-        None,
-    )
+    # Create the default return to be filled using defaultdict
+    nodal_plane_info = defaultdict(lambda: None)
+    ccld_info = None
+
     # Check if the event_id is in the srf_files
     if event_id in srf_files:
         srf_file = str(srf_files[event_id])
-        srf_points = srf.read_srf_points(srf_file)
-        srf_header = srf.read_header(srf_file, idx=True)
-        f_type = "ff"
+        nodal_plane_info["srf_points"] = srf.read_srf_points(srf_file)
+        nodal_plane_info["srf_header"] = srf.read_header(srf_file, idx=True)
+        nodal_plane_info["f_type"] = "ff"
         cmt = geonet_cmt_df[geonet_cmt_df.PublicID == event_id].iloc[0]
-        ztor = srf_points[0][2]
-        dbottom = srf_points[-1][2]
+        nodal_plane_info["ztor"] = nodal_plane_info["srf_points"][0][2]
+        nodal_plane_info["dbottom"] = nodal_plane_info["srf_points"][-1][2]
 
-        if len(srf_header) > 1:
-            strike, rake, dip, length, dip_dist = None, None, None, None, None
-        else:
-            fault_strike = srf_header[0]["strike"]
+        # Get strike, dip, rake, length and width if there is only 1 plane
+        if len(nodal_plane_info["srf_header"]) == 1:
+            fault_strike = nodal_plane_info["srf_header"][0]["strike"]
             strike1_diff = abs(fault_strike - cmt.strike1)
             if strike1_diff > 180:
                 strike1_diff = 360 - strike1_diff
@@ -362,61 +286,58 @@ def get_nodal_plane_info(
                 strike2_diff = 360 - strike2_diff
 
             if strike1_diff < strike2_diff:
-                strike = cmt.strike1
-                rake = cmt.rake1
-                dip = cmt.dip1
+                nodal_plane_info["strike"] = cmt.strike1
+                nodal_plane_info["rake"] = cmt.rake1
+                nodal_plane_info["dip"] = cmt.dip1
             else:
-                strike = cmt.strike2
-                rake = cmt.rake2
-                dip = cmt.dip2
-            length = srf_header[0]["length"]
-            dip_dist = srf_header[0]["width"]
+                nodal_plane_info["strike"] = cmt.strike2
+                nodal_plane_info["rake"] = cmt.rake2
+                nodal_plane_info["dip"] = cmt.dip2
+
+            # Get the length and dip_dist
+            nodal_plane_info["length"] = nodal_plane_info["srf_header"][0]["length"]
+            nodal_plane_info["dip_dist"] = nodal_plane_info["srf_header"][0]["width"]
     elif event_id in modified_cmt_df.PublicID.values:
         # Event is in the modified CMT data
-        f_type = "cmt"
+        nodal_plane_info["f_type"] = "cmt"
         cmt = modified_cmt_df[modified_cmt_df.PublicID == event_id].iloc[0]
-        strike = cmt.strike1
-        dip = cmt.dip1
-        rake = cmt.rake1
+        # Compute the CCLD Simulations for the event
+        ccld_info = run_ccld_simulation(
+            event_id, event_row, cmt.strike1, cmt.dip1, cmt.rake1, "A"
+        )
 
     elif event_id in geonet_cmt_df.PublicID.values:
         # Event is in the Geonet CMT data
         # Need to determine the correct plane
-        f_type = "cmt_unc"
+        nodal_plane_info["f_type"] = "cmt_unc"
         cmt = geonet_cmt_df[geonet_cmt_df.PublicID == event_id].iloc[0]
-        norm, slip = calc_fnorm_slip(cmt.strike1, cmt.dip1, cmt.rake1)
 
-        # Get the domain focal values
-        do_strike, do_rake, do_dip = get_domain_focal(
-            event_row["domain_no"], domain_focal_df
+        # Compute the CCLD Simulations for the event
+        ccld_info = run_ccld_simulation(
+            event_id,
+            event_row,
+            cmt.strike1,
+            cmt.dip1,
+            cmt.rake1,
+            "C",
+            cmt.strike2,
+            cmt.dip2,
+            cmt.rake2,
         )
-
-        # Figure out the correct plane based on the rotation and the domain focal values
-        do_norm, do_slip = calc_fnorm_slip(do_strike, do_dip, do_rake)
-        plane_out = mech_rot(do_norm, norm, do_slip, slip)
-
-        if plane_out == 1:
-            strike, dip, rake = cmt.strike1, cmt.dip1, cmt.rake1
-        else:
-            strike, dip, rake = cmt.strike2, cmt.dip2, cmt.rake2
     else:
         # Event is not found in any of the datasets
         # Use the domain focal
-        f_type = "domain"
+        nodal_plane_info["f_type"] = "domain"
         strike, rake, dip = get_domain_focal(event_row["domain_no"], domain_focal_df)
 
-    return {
-        "strike": strike,
-        "rake": rake,
-        "dip": dip,
-        "ztor": ztor,
-        "dbottom": dbottom,
-        "length": length,
-        "dip_dist": dip_dist,
-        "srf_points": srf_points,
-        "srf_header": srf_header,
-        "f_type": f_type,
-    }
+        # Compute the CCLD Simulations for the event
+        ccld_info = run_ccld_simulation(event_id, event_row, strike, dip, rake, "D")
+
+    if ccld_info is not None:
+        # Update the nodal plane info with the ccld info
+        nodal_plane_info.update(ccld_info)
+
+    return nodal_plane_info
 
 
 def compute_distances_for_event(
@@ -458,6 +379,7 @@ def compute_distances_for_event(
     extra_event_data : pd.DataFrame
         The extra event data for the event which includes the correct nodal plane information
     """
+
     # Extract out the relevant event_row data
     event_id = event_row["evid"]
     im_event_df = im_df[im_df["evid"] == event_id]
@@ -491,6 +413,10 @@ def compute_distances_for_event(
         ztor,
         dbottom,
         f_type,
+        hyp_lat,
+        hyp_lon,
+        hyp_strike,
+        hyp_dip,
     ) = (
         nodal_plane_info["strike"],
         nodal_plane_info["rake"],
@@ -502,28 +428,52 @@ def compute_distances_for_event(
         nodal_plane_info["ztor"],
         nodal_plane_info["dbottom"],
         nodal_plane_info["f_type"],
+        nodal_plane_info["hyp_lat"],
+        nodal_plane_info["hyp_lon"],
+        nodal_plane_info["hyp_strike"],
+        nodal_plane_info["hyp_dip"],
     )
-
-    # Get the length and dip_dist if they are None
-    # This is the case for when grabbing strike, dip, rake from the CMT files or the domain focal
-    if f_type != "ff" and (length is None or dip_dist is None):
-        length, dip_dist = get_l_w_mag_scaling(
-            event_row["mag"], rake, event_row["tect_class"]
-        )
-
-    # Get the ztor and dbottom if they are None
-    # This is the case for when grabbing strike, dip, rake from the CMT files or the domain focal
-    if f_type != "ff" and (ztor is None or dbottom is None):
-        height = np.sin(np.radians(dip)) * dip_dist
-        ztor = max(event_row["depth"] - (height / 2), 0)
-        dbottom = ztor + height
 
     if srf_header is None or srf_points is None:
         # Calculate the corners of the plane
         dip_dir = (strike + 90) % 360
         projected_width = dip_dist * np.cos(np.radians(dip))
+
+        config = cfg.Config()
+        points_per_km = config.get_value("points_per_km")
+
+        # Find the center of the plane based on the hypocentre location
+        strike_direction = np.array(
+            [np.cos(np.radians(strike)), np.sin(np.radians(strike))]
+        )
+        dip_direction = np.array(
+            [np.cos(np.radians(dip_dir)), np.sin(np.radians(dip_dir))]
+        )
+
+        # Convert the hypocentre location to NZTM
+        hyp_nztm = coordinates.wgs_depth_to_nztm(np.asarray([hyp_lat, hyp_lon]))
+
+        # Calculate the distance needed to travel in the strike direction
+        strike_centroid_dist = length * 1000 / 2
+        strike_hyp_dist = hyp_strike * length * 1000
+        strike_diff_dist = strike_centroid_dist - strike_hyp_dist
+
+        # Calculate the distance needed to travel in the dip direction
+        dip_centroid_dist = projected_width * 1000 / 2
+        dip_hyp_dist = hyp_dip * projected_width * 1000
+        dip_diff_dist = dip_centroid_dist - dip_hyp_dist
+
+        # Calculate the centre of the plane
+        centroid = hyp_nztm + np.array([strike_diff_dist, dip_diff_dist]) @ np.array(
+            [strike_direction, dip_direction]
+        )
+
+        # Convert back to lat, lon
+        centroid_lat_lon = coordinates.nztm_to_wgs_depth(centroid)
+
+        # Get the corners of the srf points
         corner_0, corner_1, corner_2, corner_3 = grid.grid_corners(
-            np.asarray([event_row["lat"], event_row["lon"]]),
+            centroid_lat_lon,
             strike,
             dip_dir,
             ztor,
@@ -533,11 +483,10 @@ def compute_distances_for_event(
         )
 
         # Utilise grid functions from qcore to get the mesh grid
-        config = cfg.Config()
-        points_per_km = config.get_value("points_per_km")
         srf_points = grid.coordinate_meshgrid(
             corner_0, corner_1, corner_2, 1000 / points_per_km
         )
+
         # Reshape to (n, 3)
         srf_points = srf_points.reshape(-1, 3)
         # Swap the lat and lon for the srf points
@@ -548,7 +497,7 @@ def compute_distances_for_event(
         ndip = int(round(dip_dist * points_per_km))
         srf_header = [{"nstrike": nstrike, "ndip": ndip, "strike": strike}]
 
-        # Divide the srf depth points by 1000
+        # Divide the srf depth points by 1000 to convert to km
         srf_points[:, 2] /= 1000
 
     # Calculate the distances
