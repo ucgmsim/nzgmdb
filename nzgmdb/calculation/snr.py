@@ -249,7 +249,7 @@ def compute_snr_for_mseed_data(
         )
 
     # Get all the mseed files
-    mseed_files = [mseed_file for mseed_file in data_dir.rglob(".mseed")]
+    mseed_files = [mseed_file for mseed_file in data_dir.rglob("*.mseed")]
 
     # Find files that have already been processed and get the suffix indexes
     processed_files = [f for f in batch_dir.iterdir() if f.is_file()]

@@ -209,7 +209,8 @@ def merge_flatfiles(main_dir: Path):
         flatfile_dir / file_structure.PreFlatfileNames.PROPAGATION_TABLE
     )
     im_df = pd.read_csv(
-        flatfile_dir / file_structure.PreFlatfileNames.GROUND_MOTION_IM_CATALOGUE
+        flatfile_dir / file_structure.PreFlatfileNames.GROUND_MOTION_IM_CATALOGUE,
+        dtype={"loc": str},
     )
     site_basin_df = pd.read_csv(
         flatfile_dir / file_structure.PreFlatfileNames.SITE_TABLE
