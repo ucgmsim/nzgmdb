@@ -8,9 +8,11 @@ from nzgmdb.management import config as cfg
 from nzgmdb.management import custom_errors
 
 
-def initial_preprocessing(mseed: Stream):
+def initial_preprocessing(
+    mseed: Stream, apply_taper: bool = True, apply_zero_padding: bool = True
+):
     """
-    Basic pre processing of the waveform data
+    Basic pre-processing of the waveform data
     This performs the following:
     - Demean and Detrend the data
     - Taper the data by the taper_fraction in the config to each end (5% default)
@@ -23,6 +25,10 @@ def initial_preprocessing(mseed: Stream):
     ----------
     mseed : Stream
         The waveform data
+    apply_taper : bool, optional
+        Whether to apply the tapering, by default True
+    apply_zero_padding : bool, optional
+        Whether to apply zero padding, by default True
 
     Returns
     -------
@@ -49,14 +55,16 @@ def initial_preprocessing(mseed: Stream):
     taper_fraction = config.get_value("taper_fraction")
     zero_padding_time = config.get_value("zero_padding_time")
 
-    # Taper the data by the taper_fraction
-    mseed.taper(taper_fraction, side="both", max_length=5)
+    if apply_taper:
+        # Taper the data by the taper_fraction
+        mseed.taper(taper_fraction, side="both", max_length=5)
 
-    # Perform zero-padding
-    for tr in mseed:
-        tr_starttime_trim = tr.stats.starttime - zero_padding_time
-        tr_endtime_trim = tr.stats.endtime + zero_padding_time
-        tr.trim(tr_starttime_trim, tr_endtime_trim, pad=True, fill_value=0)
+    if apply_zero_padding:
+        # Perform zero-padding
+        for tr in mseed:
+            tr_starttime_trim = tr.stats.starttime - zero_padding_time
+            tr_endtime_trim = tr.stats.endtime + zero_padding_time
+            tr.trim(tr_starttime_trim, tr_endtime_trim, pad=True, fill_value=0)
 
     # Get the inventory information
     station = mseed[0].stats.station
