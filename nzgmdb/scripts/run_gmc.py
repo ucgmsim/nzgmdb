@@ -28,6 +28,11 @@ def run_command(
         The command to activate the conda environment needed.
     log_file_path : Path
         The path to the log file.
+
+    Raises
+    ------
+    Exception
+        If the command fails.
     """
     with open(log_file_path, "w") as log_file:
         # Create the command to source conda.sh, activate the environment, and execute the full command
@@ -76,6 +81,13 @@ def process_batch(
         The command to activate the GMC environment for extracting features.
     gmc_predict_activate : str
         The command to activate the GMC prediction environment.
+
+    Raises
+    ------
+    Exception
+        If feature extraction or predict fails.
+    FileNotFoundError
+        If the failed records dir is not found.
     """
     batch_num = gmc_dir.name.split("_")[-1]
     gmc_dir.mkdir(exist_ok=True, parents=True)
@@ -182,11 +194,9 @@ def run_gmc_processing(
         flatfile_dir / file_structure.FlatfileNames.GMC_PREDICTIONS
     )
 
-    # Get all subfolders in the waveform directory (every year)
-    # subfolders = [f for f in waveform_dir.iterdir() if f.is_dir()]
-
     # Get all the mseed files
     mseed_files = list(waveform_dir.rglob("*.mseed"))
+
     # Split them into even batches based on number of mseeds and n_procs
     batch_size = len(mseed_files) // n_procs
     remainder = len(mseed_files) % n_procs
