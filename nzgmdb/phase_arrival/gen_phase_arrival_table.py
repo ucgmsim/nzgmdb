@@ -232,22 +232,26 @@ def generate_phase_arrival_table(
             itertools.chain.from_iterable(pool.map(fetch_geonet_phases, mseed_files))
         )
 
-    # Use other columns as a new DataFrame index
-    columns_to_merge_for_new_index = ["evid", "net", "sta", "loc", "chan", "phase"]
-    geonet_phases_df_new_index = geonet_phases_df.set_index(
-        columns_to_merge_for_new_index
-    )
-    picker_phases_df_new_index = picker_phases_df.set_index(
-        columns_to_merge_for_new_index
-    )
+    # Check length of the geonet_phases_df
+    if len(geonet_phases_df) > 0:
+        # Use other columns as a new DataFrame index
+        columns_to_merge_for_new_index = ["evid", "net", "sta", "loc", "chan", "phase"]
+        geonet_phases_df_new_index = geonet_phases_df.set_index(
+            columns_to_merge_for_new_index
+        )
+        picker_phases_df_new_index = picker_phases_df.set_index(
+            columns_to_merge_for_new_index
+        )
 
-    # Use the new index to include Geonet phase
-    # arrival times if there are not any conflicting
-    # phase arrival times from picker
-    merged_df = picker_phases_df_new_index.combine_first(geonet_phases_df_new_index)
+        # Use the new index to include Geonet phase
+        # arrival times if there are not any conflicting
+        # phase arrival times from picker
+        merged_df = picker_phases_df_new_index.combine_first(geonet_phases_df_new_index)
 
-    # reset the index back to normal
-    merged_df = merged_df.reset_index()
+        # reset the index back to normal
+        merged_df = merged_df.reset_index()
+    else:
+        merged_df = picker_phases_df
 
     # Save the phase arrival table
     output_dir.mkdir(parents=True, exist_ok=True)

@@ -32,8 +32,13 @@ def merge_im_data(
     # Load the GMC file
     gmc_results = pd.read_csv(gmc_ffp)
 
-    # Load the fmax file
-    fmax_results = pd.read_csv(fmax_ffp)
+    try:
+        # Load the fmax file
+        fmax_results = pd.read_csv(fmax_ffp)
+    except pd.errors.EmptyDataError:
+        fmax_results = pd.DataFrame(
+            columns=["record_id", "fmax_000", "fmax_090", "fmax_ver"]
+        )
 
     # Define the columns to be grouped
     columns = ["score_mean", "fmin_mean", "multi_mean"]

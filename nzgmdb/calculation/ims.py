@@ -241,11 +241,7 @@ def compute_ims_for_all_processed_records(
         skipped_records_df = pd.concat(skipped_records).reset_index(drop=True)
     else:
         print("No skipped records")
-        skipped_record_dict = {
-            "record_id": None,
-            "reason": None,
-        }
-        skipped_records_df = pd.DataFrame([skipped_record_dict])
+        skipped_records_df = pd.DataFrame(columns=["record_id", "reason"])
 
     if checkpoint:
         # Add the skipped records to the existing skipped records

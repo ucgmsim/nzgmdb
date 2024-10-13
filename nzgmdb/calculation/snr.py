@@ -311,7 +311,22 @@ def compute_snr_for_mseed_data(
                 meta_df = pd.concat(meta_dfs, ignore_index=True)
             else:
                 print("No metadata dataframes")
-                meta_df = pd.DataFrame()
+                meta_df = pd.DataFrame(
+                    columns=[
+                        "record_id",
+                        "evid",
+                        "sta",
+                        "chan",
+                        "loc",
+                        "tp",
+                        "Ds",
+                        "Dn",
+                        "npts",
+                        "delta",
+                        "starttime",
+                        "endtime",
+                    ]
+                )
             meta_df.to_csv(batch_dir / f"snr_metadata_{index}.csv", index=False)
 
             # Check that there are skipped records that are not None
@@ -320,7 +335,7 @@ def compute_snr_for_mseed_data(
                 print(f"Skipped {len(skipped_records)} records")
             else:
                 print("No skipped records")
-                skipped_records = pd.DataFrame()
+                skipped_records = pd.DataFrame(columns=["record_id", "reason"])
             skipped_records.to_csv(
                 batch_dir / f"snr_skipped_records_{index}.csv", index=False
             )
@@ -346,14 +361,29 @@ def compute_snr_for_mseed_data(
         meta_df = pd.concat(meta_dfs, ignore_index=True)
     else:
         print("No metadata dataframes")
-        meta_df = pd.DataFrame()
+        meta_df = pd.DataFrame(
+            columns=[
+                "record_id",
+                "evid",
+                "sta",
+                "chan",
+                "loc",
+                "tp",
+                "Ds",
+                "Dn",
+                "npts",
+                "delta",
+                "starttime",
+                "endtime",
+            ]
+        )
     # Check that there are skipped records that are not None
     if not all(value is None for value in skipped_record_dfs):
         skipped_records_df = pd.concat(skipped_record_dfs, ignore_index=True)
         print(f"Skipped {len(skipped_records_df)} records")
     else:
         print("No skipped records")
-        skipped_records_df = pd.DataFrame()
+        skipped_records_df = pd.DataFrame(columns=["record_id", "reason"])
 
     # Save the dataframes
     meta_df.to_csv(

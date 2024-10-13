@@ -753,6 +753,7 @@ def parse_geonet_information(
     batch_size: int = 500,
     only_event_ids: List[str] = None,
     only_sites: List[str] = None,
+    real_time: bool = False,
 ):
     """
     Read the geonet information and manage the fetching of more data to create the mseed files
@@ -773,35 +774,35 @@ def parse_geonet_information(
         Will only fetch the data for the event ids in the list (Must be in the start and end date range)
     only_sites : list[str] (optional)
         Will only fetch the data for the sites in the list
+    real_time : bool (optional)
+        If the function is being used in real time use a different client, default is False
     """
-    # Get the earthquake data
-    geonet = download_earthquake_data(start_date, end_date)
+    if not only_event_ids:
+        # Get the earthquake data
+        geonet = download_earthquake_data(start_date, end_date)
 
-    # Get all event ids
-    event_ids = geonet.publicid.unique().astype(str)
-
-    # Filter the event ids if only_event_ids is given
-    if only_event_ids:
-        for event_id in only_event_ids:
-            if event_id not in event_ids:
-                raise custom_errors.EventIDNotFoundError(
-                    f"Warning: {event_id} not in the earthquake data"
-                )
+        # Get all event ids
+        event_ids = geonet.publicid.unique().astype(str)
+    else:
         event_ids = only_event_ids
 
     # Set constants
     config = cfg.Config()
     channel_codes = ",".join(config.get_value("channel_codes"))
 
-    # Get Station Information from geonet clients
-    client_NZ = FDSN_Client("GEONET")
     client_IU = FDSN_Client("IRIS")
-    # Get the full inventory
-    inventory_NZ = client_NZ.get_stations(channel=channel_codes, level="response")
-    inventory_IU = client_IU.get_stations(
-        network="IU", station="SNZO", channel=channel_codes, level="response"
-    )
-    inventory = inventory_NZ + inventory_IU
+    if real_time:
+        client_NZ = FDSN_Client(base_url="https://service-nrt.geonet.org.nz")
+        inventory = client_NZ.get_stations(channel=channel_codes, level="response")
+    else:
+        # Get Station Information from geonet clients
+        client_NZ = FDSN_Client("GEONET")
+        # Get the full inventory
+        inventory_NZ = client_NZ.get_stations(channel=channel_codes, level="response")
+        inventory_IU = client_IU.get_stations(
+            network="IU", station="SNZO", channel=channel_codes, level="response"
+        )
+        inventory = inventory_NZ + inventory_IU
 
     # Get the data_dir
     data_dir = file_structure.get_data_dir()

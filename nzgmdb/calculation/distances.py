@@ -495,7 +495,15 @@ def compute_distances_for_event(
         # Generate the srf header
         nstrike = int(round(length * points_per_km))
         ndip = int(round(dip_dist * points_per_km))
-        srf_header = [{"nstrike": nstrike, "ndip": ndip, "strike": strike}]
+        srf_header = [
+            {
+                "nstrike": nstrike,
+                "ndip": ndip,
+                "strike": strike,
+                "length": length,
+                "width": dip_dist,
+            }
+        ]
 
         # Divide the srf depth points by 1000 to convert to km
         srf_points[:, 2] /= 1000
@@ -504,7 +512,7 @@ def compute_distances_for_event(
     rrups, rjbs, rrup_points = src_site_dist.calc_rrup_rjb(
         srf_points, stations, return_rrup_points=True
     )
-    rxs, rys = src_site_dist.calc_rx_ry(srf_points, srf_header, stations, type=1)
+    rxs, rys = src_site_dist.calc_rx_ry(srf_points, srf_header, stations)
     rrups_lat, rrups_lon = rrup_points[:, 0], rrup_points[:, 1]
 
     r_epis = geo.get_distances(

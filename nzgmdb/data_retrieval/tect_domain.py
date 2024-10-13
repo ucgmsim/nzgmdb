@@ -256,6 +256,10 @@ def merge_tectclass(event_df: pd.DataFrame):
     event_df : pd.DataFrame
         The event dataframe which also includes the NGASUB tectonic class data
     """
+    # Ensure the dtype of the tect_class and tect_method columns
+    event_df["tect_class"].dtype = event_df["tect_class"].astype("str")
+    event_df["tect_method"].dtype = event_df["tect_method"].astype("str")
+
     # Replace the tect_class and tect_method with the NZSMDB data where it exists
     event_df.loc[event_df.NZSMDB_TectClass.isnull() == False, "tect_class"] = event_df[
         event_df.NZSMDB_TectClass.isnull() == False
