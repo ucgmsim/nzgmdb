@@ -15,6 +15,7 @@ import pandas as pd
 import io
 from nzgmdb.management import config as cfg
 from nzgmdb.scripts import run_nzgmdb
+from nzgmdb.management import file_structure
 
 
 def download_earthquake_data_last_hour(
@@ -96,7 +97,15 @@ def poll_earthquake_data():
                 only_event_ids=only_event_ids,
                 real_time=True,
             )
-            print(f"Finished and took {time.time() - init_time} seconds")
+            finished_time = time.time()
+            print(f"Finished and took {finished_time - init_time} seconds")
+            # Get the total time taken from the earthquake happening and then the output results calculated
+            eq_source_df = pd.read_csv(
+                file_structure.get_flatfile_dir(event_dir)
+                / file_structure.FlatfileNames.EARTHQUAKE_SOURCE_TABLE
+            )
+            eq_time = pd.to_datetime(eq_source_df["datetime"].values[0])
+            print(f"Total time taken: {finished_time - eq_time.timestamp()} seconds")
         # print("Sleeping for 1 minute")
         time.sleep(60)
 

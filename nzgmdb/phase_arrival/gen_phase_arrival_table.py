@@ -220,6 +220,22 @@ def generate_phase_arrival_table(
             pd.Series(pool.map(process_mseed, mseed_files)).dropna().to_list()
         )
 
+    # Check if the picker_phases_df is empty
+    if picker_phases_df.empty:
+        # Create an empty DataFrame with the same columns as the picker_phases_df
+        picker_phases_df = pd.DataFrame(
+            columns=[
+                "evid",
+                "datetime",
+                "net",
+                "sta",
+                "loc",
+                "chan",
+                "phase",
+                "t_res",
+            ]
+        )
+
     # Change picker_phases_df[t_res] from nan to 0.0 so Geonet t_res values
     # will not be substituted for the missing picker_phases_df[t_res] values
     picker_phases_df["t_res"] = 0.0
