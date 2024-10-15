@@ -19,7 +19,7 @@ points_per_km: 10
 # Mseed Variables
 vs30: 500
 min_time_difference: 15
-ds_multiplier: 1.2
+ds_multiplier: 2
 channel_codes:
   - HN?
   - BN?
