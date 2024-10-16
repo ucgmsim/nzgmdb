@@ -116,13 +116,6 @@ def fetch_geonet_phases(mseed_file: Path) -> list[dict[str, Any]]:
     -------
     phase_table_entries: list[dict[str, any]]
         A list of phase arrival times.
-
-    Raises
-    ------
-    InvalidNumberOfGeonetPicksException
-        If more than two phase picks from Geonet match
-        a given mseed file as there should only be one
-        P phase pick and sometimes one S phase pick.
     """
     # Get the event ID (evid) from the mseed file
     evid = file_structure.get_event_id_from_mseed(mseed_file)

@@ -68,23 +68,3 @@ def get_csv_file_urls(
             subdir_contents = fetch_github_directory_contents(owner, repo, item["path"])
             csv_urls.extend(get_csv_file_urls(subdir_contents, owner, repo))
     return csv_urls
-
-
-def download_and_read_csv(url: str) -> pd.DataFrame:
-    """
-    Download a CSV file from a URL and read it into a DataFrame.
-
-    Parameters:
-    ----------
-    url : str
-        The URL of the CSV file.
-
-    Returns:
-    -------
-    pd.DataFrame
-        The DataFrame containing the CSV data.
-    """
-    response = requests.get(url)
-    response.raise_for_status()
-    csv_data = StringIO(response.text)
-    return pd.read_csv(csv_data)

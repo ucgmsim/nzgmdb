@@ -235,8 +235,7 @@ def high_and_low_cut_processing(
 
     # Determine the high and low cut frequencies
     highcut = fmax or 1 / (2.5 * dt)
-    lowcut = config.get_value("low_cut_default") if fmin is None else fmin
-    lowcut /= 1.25
+    lowcut = config.get_value("low_cut_default") if fmin is None else fmin / 1.25
 
     # Check if the lowcut is greater than the highcut
     if lowcut > highcut:

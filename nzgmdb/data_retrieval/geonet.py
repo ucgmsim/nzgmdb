@@ -504,7 +504,7 @@ def fetch_event_data(
 
 
 def process_batch(
-    batch_events: List[str],
+    batch_events: np.ndarray[str],
     batch_index: int,
     main_dir: Path,
     client_NZ: FDSN_Client,
@@ -522,8 +522,8 @@ def process_batch(
 
     Parameters
     ----------
-    batch_events : list[str]
-        The list of event ids to fetch the data for
+    batch_events : np.ndarray[str]
+        The array of event ids to fetch the data for
     batch_index : int
         The index of the current batch
     main_dir : Path
@@ -824,9 +824,7 @@ def parse_geonet_information(
     processed_suffixes = set(int(f.stem.split("_")[-1]) for f in processed_files)
 
     # Create batches from the event_ids
-    batches = [
-        event_ids[i : i + batch_size] for i in range(0, len(event_ids), batch_size)
-    ]
+    batches = np.array_split(event_ids, np.ceil(len(event_ids) / batch_size))
 
     for index, batch in enumerate(batches):
         if index not in processed_suffixes:

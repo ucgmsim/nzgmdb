@@ -4,6 +4,7 @@ import subprocess
 from pathlib import Path
 from typing import Annotated, List
 
+import numpy as np
 import pandas as pd
 import typer
 
@@ -37,16 +38,15 @@ def run_command(
     with open(log_file_path, "w") as log_file:
         # Create the command to source conda.sh, activate the environment, and execute the full command
         command = f"source {env_sh} && {env_activate_command} && {command}"
-        process = subprocess.Popen(
-            command,
-            stdout=log_file,
-            stderr=log_file,
-            shell=True,
-            executable="/bin/bash",
-        )
-        # Ensure we wait for the process to finish
-        process.communicate()
-        if process.returncode != 0:
+        try:
+            subprocess.check_call(
+                command,
+                stdout=log_file,
+                stderr=log_file,
+                shell=True,
+                executable="/bin/bash",
+            )
+        except subprocess.CalledProcessError:
             raise Exception(f"Command failed please check logs in {log_file_path}")
 
 
@@ -145,18 +145,23 @@ def run_gmc_processing(
         Path,
         typer.Argument(
             help="Main directory for gmdb.",
+            file_okay=False,
         ),
     ],
     gm_classifier_dir: Annotated[
         Path,
         typer.Argument(
             help="Directory for gm_classifier.",
+            exists=True,
+            file_okay=False,
         ),
     ],
     ko_matrices_dir: Annotated[
         Path,
         typer.Argument(
             help="Directory for KO matrices.",
+            exists=True,
+            file_okay=False,
         ),
     ],
     conda_sh: Annotated[
@@ -183,29 +188,42 @@ def run_gmc_processing(
             help="Number of processes to use for multiprocessing.",
         ),
     ] = 1,
+    waveform_dir: Annotated[
+        Path,
+        typer.Option(
+            help="Directory containing all waveform files.",
+            exists=True,
+            file_okay=False,
+        ),
+    ] = None,
+    output_dir: Annotated[
+        Path,
+        typer.Option(
+            help="Output directory for the GMC predictions.",
+            exists=True,
+            file_okay=False,
+        ),
+    ] = None,
 ):
     # Obtain other paths
     gmc_dir = file_structure.get_gmc_dir(main_dir)
     gmc_dir.mkdir(exist_ok=True, parents=True)
-    waveform_dir = file_structure.get_waveform_dir(main_dir)
-    gmc_scripts_path = gm_classifier_dir / "gm_classifier/scripts"
-    flatfile_dir = file_structure.get_flatfile_dir(main_dir)
-    final_predictions_output = (
-        flatfile_dir / file_structure.FlatfileNames.GMC_PREDICTIONS
+    waveform_dir = (
+        file_structure.get_waveform_dir(main_dir)
+        if waveform_dir is None
+        else waveform_dir
     )
+    gmc_scripts_path = gm_classifier_dir / "gm_classifier/scripts"
+    output_dir = (
+        file_structure.get_flatfile_dir(main_dir) if output_dir is None else output_dir
+    )
+    final_predictions_output = output_dir / file_structure.FlatfileNames.GMC_PREDICTIONS
 
     # Get all the mseed files
     mseed_files = list(waveform_dir.rglob("*.mseed"))
 
     # Split them into even batches based on number of mseeds and n_procs
-    batch_size = len(mseed_files) // n_procs
-    remainder = len(mseed_files) % n_procs
-    mseed_batches = []
-    start = 0
-    for i in range(n_procs):
-        end = start + batch_size + (1 if i < remainder else 0)
-        mseed_batches.append(mseed_files[start:end])
-        start = end
+    mseed_batches = np.array_split(mseed_files, n_procs)
 
     # Create a partial function with common arguments pre-filled
     process_partial = functools.partial(
