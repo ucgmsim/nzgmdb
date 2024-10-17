@@ -1,6 +1,3 @@
-from io import StringIO
-
-import pandas as pd
 import requests
 
 from nzgmdb.management import config as cfg

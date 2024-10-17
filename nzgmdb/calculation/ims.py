@@ -1,4 +1,3 @@
-import functools
 import multiprocessing as mp
 from pathlib import Path
 from typing import Dict, List

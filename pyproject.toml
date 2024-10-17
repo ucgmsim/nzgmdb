@@ -20,3 +20,6 @@ convention = "numpy"
 
 [tool.ruff.lint.isort]
 known-first-party = ["qcore", "empirical", "IM_calculation", "Velocity_Model"]
+
+[tool.ruff]
+exclude = ["CCLD"]

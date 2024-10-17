@@ -14,7 +14,7 @@ import obspy
 import pandas as pd
 from obspy.clients.fdsn import Client as FDSN_Client
 
-from nzgmdb.management import custom_errors, file_structure
+from nzgmdb.management import file_structure
 from nzgmdb.phase_arrival import picker
 
 
@@ -65,17 +65,17 @@ def process_mseed(mseed_file: Path) -> dict[str, Any]:
 
     try:
         p_comp_000 = get_p_wave(mseed_data[0].data, mseed_data[0].stats.delta)
-    except:
+    except (IndexError, ValueError):
         print(f"picker failed on {str(mseed_file)} p_comp_000")
         p_comp_000 = -1
     try:
         p_comp_090 = get_p_wave(mseed_data[1].data, mseed_data[1].stats.delta)
-    except:
+    except (IndexError, ValueError):
         print(f"picker failed on {str(mseed_file)} p_comp_090")
         p_comp_090 = -1
     try:
         p_comp_ver = get_p_wave(mseed_data[2].data, mseed_data[2].stats.delta)
-    except:
+    except (IndexError, ValueError):
         print(f"picker failed on {str(mseed_file)} p_comp_ver")
         p_comp_ver = -1
 
@@ -252,10 +252,10 @@ def generate_phase_arrival_table(
         # Adding labels to the DataFrame columns so they
         # can be distinguished after the outer merge
         picker_phases_df_new_index.columns = (
-            picker_phases_df_new_index.columns + f"_picker"
+            picker_phases_df_new_index.columns + "_picker"
         )
         geonet_phases_df_new_index.columns = (
-            geonet_phases_df_new_index.columns + f"_geonet"
+            geonet_phases_df_new_index.columns + "_geonet"
         )
 
         all_picker_and_geonet_df = pd.merge(
