@@ -490,8 +490,9 @@ def fetch_event_data(
 
     output_queue.put((event_line, sta_mag_lines, skipped_records))
     print(f"Finished processing event {event_id}")
-    # Signal that the process is done to the main process
-    # output_queue.put(f"DONE-{event_id}")
+    # Wait forever till the process is terminated by main process
+    while True:
+        time.sleep(1)
 
 
 def remove_processed_event_data(

@@ -1,4 +1,4 @@
-import functools
+import time
 import multiprocessing as mp
 import queue
 from pathlib import Path
@@ -139,6 +139,9 @@ def calculate_im_for_record(
     )
     # Tell the main process that this record is done
     output_queue.put((mseed_file.stem, []))
+    # Wait forever till the process is terminated by main process
+    while True:
+        time.sleep(1)
 
 
 def remove_processed_im_data(processes: List[mp.Process], output_queue: queue.Queue):

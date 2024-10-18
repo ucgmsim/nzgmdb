@@ -1,5 +1,6 @@
 import multiprocessing as mp
 import queue
+import time
 from pathlib import Path
 from typing import List
 
@@ -189,6 +190,9 @@ def compute_snr_for_single_mseed(
     }
     meta_df = pd.DataFrame([meta_dict])
     output_queue.put((meta_df, skipped_record))
+    # Wait forever till the process is terminated by main process
+    while True:
+        time.sleep(1)
 
 
 def remove_processed_snr_data(processes: List[mp.Process], output_queue: queue.Queue):
