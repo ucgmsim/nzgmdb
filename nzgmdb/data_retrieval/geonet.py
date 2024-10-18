@@ -534,6 +534,7 @@ def remove_processed_event_data(
 
         # Get the event_id to remove the corresponding process
         event_id_done = completed_info[0][0]
+        print(f"Searching for finished process with event_id {event_id_done}")
 
         # Remove corresponding process
         for p in processes:
