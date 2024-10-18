@@ -748,10 +748,7 @@ def calc_distances(main_dir: Path, n_procs: int = 1):
 
     # Get the station information
     client_NZ = FDSN_Client("GEONET")
-    client_IU = FDSN_Client("IRIS")
-    inventory_NZ = client_NZ.get_stations()
-    inventory_IU = client_IU.get_stations(network="IU", station="SNZO")
-    inventory = inventory_NZ + inventory_IU
+    inventory = client_NZ.get_stations()
     station_info = []
     for network in inventory:
         for station in network:

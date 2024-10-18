@@ -4,6 +4,7 @@ min_mag: 4
 max_mag: 10
 # Geonet Variables
 geonet_url: https://quakesearch.geonet.org.nz
+real_time_url: https://service-nrt.geonet.org.nz
 bbox:
   - 165.5205
   - -49.1817

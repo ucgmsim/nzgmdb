@@ -1,5 +1,6 @@
 import functools
 import multiprocessing as mp
+import queue
 from pathlib import Path
 from typing import Dict, List
 
@@ -92,8 +93,8 @@ def calculate_im_for_record(
         The path to the KO matrices, by default None
     """
     # Load the mseed file
+    mseed_file = ffp_000.parent.parent / "mseed" / f"{ffp_000.stem}.mseed"
     try:
-        mseed_file = ffp_000.parent.parent / "mseed" / f"{ffp_000.stem}.mseed"
         mseed = obspy.read(mseed_file)
     except FileNotFoundError:
         skipped_record_dict = {
@@ -102,7 +103,7 @@ def calculate_im_for_record(
         }
         skipped_record = pd.DataFrame([skipped_record_dict])
         # return skipped_record
-        output_queue.put(skipped_record)
+        output_queue.put((ffp_000.stem, skipped_record))
 
     # Get the 090 and ver components full file paths
     ffp_090 = ffp_000.parent / f"{ffp_000.stem}.090"
@@ -114,12 +115,12 @@ def calculate_im_for_record(
         )
     except FileNotFoundError:
         skipped_record_dict = {
-            "record_id": ffp_000.stem,
+            "record_id": mseed_file.stem,
             "reason": "Failed to find all components",
         }
         skipped_record = pd.DataFrame([skipped_record_dict])
         # return skipped_record
-        output_queue.put(skipped_record)
+        output_queue.put((mseed_file.stem, skipped_record))
 
     # Get the event_id and create the output directory
     event_id = file_structure.get_event_id_from_mseed(mseed_file)
@@ -136,6 +137,46 @@ def calculate_im_for_record(
         im_options,
         ko_matrices_path,
     )
+    # Tell the main process that this record is done
+    output_queue.put((mseed_file.stem, []))
+
+
+def remove_processed_im_data(processes: List[mp.Process], output_queue: queue.Queue):
+    """
+    Remove the processed IM data from the queue and end the processes
+
+    Parameters
+    ----------
+    processes : list[mp.Process]
+        The list of processes currently running
+    output_queue : queue.Queue
+        The queue to receive the output from the processes
+
+    Returns
+    -------
+    skipped_records : list
+        The list of skipped records
+    """
+    # Collect all results from the queue (If there is any)
+    skipped_records = []
+
+    # Check the queue for completed jobs
+    while not output_queue.empty():
+        # Non-blocking check
+        completed_info = output_queue.get(timeout=0.1)
+        skipped_records.append(completed_info[1])
+        # Get the record_id to remove the corresponding process
+        record_id_done = completed_info[0]
+
+        # Remove corresponding process
+        for p in processes:
+            if p.record_id == record_id_done:
+                print(f"Record {record_id_done} completed and will be removed")
+                p.terminate()
+                processes.remove(p)
+                break
+
+    return skipped_records
 
 
 def compute_ims_for_all_processed_records(
@@ -196,14 +237,14 @@ def compute_ims_for_all_processed_records(
     # Create the Process and Queue for output results
     processes = []
     output_queue = mp.Queue()
+    skipped_records = []
 
     for comp_000_file in comp_000_files:
         # If we have reached the limit of n_procs, wait for some processes to finish
         while len(processes) >= n_procs:
-            for p in processes:
-                p.join(0.1)  # Check if any process has finished, without blocking
-                if not p.is_alive():
-                    processes.remove(p)
+            # Remove the processed IM data from the queue
+            finished_skipped_records = remove_processed_im_data(processes, output_queue)
+            skipped_records.extend(finished_skipped_records)
 
         # Start a new process
         process = mp.Process(
@@ -218,18 +259,15 @@ def compute_ims_for_all_processed_records(
                 ko_matrices_path,
             ),
         )
+        process.record_id = comp_000_file.stem
         processes.append(process)
         process.start()
 
     # Wait for all remaining processes to finish
-    for process in processes:
-        process.join()
-
-    # Collect all results from the queue
-    skipped_records = []
-    while not output_queue.empty():
-        result = output_queue.get()
-        skipped_records.append(result)
+    while processes:
+        # Remove the processed IM data from the queue
+        finished_skipped_records = remove_processed_im_data(processes, output_queue)
+        skipped_records.extend(finished_skipped_records)
 
     print("Finished calculating IMs")
 

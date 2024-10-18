@@ -1,21 +1,16 @@
 import datetime
+import io
 import time
+from multiprocessing import Process
 from pathlib import Path
 from typing import List
-import requests
-import pandas as pd
-import io
-from multiprocessing import Process
-from nzgmdb.management import config as cfg
 
-
-import datetime
-import requests
 import pandas as pd
-import io
+import requests
+
 from nzgmdb.management import config as cfg
-from nzgmdb.scripts import run_nzgmdb
 from nzgmdb.management import file_structure
+from nzgmdb.scripts import run_nzgmdb
 
 
 def download_earthquake_data_last_hour(

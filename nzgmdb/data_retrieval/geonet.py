@@ -6,6 +6,7 @@ import datetime
 import io
 import multiprocessing
 import os
+import queue
 import sys
 import time
 from pathlib import Path
@@ -225,7 +226,6 @@ def fetch_sta_mag_lines(
     event_id: str,
     main_dir: Path,
     client_NZ: FDSN_Client,
-    client_IU: FDSN_Client,
     inventory: Inventory,
     pref_mag: float,
     pref_mag_type: str,
@@ -249,8 +249,6 @@ def fetch_sta_mag_lines(
         The main directory of the NZGMDB results (Highest level directory)
     client_NZ : FDSN_Client
         The geonet client to fetch the data from New Zealand
-    client_IU : FDSN_Client
-        The geonet client to fetch the data from the International Network (necessary for station SNZO)
     inventory : Inventory
         The inventory of the stations from all networks to extract the stations from
     pref_mag : float
@@ -284,8 +282,6 @@ def fetch_sta_mag_lines(
     sta_mag_line = []
     # Loop through the Inventory Subset of Networks / Stations
     for network in inv_sub_sta:
-        # Get the client
-        client = client_NZ if network.code == "NZ" else client_IU
         for station in network:
             # Check if the station is in the only_sites list if only_sites is defined
             if only_sites is None or station.code in only_sites:
@@ -311,7 +307,7 @@ def fetch_sta_mag_lines(
                 # Get the waveforms
                 st = creation.get_waveforms(
                     preferred_origin,
-                    client,
+                    client_NZ,
                     network.code,
                     station.code,
                     event_cat.preferred_magnitude().mag,
@@ -432,7 +428,6 @@ def fetch_event_data(
     event_id: str,
     main_dir: Path,
     client_NZ: FDSN_Client,
-    client_IU: FDSN_Client,
     inventory: Inventory,
     site_table: pd.DataFrame,
     mags: np.ndarray,
@@ -452,8 +447,6 @@ def fetch_event_data(
         The main directory of the NZGMDB results (Highest level directory)
     client_NZ : FDSN_Client
         The geonet client to fetch the data from New Zealand
-    client_IU : FDSN_Client
-        The geonet client to fetch the data from the International Network (necessary for station SNZO)
     inventory : Inventory
         The inventory of the stations from all networks to extract the stations from
     site_table : pd.DataFrame
@@ -483,7 +476,6 @@ def fetch_event_data(
             event_id,
             main_dir,
             client_NZ,
-            client_IU,
             inventory,
             event_line[7],
             event_line[8],
@@ -498,9 +490,60 @@ def fetch_event_data(
 
     output_queue.put((event_line, sta_mag_lines, skipped_records))
     print(f"Finished processing event {event_id}")
-    # Kill the process to ensure when the p.is_alive() check is done
-    # the process is not still running and so continues to the next event
-    sys.exit(0)
+    # Signal that the process is done to the main process
+    # output_queue.put(f"DONE-{event_id}")
+
+
+def remove_processed_event_data(
+    processes: List[multiprocessing.Process], output_queue: queue.Queue
+):
+    """
+    Remove the processed event data from the queue and end the processes
+
+    Parameters
+    ----------
+    processes : list[multiprocessing.Process]
+        The list of processes currently running
+    output_queue : queue.Queue
+        The queue to receive the output from the processes
+
+    Returns
+    -------
+    event_data : list
+        The list of event data
+    sta_mag_data : list
+        The list of station magnitude data
+    skipped_records : list
+        The list of skipped records
+    """
+    # Collect all results from the queue (If there is any)
+    event_data = []
+    sta_mag_data = []
+    skipped_records = []
+
+    # Check the queue for completed jobs
+    while not output_queue.empty():
+        # Non-blocking check
+        completed_info = output_queue.get(timeout=0.1)
+
+        event_data.append(completed_info[0])
+        if completed_info[1]:
+            sta_mag_data.extend(completed_info[1])
+        if completed_info[2]:
+            skipped_records.extend(completed_info[2])
+
+        # Get the event_id to remove the corresponding process
+        event_id_done = completed_info[0][0]
+
+        # Remove corresponding process
+        for p in processes:
+            if p.event_id == event_id_done:
+                print(f"Event {event_id_done} completed and will be removed")
+                p.terminate()
+                processes.remove(p)
+                break
+
+    return event_data, sta_mag_data, skipped_records
 
 
 def process_batch(
@@ -508,7 +551,6 @@ def process_batch(
     batch_index: int,
     main_dir: Path,
     client_NZ: FDSN_Client,
-    client_IU: FDSN_Client,
     inventory: Inventory,
     site_table: pd.DataFrame,
     mags: np.ndarray,
@@ -530,8 +572,6 @@ def process_batch(
         The main directory of the NZGMDB results (Highest level directory)
     client_NZ : FDSN_Client
         The geonet client to fetch the data from New Zealand
-    client_IU : FDSN_Client
-        The geonet client to fetch the data from the International Network (necessary for station SNZO)
     inventory : Inventory
         The inventory of the stations from all networks to extract the stations from
     site_table : pd.DataFrame
@@ -549,14 +589,20 @@ def process_batch(
     """
     processes = []
     output_queue = multiprocessing.Queue()
+    event_data = []
+    sta_mag_data = []
+    skipped_records = []
 
     for idx, event_id in enumerate(batch_events):
         # If we have reached the limit, wait for some processes to finish
         while len(processes) >= n_procs:
-            for p in processes:
-                p.join(0.1)  # Check if any process has finished, without blocking
-                if not p.is_alive():
-                    processes.remove(p)
+            finished_event_data, finished_sta_mag_data, finished_skipped_records = (
+                remove_processed_event_data(processes, output_queue)
+            )
+            event_data.extend(finished_event_data)
+            sta_mag_data.extend(finished_sta_mag_data)
+            skipped_records.extend(finished_skipped_records)
+
         # Start a new process
         print(
             f"Starting new process for event {event_id} {idx + 1}/{len(batch_events)}"
@@ -567,7 +613,6 @@ def process_batch(
                 event_id,
                 main_dir,
                 client_NZ,
-                client_IU,
                 inventory,
                 site_table,
                 mags,
@@ -577,24 +622,18 @@ def process_batch(
                 only_sites,
             ),
         )
+        process.event_id = event_id
         processes.append(process)
         process.start()
 
-    # Wait for all remaining processes to finish
-    for process in processes:
-        process.join()
-
-    # Collect all results from the queue
-    event_data = []
-    sta_mag_data = []
-    skipped_records = []
-    while not output_queue.empty():
-        result = output_queue.get()
-        event_data.append(result[0])
-        if result[1]:
-            sta_mag_data.extend(result[1])
-        if result[2]:
-            skipped_records.extend(result[2])
+    # Wait for all remaining processes to finish and check the queue
+    while processes:
+        finished_event_data, finished_sta_mag_data, finished_skipped_records = (
+            remove_processed_event_data(processes, output_queue)
+        )
+        event_data.extend(finished_event_data)
+        sta_mag_data.extend(finished_sta_mag_data)
+        skipped_records.extend(finished_skipped_records)
 
     # Create the output directory for the batch files
     flatfile_dir = file_structure.get_flatfile_dir(main_dir)
@@ -790,19 +829,12 @@ def parse_geonet_information(
     config = cfg.Config()
     channel_codes = ",".join(config.get_value("channel_codes"))
 
-    client_IU = FDSN_Client("IRIS")
     if real_time:
-        client_NZ = FDSN_Client(base_url="https://service-nrt.geonet.org.nz")
-        inventory = client_NZ.get_stations(channel=channel_codes, level="response")
+        client_NZ = FDSN_Client(base_url=config.get_value("real_time_url"))
     else:
         # Get Station Information from geonet clients
         client_NZ = FDSN_Client("GEONET")
-        # Get the full inventory
-        inventory_NZ = client_NZ.get_stations(channel=channel_codes, level="response")
-        inventory_IU = client_IU.get_stations(
-            network="IU", station="SNZO", channel=channel_codes, level="response"
-        )
-        inventory = inventory_NZ + inventory_IU
+    inventory = client_NZ.get_stations(channel=channel_codes, level="response")
 
     # Get the data_dir
     data_dir = file_structure.get_data_dir()
@@ -837,7 +869,6 @@ def parse_geonet_information(
                 index,
                 main_dir,
                 client_NZ,
-                client_IU,
                 inventory,
                 site_table,
                 mags,

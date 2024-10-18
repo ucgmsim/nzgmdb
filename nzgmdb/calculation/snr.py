@@ -1,6 +1,7 @@
 import multiprocessing as mp
-import sys
+import queue
 from pathlib import Path
+from typing import List
 
 import numpy as np
 import obspy
@@ -173,7 +174,7 @@ def compute_snr_for_single_mseed(
     )
     # Add to the metadata dataframe
     meta_dict = {
-        "record_id": f"{event_id}_{station}_{stats.channel[:2]}_{stats.location}",
+        "record_id": mseed_file.stem,
         "evid": event_id,
         "sta": station,
         "chan": stats.channel[:2],
@@ -188,9 +189,50 @@ def compute_snr_for_single_mseed(
     }
     meta_df = pd.DataFrame([meta_dict])
     output_queue.put((meta_df, skipped_record))
-    # Kill the process to ensure when the p.is_alive() check is done
-    # the process is not still running and so continues to the next record
-    sys.exit(0)
+
+
+def remove_processed_snr_data(processes: List[mp.Process], output_queue: queue.Queue):
+    """
+    Remove the processed snr data from the queue and end the processes
+
+    Parameters
+    ----------
+    processes : list[mp.Process]
+        The list of processes currently running
+    output_queue : queue.Queue
+        The queue to receive the output from the processes
+
+    Returns
+    -------
+    meta_dfs : list
+        The list of metadata dataframes
+    skipped_records : list
+        The list of skipped records
+    """
+    # Collect all results from the queue (If there is any)
+    meta_dfs = []
+    skipped_records = []
+
+    # Check the queue for completed jobs
+    while not output_queue.empty():
+        # Non-blocking check
+        completed_info = output_queue.get(timeout=0.1)
+
+        meta_dfs.append(completed_info[0])
+        skipped_records.append(completed_info[1])
+
+        # Get the record_id to remove the corresponding process
+        record_id_done = completed_info[0].iloc[0]["record_id"]
+
+        # Remove corresponding process
+        for p in processes:
+            if p.record_id == record_id_done:
+                print(f"Record {record_id_done} completed and will be removed")
+                p.terminate()
+                processes.remove(p)
+                break
+
+    return meta_dfs, skipped_records
 
 
 def compute_snr_for_mseed_data(
@@ -267,16 +309,17 @@ def compute_snr_for_mseed_data(
             print(f"Processing batch {index + 1}/{len(mseed_batches)}")
             processes = []
             output_queue = mp.Queue()
+            meta_dfs = []
+            skipped_record_dfs = []
 
             for mseed_file in batch:
                 # If we have reached the limit, wait for some processes to finish
                 while len(processes) >= n_procs:
-                    for p in processes:
-                        p.join(
-                            0.1
-                        )  # Check if any process has finished, without blocking
-                        if not p.is_alive():
-                            processes.remove(p)
+                    finished_meta_data, finished_skipped_records = (
+                        remove_processed_snr_data(processes, output_queue)
+                    )
+                    meta_dfs.append(finished_meta_data)
+                    skipped_record_dfs.append(finished_skipped_records)
 
                 # Start a new process
                 process = mp.Process(
@@ -291,20 +334,17 @@ def compute_snr_for_mseed_data(
                         common_frequency_vector,
                     ),
                 )
+                process.record_id = mseed_file.stem
                 processes.append(process)
                 process.start()
 
-            # Wait for all remaining processes to finish
-            for process in processes:
-                process.join()
-
-            # Collect all results from the queue
-            meta_dfs = []
-            skipped_record_dfs = []
-            while not output_queue.empty():
-                result = output_queue.get()
-                meta_dfs.append(result[0])
-                skipped_record_dfs.append(result[1])
+            # Wait for all remaining processes to finish and check the queue
+            while processes:
+                finished_meta_data, finished_skipped_records = (
+                    remove_processed_snr_data(processes, output_queue)
+                )
+                meta_dfs.append(finished_meta_data)
+                skipped_record_dfs.append(finished_skipped_records)
 
             # Check that there are metadata dataframes that are not None
             if not all(value is None for value in meta_dfs):
