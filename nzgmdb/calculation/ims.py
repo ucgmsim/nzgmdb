@@ -149,7 +149,7 @@ def calculate_im_for_record(
         ko_matrices_path,
     )
     # Tell the main process that this record is done
-    end_im_compute(output_queue, mseed_file.stem, [])
+    end_im_compute(output_queue, mseed_file.stem, None)
 
 
 def remove_processed_im_data(processes: List[mp.Process], output_queue: queue.Queue):
@@ -175,7 +175,9 @@ def remove_processed_im_data(processes: List[mp.Process], output_queue: queue.Qu
     while not output_queue.empty():
         # Non-blocking check
         completed_info = output_queue.get(timeout=0.1)
-        skipped_records.append(completed_info[1])
+        skipped_record = completed_info[1]
+        if skipped_record is not None:
+            skipped_records.append(skipped_record)
         # Get the record_id to remove the corresponding process
         record_id_done = completed_info[0]
 
