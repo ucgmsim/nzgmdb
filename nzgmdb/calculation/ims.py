@@ -65,6 +65,19 @@ def compute_im_for_waveform(
     im_result_df.to_csv(event_output_path / f"{record_id}_IM.csv", index=False)
 
 
+def end_im_compute(
+    output_queue: queue.Queue, record_id: str, skipped_record: pd.DataFrame
+):
+    """
+    Send the outputs to the output queue and wait for the process to be killed by
+    the main process
+    """
+    output_queue.put((record_id, skipped_record))
+    # Wait forever till the process is terminated by main process
+    while True:
+        time.sleep(1)
+
+
 def calculate_im_for_record(
     ffp_000: Path,
     output_path: Path,
@@ -102,8 +115,7 @@ def calculate_im_for_record(
             "reason": "Failed to find the mseed file",
         }
         skipped_record = pd.DataFrame([skipped_record_dict])
-        # return skipped_record
-        output_queue.put((ffp_000.stem, skipped_record))
+        end_im_compute(output_queue, ffp_000.stem, skipped_record)
 
     # Get the 090 and ver components full file paths
     ffp_090 = ffp_000.parent / f"{ffp_000.stem}.090"
@@ -119,8 +131,7 @@ def calculate_im_for_record(
             "reason": "Failed to find all components",
         }
         skipped_record = pd.DataFrame([skipped_record_dict])
-        # return skipped_record
-        output_queue.put((mseed_file.stem, skipped_record))
+        end_im_compute(output_queue, mseed_file.stem, skipped_record)
 
     # Get the event_id and create the output directory
     event_id = file_structure.get_event_id_from_mseed(mseed_file)
@@ -138,10 +149,7 @@ def calculate_im_for_record(
         ko_matrices_path,
     )
     # Tell the main process that this record is done
-    output_queue.put((mseed_file.stem, []))
-    # Wait forever till the process is terminated by main process
-    while True:
-        time.sleep(1)
+    end_im_compute(output_queue, mseed_file.stem, [])
 
 
 def remove_processed_im_data(processes: List[mp.Process], output_queue: queue.Queue):
