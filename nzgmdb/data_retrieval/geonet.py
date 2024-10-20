@@ -492,7 +492,8 @@ def fetch_event_data(
     print(f"Finished processing event {event_id}")
     # Wait forever till the process is terminated by main process
     while True:
-        time.sleep(1)
+        time.sleep(10)
+        print(f"Waiting for main process to terminate {event_id}")
 
 
 def remove_processed_event_data(
@@ -604,12 +605,6 @@ def process_batch(
             event_data.extend(finished_event_data)
             sta_mag_data.extend(finished_sta_mag_data)
             skipped_records.extend(finished_skipped_records)
-
-            # Check if any processes has been terminated
-            for p in processes:
-                if not p.is_alive():
-                    print(f"Process for event {p.event_id} has been terminated")
-                    processes.remove(p)
 
             # Wait 1 second before checking again (prevents missing completed jobs)
             time.sleep(1)
