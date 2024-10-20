@@ -599,6 +599,7 @@ def process_batch(
     for idx, event_id in enumerate(batch_events):
         # If we have reached the limit, wait for some processes to finish
         while len(processes) >= n_procs:
+            time.sleep(1)
             print("Waiting for processes to finish")
             finished_event_data, finished_sta_mag_data, finished_skipped_records = (
                 remove_processed_event_data(processes, output_queue)
