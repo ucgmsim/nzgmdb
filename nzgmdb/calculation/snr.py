@@ -26,7 +26,7 @@ def end_snr_compute(
     output_queue.put((meta_df, skipped_record))
     # Wait forever till the process is terminated by main process
     while True:
-        time.sleep(1)
+        time.sleep(10)
 
 
 def compute_snr_for_single_mseed(

@@ -493,6 +493,7 @@ def fetch_event_data(
     # Wait forever till the process is terminated by main process
     while True:
         time.sleep(10)
+        # Ideally this should be terminated by the main process before this point
         print(f"Waiting for main process to terminate {event_id}")
 
 

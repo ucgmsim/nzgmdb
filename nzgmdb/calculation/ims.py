@@ -75,7 +75,7 @@ def end_im_compute(
     output_queue.put((record_id, skipped_record))
     # Wait forever till the process is terminated by main process
     while True:
-        time.sleep(1)
+        time.sleep(10)
 
 
 def calculate_im_for_record(
