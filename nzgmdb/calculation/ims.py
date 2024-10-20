@@ -258,6 +258,8 @@ def compute_ims_for_all_processed_records(
             # Remove the processed IM data from the queue
             finished_skipped_records = remove_processed_im_data(processes, output_queue)
             skipped_records.extend(finished_skipped_records)
+            # Wait 1 second before checking again (prevents missing completed jobs)
+            time.sleep(1)
 
         # Start a new process
         process = mp.Process(

@@ -524,7 +524,6 @@ def remove_processed_event_data(
 
     # Check the queue for completed jobs
     while not output_queue.empty():
-        print("Checking output queue")
         # Non-blocking check
         completed_info = output_queue.get(timeout=0.1)
 
@@ -599,14 +598,14 @@ def process_batch(
     for idx, event_id in enumerate(batch_events):
         # If we have reached the limit, wait for some processes to finish
         while len(processes) >= n_procs:
-            time.sleep(1)
-            print("Waiting for processes to finish")
             finished_event_data, finished_sta_mag_data, finished_skipped_records = (
                 remove_processed_event_data(processes, output_queue)
             )
             event_data.extend(finished_event_data)
             sta_mag_data.extend(finished_sta_mag_data)
             skipped_records.extend(finished_skipped_records)
+            # Wait 1 second before checking again (prevents missing completed jobs)
+            time.sleep(1)
 
         # Start a new process
         print(

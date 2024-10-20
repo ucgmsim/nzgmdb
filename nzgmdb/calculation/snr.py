@@ -366,6 +366,8 @@ def compute_snr_for_mseed_data(
                     meta_dfs.extend(finished_meta_data)
                 if len(finished_skipped_records) > 0:
                     skipped_record_dfs.extend(finished_skipped_records)
+                # Wait 1 second before checking again (prevents missing completed jobs)
+                time.sleep(1)
 
             # Check that there are metadata dataframes that are not None
             if not all(value is None for value in meta_dfs):
