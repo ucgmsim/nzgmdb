@@ -8,9 +8,11 @@ from pathlib import Path
 from typing import Optional
 
 import numpy as np
+import obspy
 import pandas as pd
 
 from nzgmdb.management import config as cfg
+from nzgmdb.management import file_structure
 
 
 def run_full_fmax_calc(
@@ -29,7 +31,9 @@ def run_full_fmax_calc(
         Number of processes to use, by default 1.
     """
 
-    metadata_df = pd.read_csv(meta_output_dir / "snr_metadata.csv")
+    metadata_df = pd.read_csv(
+        meta_output_dir / file_structure.FlatfileNames.SNR_METADATA
+    )
     snr_filenames = snr_fas_output_dir.glob("**/*snr_fas.csv")
 
     with multiprocessing.Pool(n_procs) as pool:
@@ -52,9 +56,12 @@ def run_full_fmax_calc(
 
     print(f"Skipped {len(skipped_records_df)} records")
 
-    fmax_df.to_csv(meta_output_dir / "fmax.csv", index=False)
+    fmax_df.to_csv(meta_output_dir / file_structure.FlatfileNames.FMAX, index=False)
 
-    skipped_records_df.to_csv(meta_output_dir / "fmax_skipped_records.csv", index=False)
+    skipped_records_df.to_csv(
+        meta_output_dir / file_structure.SkippedRecordFilenames.FMAX_SKIPPED_RECORDS,
+        index=False,
+    )
 
 
 def assess_snr_and_get_fmax(
@@ -86,12 +93,22 @@ def assess_snr_and_get_fmax(
     # Get delta from the metadata
     current_row = metadata.iloc[np.where(metadata["record_id"] == record_id)[0], :]
 
+    # Check the length of the current_row
+    if len(current_row) == 0:
+        print(f"Record {record_id} not found in metadata")
+        # Find the value from the mseed file
+        mseed_dir = file_structure.get_mseed_dir_from_snrfas(filename)
+        mseed_file = mseed_dir / f"{record_id}.mseed"
+        # read the mseed file to get the delta
+        mseed = obspy.read(str(mseed_file))
+        dt = mseed[0].stats.delta
+    else:
+        dt = current_row["delta"].iloc[0]
+
     # current_row["delta"] is a pd.Series() containing 1 float so .iloc[0]
     # is used to get the float from the pd.Series()
     scaled_nyquist_freq = (
-        (1 / current_row["delta"].iloc[0])
-        * 0.5
-        * config.get_value("nyquist_freq_scaling_factor")
+        (1 / dt) * 0.5 * config.get_value("nyquist_freq_scaling_factor")
     )
 
     snr_with_freq_signal_noise = pd.read_csv(filename)

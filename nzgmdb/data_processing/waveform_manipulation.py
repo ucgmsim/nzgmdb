@@ -8,9 +8,11 @@ from nzgmdb.management import config as cfg
 from nzgmdb.management import custom_errors
 
 
-def initial_preprocessing(mseed: Stream):
+def initial_preprocessing(
+    mseed: Stream, apply_taper: bool = True, apply_zero_padding: bool = True
+):
     """
-    Basic pre processing of the waveform data
+    Basic pre-processing of the waveform data
     This performs the following:
     - Demean and Detrend the data
     - Taper the data by the taper_fraction in the config to each end (5% default)
@@ -23,6 +25,10 @@ def initial_preprocessing(mseed: Stream):
     ----------
     mseed : Stream
         The waveform data
+    apply_taper : bool, optional
+        Whether to apply the tapering, by default True
+    apply_zero_padding : bool, optional
+        Whether to apply zero padding, by default True
 
     Returns
     -------
@@ -35,10 +41,12 @@ def initial_preprocessing(mseed: Stream):
         If no inventory information is found for the station and location pair
     SensitivityRemovalError
         If the sensitivity removal fails
+    RotationError
+        If the rotation fails
     """
     # Small Processing
     mseed.detrend("demean")
-    mseed.detrend()
+    mseed.detrend("linear")
 
     # Load config
     config = cfg.Config()
@@ -47,16 +55,16 @@ def initial_preprocessing(mseed: Stream):
     taper_fraction = config.get_value("taper_fraction")
     zero_padding_time = config.get_value("zero_padding_time")
 
-    # Taper the data by the taper_fraction
-    mseed.taper(taper_fraction, side="both", max_length=5)
+    if apply_taper:
+        # Taper the data by the taper_fraction
+        mseed.taper(taper_fraction, side="both", max_length=5)
 
-    # Perform zero-padding
-    mseed.trim(
-        mseed[0].stats.starttime - zero_padding_time,
-        mseed[0].stats.endtime + zero_padding_time,
-        pad=True,
-        fill_value=0,
-    )
+    if apply_zero_padding:
+        # Perform zero-padding
+        for tr in mseed:
+            tr_starttime_trim = tr.stats.starttime - zero_padding_time
+            tr_endtime_trim = tr.stats.endtime + zero_padding_time
+            tr.trim(tr_starttime_trim, tr_endtime_trim, pad=True, fill_value=0)
 
     # Get the inventory information
     station = mseed[0].stats.station
@@ -87,7 +95,15 @@ def initial_preprocessing(mseed: Stream):
                 )
 
         # Rotate
-        mseed.rotate("->ZNE", inventory=inv)
+        try:
+            mseed.rotate("->ZNE", inventory=inv)
+        except (
+            Exception
+        ):  # Due to obspy raising an Exception instead of a specific error
+            # Error for no matching channel metadata found
+            raise custom_errors.RotationError(
+                f"Failed to rotate for station {station} with location {location}"
+            )
 
         # Add the response (Same for all channels)
         # this is done so that the sensitivity can be removed otherwise it tries to find the exact same channel
@@ -219,7 +235,7 @@ def high_and_low_cut_processing(
 
     # Determine the high and low cut frequencies
     highcut = fmax or 1 / (2.5 * dt)
-    lowcut = config.get_value("low_cut_default") if fmin is None else fmin
+    lowcut = config.get_value("low_cut_default") if fmin is None else fmin / 1.25
 
     # Check if the lowcut is greater than the highcut
     if lowcut > highcut:
@@ -237,9 +253,8 @@ def high_and_low_cut_processing(
     except IndexError:
         try:
             # If the N and E components are not found, try the X and Y components
-            # TODO Check that this is valid with brendon later
-            acc_000 = mseed.select(channel="*X")[0]
-            acc_090 = mseed.select(channel="*Y")[0]
+            acc_000 = mseed.select(channel="*Y")[0]
+            acc_090 = mseed.select(channel="*X")[0]
         except IndexError:
             raise custom_errors.ComponentSelectionError(
                 "No N, X or E, Y components found in the mseed"
@@ -252,17 +267,26 @@ def high_and_low_cut_processing(
     acc_bb_ver = butter_bandpass_filter(acc_ver, lowcut, highcut, fs, order)
 
     # Remove Zero padding
-    mseed.trim(mseed[0].stats.starttime, mseed[0].stats.endtime)
+    for tr in mseed:
+        tr_starttime_trim = tr.stats.starttime
+        tr_endtime_trim = tr.stats.endtime
+        tr.trim(tr_starttime_trim, tr_endtime_trim)
 
     # Calculate the velocity
-    vel_000 = integrate.cumtrapz(y=acc_bb_000, dx=dt, initial=0.0) * g / 10.0
-    vel_090 = integrate.cumtrapz(y=acc_bb_090, dx=dt, initial=0.0) * g / 10.0
-    vel_ver = integrate.cumtrapz(y=acc_bb_ver, dx=dt, initial=0.0) * g / 10.0
+    vel_000 = (
+        integrate.cumulative_trapezoid(y=acc_bb_000, dx=dt, initial=0.0) * g / 10.0
+    )
+    vel_090 = (
+        integrate.cumulative_trapezoid(y=acc_bb_090, dx=dt, initial=0.0) * g / 10.0
+    )
+    vel_ver = (
+        integrate.cumulative_trapezoid(y=acc_bb_ver, dx=dt, initial=0.0) * g / 10.0
+    )
 
     # Calculate the displacement
-    disp_000 = integrate.cumtrapz(y=vel_000, dx=dt, initial=0.0)
-    disp_090 = integrate.cumtrapz(y=vel_090, dx=dt, initial=0.0)
-    disp_ver = integrate.cumtrapz(y=vel_ver, dx=dt, initial=0.0)
+    disp_000 = integrate.cumulative_trapezoid(y=vel_000, dx=dt, initial=0.0)
+    disp_090 = integrate.cumulative_trapezoid(y=vel_090, dx=dt, initial=0.0)
+    disp_ver = integrate.cumulative_trapezoid(y=vel_ver, dx=dt, initial=0.0)
 
     # The following steps were added to align the processing with NGA-West
     # Fit six-order polynomial to the displacement series

@@ -6,7 +6,7 @@ scipy
 requests
 fiona
 pyproj
-yaml @ pyyaml
+yaml
 pytz
 shapely
 gmprocess

@@ -5,7 +5,9 @@
 import datetime
 import io
 import multiprocessing
-from functools import partial
+import os
+import sys
+import time
 from pathlib import Path
 from typing import List
 
@@ -16,11 +18,12 @@ import requests
 from obspy.clients.fdsn import Client as FDSN_Client
 from obspy.core.event import Event, Magnitude
 from obspy.core.inventory import Inventory
+from pandas.errors import EmptyDataError
 from scipy.interpolate import interp1d
 
 from nzgmdb.data_processing import filtering
 from nzgmdb.management import config as cfg
-from nzgmdb.management import file_structure
+from nzgmdb.management import custom_errors, file_structure
 from nzgmdb.mseed_management import creation
 
 
@@ -65,11 +68,31 @@ def fetch_event_line(event_cat: Event, event_id: str):
     ev_lat = preferred_origin.latitude
     ev_lon = preferred_origin.longitude
     ev_depth = preferred_origin.depth / 1000
-    ev_loc_type = str(preferred_origin.method_id).split("/")[1]
-    ev_loc_grid = str(preferred_origin.earth_model_id).split("/")[1]
-    ev_ndef = preferred_origin.quality.used_phase_count
-    ev_nsta = preferred_origin.quality.used_station_count
-    std = preferred_origin.quality.standard_error
+    ev_loc_type = (
+        None
+        if preferred_origin.method_id is None
+        else str(preferred_origin.method_id).split("/")[1]
+    )
+    ev_loc_grid = (
+        None
+        if preferred_origin.earth_model_id is None
+        else str(preferred_origin.earth_model_id).split("/")[1]
+    )
+    ev_ndef = (
+        None
+        if preferred_origin.quality.used_phase_count is None
+        else preferred_origin.quality.used_phase_count
+    )
+    ev_nsta = (
+        None
+        if preferred_origin.quality.used_station_count is None
+        else preferred_origin.quality.used_station_count
+    )
+    std = (
+        None
+        if preferred_origin.quality.standard_error is None
+        else preferred_origin.quality.standard_error
+    )
 
     pref_mag_type = preferred_magnitude.magnitude_type
 
@@ -210,6 +233,7 @@ def fetch_sta_mag_lines(
     mags: np.ndarray,
     rrups: np.ndarray,
     f_rrup: interp1d,
+    only_sites: List[str] = None,
 ):
     """
     Fetch the station magnitude lines from the geonet client to be added to the sta_mag_df
@@ -241,6 +265,8 @@ def fetch_sta_mag_lines(
         The rrups from the Mw_rrup file
     f_rrup : interp1d
         The cubic interpolation function for the magnitude distance relationship
+    only_sites : list[str] (optional)
+        Will only fetch the data for the sites in the list
     """
     skipped_records = []
     # Get the preferred_origin
@@ -261,141 +287,143 @@ def fetch_sta_mag_lines(
         # Get the client
         client = client_NZ if network.code == "NZ" else client_IU
         for station in network:
-            # Get the r_hyp
-            dist, _, _ = obspy.geodetics.gps2dist_azimuth(
-                ev_lat,
-                ev_lon,
-                station.latitude,
-                station.longitude,
-            )
-            r_epi = dist / 1000
-            ev_depth = preferred_origin.depth / 1000
-            r_hyp = ((r_epi) ** 2 + (ev_depth + station.elevation) ** 2) ** 0.5
-
-            # Get the vs30 value
-            site_vs30_row = site_table.loc[
-                (site_table["net"] == network.code)
-                & (site_table["sta"] == station.code),
-                "Vs30",
-            ]
-            vs30 = None if site_vs30_row.empty else site_vs30_row.values[0]
-
-            # Get the waveforms
-            st = creation.get_waveforms(
-                preferred_origin,
-                client,
-                network.code,
-                station.code,
-                event_cat.preferred_magnitude().mag,
-                r_hyp,
-                r_epi,
-                vs30,
-            )
-            # Check that data was found
-            if st is None:
-                skipped_records.append(
-                    [f"{event_id}_{station.code}", "No Waveform Data"]
+            # Check if the station is in the only_sites list if only_sites is defined
+            if only_sites is None or station.code in only_sites:
+                # Get the r_hyp
+                dist, _, _ = obspy.geodetics.gps2dist_azimuth(
+                    ev_lat,
+                    ev_lon,
+                    station.latitude,
+                    station.longitude,
                 )
-                continue
+                r_epi = dist / 1000
+                ev_depth = preferred_origin.depth / 1000
+                r_hyp = ((r_epi) ** 2 + (ev_depth + station.elevation) ** 2) ** 0.5
 
-            # Get the unique channels (Using first 2 keys) and locations
-            unique_channels = set(
-                [(tr.stats.channel[:2], tr.stats.location) for tr in st]
-            )
+                # Get the vs30 value
+                site_vs30_row = site_table.loc[
+                    (site_table["net"] == network.code)
+                    & (site_table["sta"] == station.code),
+                    "Vs30",
+                ]
+                vs30 = None if site_vs30_row.empty else site_vs30_row.values[0]
 
-            # Split the stream into mseeds
-            mseeds = creation.split_stream_into_mseeds(st, unique_channels)
-
-            # Get the station magnitudes
-            station_magnitudes = [
-                mag
-                for mag in event_cat.station_magnitudes
-                if mag.waveform_id.station_code == station.code
-            ]
-
-            for mseed in mseeds:
-                # Check the data is not all 0's
-                if all([np.allclose(tr.data, 0) for tr in mseed]):
-                    stats = mseed[0].stats
+                # Get the waveforms
+                st = creation.get_waveforms(
+                    preferred_origin,
+                    client,
+                    network.code,
+                    station.code,
+                    event_cat.preferred_magnitude().mag,
+                    r_hyp,
+                    r_epi,
+                    vs30,
+                )
+                # Check that data was found
+                if st is None:
                     skipped_records.append(
-                        [
-                            f"{event_id}_{stats.station}_{stats.location}_{stats.channel}",
-                            "All 0's",
-                        ]
+                        [f"{event_id}_{station.code}", "No Waveform Data"]
                     )
                     continue
 
-                # Calculate clip to determine if the record should be dropped
-                clip = filtering.get_clip_probability(pref_mag, r_hyp, st)
+                # Get the unique channels (Using first 2 keys) and locations
+                unique_channels = set(
+                    [(tr.stats.channel[:2], tr.stats.location) for tr in st]
+                )
 
-                # Check if the record should be dropped
-                if clip > threshold:
-                    stats = mseed[0].stats
-                    skipped_records.append(
-                        [
-                            f"{event_id}_{stats.station}_{stats.location}_{stats.channel}",
-                            "Clipped",
-                        ]
-                    )
-                    continue
+                # Split the stream into mseeds
+                mseeds = creation.split_stream_into_mseeds(st, unique_channels)
 
-                # Create the directory structure for the given event
-                year = event_cat.origins[0].time.year
-                mseed_dir = file_structure.get_mseed_dir(main_dir, year, event_id)
+                # Get the station magnitudes
+                station_magnitudes = [
+                    mag
+                    for mag in event_cat.station_magnitudes
+                    if mag.waveform_id.station_code == station.code
+                ]
 
-                # Write the mseed file
-                creation.write_mseed(mseed, event_id, station.code, mseed_dir)
-
-                for trace in mseed:
-                    chan = trace.stats.channel
-                    loc = trace.stats.location
-                    # Find the station magnitude
-                    # Ensures that the station codes matches and that if the channel code ends with Z then it makes
-                    # sure that the station magnitude is for the Z channel, otherwise any that match with the first two
-                    # characters of the channel code is sufficient
-                    sta_mag = None
-                    for mag in station_magnitudes:
-                        if mag.waveform_id.channel_code[:2] == chan[:2]:
-                            sta_mag = mag
-                            if chan[-1] == "Z":
-                                break
-
-                    if sta_mag:
-                        sta_mag_mag = sta_mag.mag
-                        sta_mag_type = sta_mag.station_magnitude_type
-                        amp = next(
-                            (
-                                amp
-                                for amp in event_cat.amplitudes
-                                if amp.resource_id == sta_mag.amplitude_id
-                            ),
-                            None,
+                for mseed in mseeds:
+                    # Check the data is not all 0's
+                    if all([np.allclose(tr.data, 0) for tr in mseed]):
+                        stats = mseed[0].stats
+                        skipped_records.append(
+                            [
+                                f"{event_id}_{stats.station}_{stats.location}_{stats.channel}",
+                                "All 0's",
+                            ]
                         )
-                    else:
-                        sta_mag_mag = None
-                        sta_mag_type = pref_mag_type
-                        amp = None
+                        continue
 
-                    # Get the amp values
-                    amp_amp = amp.generic_amplitude if amp else None
-                    amp_unit = amp.unit if amp and "unit" in amp else None
+                    # Calculate clip to determine if the record should be dropped
+                    clip = filtering.get_clip_probability(pref_mag, r_hyp, st)
 
-                    mag_id = f"{event_id}m{len(sta_mag_line) + 1}"
-                    sta_mag_line.append(
-                        [
-                            mag_id,
-                            network.code,
-                            station.code,
-                            loc,
-                            chan,
-                            event_id,
-                            sta_mag_mag,
-                            sta_mag_type,
-                            "uncorrected",
-                            amp_amp,
-                            amp_unit,
-                        ]
-                    )
+                    # Check if the record should be dropped
+                    if clip > threshold:
+                        stats = mseed[0].stats
+                        skipped_records.append(
+                            [
+                                f"{event_id}_{stats.station}_{stats.location}_{stats.channel}",
+                                "Clipped",
+                            ]
+                        )
+                        continue
+
+                    # Create the directory structure for the given event
+                    year = event_cat.origins[0].time.year
+                    mseed_dir = file_structure.get_mseed_dir(main_dir, year, event_id)
+
+                    # Write the mseed file
+                    creation.write_mseed(mseed, event_id, station.code, mseed_dir)
+
+                    for trace in mseed:
+                        chan = trace.stats.channel
+                        loc = trace.stats.location
+                        # Find the station magnitude
+                        # Ensures that the station codes matches and that if the channel code ends with Z then it makes
+                        # sure that the station magnitude is for the Z channel, otherwise any that match with the first two
+                        # characters of the channel code is sufficient
+                        sta_mag = None
+                        for mag in station_magnitudes:
+                            if mag.waveform_id.channel_code[:2] == chan[:2]:
+                                sta_mag = mag
+                                if chan[-1] == "Z":
+                                    break
+
+                        if sta_mag:
+                            sta_mag_mag = sta_mag.mag
+                            sta_mag_type = sta_mag.station_magnitude_type
+                            amp = next(
+                                (
+                                    amp
+                                    for amp in event_cat.amplitudes
+                                    if amp.resource_id == sta_mag.amplitude_id
+                                ),
+                                None,
+                            )
+                        else:
+                            sta_mag_mag = None
+                            sta_mag_type = pref_mag_type
+                            amp = None
+
+                        # Get the amp values
+                        amp_amp = amp.generic_amplitude if amp else None
+                        amp_unit = amp.unit if amp and "unit" in amp else None
+
+                        mag_id = f"{event_id}m{len(sta_mag_line) + 1}"
+                        sta_mag_line.append(
+                            [
+                                mag_id,
+                                network.code,
+                                station.code,
+                                loc,
+                                chan,
+                                event_id,
+                                sta_mag_mag,
+                                sta_mag_type,
+                                "uncorrected",
+                                amp_amp,
+                                amp_unit,
+                            ]
+                        )
 
     return sta_mag_line, skipped_records
 
@@ -410,6 +438,8 @@ def fetch_event_data(
     mags: np.ndarray,
     rrups: np.ndarray,
     f_rrup: interp1d,
+    output_queue: multiprocessing.Queue,
+    only_sites: List[str] = None,
 ):
     """
     Fetch the event data from the geonet client to form the event and magnitude dataframes
@@ -434,6 +464,10 @@ def fetch_event_data(
         The rrups from the Mw_rrup file
     f_rrup : interp1d
         The cubic interpolation function for the magnitude distance relationship
+    output_queue : multiprocessing.Queue
+        The queue to output the event line, sta_mag_lines and skipped_records
+    only_sites : list[str] (optional)
+        Will only fetch the data for the sites in the list
     """
     # Get the catalog information
     cat = client_NZ.get_events(eventid=event_id)
@@ -457,11 +491,180 @@ def fetch_event_data(
             mags,
             rrups,
             f_rrup,
+            only_sites,
         )
     else:
         sta_mag_lines, skipped_records = None, None
 
-    return event_line, sta_mag_lines, skipped_records
+    output_queue.put((event_line, sta_mag_lines, skipped_records))
+    print(f"Finished processing event {event_id}")
+    # Kill the process to ensure when the p.is_alive() check is done
+    # the process is not still running and so continues to the next event
+    sys.exit(0)
+
+
+def process_batch(
+    batch_events: np.ndarray[str],
+    batch_index: int,
+    main_dir: Path,
+    client_NZ: FDSN_Client,
+    client_IU: FDSN_Client,
+    inventory: Inventory,
+    site_table: pd.DataFrame,
+    mags: np.ndarray,
+    rrups: np.ndarray,
+    f_rrup: interp1d,
+    n_procs: int = 1,
+    only_sites: List[str] = None,
+):
+    """
+    Process a batch of events to fetch the event data and create the dataframes
+
+    Parameters
+    ----------
+    batch_events : np.ndarray[str]
+        The array of event ids to fetch the data for
+    batch_index : int
+        The index of the current batch
+    main_dir : Path
+        The main directory of the NZGMDB results (Highest level directory)
+    client_NZ : FDSN_Client
+        The geonet client to fetch the data from New Zealand
+    client_IU : FDSN_Client
+        The geonet client to fetch the data from the International Network (necessary for station SNZO)
+    inventory : Inventory
+        The inventory of the stations from all networks to extract the stations from
+    site_table : pd.DataFrame
+        The site table to extract the vs30 value from
+    mags : np.ndarray
+        The magnitudes from the Mw_rrup file
+    rrups : np.ndarray
+        The rrups from the Mw_rrup file
+    f_rrup : interp1d
+        The cubic interpolation function for the magnitude distance relationship
+    n_procs : int (optional)
+        The number of processes to run
+    only_sites : list[str] (optional)
+        Will only fetch the data for the sites in the list
+    """
+    processes = []
+    output_queue = multiprocessing.Queue()
+
+    for idx, event_id in enumerate(batch_events):
+        # If we have reached the limit, wait for some processes to finish
+        while len(processes) >= n_procs:
+            for p in processes:
+                p.join(0.1)  # Check if any process has finished, without blocking
+                if not p.is_alive():
+                    processes.remove(p)
+        # Start a new process
+        print(
+            f"Starting new process for event {event_id} {idx + 1}/{len(batch_events)}"
+        )
+        process = multiprocessing.Process(
+            target=fetch_event_data,
+            args=(
+                event_id,
+                main_dir,
+                client_NZ,
+                client_IU,
+                inventory,
+                site_table,
+                mags,
+                rrups,
+                f_rrup,
+                output_queue,
+                only_sites,
+            ),
+        )
+        processes.append(process)
+        process.start()
+
+    # Wait for all remaining processes to finish
+    for process in processes:
+        process.join()
+
+    # Collect all results from the queue
+    event_data = []
+    sta_mag_data = []
+    skipped_records = []
+    while not output_queue.empty():
+        result = output_queue.get()
+        event_data.append(result[0])
+        if result[1]:
+            sta_mag_data.extend(result[1])
+        if result[2]:
+            skipped_records.extend(result[2])
+
+    # Create the output directory for the batch files
+    flatfile_dir = file_structure.get_flatfile_dir(main_dir)
+    batch_dir = flatfile_dir / "geonet_batch_files"
+
+    # Create the event df
+    event_df = pd.DataFrame(
+        event_data,
+        columns=[
+            "evid",
+            "datetime",
+            "lat",
+            "lon",
+            "depth",
+            "loc_type",
+            "loc_grid",
+            "mag",
+            "mag_type",
+            "mag_method",
+            "mag_unc",
+            "mag_orig",
+            "mag_orig_type",
+            "mag_orig_unc",
+            "ndef",
+            "nsta",
+            "nmag",
+            "t_res",
+            "reloc",
+        ],
+    )
+    # Save the dataframes with a suffix
+    event_df.to_csv(
+        batch_dir / f"earthquake_source_table_{batch_index}.csv", index=False
+    )
+
+    if len(sta_mag_data) > 0:
+        sta_mag_df = pd.DataFrame(
+            sta_mag_data,
+            columns=[
+                "magid",
+                "net",
+                "sta",
+                "loc",
+                "chan",
+                "evid",
+                "mag",
+                "mag_type",
+                "mag_corr_method",
+                "amp",
+                "amp_unit",
+            ],
+        )
+    else:
+        sta_mag_df = pd.DataFrame()
+
+    sta_mag_df.to_csv(
+        batch_dir / f"station_magnitude_table_{batch_index}.csv", index=False
+    )
+
+    if len(skipped_records) > 0:
+        # Create the skipped records df
+        skipped_records_df = pd.DataFrame(
+            skipped_records, columns=["skipped_records", "reason"]
+        )
+    else:
+        skipped_records_df = pd.DataFrame()
+
+    skipped_records_df.to_csv(
+        batch_dir / f"geonet_skipped_records_{batch_index}.csv", index=False
+    )
 
 
 def download_earthquake_data(
@@ -547,6 +750,9 @@ def parse_geonet_information(
     start_date: datetime,
     end_date: datetime,
     n_procs: int = 1,
+    batch_size: int = 500,
+    only_event_ids: List[str] = None,
+    only_sites: List[str] = None,
 ):
     """
     Read the geonet information and manage the fetching of more data to create the mseed files
@@ -561,12 +767,27 @@ def parse_geonet_information(
         The end date for the data extraction from the earthquake csv
     n_procs : int (optional)
         The number of processes to run
+    batch_size : int (optional)
+        The size of the batches to run, default is 500
+    only_event_ids : list[str] (optional)
+        Will only fetch the data for the event ids in the list (Must be in the start and end date range)
+    only_sites : list[str] (optional)
+        Will only fetch the data for the sites in the list
     """
     # Get the earthquake data
     geonet = download_earthquake_data(start_date, end_date)
 
     # Get all event ids
     event_ids = geonet.publicid.unique().astype(str)
+
+    # Filter the event ids if only_event_ids is given
+    if only_event_ids:
+        for event_id in only_event_ids:
+            if event_id not in event_ids:
+                raise custom_errors.EventIDNotFoundError(
+                    f"Warning: {event_id} not in the earthquake data"
+                )
+        event_ids = only_event_ids
 
     # Set constants
     config = cfg.Config()
@@ -593,87 +814,72 @@ def parse_geonet_information(
 
     # Get the site table
     flatfile_dir = file_structure.get_flatfile_dir(main_dir)
-    site_table = pd.read_csv(flatfile_dir / "site_table.csv")
+    site_table = pd.read_csv(flatfile_dir / file_structure.PreFlatfileNames.SITE_TABLE)
 
-    # Get each of the results for the event ids
-    with multiprocessing.Pool(processes=n_procs) as pool:
-        results = pool.map(
-            partial(
-                fetch_event_data,
-                main_dir=main_dir,
-                client_NZ=client_NZ,
-                client_IU=client_IU,
-                inventory=inventory,
-                site_table=site_table,
-                mags=mags,
-                rrups=rrups,
-                f_rrup=f_rrup,
-            ),
-            event_ids,
-        )
+    batch_dir = flatfile_dir / "geonet_batch_files"
+    batch_dir.mkdir(exist_ok=True, parents=True)
 
-    # Due to uneven lengths, need to extract using a for loop
-    event_data = []
-    sta_mag_data = []
-    skipped_records = []
-    for result in results:
-        if result[0] is not None:
-            event_data.append(result[0])
-            sta_mag_data.extend(result[1])
-            skipped_records.append(result[2])
+    # Find files that have already been processed and get the suffix indexes and remove them from the event_ids
+    processed_files = [f for f in batch_dir.iterdir() if f.is_file()]
+    processed_suffixes = set(int(f.stem.split("_")[-1]) for f in processed_files)
 
-    # Create the event df
-    event_df = pd.DataFrame(
-        event_data,
-        columns=[
-            "evid",
-            "datetime",
-            "lat",
-            "lon",
-            "depth",
-            "loc_type",
-            "loc_grid",
-            "mag",
-            "mag_type",
-            "mag_method",
-            "mag_unc",
-            "mag_orig",
-            "mag_orig_type",
-            "mag_orig_unc",
-            "ndef",
-            "nsta",
-            "nmag",
-            "t_res",
-            "reloc",
-        ],
-    )
-    sta_mag_df = pd.DataFrame(
-        sta_mag_data,
-        columns=[
-            "magid",
-            "net",
-            "sta",
-            "loc",
-            "chan",
-            "evid",
-            "mag",
-            "mag_type",
-            "mag_corr_method",
-            "amp",
-            "amp_unit",
-        ],
-    )
+    # Create batches from the event_ids
+    batches = np.array_split(event_ids, np.ceil(len(event_ids) / batch_size))
 
-    # Create the skipped records df
-    skipped_records_df = pd.DataFrame(
-        skipped_records, columns=["skipped_records", "reason"]
-    )
+    for index, batch in enumerate(batches):
+        if index not in processed_suffixes:
+            print(f"Processing batch {index + 1}/{len(batches)}")
+            process_batch(
+                batch,
+                index,
+                main_dir,
+                client_NZ,
+                client_IU,
+                inventory,
+                site_table,
+                mags,
+                rrups,
+                f_rrup,
+                n_procs,
+                only_sites,
+            )
 
-    # Create the output directory for the flatfiles
-    flatfile_dir = file_structure.get_flatfile_dir(main_dir)
-    flatfile_dir.mkdir(exist_ok=True, parents=True)
+    # Combine all the event and sta_mag dataframes
+    event_dfs = []
+    sta_mag_dfs = []
+    skipped_records_dfs = []
+
+    for file in batch_dir.iterdir():
+        if "earthquake_source_table" in file.stem:
+            try:
+                event_dfs.append(pd.read_csv(file))
+            except EmptyDataError:
+                print(f"Warning: {file} is empty or has no valid columns to parse.")
+        elif "station_magnitude_table" in file.stem:
+            try:
+                sta_mag_dfs.append(pd.read_csv(file))
+            except EmptyDataError:
+                print(f"Warning: {file} is empty or has no valid columns to parse.")
+        elif "geonet_skipped_records" in file.stem:
+            try:
+                skipped_records_dfs.append(pd.read_csv(file))
+            except EmptyDataError:
+                print(f"Warning: {file} is empty or has no valid columns to parse.")
+
+    event_df = pd.concat(event_dfs, ignore_index=True)
+    sta_mag_df = pd.concat(sta_mag_dfs, ignore_index=True)
+    skipped_records_df = pd.concat(skipped_records_dfs, ignore_index=True)
 
     # Save the dataframes
-    event_df.to_csv(flatfile_dir / "earthquake_source_table.csv", index=False)
-    sta_mag_df.to_csv(flatfile_dir / "station_magnitude_table.csv", index=False)
-    skipped_records_df.to_csv(flatfile_dir / "geonet_skipped_records.csv", index=False)
+    event_df.to_csv(
+        flatfile_dir / file_structure.PreFlatfileNames.EARTHQUAKE_SOURCE_TABLE_GEONET,
+        index=False,
+    )
+    sta_mag_df.to_csv(
+        flatfile_dir / file_structure.PreFlatfileNames.STATION_MAGNITUDE_TABLE_GEONET,
+        index=False,
+    )
+    skipped_records_df.to_csv(
+        flatfile_dir / file_structure.SkippedRecordFilenames.GEONET_SKIPPED_RECORDS,
+        index=False,
+    )

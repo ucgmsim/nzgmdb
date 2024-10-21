@@ -81,8 +81,11 @@ def get_comcat_id(mseed: Stream, event_lat: float, event_lon: float, event_mag: 
     time_range = config.get_value("time_range")
     base = config.get_value("gmprocess_url")
 
+    # Get the origin time of the event
+    # (This is because obspy trim function does not update start and end times)
+    origin = max([tr.stats.starttime for tr in mseed])
+
     # Prep the start and end times
-    origin = mseed[0].stats.starttime
     starttime = str(origin - datetime.timedelta(seconds=time_range)).replace(" ", "T")
     endtime = str(origin + datetime.timedelta(seconds=time_range)).replace(" ", "T")
 

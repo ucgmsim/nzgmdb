@@ -4,7 +4,7 @@ File that contains the function scripts that can be called to run the NZGMDB pip
 
 from datetime import datetime
 from pathlib import Path
-from typing import Annotated
+from typing import Annotated, List
 
 import typer
 
@@ -13,6 +13,7 @@ from nzgmdb.data_processing import merge_flatfiles, process_observed
 from nzgmdb.data_retrieval import geonet, sites, tect_domain
 from nzgmdb.management import file_structure
 from nzgmdb.phase_arrival import gen_phase_arrival_table
+from nzgmdb.scripts import run_gmc
 
 app = typer.Typer()
 
@@ -41,8 +42,30 @@ def fetch_geonet_data(
         ),
     ],
     n_procs: Annotated[int, typer.Option(help="Number of processes to use")] = 1,
+    batch_size: Annotated[
+        int,
+        typer.Option(
+            help="The batch size for the Geonet data retrieval for how many events to process at a time",
+        ),
+    ] = 500,
+    only_event_ids: Annotated[
+        List[str],
+        typer.Option(
+            help="A list of event ids to filter the earthquake data, separated by commas",
+            callback=lambda x: [] if x is None else x[0].split(","),
+        ),
+    ] = None,
+    only_sites: Annotated[
+        List[str],
+        typer.Option(
+            help="A list of site names to filter the earthquake data, separated by commas",
+            callback=lambda x: [] if x is None else x[0].split(","),
+        ),
+    ] = None,
 ):
-    geonet.parse_geonet_information(main_dir, start_date, end_date, n_procs)
+    geonet.parse_geonet_information(
+        main_dir, start_date, end_date, n_procs, batch_size, only_event_ids, only_sites
+    )
 
 
 @app.command(help="Add tectonic domains to the earthquake source table")
@@ -137,9 +160,12 @@ def calculate_snr(
         ),
     ] = None,
     n_procs: Annotated[int, typer.Option(help="Number of processes to use")] = 1,
-    apply_smoothing: Annotated[
-        bool, typer.Option(help="Whether to apply smoothing to the SNR calculation")
-    ] = True,
+    no_smoothing: Annotated[
+        bool,
+        typer.Option(
+            help="Enable to disable smoothing to the SNR calculation", is_flag=True
+        ),
+    ] = False,
     ko_matrix_path: Annotated[
         Path,
         typer.Option(
@@ -148,11 +174,18 @@ def calculate_snr(
             file_okay=False,
         ),
     ] = None,
+    batch_size: Annotated[
+        int,
+        typer.Option(
+            help="The batch size for the SNR calculation for how many mseeds to process at a time",
+        ),
+    ] = 5000,
 ):
     # Define the default paths if not provided
     if phase_table_path is None:
         phase_table_path = (
-            file_structure.get_flatfile_dir(main_dir) / "phase_arrival_table.csv"
+            file_structure.get_flatfile_dir(main_dir)
+            / file_structure.PreFlatfileNames.PHASE_ARRIVAL_TABLE
         )
     if meta_output_dir is None:
         meta_output_dir = file_structure.get_flatfile_dir(main_dir)
@@ -164,8 +197,9 @@ def calculate_snr(
         meta_output_dir,
         snr_fas_output_dir,
         n_procs,
-        apply_smoothing,
-        ko_matrix_path,
+        apply_smoothing=not no_smoothing,
+        ko_matrix_path=ko_matrix_path,
+        batch_size=batch_size,
     )
 
 
@@ -239,9 +273,15 @@ def process_records(
     n_procs: Annotated[int, typer.Option(help="The number of processes to use")] = 1,
 ):
     if gmc_ffp is None:
-        gmc_ffp = file_structure.get_flatfile_dir(main_dir) / "gmc_predictions.csv"
+        gmc_ffp = (
+            file_structure.get_flatfile_dir(main_dir)
+            / file_structure.FlatfileNames.GMC_PREDICTIONS
+        )
     if fmax_ffp is None:
-        fmax_ffp = file_structure.get_flatfile_dir(main_dir) / "fmax.csv"
+        fmax_ffp = (
+            file_structure.get_flatfile_dir(main_dir)
+            / file_structure.FlatfileNames.FMAX
+        )
 
     process_observed.process_mseeds_to_txt(main_dir, gmc_ffp, fmax_ffp, n_procs)
 
@@ -264,13 +304,24 @@ def run_im_calculation(
     checkpoint: Annotated[
         bool,
         typer.Option(
-            help="If True, the function will check for already completed files and skip them"
+            help="If True, the function will check for already completed files and skip them",
+            is_flag=True,
         ),
     ] = False,
+    ko_matrix_path: Annotated[
+        Path,
+        typer.Option(
+            help="Path to the ko matrix directory",
+            exists=True,
+            file_okay=False,
+        ),
+    ] = None,
 ):
     if output_dir is None:
         output_dir = file_structure.get_im_dir(main_dir)
-    ims.compute_ims_for_all_processed_records(main_dir, output_dir, n_procs, checkpoint)
+    ims.compute_ims_for_all_processed_records(
+        main_dir, output_dir, n_procs, checkpoint, ko_matrix_path
+    )
 
 
 @app.command(help="Generate the site table basin flatfile")
@@ -292,7 +343,9 @@ def generate_site_table_basin(
     site_df = sites.create_site_table_response()
     site_df = sites.add_site_basins(site_df)
 
-    site_df.to_csv(flatfile_dir / "site_table.csv", index=False)
+    site_df.to_csv(
+        flatfile_dir / file_structure.PreFlatfileNames.SITE_TABLE, index=False
+    )
 
 
 @app.command(
@@ -367,14 +420,20 @@ def merge_flat_files(
 
 
 @app.command(
-    help="Run the first half of the NZGMDB pipeline before GMC. "
+    help="Run the Entire NZGMDB pipeline."
     "- Fetch Geonet data "
     "- Merge tectonic domains "
     "- Generate phase arrival table "
     "- Calculate SNR "
     "- Calculate Fmax"
+    "- Run GMC"
+    "- Process and filter waveform data to txt files "
+    "- Calculate IM's "
+    "- Merge IM results into flatfiles"
+    "- Calculate distances"
+    "- Merge flat files"
 )
-def run_pre_process_nzgmdb(
+def run_full_nzgmdb(
     main_dir: Annotated[
         Path,
         typer.Argument(
@@ -394,72 +453,237 @@ def run_pre_process_nzgmdb(
             help="The end date to filter the earthquake data",
         ),
     ],
+    gm_classifier_dir: Annotated[
+        Path,
+        typer.Argument(
+            help="Directory for gm_classifier.",
+        ),
+    ],
+    conda_sh: Annotated[
+        Path,
+        typer.Argument(
+            help="Path to activate your mamba conda.sh script.",
+        ),
+    ],
+    gmc_activate: Annotated[
+        str,
+        typer.Argument(
+            help="Command to activate gmc environment for extracting features.",
+        ),
+    ],
+    gmc_predict_activate: Annotated[
+        str,
+        typer.Argument(
+            help="Command to activate gmc_predict environment to run the predictions.",
+        ),
+    ],
+    gmc_procs: Annotated[
+        int,
+        typer.Option(
+            help="Number of processes to use for GMC due to large memory requirement"
+        ),
+    ] = 1,
     n_procs: Annotated[int, typer.Option(help="The number of processes to use")] = 1,
+    no_smoothing: Annotated[
+        bool,
+        typer.Option(
+            help="Enable to disable smoothing to the SNR calculation", is_flag=True
+        ),
+    ] = False,
+    ko_matrix_path: Annotated[
+        Path,
+        typer.Option(
+            help="Path to the ko matrix directory",
+            exists=True,
+            file_okay=False,
+        ),
+    ] = None,
+    checkpoint: Annotated[
+        bool,
+        typer.Option(
+            help="If True, the function will check for already completed files and skip them",
+            is_flag=True,
+        ),
+    ] = False,
+    only_event_ids: Annotated[
+        List[str],
+        typer.Option(
+            help="A list of event ids to filter the earthquake data, separated by commas",
+            callback=lambda x: [] if x is None else x[0].split(","),
+        ),
+    ] = None,
+    only_sites: Annotated[
+        List[str],
+        typer.Option(
+            help="A list of site names to filter the earthquake data, separated by commas",
+            callback=lambda x: [] if x is None else x[0].split(","),
+        ),
+    ] = None,
+    geonet_batch_size: Annotated[
+        int,
+        typer.Option(
+            help="The batch size for the Geonet data retrieval for how many events to process at a time",
+        ),
+    ] = 500,
+    snr_batch_size: Annotated[
+        int,
+        typer.Option(
+            help="The batch size for the SNR calculation for how many mseeds to process at a time",
+        ),
+    ] = 5000,
 ):
     main_dir.mkdir(parents=True, exist_ok=True)
 
     # Generate the site basin flatfile
     flatfile_dir = file_structure.get_flatfile_dir(main_dir)
     flatfile_dir.mkdir(parents=True, exist_ok=True)
-    generate_site_table_basin(main_dir)
+    if not (
+        checkpoint
+        and (flatfile_dir / file_structure.PreFlatfileNames.SITE_TABLE).exists()
+    ):
+        print("Generating site table basin flatfile")
+        generate_site_table_basin(main_dir)
 
     # Fetch the Geonet data
-    geonet.parse_geonet_information(main_dir, start_date, end_date, n_procs)
+    if not (
+        checkpoint
+        and (
+            flatfile_dir
+            / file_structure.PreFlatfileNames.EARTHQUAKE_SOURCE_TABLE_GEONET
+        ).exists()
+    ):
+        print("Fetching Geonet data")
+        geonet.parse_geonet_information(
+            main_dir,
+            start_date,
+            end_date,
+            n_procs,
+            geonet_batch_size,
+            only_event_ids,
+            only_sites,
+        )
 
     # Merge the tectonic domains
-    eq_source_ffp = flatfile_dir / "earthquake_source_table.csv"
-    eq_tect_domain_ffp = flatfile_dir / "earthquake_source_table.csv"
-    tect_domain.add_tect_domain(eq_source_ffp, eq_tect_domain_ffp, n_procs)
+    if not (
+        checkpoint
+        and (
+            flatfile_dir
+            / file_structure.PreFlatfileNames.EARTHQUAKE_SOURCE_TABLE_TECTONIC
+        ).exists()
+    ):
+        print("Merging tectonic domains")
+        eq_source_ffp = (
+            flatfile_dir
+            / file_structure.PreFlatfileNames.EARTHQUAKE_SOURCE_TABLE_GEONET
+        )
+        eq_tect_domain_ffp = (
+            flatfile_dir
+            / file_structure.PreFlatfileNames.EARTHQUAKE_SOURCE_TABLE_TECTONIC
+        )
+        tect_domain.add_tect_domain(eq_source_ffp, eq_tect_domain_ffp, n_procs)
 
     # Generate the phase arrival table
-    gen_phase_arrival_table.generate_phase_arrival_table(
-        main_dir, flatfile_dir, n_procs
-    )
+    if not (
+        checkpoint
+        and (
+            flatfile_dir / file_structure.PreFlatfileNames.PHASE_ARRIVAL_TABLE
+        ).exists()
+    ):
+        print("Generating phase arrival table")
+        gen_phase_arrival_table.generate_phase_arrival_table(
+            main_dir, flatfile_dir, n_procs
+        )
 
     # Generate SNR
     snr_fas_output_dir = file_structure.get_snr_fas_dir(main_dir)
-    phase_table_path = flatfile_dir / "phase_arrival_table.csv"
-    calculate_snr(main_dir, phase_table_path, flatfile_dir, snr_fas_output_dir, n_procs)
+    if not (
+        checkpoint
+        and (flatfile_dir / file_structure.FlatfileNames.SNR_METADATA).exists()
+    ):
+        print("Calculating SNR")
+        phase_table_path = (
+            flatfile_dir / file_structure.PreFlatfileNames.PHASE_ARRIVAL_TABLE
+        )
+        calculate_snr(
+            main_dir,
+            phase_table_path,
+            flatfile_dir,
+            snr_fas_output_dir,
+            n_procs,
+            no_smoothing=no_smoothing,
+            ko_matrix_path=ko_matrix_path,
+            batch_size=snr_batch_size,
+        )
 
     # Calculate Fmax
-    calc_fmax(main_dir, flatfile_dir, snr_fas_output_dir, n_procs)
+    if not (checkpoint and (flatfile_dir / file_structure.FlatfileNames.FMAX).exists()):
+        print("Calculating Fmax")
+        calc_fmax(main_dir, flatfile_dir, snr_fas_output_dir, n_procs)
 
-
-@app.command(
-    help="Run the processing part of the NZGMDB pipeline, everything after GMC. "
-    "- Process and filter waveform data to txt files "
-    "- Calculate IM's "
-    "- Merge IM results into flatfiles"
-)
-def run_process_nzgmdb(
-    main_dir: Annotated[
-        Path,
-        typer.Argument(
-            help="The main directory of the NZGMDB results (Highest level directory)",
-            exists=True,
-        ),
-    ],
-    n_procs: Annotated[int, typer.Option(help="The number of processes to use")] = 1,
-):
-    flatfile_dir = file_structure.get_flatfile_dir(main_dir)
+    # Run GMC
+    if not (
+        checkpoint
+        and (flatfile_dir / file_structure.FlatfileNames.GMC_PREDICTIONS).exists()
+    ):
+        print("Running GMC")
+        run_gmc.run_gmc_processing(
+            main_dir,
+            gm_classifier_dir,
+            ko_matrix_path,
+            conda_sh,
+            gmc_activate,
+            gmc_predict_activate,
+            gmc_procs,
+        )
 
     # Run filtering and processing of mseeds
-    gmc_ffp = flatfile_dir / "gmc_predictions.csv"
-    fmax_ffp = flatfile_dir / "fmax.csv"
-    process_records(main_dir, gmc_ffp, fmax_ffp, n_procs)
+    gmc_ffp = flatfile_dir / file_structure.FlatfileNames.GMC_PREDICTIONS
+    fmax_ffp = flatfile_dir / file_structure.FlatfileNames.FMAX
+    if not (
+        checkpoint
+        and (
+            flatfile_dir
+            / file_structure.SkippedRecordFilenames.PROCESSING_SKIPPED_RECORDS
+        ).exists()
+    ):
+        print("Processing records")
+        process_records(main_dir, gmc_ffp, fmax_ffp, n_procs)
 
     # Run IM calculation
     im_dir = file_structure.get_im_dir(main_dir)
-    run_im_calculation(main_dir, im_dir, n_procs)
+    print("Calculating IMs")
+    run_im_calculation(main_dir, im_dir, n_procs, checkpoint, ko_matrix_path)
 
     # Merge IM results
-    merge_im_results(im_dir, flatfile_dir, gmc_ffp, fmax_ffp)
+    if not (
+        checkpoint
+        and (
+            flatfile_dir / file_structure.PreFlatfileNames.GROUND_MOTION_IM_CATALOGUE
+        ).exists()
+    ):
+        print("Merging IM results")
+        merge_im_results(im_dir, flatfile_dir, gmc_ffp, fmax_ffp)
 
     # Calculate distances
-    distances.calc_distances(main_dir, n_procs)
+    if not (
+        checkpoint
+        and (
+            flatfile_dir
+            / file_structure.PreFlatfileNames.EARTHQUAKE_SOURCE_TABLE_DISTANCES
+        ).exists()
+    ):
+        print("Calculating distances")
+        distances.calc_distances(main_dir, n_procs)
 
     # Merge flat files
-    merge_flat_files(main_dir)
+    if not (
+        checkpoint
+        and (
+            flatfile_dir / file_structure.FlatfileNames.GROUND_MOTION_IM_ROTD100_FLAT
+        ).exists()
+    ):
+        print("Merging flat files")
+        merge_flat_files(main_dir)
 
 
 if __name__ == "__main__":

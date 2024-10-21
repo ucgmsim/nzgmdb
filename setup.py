@@ -12,4 +12,5 @@ setuptools.setup(
     long_description=long_description,
     long_description_content_type="text/markdown",
     packages=setuptools.find_packages(),
+    package_data={"nzgmdb": ["data/*"]},
 )

@@ -116,13 +116,6 @@ def fetch_geonet_phases(mseed_file: Path) -> list[dict[str, Any]]:
     -------
     phase_table_entries: list[dict[str, any]]
         A list of phase arrival times.
-
-    Raises
-    ------
-    InvalidNumberOfGeonetPicksException
-        If more than two phase picks from Geonet match
-        a given mseed file as there should only be one
-        P phase pick and sometimes one S phase pick.
     """
     # Get the event ID (evid) from the mseed file
     evid = file_structure.get_event_id_from_mseed(mseed_file)
@@ -148,13 +141,6 @@ def fetch_geonet_phases(mseed_file: Path) -> list[dict[str, Any]]:
         ):
             picks_matching_mseed.append(pick)
 
-    # Check that the number of matching picks is acceptable
-    if len(picks_matching_mseed) > 2:
-        raise custom_errors.InvalidNumberOfGeonetPicksException(
-            "More than two phase picks from Geonet seem to match the given mseed file."
-            "\nThere should only be one P phase pick and sometimes one S phase pick."
-        )
-
     # Get arrival data corresponding to the given mseed file by matching pick_id
     mseed_arrival_pick_pairs = [
         (arrival, pick)
@@ -162,6 +148,22 @@ def fetch_geonet_phases(mseed_file: Path) -> list[dict[str, Any]]:
         for pick in picks_matching_mseed
         if pick.resource_id == arrival.pick_id
     ]
+
+    if len(mseed_arrival_pick_pairs) > 2:
+        p_count = 0
+        s_count = 0
+        new_picks = []
+        # Make sure that both the P and S Waves only have one pick
+        for arrival, pick in mseed_arrival_pick_pairs:
+            if arrival.phase == "P":
+                if p_count == 0:
+                    new_picks.append((arrival, pick))
+                p_count += 1
+            if arrival.phase == "S":
+                if s_count == 0:
+                    new_picks.append((arrival, pick))
+                s_count += 1
+        mseed_arrival_pick_pairs = new_picks
 
     phase_table_entries = [
         {
@@ -242,7 +244,9 @@ def generate_phase_arrival_table(
 
     # Save the phase arrival table
     output_dir.mkdir(parents=True, exist_ok=True)
-    merged_df.to_csv(output_dir / "phase_arrival_table.csv", index=False)
+    merged_df.to_csv(
+        output_dir / file_structure.PreFlatfileNames.PHASE_ARRIVAL_TABLE, index=False
+    )
 
     if full_output:
         # Adding labels to the DataFrame columns so they

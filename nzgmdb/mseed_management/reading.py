@@ -52,8 +52,14 @@ def create_waveform_from_mseed(
         mseed = waveform_manipulation.initial_preprocessing(mseed)
 
     # Stack the data
-    data = np.stack([tr.data for tr in mseed], axis=1)
-    data = data.astype(np.float64)
+    try:
+        data = np.stack([tr.data for tr in mseed], axis=1)
+        data = data.astype(np.float64)
+    except ValueError:
+        print(f"Error reading data from {mseed_file}")
+        raise custom_errors.InvalidTraceLengthError(
+            f"Error reading data from {mseed_file}"
+        )
 
     # Create the waveform object
     waveform = read_waveform.create_waveform_from_data(

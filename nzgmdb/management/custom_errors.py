@@ -3,6 +3,12 @@ Contains custom exceptions for the NZGMDB.
 """
 
 
+class EventIDNotFoundError(Exception):
+    """Exception raised when the event ID is not found."""
+
+    pass
+
+
 class SensitivityRemovalError(Exception):
     """Exception raised when sensitivity removal fails."""
 
@@ -11,6 +17,12 @@ class SensitivityRemovalError(Exception):
 
 class InventoryNotFoundError(Exception):
     """Exception raised when the inventory information is not found."""
+
+    pass
+
+
+class RotationError(Exception):
+    """Exception raised when the rotation fails."""
 
     pass
 
@@ -45,11 +57,7 @@ class ComponentSelectionError(Exception):
     pass
 
 
-class InvalidNumberOfGeonetPicksException(Exception):
-    """
-    Exception raised if more than two phase picks
-    from Geonet match a given mseed file as there should
-    only be one P phase pick and sometimes one S phase pick.
-    """
+class InvalidTraceLengthError(Exception):
+    """Exception raised when the trace length is invalid for an mseed file."""
 
     pass

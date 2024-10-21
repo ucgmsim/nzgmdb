@@ -22,6 +22,7 @@ def compute_im_for_waveform(
     components: List[Components],
     ims: List[str],
     im_options: Dict[str, List[float]],
+    ko_matrices_path: Path = None,
 ):
     """
     Compute the IMs for a single waveform and save the results to a csv file
@@ -40,6 +41,8 @@ def compute_im_for_waveform(
         The IMs to calculate
     im_options : Dict[str, List[float]]
         The options for the IMs
+    ko_matrices_path : Path, optional
+        The path to the KO matrices, by default None
     """
     im_result = im_calculation.compute_measure_single(
         (waveform, None),
@@ -47,6 +50,7 @@ def compute_im_for_waveform(
         components,
         im_options,
         components,
+        ko_matrices_path=ko_matrices_path,
     )
 
     # Turn the results into a dataframe
@@ -63,9 +67,11 @@ def compute_im_for_waveform(
 def calculate_im_for_record(
     ffp_000: Path,
     output_path: Path,
+    output_queue: mp.Queue,
     components: List[Components],
     ims: List[str],
     im_options: Dict[str, List[float]],
+    ko_matrices_path: Path = None,
 ):
     """
     Calculate the IMs for a single record and save the results to a csv file
@@ -82,6 +88,8 @@ def calculate_im_for_record(
         The IMs to calculate
     im_options : Dict[str, List[float]]
         The options for the IMs
+    ko_matrices_path : Path, optional
+        The path to the KO matrices, by default None
     """
     # Load the mseed file
     try:
@@ -93,7 +101,8 @@ def calculate_im_for_record(
             "reason": "Failed to find the mseed file",
         }
         skipped_record = pd.DataFrame([skipped_record_dict])
-        return skipped_record
+        # return skipped_record
+        output_queue.put(skipped_record)
 
     # Get the 090 and ver components full file paths
     ffp_090 = ffp_000.parent / f"{ffp_000.stem}.090"
@@ -109,7 +118,8 @@ def calculate_im_for_record(
             "reason": "Failed to find all components",
         }
         skipped_record = pd.DataFrame([skipped_record_dict])
-        return skipped_record
+        # return skipped_record
+        output_queue.put(skipped_record)
 
     # Get the event_id and create the output directory
     event_id = file_structure.get_event_id_from_mseed(mseed_file)
@@ -118,7 +128,13 @@ def calculate_im_for_record(
 
     # Calculate the IMs
     compute_im_for_waveform(
-        waveform, ffp_000.stem, event_output_path, components, ims, im_options
+        waveform,
+        ffp_000.stem,
+        event_output_path,
+        components,
+        ims,
+        im_options,
+        ko_matrices_path,
     )
 
 
@@ -127,6 +143,7 @@ def compute_ims_for_all_processed_records(
     output_path: Path,
     n_procs: int = 1,
     checkpoint: bool = False,
+    ko_matrices_path: Path = None,
 ):
     """
     Compute the IMs for all processed records in the main directory
@@ -141,6 +158,8 @@ def compute_ims_for_all_processed_records(
         The number of processes to use
     checkpoint : bool, optional
         If True, the function will check for already completed files and skip them
+    ko_matrices_path : Path, optional
+        The path to the KO matrices, by default None
     """
     # Get the waveform directory and all the 000 files
     waveform_dir = file_structure.get_waveform_dir(main_dir)
@@ -151,6 +170,8 @@ def compute_ims_for_all_processed_records(
         completed_files = [f.stem[:-3] for f in output_path.rglob("*_IM.csv")]
         # Remove completed files from the list
         comp_000_files = [f for f in comp_000_files if f.stem not in completed_files]
+
+    print(f"Calculating IMs for {len(comp_000_files)} records")
 
     # Load the config and extract the IM options
     config = cfg.Config()
@@ -172,18 +193,45 @@ def compute_ims_for_all_processed_records(
         "FAS": im_calculation.validate_fas_frequency(fas_frequencies),
     }
 
-    # Create the pool of processes
-    with mp.Pool(n_procs) as pool:
-        skipped_records = pool.map(
-            functools.partial(
-                calculate_im_for_record,
-                output_path=output_path,
-                components=components,
-                ims=ims,
-                im_options=im_options,
+    # Create the Process and Queue for output results
+    processes = []
+    output_queue = mp.Queue()
+
+    for comp_000_file in comp_000_files:
+        # If we have reached the limit of n_procs, wait for some processes to finish
+        while len(processes) >= n_procs:
+            for p in processes:
+                p.join(0.1)  # Check if any process has finished, without blocking
+                if not p.is_alive():
+                    processes.remove(p)
+
+        # Start a new process
+        process = mp.Process(
+            target=calculate_im_for_record,
+            args=(
+                comp_000_file,
+                output_path,
+                output_queue,
+                components,
+                ims,
+                im_options,
+                ko_matrices_path,
             ),
-            comp_000_files,
         )
+        processes.append(process)
+        process.start()
+
+    # Wait for all remaining processes to finish
+    for process in processes:
+        process.join()
+
+    # Collect all results from the queue
+    skipped_records = []
+    while not output_queue.empty():
+        result = output_queue.get()
+        skipped_records.append(result)
+
+    print("Finished calculating IMs")
 
     # Save the skipped records
     flatfile_dir = file_structure.get_flatfile_dir(main_dir)
@@ -203,7 +251,8 @@ def compute_ims_for_all_processed_records(
         # Add the skipped records to the existing skipped records
         try:
             existing_skipped_records = pd.read_csv(
-                flatfile_dir / "IM_calc_skipped_records.csv"
+                flatfile_dir
+                / file_structure.SkippedRecordFilenames.IM_CALC_SKIPPED_RECORDS
             )
             skipped_records_df = pd.concat(
                 [existing_skipped_records, skipped_records_df]
@@ -211,4 +260,7 @@ def compute_ims_for_all_processed_records(
         except FileNotFoundError:
             pass
 
-    skipped_records_df.to_csv(flatfile_dir / "IM_calc_skipped_records.csv", index=False)
+    skipped_records_df.to_csv(
+        flatfile_dir / file_structure.SkippedRecordFilenames.IM_CALC_SKIPPED_RECORDS,
+        index=False,
+    )
