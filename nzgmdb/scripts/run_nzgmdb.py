@@ -681,7 +681,8 @@ def run_full_nzgmdb(
     # Calculate Fmax
     if not (checkpoint and (flatfile_dir / file_structure.FlatfileNames.FMAX).exists()):
         print("Calculating Fmax")
-        calc_fmax(main_dir, flatfile_dir, snr_fas_output_dir, n_procs)
+        waveform_dir = file_structure.get_waveform_dir(main_dir)
+        calc_fmax(main_dir, flatfile_dir, waveform_dir, snr_fas_output_dir, n_procs)
 
     # Run GMC
     if real_time:
