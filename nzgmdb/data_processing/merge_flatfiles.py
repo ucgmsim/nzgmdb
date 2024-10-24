@@ -9,7 +9,7 @@ from nzgmdb.management import file_structure
 
 def merge_im_data(
     im_dir: Path,
-    ouptut_dir: Path,
+    output_dir: Path,
     gmc_ffp: Path,
     fmax_ffp: Path,
 ):
@@ -22,7 +22,7 @@ def merge_im_data(
     ----------
     im_dir : Path
         The directory where the IM files are stored
-    ouptut_dir : Path
+    output_dir : Path
         The directory to save the final IM flatfile and the skipped records
     gmc_ffp : Path
         The file path to the GMC results
@@ -73,28 +73,6 @@ def merge_im_data(
 
     # remove the record column
     gm_final = gm_final.drop(columns=["record"])
-
-    # Get the Ds595 Lower Bound
-    config = cfg.Config()
-    Ds595_lower_bound = config.get_value("Ds595_lower_bound")
-
-    # Filter the Ds595 by first filtering only the ver, 000 and 090 components
-    comp_sub = gm_final[gm_final.component.isin(["ver", "000", "090"])]
-    # Then Sum the Ds595 values for each record
-    comp_sub_grouped = comp_sub.groupby(["record_id"]).sum()
-    # Find the records that are below the Ds595 lower bound
-    Ds595_filter_records = comp_sub_grouped[
-        comp_sub_grouped.Ds595 < Ds595_lower_bound
-    ].reset_index()[["record_id"]]
-    # Remove the records that are below the Ds595 lower bound
-    gm_final = gm_final[~gm_final.record_id.isin(Ds595_filter_records.record_id)]
-
-    # Create a skipped IM merge file for records that are below the Ds595 lower bound
-    Ds595_filter_records["reason"] = f"Ds595 below lower bound of {Ds595_lower_bound}"
-    Ds595_filter_records.to_csv(
-        ouptut_dir / file_structure.SkippedRecordFilenames.IM_MERGE_SKIPPED_RECORDS,
-        index=False,
-    )
 
     # Merge in fmax
     gm_final = pd.merge(
@@ -150,7 +128,7 @@ def merge_im_data(
 
     # Save the ground_motion_im_catalogue.csv
     gm_final.to_csv(
-        ouptut_dir / file_structure.PreFlatfileNames.GROUND_MOTION_IM_CATALOGUE,
+        output_dir / file_structure.PreFlatfileNames.GROUND_MOTION_IM_CATALOGUE,
         index=False,
     )
 

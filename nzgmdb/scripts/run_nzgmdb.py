@@ -10,7 +10,7 @@ import pandas as pd
 import typer
 
 from nzgmdb.calculation import distances, fmax, ims, snr
-from nzgmdb.data_processing import merge_flatfiles, process_observed
+from nzgmdb.data_processing import merge_flatfiles, process_observed, quality_db
 from nzgmdb.data_retrieval import geonet, sites, tect_domain
 from nzgmdb.management import file_structure
 from nzgmdb.phase_arrival import gen_phase_arrival_table
@@ -435,6 +435,23 @@ def merge_flat_files(
 
 
 @app.command(
+    help="Create a quality database for the NZGMDB results by running quality checks"
+)
+def create_quality_db(
+    main_dir: Annotated[
+        Path,
+        typer.Argument(
+            help="The main directory of the NZGMDB results (Highest level directory)",
+            exists=True,
+            file_okay=False,
+        ),
+    ],
+    n_procs: Annotated[int, typer.Option(help="The number of processes to use")] = 1,
+):
+    quality_db.create_quality_db(main_dir, n_procs)
+
+
+@app.command(
     help="Run the Entire NZGMDB pipeline."
     "- Fetch Geonet data "
     "- Merge tectonic domains "
@@ -550,6 +567,13 @@ def run_full_nzgmdb(
         bool,
         typer.Option(
             help="If True, the function will run in real time mode and not save intermediate files",
+            is_flag=True,
+        ),
+    ] = False,
+    create_quality_db: Annotated[
+        bool,
+        typer.Option(
+            help="If True, the function will create a quality database",
             is_flag=True,
         ),
     ] = False,
@@ -733,6 +757,10 @@ def run_full_nzgmdb(
     ):
         print("Merging flat files")
         merge_flat_files(main_dir)
+
+    if create_quality_db:
+        print("Creating quality database")
+        quality_db.create_quality_db(main_dir, n_procs=n_procs)
 
 
 if __name__ == "__main__":

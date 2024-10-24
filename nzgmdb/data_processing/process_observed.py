@@ -98,40 +98,6 @@ def process_single_mseed(mseed_file: Path, gmc_df: pd.DataFrame, fmax_df: pd.Dat
         else min(fmax_rows.loc[:, ["fmax_000", "fmax_090", "fmax_ver"]].values[0])
     )
 
-    config = cfg.Config()
-    fmax_min = config.get_value("fmax_min")
-    score_min = config.get_value("score_min")
-    fmin_max = config.get_value("fmin_max")
-    multi_max = config.get_value("multi_max")
-
-    # Filter out records that have too low of a fmax value
-    if fmax is not None and fmax <= fmax_min:
-        skipped_record_dict = {
-            "record_id": mseed_stem,
-            "reason": f"Fmax value is less than {fmax_min}",
-        }
-        return pd.DataFrame([skipped_record_dict])
-
-    # Filter by score, fmin and multi mean
-    if gmc_rows["score_mean"].min() < score_min:
-        skipped_record_dict = {
-            "record_id": mseed_stem,
-            "reason": f"Score mean is less than {score_min}",
-        }
-        return pd.DataFrame([skipped_record_dict])
-    if fmin > fmin_max:
-        skipped_record_dict = {
-            "record_id": mseed_stem,
-            "reason": f"Fmin mean is greater than {fmin_max}",
-        }
-        return pd.DataFrame([skipped_record_dict])
-    if gmc_rows["multi_mean"].max() > multi_max:
-        skipped_record_dict = {
-            "record_id": mseed_stem,
-            "reason": f"Multi mean is greater than {multi_max}",
-        }
-        return pd.DataFrame([skipped_record_dict])
-
     # Perform high and lowcut processing
     try:
         (
