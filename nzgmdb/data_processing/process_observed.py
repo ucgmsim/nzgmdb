@@ -38,15 +38,6 @@ def process_single_mseed(mseed_file: Path, gmc_df: pd.DataFrame, fmax_df: pd.Dat
     mseed_stem = mseed_file.stem
     gmc_rows = gmc_df[gmc_df["record"] == mseed_stem]
 
-    # Check if there is any row, if not skip
-    if gmc_rows.empty:
-        skipped_record_dict = {
-            "record_id": mseed_stem,
-            "reason": "No record found in GMC predictions",
-        }
-        skipped_record = pd.DataFrame([skipped_record_dict])
-        return skipped_record
-
     # Read mseed information
     mseed = obspy.read(mseed_file)
 
@@ -89,7 +80,7 @@ def process_single_mseed(mseed_file: Path, gmc_df: pd.DataFrame, fmax_df: pd.Dat
         return skipped_record
 
     # Get the GMC fmin and fmax values
-    fmin = gmc_rows["fmin_mean"].max()
+    fmin = None if gmc_rows.empty else gmc_rows["fmin_mean"].max()
     search_name = "_".join(mseed_stem.split("_")[:-1])
     fmax_rows = fmax_df[fmax_df["record_id"] == search_name]
     fmax = (

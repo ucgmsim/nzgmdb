@@ -14,7 +14,7 @@ from nzgmdb.data_processing import merge_flatfiles, process_observed, quality_db
 from nzgmdb.data_retrieval import geonet, sites, tect_domain
 from nzgmdb.management import file_structure
 from nzgmdb.phase_arrival import gen_phase_arrival_table
-from nzgmdb.scripts import run_gmc
+from nzgmdb.scripts import run_gmc, upload_to_dropox
 
 app = typer.Typer()
 
@@ -570,6 +570,13 @@ def run_full_nzgmdb(
             is_flag=True,
         ),
     ] = False,
+    upload_to_dropbox: Annotated[
+        bool,
+        typer.Option(
+            help="If True, the function will upload the results to Dropbox",
+            is_flag=True,
+        ),
+    ] = False,
     create_quality_db: Annotated[
         bool,
         typer.Option(
@@ -758,9 +765,13 @@ def run_full_nzgmdb(
         print("Merging flat files")
         merge_flat_files(main_dir)
 
-    if create_quality_db:
-        print("Creating quality database")
-        quality_db.create_quality_db(main_dir, n_procs=n_procs)
+    # if create_quality_db:
+    #     print("Creating quality database")
+    #     quality_db.create_quality_db(main_dir, n_procs=n_procs)
+
+    if upload_to_dropbox:
+        print("Uploading to Dropbox")
+        upload_to_dropox.main(main_dir, n_procs, f"{main_dir.stem}_full")
 
 
 if __name__ == "__main__":

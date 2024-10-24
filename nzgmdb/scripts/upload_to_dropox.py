@@ -62,11 +62,11 @@ def main(
     waveforms_dir = file_structure.get_waveform_dir(input_dir)
 
     # 1) Zip the waveforms per year
-    # year_folders = [f for f in waveforms_dir.iterdir() if f.is_dir()]
-    # with mp.Pool(n_procs) as pool:
-    #     waveforms_zip_files = pool.starmap(
-    #         zip_folder, [(folder, output_dir, folder.stem) for folder in year_folders]
-    #     )
+    year_folders = [f for f in waveforms_dir.iterdir() if f.is_dir()]
+    with mp.Pool(n_procs) as pool:
+        waveforms_zip_files = pool.starmap(
+            zip_folder, [(folder, output_dir, folder.stem) for folder in year_folders]
+        )
 
     # 2) Zip flatfiles_{ver}.zip
     flatfiles = [flatfiles_dir / file for file in file_structure.FlatfileNames]
@@ -87,9 +87,9 @@ def main(
 
     # Upload everything to Dropbox
     dropbox_version_dir = f"{DROPBOX_PATH}/{version}"
-    # dropbox_waveforms_path = f"{dropbox_version_dir}/waveforms"
-    # for zip_file in waveforms_zip_files:
-    #     upload_zip_to_dropbox(zip_file, dropbox_waveforms_path)
+    dropbox_waveforms_path = f"{dropbox_version_dir}/waveforms"
+    for zip_file in waveforms_zip_files:
+        upload_zip_to_dropbox(zip_file, dropbox_waveforms_path)
 
     upload_zip_to_dropbox(flatfiles_zip, dropbox_version_dir)
     upload_zip_to_dropbox(skipped_zip, dropbox_version_dir)
