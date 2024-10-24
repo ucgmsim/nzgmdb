@@ -16,40 +16,39 @@ from nzgmdb.management import file_structure
 
 
 def run_full_fmax_calc(
-    meta_output_dir: Path, snr_fas_output_dir: Path, n_procs: int = 1
+    meta_output_dir: Path,
+    waveform_dir: Path,
+    snr_fas_output_dir: Path,
+    n_procs: int = 1,
 ):
     """
-    Run the full procedure for each record to assess SNR and get the maximum usable frequency (fmax).
+    Run the full procedure for each record to assess SNR produced from mseed files
+    and get the maximum usable frequency (fmax).
 
     Parameters
     ----------
     meta_output_dir : Path
         Path to the output directory for the metadata and skipped records.
+    waveform_dir : Path
+        Path to the directory containing the mseed files to process.
     snr_fas_output_dir : Path
         Path to the output directory for the SNR and FAS data.
     n_procs : int, optional
         Number of processes to use, by default 1.
     """
-
-    try:
-        metadata_df = pd.read_csv(
-            meta_output_dir / file_structure.FlatfileNames.SNR_METADATA
-        )
-    except pd.errors.EmptyDataError:
-        metadata_df = pd.DataFrame()
-    snr_filenames = snr_fas_output_dir.glob("**/*snr_fas.csv")
+    mseed_files = waveform_dir.rglob("*.mseed")
 
     with multiprocessing.Pool(n_procs) as pool:
         results = pool.map(
             functools.partial(
                 assess_snr_and_get_fmax,
-                metadata=metadata_df,
+                snr_fas_output_dir=snr_fas_output_dir,
             ),
-            snr_filenames,
+            mseed_files,
         )
 
     if len(results) == 0:
-        print("No SNR records to process")
+        print("No records to process")
         meta_dfs, skipped_record_dfs = [None], [None]
     else:
         # Unpack the results
@@ -77,7 +76,7 @@ def run_full_fmax_calc(
 
 
 def assess_snr_and_get_fmax(
-    filename: Path, metadata: pd.DataFrame
+    filename: Path, snr_fas_output_dir: Path
 ) -> tuple[Optional[pd.DataFrame], Optional[pd.DataFrame]]:
     """
     Assess the record's SNR within the frequency interval specified in the config file and get the record's
@@ -86,9 +85,9 @@ def assess_snr_and_get_fmax(
     Parameters
     ----------
     filename : Path
-        Path to the ___snr_fas.csv file.
-    metadata : pd.DataFrame
-        Contains the SNR meta data.
+        Path to the record_id.mseed file.
+    snr_fas_output_dir : Path
+        Path to the output directory for the SNR and FAS data where the record_id_snr_fas.csv file is located.
 
     Returns
     -------
@@ -100,22 +99,11 @@ def assess_snr_and_get_fmax(
     """
     config = cfg.Config()
 
-    record_id = str(filename.stem).replace("_snr_fas", "")
+    record_id = str(filename.stem)
 
-    # Get delta from the metadata
-    current_row = metadata.iloc[np.where(metadata["record_id"] == record_id)[0], :]
-
-    # Check the length of the current_row
-    if len(current_row) == 0:
-        print(f"Record {record_id} not found in metadata")
-        # Find the value from the mseed file
-        mseed_dir = file_structure.get_mseed_dir_from_snrfas(filename)
-        mseed_file = mseed_dir / f"{record_id}.mseed"
-        # read the mseed file to get the delta
-        mseed = obspy.read(str(mseed_file))
-        dt = mseed[0].stats.delta
-    else:
-        dt = current_row["delta"].iloc[0]
+    # read the mseed file to get the delta
+    mseed = obspy.read(str(filename))
+    dt = mseed[0].stats.delta
 
     # current_row["delta"] is a pd.Series() containing 1 float so .iloc[0]
     # is used to get the float from the pd.Series()
@@ -123,7 +111,31 @@ def assess_snr_and_get_fmax(
         (1 / dt) * 0.5 * config.get_value("nyquist_freq_scaling_factor")
     )
 
-    snr_with_freq_signal_noise = pd.read_csv(filename)
+    snr_filename = next(snr_fas_output_dir.rglob(f"{record_id}_snr_fas.csv"), None)
+    if snr_filename is None:
+        # Use the Nyquist frequency as the fmax
+        fmax_record = pd.DataFrame(
+            [
+                {
+                    "record_id": record_id,
+                    "fmax_000": scaled_nyquist_freq,
+                    "fmax_090": scaled_nyquist_freq,
+                    "fmax_ver": scaled_nyquist_freq,
+                }
+            ]
+        )
+        skipped_record = pd.DataFrame(
+            [
+                {
+                    "record_id": record_id,
+                    "reason": "No SNR file found for record",
+                }
+            ]
+        )
+        return fmax_record, skipped_record
+
+    # Assess the SNR
+    snr_with_freq_signal_noise = pd.read_csv(snr_filename)
     snr = snr_with_freq_signal_noise[["snr_000", "snr_090", "snr_ver"]]
 
     snr_smooth = snr.rolling(
@@ -209,8 +221,17 @@ def assess_snr_and_get_fmax(
         ############################################################################
 
     else:
-        # Skip the record
-        fmax_record = None
+        # Use the Nyquist frequency as the fmax
+        fmax_record = pd.DataFrame(
+            [
+                {
+                    "record_id": record_id,
+                    "fmax_000": scaled_nyquist_freq,
+                    "fmax_090": scaled_nyquist_freq,
+                    "fmax_ver": scaled_nyquist_freq,
+                }
+            ]
+        )
 
         skipped_record = pd.DataFrame(
             [

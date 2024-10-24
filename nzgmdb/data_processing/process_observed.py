@@ -96,6 +96,13 @@ def process_single_mseed(mseed_file: Path, gmc_df: pd.DataFrame, fmax_df: pd.Dat
             acc_bb_090,
             acc_bb_ver,
         ) = waveform_manipulation.high_and_low_cut_processing(mseed, dt, fmin, fmax)
+    except custom_errors.InvalidTraceLengthError:
+        skipped_record_dict = {
+            "record_id": mseed_stem,
+            "reason": "Invalid trace length for the mseed file",
+        }
+        skipped_record = pd.DataFrame([skipped_record_dict])
+        return skipped_record
     except custom_errors.LowcutHighcutError:
         skipped_record_dict = {
             "record_id": mseed_stem,

@@ -88,6 +88,8 @@ def create_quality_db(
         min, axis=1
     )
 
+    # Fill nan values with 1 / (2.5 * dt)
+
     # Filter out records that have too low of a fmax_min value
     fmax_min_filter = gm_fmax_df[gm_fmax_df["fmax_min"] < fmax_min]
 

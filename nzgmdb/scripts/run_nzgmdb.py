@@ -239,6 +239,13 @@ def calc_fmax(
             file_okay=False,
         ),
     ] = None,
+    waveform_dir: Annotated[
+        Path,
+        typer.Option(
+            help="Path to the directory containing the mseed files to process",
+            file_okay=False,
+        ),
+    ] = None,
     snr_fas_output_dir: Annotated[
         Path,
         typer.Option(
@@ -250,10 +257,12 @@ def calc_fmax(
 ):
     if meta_output_dir is None:
         meta_output_dir = file_structure.get_flatfile_dir(main_dir)
+    if waveform_dir is None:
+        waveform_dir = file_structure.get_waveform_dir(main_dir)
     if snr_fas_output_dir is None:
         snr_fas_output_dir = file_structure.get_snr_fas_dir(main_dir)
 
-    fmax.run_full_fmax_calc(meta_output_dir, snr_fas_output_dir, n_procs)
+    fmax.run_full_fmax_calc(meta_output_dir, waveform_dir, snr_fas_output_dir, n_procs)
 
 
 @app.command(
