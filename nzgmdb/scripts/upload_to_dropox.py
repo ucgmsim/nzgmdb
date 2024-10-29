@@ -51,50 +51,80 @@ def upload_zip_to_dropbox(local_file: Path, dropbox_path: str):
 def main(
     input_dir: Path,
     n_procs: int,
-    version: str,
+    version: str = None,
 ):
     """Main function to zip and upload all required files."""
     output_dir = input_dir / "zips"
     output_dir.mkdir(parents=True, exist_ok=True)
+
+    if version is None:
+        version = input_dir.name
 
     flatfiles_dir = file_structure.get_flatfile_dir(input_dir)
     snr_fas_dir = file_structure.get_snr_fas_dir(input_dir)
     waveforms_dir = file_structure.get_waveform_dir(input_dir)
 
     # 1) Zip the waveforms per year
+    waveform_output_dir = output_dir / "waveforms"
+    waveform_output_dir.mkdir(exist_ok=True)
     year_folders = [f for f in waveforms_dir.iterdir() if f.is_dir()]
-    with mp.Pool(n_procs) as pool:
-        waveforms_zip_files = pool.starmap(
-            zip_folder, [(folder, output_dir, folder.stem) for folder in year_folders]
-        )
+    # with mp.Pool(n_procs) as pool:
+    #     waveforms_zip_files = pool.starmap(
+    #         zip_folder,
+    #         [(folder, output_dir, folder.stem) for folder in year_folders],
+    #     )
+    # Also zip each event folder
+    event_zips = {}
+    for year_folder in year_folders:
+        year_output_dir = waveform_output_dir / year_folder.name
+        year_output_dir.mkdir(exist_ok=True)
+        event_folders = [f for f in year_folder.iterdir() if f.is_dir()]
+        with mp.Pool(n_procs) as pool:
+            year_event_zips = pool.starmap(
+                zip_folder,
+                [(folder, year_output_dir, folder.stem) for folder in event_folders],
+            )
+        event_zips[year_folder.name] = year_event_zips
 
-    # 2) Zip flatfiles_{ver}.zip
-    flatfiles = [flatfiles_dir / file for file in file_structure.FlatfileNames]
-    flatfiles_zip = zip_files(flatfiles, output_dir, f"flatfiles_{version}")
-
-    # 3) Zip skipped_{ver}.zip
-    skipped_files = [
-        flatfiles_dir / file for file in file_structure.SkippedRecordFilenames
-    ]
-    skipped_zip = zip_files(skipped_files, output_dir, f"skipped_{version}")
-
-    # 4) Zip pre_flatfiles_{ver}.zip
-    pre_flatfiles = [flatfiles_dir / file for file in file_structure.PreFlatfileNames]
-    pre_flatfiles_zip = zip_files(pre_flatfiles, output_dir, f"pre_flatfiles_{version}")
-
-    # 5) Zip snr_fas_{ver}.zip
-    snr_fas_zip = zip_folder(snr_fas_dir, output_dir, f"snr_fas_{version}")
+    # # 2) Zip flatfiles_{ver}.zip
+    # flatfiles = [flatfiles_dir / file for file in file_structure.FlatfileNames]
+    # flatfiles_zip = zip_files(flatfiles, output_dir, f"flatfiles_{version}")
+    #
+    # # 3) Zip skipped_{ver}.zip
+    # skipped_files = [
+    #     flatfiles_dir / file for file in file_structure.SkippedRecordFilenames
+    # ]
+    # skipped_zip = zip_files(skipped_files, output_dir, f"skipped_{version}")
+    #
+    # # 4) Zip pre_flatfiles_{ver}.zip
+    # pre_flatfiles = [flatfiles_dir / file for file in file_structure.PreFlatfileNames]
+    # pre_flatfiles_zip = zip_files(pre_flatfiles, output_dir, f"pre_flatfiles_{version}")
+    #
+    # # 5) Zip snr_fas_{ver}.zip
+    # snr_fas_zip = zip_folder(snr_fas_dir, output_dir, f"snr_fas_{version}")
 
     # Upload everything to Dropbox
     dropbox_version_dir = f"{DROPBOX_PATH}/{version}"
     dropbox_waveforms_path = f"{dropbox_version_dir}/waveforms"
-    for zip_file in waveforms_zip_files:
-        upload_zip_to_dropbox(zip_file, dropbox_waveforms_path)
+    # Upload waveform year zips
+    # with mp.Pool(n_procs) as pool:
+    #     pool.starmap(
+    #         upload_zip_to_dropbox,
+    #         [(zip_file, dropbox_waveforms_path) for zip_file in waveforms_zip_files],
+    #     )
+    # Upload event zips
+    for year, event_zips in event_zips.items():
+        dropbox_year_path = f"{dropbox_waveforms_path}/{year}"
+        with mp.Pool(n_procs) as pool:
+            pool.starmap(
+                upload_zip_to_dropbox,
+                [(zip_file, dropbox_year_path) for zip_file in event_zips],
+            )
 
-    upload_zip_to_dropbox(flatfiles_zip, dropbox_version_dir)
-    upload_zip_to_dropbox(skipped_zip, dropbox_version_dir)
-    upload_zip_to_dropbox(pre_flatfiles_zip, dropbox_version_dir)
-    upload_zip_to_dropbox(snr_fas_zip, dropbox_version_dir)
+    # upload_zip_to_dropbox(flatfiles_zip, dropbox_version_dir)
+    # upload_zip_to_dropbox(skipped_zip, dropbox_version_dir)
+    # upload_zip_to_dropbox(pre_flatfiles_zip, dropbox_version_dir)
+    # upload_zip_to_dropbox(snr_fas_zip, dropbox_version_dir)
 
 
 @app.command()
@@ -102,12 +132,14 @@ def upload_to_dropbox(
     input_directory: Path = typer.Argument(
         ..., help="Directory containing the results"
     ),
-    version: str = typer.Argument(..., help="Version of the results"),
-    num_processes: int = typer.Option(6, help="Number of processes to use"),
+    version: str = typer.Option(
+        None, help="Version of the results, defaults to the directory name"
+    ),
+    n_procs: int = typer.Option(1, help="Number of processes to use"),
 ):
     main(
         input_directory,
-        num_processes,
+        n_procs,
         version,
     )
 
