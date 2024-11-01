@@ -46,9 +46,9 @@ def poll_earthquake_data():
         init_time = time.time()
         # Get the last 2 minutes worth of data and check if there are any new events
         end_date = datetime.datetime.utcnow() - datetime.timedelta(minutes=1)
-        start_date = end_date - datetime.timedelta(minutes=2)
+        start_date = end_date - datetime.timedelta(minutes=2, days=60)
         geonet_df = download_earthquake_data_last_hour(start_date, end_date)
-        main_dir = Path("/home/joel/local/gmdb/real_time/testing")
+        main_dir = Path("/home/joel/local/SeismicNow/event_dir")
 
         gm_classifier_dir = Path("/home/joel/code/gm_classifier")
         conda_sh = Path("/home/joel/anaconda3/etc/profile.d/conda.sh")

@@ -623,7 +623,7 @@ def run_full_nzgmdb(
             geonet_batch_size,
             only_event_ids,
             only_sites,
-            real_time,
+            False,
         )
 
     # Merge the tectonic domains
@@ -779,9 +779,9 @@ def run_full_nzgmdb(
     #     print("Creating quality database")
     #     quality_db.create_quality_db(main_dir, n_procs=n_procs)
 
-    if upload_to_dropbox:
-        print("Uploading to Dropbox")
-        upload_to_dropox.main(main_dir, n_procs, f"{main_dir.stem}_full")
+    # if upload_to_dropbox:
+    #     print("Uploading to Dropbox")
+    #     upload_to_dropox.main(main_dir, n_procs, f"{main_dir.stem}_full")
 
 
 if __name__ == "__main__":

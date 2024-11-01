@@ -137,21 +137,29 @@ def compute_snr_for_single_mseed(
         skipped_record = pd.DataFrame([skipped_record_dict])
         end_snr_compute(output_queue, None, skipped_record)
 
-    (
-        snr,
-        frequencies,
-        fas_signal,
-        fas_noise,
-        Ds,
-        Dn,
-    ) = snr_calc.get_snr_from_waveform(
-        waveform,
-        tp,
-        apply_smoothing=apply_smoothing,
-        ko_matrix_path=ko_matrix_path,
-        common_frequency_vector=common_frequency_vector,
-        sampling_rate=stats.sampling_rate,
-    )
+    try:
+        (
+            snr,
+            frequencies,
+            fas_signal,
+            fas_noise,
+            Ds,
+            Dn,
+        ) = snr_calc.get_snr_from_waveform(
+            waveform,
+            tp,
+            apply_smoothing=apply_smoothing,
+            ko_matrix_path=ko_matrix_path,
+            common_frequency_vector=common_frequency_vector,
+            sampling_rate=stats.sampling_rate,
+        )
+    except FileNotFoundError:
+        skipped_record_dict = {
+            "record_id": mseed_file.stem,
+            "reason": "Failed to find Ko matrix",
+        }
+        skipped_record = pd.DataFrame([skipped_record_dict])
+        end_snr_compute(output_queue, None, skipped_record)
 
     if snr is None:
         skipped_record_dict = {
