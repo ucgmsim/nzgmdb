@@ -16,7 +16,7 @@ import pandas as pd
 import requests
 from obspy.clients.fdsn import Client as FDSN_Client
 from obspy.core.event import Event, Magnitude
-from obspy.core.inventory import Inventory, Station, Network
+from obspy.core.inventory import Inventory, Network, Station
 from pandas.errors import EmptyDataError
 from scipy.interpolate import interp1d
 

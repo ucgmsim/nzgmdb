@@ -1,6 +1,6 @@
-import time
 import multiprocessing as mp
 import queue
+import time
 from pathlib import Path
 from typing import Dict, List
 
