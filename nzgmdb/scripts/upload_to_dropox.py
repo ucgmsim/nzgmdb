@@ -41,32 +41,64 @@ def upload_zip_to_dropbox(local_file: Path, dropbox_path: str):
         stdout=subprocess.PIPE,
         stderr=subprocess.PIPE,
     )
-    stdout, stderr = p.communicate()
+    _, _ = p.communicate()
     if p.returncode != 0:
-        print(f"Error uploading {local_file}: {stderr}")
+        return local_file
     else:
-        print(f"Successfully uploaded {local_file}")
+        # Check file size is correct and uploaded successfully
+        local_size = local_file.stat().st_size
+        cmd = f"rclone lsf --format=s {dropbox_path}/{local_file.name}"
+        p = subprocess.Popen(
+            cmd, shell=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE
+        )
+        out, err = p.communicate()
+        output_decoded = out.decode("utf-8").strip()
+        if not output_decoded:
+            # File does not exist on Dropbox
+            return local_file
+        if int(output_decoded) != local_size:
+            # File size does not match
+            return local_file
+        return None
 
 
 def main(
     input_dir: Path,
     n_procs: int,
-    version: str,
+    version: str = None,
 ):
     """Main function to zip and upload all required files."""
     output_dir = input_dir / "zips"
     output_dir.mkdir(parents=True, exist_ok=True)
+
+    if version is None:
+        version = input_dir.name
 
     flatfiles_dir = file_structure.get_flatfile_dir(input_dir)
     snr_fas_dir = file_structure.get_snr_fas_dir(input_dir)
     waveforms_dir = file_structure.get_waveform_dir(input_dir)
 
     # 1) Zip the waveforms per year
-    # year_folders = [f for f in waveforms_dir.iterdir() if f.is_dir()]
-    # with mp.Pool(n_procs) as pool:
-    #     waveforms_zip_files = pool.starmap(
-    #         zip_folder, [(folder, output_dir, folder.stem) for folder in year_folders]
-    #     )
+    waveform_output_dir = output_dir / "waveforms"
+    waveform_output_dir.mkdir(exist_ok=True)
+    year_folders = [f for f in waveforms_dir.iterdir() if f.is_dir()]
+    with mp.Pool(n_procs) as pool:
+        waveforms_zip_files = pool.starmap(
+            zip_folder,
+            [(folder, output_dir, folder.stem) for folder in year_folders],
+        )
+    # Also zip each event folder
+    event_zips = {}
+    for year_folder in year_folders:
+        year_output_dir = waveform_output_dir / year_folder.name
+        year_output_dir.mkdir(exist_ok=True)
+        event_folders = [f for f in year_folder.iterdir() if f.is_dir()]
+        with mp.Pool(n_procs) as pool:
+            year_event_zips = pool.starmap(
+                zip_folder,
+                [(folder, year_output_dir, folder.stem) for folder in event_folders],
+            )
+        event_zips[year_folder.name] = year_event_zips
 
     # 2) Zip flatfiles_{ver}.zip
     flatfiles = [flatfiles_dir / file for file in file_structure.FlatfileNames]
@@ -87,14 +119,42 @@ def main(
 
     # Upload everything to Dropbox
     dropbox_version_dir = f"{DROPBOX_PATH}/{version}"
-    # dropbox_waveforms_path = f"{dropbox_version_dir}/waveforms"
-    # for zip_file in waveforms_zip_files:
-    #     upload_zip_to_dropbox(zip_file, dropbox_waveforms_path)
+    dropbox_waveforms_path = f"{dropbox_version_dir}/waveforms"
+    # Upload waveform year zips
+    with mp.Pool(n_procs) as pool:
+        failed_files = pool.starmap(
+            upload_zip_to_dropbox,
+            [(zip_file, dropbox_waveforms_path) for zip_file in waveforms_zip_files],
+        )
+    # Upload event zips
+    for year, event_zips in event_zips.items():
+        dropbox_year_path = f"{dropbox_waveforms_path}/{year}"
+        with mp.Pool(n_procs) as pool:
+            failed_files.extend(
+                pool.starmap(
+                    upload_zip_to_dropbox,
+                    [(zip_file, dropbox_year_path) for zip_file in event_zips],
+                )
+            )
 
-    upload_zip_to_dropbox(flatfiles_zip, dropbox_version_dir)
-    upload_zip_to_dropbox(skipped_zip, dropbox_version_dir)
-    upload_zip_to_dropbox(pre_flatfiles_zip, dropbox_version_dir)
-    upload_zip_to_dropbox(snr_fas_zip, dropbox_version_dir)
+    failed_files.append(upload_zip_to_dropbox(flatfiles_zip, dropbox_version_dir))
+    failed_files.append(upload_zip_to_dropbox(skipped_zip, dropbox_version_dir))
+    failed_files.append(upload_zip_to_dropbox(pre_flatfiles_zip, dropbox_version_dir))
+    failed_files.append(upload_zip_to_dropbox(snr_fas_zip, dropbox_version_dir))
+
+    # Remove any None values from the failed_files list
+    failed_files = [f for f in failed_files if f is not None]
+
+    if failed_files:
+        # Save the failed files to a file
+        failed_files_file = output_dir / "failed_files.txt"
+        with open(failed_files_file, "w") as f:
+            f.write("\n".join([str(f) for f in failed_files]))
+        print(
+            f"Failed to upload {len(failed_files)} files. See {failed_files_file} for paths."
+        )
+    else:
+        print("All files uploaded successfully.")
 
 
 @app.command()
@@ -102,14 +162,55 @@ def upload_to_dropbox(
     input_directory: Path = typer.Argument(
         ..., help="Directory containing the results"
     ),
-    version: str = typer.Argument(..., help="Version of the results"),
-    num_processes: int = typer.Option(6, help="Number of processes to use"),
+    version: str = typer.Option(
+        None, help="Version of the results, defaults to the directory name"
+    ),
+    n_procs: int = typer.Option(1, help="Number of processes to use"),
 ):
     main(
         input_directory,
-        num_processes,
+        n_procs,
         version,
     )
+
+
+@app.command()
+def upload_failed_files(
+    failed_files_file: Path = typer.Argument(
+        ..., help="File containing the failed files"
+    ),
+    version: str = typer.Option(
+        None, help="Version of the results, defaults to the directory name"
+    ),
+    n_procs: int = typer.Option(1, help="Number of processes to use"),
+):
+    with open(failed_files_file, "r") as f:
+        failed_files = f.read().splitlines()
+
+    if version is None:
+        version = failed_files_file.parent.name
+
+    dropbox_version_dir = f"{DROPBOX_PATH}/{version}"
+
+    with mp.Pool(n_procs) as pool:
+        failed_files = pool.starmap(
+            upload_zip_to_dropbox,
+            [(Path(f), dropbox_version_dir) for f in failed_files],
+        )
+
+    failed_files = [f for f in failed_files if f is not None]
+    if failed_files:
+        # Save the failed files to a file
+        failed_files_file = (
+            failed_files_file.parent / f"{failed_files_file.stem}_rerun.txt"
+        )
+        with open(failed_files_file, "w") as f:
+            f.write("\n".join([str(f) for f in failed_files]))
+        print(
+            f"Failed to upload {len(failed_files)} files. See {failed_files_file.stem}_rerun.txt for paths."
+        )
+    else:
+        print("All files uploaded successfully.")
 
 
 if __name__ == "__main__":
