@@ -14,7 +14,7 @@ from nzgmdb.data_processing import merge_flatfiles, process_observed
 from nzgmdb.data_retrieval import geonet, sites, tect_domain
 from nzgmdb.management import file_structure
 from nzgmdb.phase_arrival import gen_phase_arrival_table
-from nzgmdb.scripts import run_gmc
+from nzgmdb.scripts import run_gmc, upload_to_dropox
 
 app = typer.Typer()
 
@@ -447,6 +447,7 @@ def merge_flat_files(
     "- Merge IM results into flatfiles"
     "- Calculate distances"
     "- Merge flat files"
+    "- Upload to Dropbox"
 )
 def run_full_nzgmdb(
     main_dir: Annotated[
@@ -550,6 +551,13 @@ def run_full_nzgmdb(
         bool,
         typer.Option(
             help="If True, the function will run in real time mode and not save intermediate files",
+            is_flag=True,
+        ),
+    ] = False,
+    upload: Annotated[
+        bool,
+        typer.Option(
+            help="If True, the function will upload the results to Dropbox",
             is_flag=True,
         ),
     ] = False,
@@ -733,6 +741,11 @@ def run_full_nzgmdb(
     ):
         print("Merging flat files")
         merge_flat_files(main_dir)
+
+    # Upload to dropbox
+    if upload:
+        print("Uploading to Dropbox")
+        upload_to_dropox.upload_to_dropbox(main_dir, n_procs=n_procs)
 
 
 if __name__ == "__main__":
