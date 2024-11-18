@@ -1,6 +1,8 @@
 import multiprocessing as mp
-import sys
+import queue
+import time
 from pathlib import Path
+from typing import List
 
 import numpy as np
 import obspy
@@ -12,6 +14,19 @@ from nzgmdb.management import config as cfg
 from nzgmdb.management import custom_errors, file_structure
 from nzgmdb.mseed_management import reading
 from nzgmdb.phase_arrival import tp_selection
+
+
+def end_snr_compute(
+    output_queue: queue.Queue, meta_df: pd.DataFrame, skipped_record: pd.DataFrame
+):
+    """
+    Send the outputs to the output queue and wait for the process to be killed by
+    the main process
+    """
+    output_queue.put((meta_df, skipped_record))
+    # Wait forever till the process is terminated by main process
+    while True:
+        time.sleep(10)
 
 
 def compute_snr_for_single_mseed(
@@ -72,35 +87,35 @@ def compute_snr_for_single_mseed(
             "reason": "Failed to find inventory information",
         }
         skipped_record = pd.DataFrame([skipped_record_dict])
-        return None, skipped_record
+        end_snr_compute(output_queue, None, skipped_record)
     except custom_errors.SensitivityRemovalError:
         skipped_record_dict = {
             "record_id": mseed_file.stem,
             "reason": "Failed to remove sensitivity",
         }
         skipped_record = pd.DataFrame([skipped_record_dict])
-        return None, skipped_record
+        end_snr_compute(output_queue, None, skipped_record)
     except custom_errors.All3ComponentsNotPresentError:
         skipped_record_dict = {
             "record_id": mseed_file.stem,
             "reason": "File did not contain 3 components",
         }
         skipped_record = pd.DataFrame([skipped_record_dict])
-        return None, skipped_record
+        end_snr_compute(output_queue, None, skipped_record)
     except custom_errors.RotationError:
         skipped_record_dict = {
             "record_id": mseed_file.stem,
             "reason": "Failed to rotate the data",
         }
         skipped_record = pd.DataFrame([skipped_record_dict])
-        return None, skipped_record
+        end_snr_compute(output_queue, None, skipped_record)
     except custom_errors.InvalidTraceLengthError:
         skipped_record_dict = {
             "record_id": mseed_file.stem,
             "reason": "Invalid trace length from mseed file",
         }
         skipped_record = pd.DataFrame([skipped_record_dict])
-        return None, skipped_record
+        end_snr_compute(output_queue, None, skipped_record)
 
     stats = obspy.read(str(mseed_file))[0].stats
 
@@ -113,14 +128,14 @@ def compute_snr_for_single_mseed(
             "reason": "No P-wave found in phase arrival table",
         }
         skipped_record = pd.DataFrame([skipped_record_dict])
-        return None, skipped_record
+        end_snr_compute(output_queue, None, skipped_record)
     except custom_errors.TPNotInWaveformError:
         skipped_record_dict = {
             "record_id": mseed_file.stem,
             "reason": "TP not in waveform bounds",
         }
         skipped_record = pd.DataFrame([skipped_record_dict])
-        return None, skipped_record
+        end_snr_compute(output_queue, None, skipped_record)
 
     (
         snr,
@@ -144,7 +159,7 @@ def compute_snr_for_single_mseed(
             "reason": "Noise was less than 1 second",
         }
         skipped_record = pd.DataFrame([skipped_record_dict])
-        return None, skipped_record
+        end_snr_compute(output_queue, None, skipped_record)
 
     # Save the SNR data
     # Create dataframe with the snr, fas_noise and fas_signal
@@ -173,7 +188,7 @@ def compute_snr_for_single_mseed(
     )
     # Add to the metadata dataframe
     meta_dict = {
-        "record_id": f"{event_id}_{station}_{stats.channel[:2]}_{stats.location}",
+        "record_id": mseed_file.stem,
         "evid": event_id,
         "sta": station,
         "chan": stats.channel[:2],
@@ -187,10 +202,53 @@ def compute_snr_for_single_mseed(
         "endtime": stats.endtime,
     }
     meta_df = pd.DataFrame([meta_dict])
-    output_queue.put((meta_df, skipped_record))
-    # Kill the process to ensure when the p.is_alive() check is done
-    # the process is not still running and so continues to the next record
-    sys.exit(0)
+    end_snr_compute(output_queue, meta_df, None)
+
+
+def remove_processed_snr_data(processes: List[mp.Process], output_queue: queue.Queue):
+    """
+    Remove the processed snr data from the queue and end the processes
+
+    Parameters
+    ----------
+    processes : list[mp.Process]
+        The list of processes currently running
+    output_queue : queue.Queue
+        The queue to receive the output from the processes
+
+    Returns
+    -------
+    meta_dfs : list
+        The list of metadata dataframes
+    skipped_records : list
+        The list of skipped records
+    """
+    # Collect all results from the queue (If there is any)
+    meta_dfs = []
+    skipped_records = []
+
+    # Check the queue for completed jobs
+    while not output_queue.empty():
+        # Non-blocking check
+        completed_info = output_queue.get(timeout=0.1)
+
+        finished_meta_data = completed_info[0]
+        finished_skipped_records = completed_info[1]
+        if finished_meta_data is None:
+            skipped_records.append(finished_skipped_records)
+            record_id_done = finished_skipped_records.iloc[0]["record_id"]
+        else:
+            meta_dfs.append(finished_meta_data)
+            record_id_done = finished_meta_data.iloc[0]["record_id"]
+
+        # Remove corresponding process
+        for p in processes:
+            if p.record_id == record_id_done:
+                p.terminate()
+                processes.remove(p)
+                break
+
+    return meta_dfs, skipped_records
 
 
 def compute_snr_for_mseed_data(
@@ -265,16 +323,19 @@ def compute_snr_for_mseed_data(
             print(f"Processing batch {index + 1}/{len(mseed_batches)}")
             processes = []
             output_queue = mp.Queue()
+            meta_dfs = []
+            skipped_record_dfs = []
 
             for mseed_file in batch:
                 # If we have reached the limit, wait for some processes to finish
                 while len(processes) >= n_procs:
-                    for p in processes:
-                        p.join(
-                            0.1
-                        )  # Check if any process has finished, without blocking
-                        if not p.is_alive():
-                            processes.remove(p)
+                    finished_meta_data, finished_skipped_records = (
+                        remove_processed_snr_data(processes, output_queue)
+                    )
+                    if len(finished_meta_data) > 0:
+                        meta_dfs.extend(finished_meta_data)
+                    if len(finished_skipped_records) > 0:
+                        skipped_record_dfs.extend(finished_skipped_records)
 
                 # Start a new process
                 process = mp.Process(
@@ -289,27 +350,43 @@ def compute_snr_for_mseed_data(
                         common_frequency_vector,
                     ),
                 )
+                process.record_id = mseed_file.stem
                 processes.append(process)
                 process.start()
 
-            # Wait for all remaining processes to finish
-            for process in processes:
-                process.join()
-
-            # Collect all results from the queue
-            meta_dfs = []
-            skipped_record_dfs = []
-            while not output_queue.empty():
-                result = output_queue.get()
-                meta_dfs.append(result[0])
-                skipped_record_dfs.append(result[1])
+            # Wait for all remaining processes to finish and check the queue
+            while processes:
+                finished_meta_data, finished_skipped_records = (
+                    remove_processed_snr_data(processes, output_queue)
+                )
+                if len(finished_meta_data) > 0:
+                    meta_dfs.extend(finished_meta_data)
+                if len(finished_skipped_records) > 0:
+                    skipped_record_dfs.extend(finished_skipped_records)
+                # Wait 1 second before checking again (prevents missing completed jobs)
+                time.sleep(1)
 
             # Check that there are metadata dataframes that are not None
             if not all(value is None for value in meta_dfs):
                 meta_df = pd.concat(meta_dfs, ignore_index=True)
             else:
                 print("No metadata dataframes")
-                meta_df = pd.DataFrame()
+                meta_df = pd.DataFrame(
+                    columns=[
+                        "record_id",
+                        "evid",
+                        "sta",
+                        "chan",
+                        "loc",
+                        "tp",
+                        "Ds",
+                        "Dn",
+                        "npts",
+                        "delta",
+                        "starttime",
+                        "endtime",
+                    ]
+                )
             meta_df.to_csv(batch_dir / f"snr_metadata_{index}.csv", index=False)
 
             # Check that there are skipped records that are not None
@@ -318,7 +395,7 @@ def compute_snr_for_mseed_data(
                 print(f"Skipped {len(skipped_records)} records")
             else:
                 print("No skipped records")
-                skipped_records = pd.DataFrame()
+                skipped_records = pd.DataFrame(columns=["record_id", "reason"])
             skipped_records.to_csv(
                 batch_dir / f"snr_skipped_records_{index}.csv", index=False
             )
@@ -344,14 +421,29 @@ def compute_snr_for_mseed_data(
         meta_df = pd.concat(meta_dfs, ignore_index=True)
     else:
         print("No metadata dataframes")
-        meta_df = pd.DataFrame()
+        meta_df = pd.DataFrame(
+            columns=[
+                "record_id",
+                "evid",
+                "sta",
+                "chan",
+                "loc",
+                "tp",
+                "Ds",
+                "Dn",
+                "npts",
+                "delta",
+                "starttime",
+                "endtime",
+            ]
+        )
     # Check that there are skipped records that are not None
     if not all(value is None for value in skipped_record_dfs):
         skipped_records_df = pd.concat(skipped_record_dfs, ignore_index=True)
         print(f"Skipped {len(skipped_records_df)} records")
     else:
         print("No skipped records")
-        skipped_records_df = pd.DataFrame()
+        skipped_records_df = pd.DataFrame(columns=["record_id", "reason"])
 
     # Save the dataframes
     meta_df.to_csv(

@@ -84,15 +84,9 @@ def initial_preprocessing(
                 level="response", network="NZ", station=station, location=location
             )
         except FDSNNoDataException:
-            try:
-                client_IU = FDSN_Client("IRIS")
-                inv = client_IU.get_stations(
-                    level="response", network="IU", station=station, location=location
-                )
-            except FDSNNoDataException:
-                raise custom_errors.InventoryNotFoundError(
-                    f"No inventory information found for station {station} with location {location}"
-                )
+            raise custom_errors.InventoryNotFoundError(
+                f"No inventory information found for station {station} with location {location}"
+            )
 
         # Rotate
         try:

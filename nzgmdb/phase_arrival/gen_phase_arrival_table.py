@@ -213,6 +213,22 @@ def generate_phase_arrival_table(
             pd.Series(pool.map(process_mseed, mseed_files)).dropna().to_list()
         )
 
+    # Check if the picker_phases_df is empty
+    if picker_phases_df.empty:
+        # Create an empty DataFrame with the same columns as the picker_phases_df
+        picker_phases_df = pd.DataFrame(
+            columns=[
+                "evid",
+                "datetime",
+                "net",
+                "sta",
+                "loc",
+                "chan",
+                "phase",
+                "t_res",
+            ]
+        )
+
     # Change picker_phases_df[t_res] from nan to 0.0 so Geonet t_res values
     # will not be substituted for the missing picker_phases_df[t_res] values
     picker_phases_df["t_res"] = 0.0
@@ -225,22 +241,26 @@ def generate_phase_arrival_table(
             itertools.chain.from_iterable(pool.map(fetch_geonet_phases, mseed_files))
         )
 
-    # Use other columns as a new DataFrame index
-    columns_to_merge_for_new_index = ["evid", "net", "sta", "loc", "chan", "phase"]
-    geonet_phases_df_new_index = geonet_phases_df.set_index(
-        columns_to_merge_for_new_index
-    )
-    picker_phases_df_new_index = picker_phases_df.set_index(
-        columns_to_merge_for_new_index
-    )
+    # Check length of the geonet_phases_df
+    if len(geonet_phases_df) > 0:
+        # Use other columns as a new DataFrame index
+        columns_to_merge_for_new_index = ["evid", "net", "sta", "loc", "chan", "phase"]
+        geonet_phases_df_new_index = geonet_phases_df.set_index(
+            columns_to_merge_for_new_index
+        )
+        picker_phases_df_new_index = picker_phases_df.set_index(
+            columns_to_merge_for_new_index
+        )
 
-    # Use the new index to include Geonet phase
-    # arrival times if there are not any conflicting
-    # phase arrival times from picker
-    merged_df = picker_phases_df_new_index.combine_first(geonet_phases_df_new_index)
+        # Use the new index to include Geonet phase
+        # arrival times if there are not any conflicting
+        # phase arrival times from picker
+        merged_df = picker_phases_df_new_index.combine_first(geonet_phases_df_new_index)
 
-    # reset the index back to normal
-    merged_df = merged_df.reset_index()
+        # reset the index back to normal
+        merged_df = merged_df.reset_index()
+    else:
+        merged_df = picker_phases_df
 
     # Save the phase arrival table
     output_dir.mkdir(parents=True, exist_ok=True)

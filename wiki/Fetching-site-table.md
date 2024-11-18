@@ -4,7 +4,7 @@ This page describes the process that occurs during the fetching site table step 
 - None
 
 # Process
-We utilize the FDSN Clients from obspy to fetch simple station information such as the network code, station code, lat, lon and elevation values. The "GEONET" client is used to obtain all of the stations in NZ and the "IRIS" client is used to fetch the single station SNZO.
+We utilize the FDSN Clients from obspy to fetch simple station information such as the network code, station code, lat, lon and elevation values. The "GEONET" client is used to obtain all of the stations in NZ.
 
 This information is then paired with a file [Geonet  Metadata  Summary_v1.4.csv](https://github.com/ucgmsim/nzgmdb/blob/2fa80fa0917989c1103ed0a1e4821be7bb8f0e73/nzgmdb/data/Geonet%20%20Metadata%20%20Summary_v1.4.csv) found in the data folder of the NZGMDB github. This file contains site information as shown below in the screenshot.
 
