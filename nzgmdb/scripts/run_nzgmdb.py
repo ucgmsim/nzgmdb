@@ -66,7 +66,7 @@ def fetch_geonet_data(
     real_time: Annotated[
         bool,
         typer.Option(
-            help="If True, the function will run in real time mode and not save intermediate files",
+            help="If True, the function will run in real time mode by using a different client",
             is_flag=True,
         ),
     ] = False,
@@ -549,7 +549,7 @@ def run_full_nzgmdb(
     real_time: Annotated[
         bool,
         typer.Option(
-            help="If True, the function will run in real time mode and not save intermediate files",
+            help="If True, the function will run in real time mode by using a different client",
             is_flag=True,
         ),
     ] = False,

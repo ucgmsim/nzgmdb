@@ -85,6 +85,8 @@ def remove_processed_station(processes: List[Process], output_queue: Queue):
 
     Returns
     -------
+    sta_mag_lines : list
+        The list of station magnitude lines
     skipped_records : list
         The list of skipped records
     """
@@ -126,6 +128,32 @@ def get_station_data(
     site_table: pd.DataFrame,
     output_queue: Queue,
 ):
+    """
+    Get the station data for the given station and network
+
+    Parameters
+    ----------
+    station : obspy.core.inventory.Station
+        The station object
+    network : obspy.core.inventory.Network
+        The network object
+    event_cat : obspy.core.event.Event
+        The event catalog object
+    event_id : str
+        The event ID
+    main_dir : Path
+        The main directory for the event
+    client_NZ : obspy.clients.fdsn.Client
+        The FDSN client
+    pref_mag : float
+        The preferred magnitude
+    pref_mag_type : str
+        The preferred magnitude type
+    site_table : pd.DataFrame
+        The site table dataframe
+    output_queue : queue.Queue
+        The queue to output the results
+    """
     sta_mag_line, skipped_records = geonet.fetch_sta_mag_line(
         station,
         network,
@@ -156,6 +184,11 @@ def custom_multiprocess_geonet(event_dir: Path, event_id: str, n_procs: int = 1)
         The event ID
     n_procs : int
         The number of processes to use
+
+    Returns
+    -------
+    bool
+        True if the event was processed, None if the event was skipped
     """
     # Generate the site basin flatfile
     flatfile_dir = file_structure.get_flatfile_dir(event_dir)
