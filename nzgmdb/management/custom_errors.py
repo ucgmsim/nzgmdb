@@ -61,9 +61,3 @@ class InvalidTraceLengthError(Exception):
     """Exception raised when the trace length is invalid for an mseed file."""
 
     pass
-
-
-class NoStations(Exception):
-    """Exception raised when no stations are found for an event (too offshore)."""
-
-    pass

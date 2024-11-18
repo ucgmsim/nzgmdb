@@ -184,7 +184,6 @@ def remove_processed_im_data(processes: List[mp.Process], output_queue: queue.Qu
         # Remove corresponding process
         for p in processes:
             if p.record_id == record_id_done:
-                print(f"Record {record_id_done} completed and will be removed")
                 p.terminate()
                 processes.remove(p)
                 break
