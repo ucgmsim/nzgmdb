@@ -1,6 +1,7 @@
 import datetime
 import io
 import time
+import requests
 from multiprocessing import Process
 from pathlib import Path
 from typing import List
@@ -9,7 +10,7 @@ import pandas as pd
 import requests
 
 from nzgmdb.management import config as cfg
-from nzgmdb.management import file_structure
+from nzgmdb.management import file_structure, custom_errors
 from nzgmdb.scripts import run_nzgmdb
 
 
@@ -65,35 +66,28 @@ def poll_earthquake_data():
         checkpoint = True
 
         if not geonet_df.empty:
-            # Run for all the event_ids
-            for event_id in geonet_df["publicid"]:
-                event_id = str(event_id)
-                # Check if the event_dir exists
-                event_dir = main_dir / event_id
-                if event_dir.exists():
-                    continue
-                # Execute the NZGMDB pipeline in the current process
-                print(f"Started process for {event_id}")
-                event_dir.mkdir(exist_ok=True)
-                try:
-                    run_nzgmdb.run_full_nzgmdb(
-                        event_dir,
-                        start_date,
-                        end_date,
-                        gm_classifier_dir,
-                        conda_sh,
-                        gmc_activate,
-                        gmc_predict_activate,
-                        gmc_procs,
-                        n_procs,
-                        ko_matrix_path=ko_matrix_path,
-                        checkpoint=checkpoint,
-                        only_event_ids=[event_id],
-                        real_time=True,
-                    )
-                except ValueError:
-                    # No results for the event
-                    event_dir.rmdir()
+            # Get the last event_id
+            only_event_ids = [str(geonet_df["publicid"].values[0])]
+            # Execute the NZGMDB pipeline in the current process
+            print(f"Started process for {only_event_ids[0]}")
+            event_dir = main_dir / only_event_ids[0]
+            event_dir.mkdir(exist_ok=True)
+            try:
+                run_nzgmdb.run_full_nzgmdb(
+                    event_dir,
+                    start_date,
+                    end_date,
+                    gm_classifier_dir,
+                    conda_sh,
+                    gmc_activate,
+                    gmc_predict_activate,
+                    gmc_procs,
+                    n_procs,
+                    ko_matrix_path=ko_matrix_path,
+                    checkpoint=checkpoint,
+                    only_event_ids=only_event_ids,
+                    real_time=True,
+                )
                 finished_time = time.time()
                 print(f"Finished and took {finished_time - init_time} seconds")
                 # Get the total time taken from the earthquake happening and then the output results calculated
@@ -105,6 +99,23 @@ def poll_earthquake_data():
                 print(
                     f"Total time taken: {finished_time - eq_time.timestamp()} seconds"
                 )
+
+                # Define the URL for the endpoint
+                url = f"https://quakecoresoft.canterbury.ac.nz/seismicnow/api/earthquakes/add?earthquake_id={only_event_ids[0]}"
+
+                # Send a GET request to the endpoint
+                response = requests.post(url)
+
+                # Check the response status
+                if response.status_code == 200:
+                    print("Event added successfully")
+                else:
+                    print(f"Failed to add event. Status code: {response.status_code}")
+                    print(f"Response: {response.text}")
+            except custom_errors.NoStations as e:
+                print(e)
+                print("Skip event as no stations were found")
+        print("Sleeping for 1 minute")
         time.sleep(60)
 
 

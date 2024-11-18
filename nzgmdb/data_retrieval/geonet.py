@@ -907,6 +907,11 @@ def parse_geonet_information(
             except EmptyDataError:
                 print(f"Warning: {file} is empty or has no valid columns to parse.")
 
+    if not sta_mag_dfs:
+        raise custom_errors.NoStations(
+            "No station magnitude data was found, please check the origin of the earthquake"
+        )
+
     event_df = pd.concat(event_dfs, ignore_index=True)
     sta_mag_df = pd.concat(sta_mag_dfs, ignore_index=True)
     skipped_records_df = pd.concat(skipped_records_dfs, ignore_index=True)
