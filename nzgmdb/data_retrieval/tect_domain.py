@@ -1,5 +1,5 @@
 """
-    Contains the functions to add tectonic domain to the data
+Contains the functions to add tectonic domain to the data
 """
 
 import multiprocessing
@@ -260,10 +260,10 @@ def merge_tectclass(event_df: pd.DataFrame):
     event_df["tect_method"] = event_df["tect_method"].astype("str")
 
     # Replace the tect_class and tect_method with the NZSMDB data where it exists
-    event_df.loc[event_df.NZSMDB_TectClass.isnull() == False, "tect_class"] = event_df[
-        event_df.NZSMDB_TectClass.isnull() == False
+    event_df.loc[not event_df.NZSMDB_TectClass.isnull(), "tect_class"] = event_df[
+        not event_df.NZSMDB_TectClass.isnull()
     ].NZSMDB_TectClass.values
-    event_df.loc[event_df.NZSMDB_TectClass.isnull() == False, "tect_method"] = "NZSMDB"
+    event_df.loc[not event_df.NZSMDB_TectClass.isnull(), "tect_method"] = "NZSMDB"
 
     # Drop unnecessary columns
     event_df = event_df.drop(columns=["NZSMDB_TectClass"])

@@ -1,23 +1,51 @@
 import datetime
 import io
 import time
-from multiprocessing import Process
+from multiprocessing import Process, Queue
 from pathlib import Path
-from typing import List
+from typing import Annotated
 
+import numpy as np
 import pandas as pd
 import requests
+import typer
+from obspy.clients.fdsn import Client as FDSN_Client
+from obspy.core.event import Event
+from obspy.core.inventory import Network, Station
+from scipy.interpolate import interp1d
 
+from nzgmdb.data_retrieval import geonet, sites
 from nzgmdb.management import config as cfg
 from nzgmdb.management import file_structure
 from nzgmdb.scripts import run_nzgmdb
 
+app = typer.Typer()
 
-def download_earthquake_data_last_hour(
-    start_date: datetime, end_date: datetime
+SEISMIC_NOW_URL = (
+    "https://quakecoresoft.canterbury.ac.nz/seismicnow/api/earthquakes/add"
+)
+
+
+def download_earthquake_data(
+    start_date: datetime, end_date: datetime, mag_filter: float
 ) -> pd.DataFrame:
-    # Calculate the current time and the time one hour ago
+    """
+    Download the earthquake data from the GeoNet API
 
+    Parameters
+    ----------
+    start_date : datetime
+        Start date to download the data
+    end_date : datetime
+        End date to download the data
+    mag_filter : float
+        Minimum magnitude to filter the data
+
+    Returns
+    -------
+    pd.DataFrame
+        Dataframe containing the earthquake data
+    """
     # Format the dates in the required format
     start_date_str = start_date.strftime("%Y-%m-%dT%H:%M:%S")
     end_date_str = end_date.strftime("%Y-%m-%dT%H:%M:%S")
@@ -38,72 +66,530 @@ def download_earthquake_data_last_hour(
     # Read the response into a dataframe
     df = pd.read_csv(io.StringIO(response.text))
 
+    # Filter by magnitude
+    df = df[df["magnitude"] >= mag_filter]
+
     return df
 
 
-def poll_earthquake_data():
+def remove_processed_station(processes: list[Process], output_queue: Queue):
+    """
+    Remove the processed station from the queue and end the processes
+
+    Parameters
+    ----------
+    processes : list[mp.Process]
+        The list of processes currently running
+    output_queue : queue.Queue
+        The queue to receive the output from the processes
+
+    Returns
+    -------
+    sta_mag_lines : list
+        The list of station magnitude lines
+    skipped_records : list
+        The list of skipped records
+    """
+    # Collect all results from the queue (If there is any)
+    sta_mag_lines = []
+    skipped_records = []
+
+    # Check the queue for completed jobs
+    while not output_queue.empty():
+        # Non-blocking check
+        completed_info = output_queue.get(timeout=0.1)
+        sta_mag_line = completed_info[0]
+        skipped_record = completed_info[1]
+        station_done = completed_info[2]
+        if skipped_record is not None:
+            skipped_records.extend(skipped_record)
+        if sta_mag_line is not None:
+            sta_mag_lines.extend(sta_mag_line)
+
+        # Remove corresponding process
+        for p in processes:
+            if p.station == station_done:
+                p.terminate()
+                processes.remove(p)
+                break
+
+    return sta_mag_lines, skipped_records
+
+
+def get_station_data(
+    station: Station,
+    network: Network,
+    event_cat: Event,
+    event_id: str,
+    main_dir: Path,
+    client_NZ: FDSN_Client,
+    pref_mag: float,
+    pref_mag_type: str,
+    site_table: pd.DataFrame,
+    output_queue: Queue,
+):
+    """
+    Get the station data for the given station and network
+
+    Parameters
+    ----------
+    station : obspy.core.inventory.Station
+        The station object
+    network : obspy.core.inventory.Network
+        The network object
+    event_cat : obspy.core.event.Event
+        The event catalog object
+    event_id : str
+        The event ID
+    main_dir : Path
+        The main directory for the event
+    client_NZ : obspy.clients.fdsn.Client
+        The FDSN client
+    pref_mag : float
+        The preferred magnitude
+    pref_mag_type : str
+        The preferred magnitude type
+    site_table : pd.DataFrame
+        The site table dataframe
+    output_queue : queue.Queue
+        The queue to output the results
+    """
+    sta_mag_line, skipped_records = geonet.fetch_sta_mag_line(
+        station,
+        network,
+        event_cat,
+        event_id,
+        main_dir,
+        client_NZ,
+        pref_mag,
+        pref_mag_type,
+        site_table,
+    )
+    # Tell the main process that this record is done
+    output_queue.put((sta_mag_line, skipped_records, station.code))
+    # Wait forever till the process is terminated by main process
     while True:
-        init_time = time.time()
+        time.sleep(10)
+
+
+def custom_multiprocess_geonet(event_dir: Path, event_id: str, n_procs: int = 1):
+    """
+    Multiprocess the GeoNet data retrieval for speed efficiency over stations
+
+    Parameters
+    ----------
+    event_dir : Path
+        The directory for the event
+    event_id : str
+        The event ID
+    n_procs : int
+        The number of processes to use
+
+    Returns
+    -------
+    bool
+        True if the event was processed, None if the event was skipped
+    """
+    # Generate the site basin flatfile
+    flatfile_dir = file_structure.get_flatfile_dir(event_dir)
+    flatfile_dir.mkdir(parents=True, exist_ok=True)
+
+    site_df = sites.create_site_table_response()
+    site_df = sites.add_site_basins(site_df)
+
+    site_df.to_csv(
+        flatfile_dir / file_structure.PreFlatfileNames.SITE_TABLE, index=False
+    )
+
+    # Set constants
+    config = cfg.Config()
+    channel_codes = ",".join(config.get_value("channel_codes"))
+    client_NZ = FDSN_Client(base_url=config.get_value("real_time_url"))
+    inventory = client_NZ.get_stations(channel=channel_codes, level="response")
+    # Get the catalog information
+    cat = client_NZ.get_events(eventid=event_id)
+    event_cat = cat[0]
+
+    # Get the event line and save the output
+    event_line = geonet.fetch_event_line(event_cat, event_id)
+    event_df = pd.DataFrame(
+        [event_line],
+        columns=[
+            "evid",
+            "datetime",
+            "lat",
+            "lon",
+            "depth",
+            "loc_type",
+            "loc_grid",
+            "mag",
+            "mag_type",
+            "mag_method",
+            "mag_unc",
+            "mag_orig",
+            "mag_orig_type",
+            "mag_orig_unc",
+            "ndef",
+            "nsta",
+            "nmag",
+            "t_res",
+            "reloc",
+        ],
+    )
+    # Save the dataframes with a suffix
+    event_df.to_csv(
+        flatfile_dir / file_structure.PreFlatfileNames.EARTHQUAKE_SOURCE_TABLE_GEONET,
+        index=False,
+    )
+
+    # Get the data_dir
+    data_dir = file_structure.get_data_dir()
+
+    mw_rrup = np.loadtxt(data_dir / "Mw_rrup.txt")
+    mags = mw_rrup[:, 0]
+    rrups = mw_rrup[:, 1]
+    # Generate cubic interpolation for magnitude distance relationship
+    f_rrup = interp1d(mags, rrups, kind="cubic")
+
+    # Get Networks / Stations within a certain radius of the event
+    inv_sub_sta = geonet.get_stations_within_radius(
+        event_cat, mags, rrups, f_rrup, inventory
+    )
+
+    # Check if there are any stations
+    if len(inv_sub_sta) == 0:
+        return None
+
+    # Create the Process and Queue for output results
+    processes = []
+    output_queue = Queue()
+    sta_mag_table = []
+    skipped_records = []
+
+    # Get the station magnitude lines
+    for network in inv_sub_sta:
+        for station in network:
+            # If we have reached the limit of n_procs, wait for some processes to finish
+            while len(processes) >= n_procs:
+                # Remove the processed Station from the queue
+                finished_sta_mag_table, finished_skipped_records = (
+                    remove_processed_station(processes, output_queue)
+                )
+                sta_mag_table.extend(finished_sta_mag_table)
+                skipped_records.extend(finished_skipped_records)
+                # Wait 1 second before checking again (prevents missing completed jobs)
+                time.sleep(1)
+
+            # Start a new process
+            process = Process(
+                target=get_station_data,
+                args=(
+                    station,
+                    network,
+                    event_cat,
+                    event_id,
+                    event_dir,
+                    client_NZ,
+                    event_line[7],
+                    event_line[8],
+                    site_df,
+                    output_queue,
+                ),
+            )
+            process.station = station.code
+            processes.append(process)
+            process.start()
+
+    # Wait for all remaining processes to finish
+    while processes:
+        # Remove the processed Station from the queue
+        finished_sta_mag_table, finished_skipped_records = remove_processed_station(
+            processes, output_queue
+        )
+        sta_mag_table.extend(finished_sta_mag_table)
+        skipped_records.extend(finished_skipped_records)
+
+    if len(sta_mag_table) == 0:
+        # No station data, skip this event
+        return None
+    else:
+        sta_mag_df = pd.DataFrame(
+            sta_mag_table,
+            columns=[
+                "magid",
+                "net",
+                "sta",
+                "loc",
+                "chan",
+                "evid",
+                "mag",
+                "mag_type",
+                "mag_corr_method",
+                "amp",
+                "amp_unit",
+            ],
+        )
+
+    sta_mag_df.to_csv(
+        flatfile_dir / file_structure.PreFlatfileNames.STATION_MAGNITUDE_TABLE_GEONET,
+        index=False,
+    )
+
+    if len(skipped_records) > 0:
+        # Create the skipped records df
+        skipped_records_df = pd.DataFrame(
+            skipped_records, columns=["skipped_records", "reason"]
+        )
+    else:
+        skipped_records_df = pd.DataFrame()
+
+    skipped_records_df.to_csv(
+        flatfile_dir / file_structure.SkippedRecordFilenames.GEONET_SKIPPED_RECORDS,
+        index=False,
+    )
+    return True
+
+
+@app.command(
+    help="Run the NZGMDB pipeline for a specific event in near-real-time mode."
+)
+def run_event(  # noqa: D103
+    event_id: Annotated[
+        str,
+        typer.Argument(
+            help="The event ID.",
+        ),
+    ],
+    event_dir: Annotated[
+        Path,
+        typer.Argument(
+            help="The directory for the event to output to.",
+            exists=True,
+            file_okay=False,
+        ),
+    ],
+    gm_classifier_dir: Annotated[
+        Path,
+        typer.Argument(
+            help="Directory for gm_classifier.",
+            exists=True,
+            file_okay=False,
+        ),
+    ],
+    conda_sh: Annotated[
+        Path,
+        typer.Argument(
+            help="Path to the conda.sh script for environment activation.",
+            exists=True,
+            file_okay=True,
+        ),
+    ],
+    gmc_activate: Annotated[
+        str,
+        typer.Argument(
+            help="Command to activate gmc environment.",
+        ),
+    ],
+    gmc_predict_activate: Annotated[
+        str,
+        typer.Argument(
+            help="Command to activate gmc_predict environment.",
+        ),
+    ],
+    n_procs: Annotated[
+        int,
+        typer.Option(
+            help="Number of processes to use in the pipeline.",
+        ),
+    ],
+    gmc_procs: Annotated[
+        int,
+        typer.Option(
+            help="Number of GMC processes to use.",
+        ),
+    ],
+    ko_matrix_path: Annotated[
+        Path,
+        typer.Option(
+            help="Path to the KO matrix directory.",
+            exists=True,
+            file_okay=False,
+        ),
+    ] = None,
+    add_seismic_now: Annotated[
+        bool,
+        typer.Option(
+            help="Add the event to SeismicNow.",
+            is_flag=True,
+        ),
+    ] = False,
+    start_date: Annotated[
+        datetime.datetime,
+        typer.Option(
+            help="Start date for the event.",
+        ),
+    ] = datetime.datetime.utcnow() - datetime.timedelta(days=8),
+    end_date: Annotated[
+        datetime.datetime,
+        typer.Option(
+            help="End date for the event.",
+        ),
+    ] = datetime.datetime.utcnow() - datetime.timedelta(minutes=1),
+):
+    # Run the custom multiprocess geonet, site table and geonet steps
+    result = custom_multiprocess_geonet(event_dir, event_id, n_procs)
+
+    if result is None:
+        # Skip this event
+        print(f"Skipping event {event_id}")
+        return None
+
+    # Run the rest of the pipeline
+    run_nzgmdb.run_full_nzgmdb(
+        event_dir,
+        start_date,
+        end_date,
+        gm_classifier_dir,
+        conda_sh,
+        gmc_activate,
+        gmc_predict_activate,
+        gmc_procs,
+        n_procs,
+        ko_matrix_path=ko_matrix_path,
+        checkpoint=True,
+        only_event_ids=[event_id],
+        real_time=True,
+    )
+
+    if add_seismic_now:
+        # Define the URL for the endpoint
+        url = f"{SEISMIC_NOW_URL}?earthquake_id={event_id}"
+
+        # Send a GET request to the endpoint
+        response = requests.post(url)
+
+        # Check the response status
+        if response.status_code == 200:
+            print("Event added successfully")
+        else:
+            print(f"Failed to add event. Status code: {response.status_code}")
+            print(f"Response: {response.text}")
+    return True
+
+
+@app.command(
+    help="Poll earthquake data, process events, and run the NZGMDB pipeline for real-time data."
+)
+def poll_earthquake_data(  # noqa: D103
+    main_dir: Annotated[
+        Path,
+        typer.Argument(
+            help="The main directory for earthquake event data.",
+            exists=True,
+            file_okay=False,
+        ),
+    ],
+    gm_classifier_dir: Annotated[
+        Path,
+        typer.Argument(
+            help="Directory for gm_classifier.",
+            exists=True,
+            file_okay=False,
+        ),
+    ],
+    conda_sh: Annotated[
+        Path,
+        typer.Argument(
+            help="Path to the conda.sh script for environment activation.",
+            exists=True,
+            file_okay=True,
+        ),
+    ],
+    gmc_activate: Annotated[
+        str,
+        typer.Argument(
+            help="Command to activate gmc environment.",
+        ),
+    ],
+    gmc_predict_activate: Annotated[
+        str,
+        typer.Argument(
+            help="Command to activate gmc_predict environment.",
+        ),
+    ],
+    n_procs: Annotated[
+        int,
+        typer.Option(
+            help="Number of processes to use in the pipeline.",
+        ),
+    ] = 1,
+    gmc_procs: Annotated[
+        int,
+        typer.Option(
+            help="Number of GMC processes to use.",
+        ),
+    ] = 1,
+    ko_matrix_path: Annotated[
+        Path,
+        typer.Option(
+            help="Path to the KO matrix directory.",
+            exists=True,
+            file_okay=False,
+        ),
+    ] = None,
+    add_seismic_now: Annotated[
+        bool,
+        typer.Option(
+            help="Add the event to SeismicNow.",
+            is_flag=True,
+        ),
+    ] = False,
+):
+    init_start_date = None
+    while True:
         # Get the last 2 minutes worth of data and check if there are any new events
         end_date = datetime.datetime.utcnow() - datetime.timedelta(minutes=1)
-        start_date = end_date - datetime.timedelta(minutes=2)
-        geonet_df = download_earthquake_data_last_hour(start_date, end_date)
-        main_dir = Path("/home/joel/local/gmdb/real_time/testing")
-
-        gm_classifier_dir = Path("/home/joel/code/gm_classifier")
-        conda_sh = Path("/home/joel/anaconda3/etc/profile.d/conda.sh")
-        gmc_activate = "conda activate gmc"
-        gmc_predict_activate = "conda activate gmc_predict"
-        n_procs = 7
-        gmc_procs = 2
-        ko_matrix_path = Path(
-            "/home/joel/code/IM_calculation/IM_calculation/IM/KO_matrices"
+        # If an event was just executed, ensures we capture any events that may have been missed during the execution
+        start_date = (
+            end_date - datetime.timedelta(minutes=2)
+            if init_start_date is None
+            else init_start_date
         )
-        checkpoint = True
+        geonet_df = download_earthquake_data(start_date, end_date, mag_filter=4.0)
+        init_start_date = None
 
         if not geonet_df.empty:
-            # Get the last event_id
-            only_event_ids = [str(geonet_df["publicid"].values[0])]
+            # Run every event
+            for event_id in geonet_df["publicid"].values:
+                event_dir = main_dir / str(event_id)
+                # If the event exists skip
+                if event_dir.exists():
+                    print(f"Event {event_id} already exists")
+                    continue
+                event_dir.mkdir()
 
-            # Now we need to execute the full NZGMDB pipeline as a new process
-            # process = Process(
-            #     target=run_nzgmdb.run_full_nzgmdb,
-            #     args=(main_dir, start_date, end_date, gm_classifier_dir, conda_sh, gmc_activate, gmc_predict_activate,
-            #           gmc_procs, n_procs),
-            #     kwargs={'ko_matrix_path': ko_matrix_path, 'checkpoint': checkpoint, 'only_event_ids': only_event_ids}
-            # )
-            # process.start()
-            # Execute the NZGMDB pipeline in the current process
-            print(f"Started process for {only_event_ids[0]}")
-            event_dir = main_dir / only_event_ids[0]
-            event_dir.mkdir(exist_ok=True)
-            run_nzgmdb.run_full_nzgmdb(
-                event_dir,
-                start_date,
-                end_date,
-                gm_classifier_dir,
-                conda_sh,
-                gmc_activate,
-                gmc_predict_activate,
-                gmc_procs,
-                n_procs,
-                ko_matrix_path=ko_matrix_path,
-                checkpoint=checkpoint,
-                only_event_ids=only_event_ids,
-                real_time=True,
-            )
-            finished_time = time.time()
-            print(f"Finished and took {finished_time - init_time} seconds")
-            # Get the total time taken from the earthquake happening and then the output results calculated
-            eq_source_df = pd.read_csv(
-                file_structure.get_flatfile_dir(event_dir)
-                / file_structure.FlatfileNames.EARTHQUAKE_SOURCE_TABLE
-            )
-            eq_time = pd.to_datetime(eq_source_df["datetime"].values[0])
-            print(f"Total time taken: {finished_time - eq_time.timestamp()} seconds")
-        # print("Sleeping for 1 minute")
+                result = run_event(
+                    str(event_id),
+                    event_dir,
+                    gm_classifier_dir,
+                    conda_sh,
+                    gmc_activate,
+                    gmc_predict_activate,
+                    n_procs,
+                    gmc_procs,
+                    ko_matrix_path,
+                    add_seismic_now,
+                    start_date,
+                    end_date,
+                )
+
+                if result is None:
+                    # remove the event directory
+                    event_dir.rmdir()
+                init_start_date = end_date
+
         time.sleep(60)
 
 
 if __name__ == "__main__":
-    poll_earthquake_data()
+    app()

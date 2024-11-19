@@ -1,6 +1,6 @@
 """
-    Contains functions for generating
-    the phase arrival table
+Contains functions for generating
+the phase arrival table
 """
 
 import itertools
@@ -14,7 +14,7 @@ import obspy
 import pandas as pd
 from obspy.clients.fdsn import Client as FDSN_Client
 
-from nzgmdb.management import custom_errors, file_structure
+from nzgmdb.management import file_structure
 from nzgmdb.phase_arrival import picker
 
 
@@ -65,17 +65,17 @@ def process_mseed(mseed_file: Path) -> dict[str, Any]:
 
     try:
         p_comp_000 = get_p_wave(mseed_data[0].data, mseed_data[0].stats.delta)
-    except:
+    except (IndexError, ValueError):
         print(f"picker failed on {str(mseed_file)} p_comp_000")
         p_comp_000 = -1
     try:
         p_comp_090 = get_p_wave(mseed_data[1].data, mseed_data[1].stats.delta)
-    except:
+    except (IndexError, ValueError):
         print(f"picker failed on {str(mseed_file)} p_comp_090")
         p_comp_090 = -1
     try:
         p_comp_ver = get_p_wave(mseed_data[2].data, mseed_data[2].stats.delta)
-    except:
+    except (IndexError, ValueError):
         print(f"picker failed on {str(mseed_file)} p_comp_ver")
         p_comp_ver = -1
 
@@ -116,13 +116,6 @@ def fetch_geonet_phases(mseed_file: Path) -> list[dict[str, Any]]:
     -------
     phase_table_entries: list[dict[str, any]]
         A list of phase arrival times.
-
-    Raises
-    ------
-    InvalidNumberOfGeonetPicksException
-        If more than two phase picks from Geonet match
-        a given mseed file as there should only be one
-        P phase pick and sometimes one S phase pick.
     """
     # Get the event ID (evid) from the mseed file
     evid = file_structure.get_event_id_from_mseed(mseed_file)
@@ -279,10 +272,10 @@ def generate_phase_arrival_table(
         # Adding labels to the DataFrame columns so they
         # can be distinguished after the outer merge
         picker_phases_df_new_index.columns = (
-            picker_phases_df_new_index.columns + f"_picker"
+            picker_phases_df_new_index.columns + "_picker"
         )
         geonet_phases_df_new_index.columns = (
-            geonet_phases_df_new_index.columns + f"_geonet"
+            geonet_phases_df_new_index.columns + "_geonet"
         )
 
         all_picker_and_geonet_df = pd.merge(
@@ -305,9 +298,7 @@ def generate_phase_arrival_table(
         ] = (
             all_picker_and_geonet_df.loc[condition_not_nan, "datetime_picker"]
             - all_picker_and_geonet_df.loc[condition_not_nan, "datetime_geonet"]
-        ).astype(
-            np.float64
-        )
+        ).astype(np.float64)
 
         all_picker_and_geonet_df.to_csv(
             output_dir / "full_phase_arrival_table.csv", index=False

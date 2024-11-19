@@ -2,7 +2,7 @@ import multiprocessing as mp
 import queue
 import time
 from pathlib import Path
-from typing import List
+from typing import list
 
 import numpy as np
 import obspy
@@ -205,7 +205,7 @@ def compute_snr_for_single_mseed(
     end_snr_compute(output_queue, meta_df, None)
 
 
-def remove_processed_snr_data(processes: List[mp.Process], output_queue: queue.Queue):
+def remove_processed_snr_data(processes: list[mp.Process], output_queue: queue.Queue):
     """
     Remove the processed snr data from the queue and end the processes
 
@@ -244,7 +244,6 @@ def remove_processed_snr_data(processes: List[mp.Process], output_queue: queue.Q
         # Remove corresponding process
         for p in processes:
             if p.record_id == record_id_done:
-                print(f"Record {record_id_done} completed and will be removed")
                 p.terminate()
                 processes.remove(p)
                 break
@@ -317,9 +316,7 @@ def compute_snr_for_mseed_data(
     print(f"Total number of mseed files to process: {len(mseed_files)}")
 
     # Create batches of mseed files for checkpointing
-    mseed_batches = [
-        mseed_files[i : i + batch_size] for i in range(0, len(mseed_files), batch_size)
-    ]
+    mseed_batches = np.array_split(mseed_files, np.ceil(len(mseed_files) / batch_size))
 
     for index, batch in enumerate(mseed_batches):
         if index not in processed_suffixes:

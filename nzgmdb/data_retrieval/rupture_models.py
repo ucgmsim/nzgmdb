@@ -1,4 +1,5 @@
 import numpy as np
+import pandas as pd
 
 from nzgmdb.data_retrieval import github
 from nzgmdb.management import config as cfg
@@ -36,7 +37,7 @@ def get_seismic_data_from_url(
             The average width of the rupture model.
     """
     # Get the dataframe
-    df = github.download_and_read_csv(url)
+    df = pd.read_csv(url)
 
     # Define calculated data output variables
     length = 0
