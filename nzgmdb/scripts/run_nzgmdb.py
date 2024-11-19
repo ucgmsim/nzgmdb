@@ -22,7 +22,7 @@ app = typer.Typer()
 @app.command(
     help="Fetch earthquake data from Geonet and generates the earthquake source and station magnitude tables."
 )
-def fetch_geonet_data(
+def fetch_geonet_data(  # noqa: D103
     main_dir: Annotated[
         Path,
         typer.Argument(
@@ -70,7 +70,7 @@ def fetch_geonet_data(
             is_flag=True,
         ),
     ] = False,
-):  # noqa: D103
+):
     geonet.parse_geonet_information(
         main_dir,
         start_date,
@@ -84,7 +84,7 @@ def fetch_geonet_data(
 
 
 @app.command(help="Add tectonic domains to the earthquake source table")
-def merge_tect_domain(
+def merge_tect_domain(  # noqa: D103
     eq_source_ffp: Annotated[
         Path,
         typer.Argument(
@@ -101,7 +101,7 @@ def merge_tect_domain(
         ),
     ],
     n_procs: Annotated[int, typer.Option(help="Number of processes to use")] = 1,
-):  # noqa: D103
+):
     tect_domain.add_tect_domain(eq_source_ffp, output_dir, n_procs)
 
 
@@ -109,7 +109,7 @@ def merge_tect_domain(
     help="Generate the phase arrival table, taking mseed data and finding the phase arrivals using a p_wave picker. "
     "Requires the mseed files to be generated."
 )
-def make_phase_arrival_table(
+def make_phase_arrival_table(  # noqa: D103
     main_dir: Annotated[
         Path,
         typer.Argument(
@@ -129,7 +129,7 @@ def make_phase_arrival_table(
     full_output: Annotated[
         bool, typer.Option(help="output arrival times from GeoNet and Picker")
     ] = False,
-):  # noqa: D103
+):
     gen_phase_arrival_table.generate_phase_arrival_table(
         main_dir, output_dir, n_procs, full_output
     )
@@ -143,7 +143,7 @@ def make_phase_arrival_table(
     "Note: Can't have the common frequency vector as an input due to typer limitations. "
     "Instead change the configuration file."
 )
-def calculate_snr(
+def calculate_snr(  # noqa: D103
     main_dir: Annotated[
         Path,
         typer.Argument(
@@ -195,7 +195,7 @@ def calculate_snr(
             help="The batch size for the SNR calculation for how many mseeds to process at a time",
         ),
     ] = 5000,
-):  # noqa: D103
+):
     # Define the default paths if not provided
     if phase_table_path is None:
         phase_table_path = (
@@ -223,7 +223,7 @@ def calculate_snr(
     "Requires the snr_fas files and the snr metadata. "
     "Several parameters are set in the config file."
 )
-def calc_fmax(
+def calc_fmax(  # noqa: D103
     main_dir: Annotated[
         Path,
         typer.Argument(
@@ -247,7 +247,7 @@ def calc_fmax(
         ),
     ] = None,
     n_procs: Annotated[int, typer.Option(help="Number of processes to use")] = 1,
-):  # noqa: D103
+):
     if meta_output_dir is None:
         meta_output_dir = file_structure.get_flatfile_dir(main_dir)
     if snr_fas_output_dir is None:
@@ -260,7 +260,7 @@ def calc_fmax(
     help="Process the mseed files to txt files. "
     "Saves the skipped records to a csv file and gives reasons why they were skipped"
 )
-def process_records(
+def process_records(  # noqa: D103
     main_dir: Annotated[
         Path,
         typer.Argument(
@@ -286,7 +286,7 @@ def process_records(
         ),
     ] = None,
     n_procs: Annotated[int, typer.Option(help="The number of processes to use")] = 1,
-):  # noqa: D103
+):
     if gmc_ffp is None:
         gmc_ffp = (
             file_structure.get_flatfile_dir(main_dir)
@@ -302,7 +302,7 @@ def process_records(
 
 
 @app.command(help="Run IM Calculation on processed waveform files")
-def run_im_calculation(
+def run_im_calculation(  # noqa: D103
     main_dir: Annotated[
         Path,
         typer.Argument(
@@ -331,7 +331,7 @@ def run_im_calculation(
             file_okay=False,
         ),
     ] = None,
-):  # noqa: D103
+):
     if output_dir is None:
         output_dir = file_structure.get_im_dir(main_dir)
     ims.compute_ims_for_all_processed_records(
@@ -340,7 +340,7 @@ def run_im_calculation(
 
 
 @app.command(help="Generate the site table basin flatfile")
-def generate_site_table_basin(
+def generate_site_table_basin(  # noqa: D103
     main_dir: Annotated[
         Path,
         typer.Argument(
@@ -349,7 +349,7 @@ def generate_site_table_basin(
             file_okay=False,
         ),
     ],
-):  # noqa: D103
+):
     main_dir.mkdir(parents=True, exist_ok=True)
     # Generate the site basin flatfile
     flatfile_dir = file_structure.get_flatfile_dir(main_dir)
@@ -366,7 +366,7 @@ def generate_site_table_basin(
 @app.command(
     help="Calculate the distances between the earthquake source and the station"
 )
-def calculate_distances(
+def calculate_distances(  # noqa: D103
     main_dir: Annotated[
         Path,
         typer.Argument(
@@ -376,14 +376,14 @@ def calculate_distances(
         ),
     ],
     n_procs: Annotated[int, typer.Option(help="The number of processes to use")] = 1,
-):  # noqa: D103
+):
     distances.calc_distances(main_dir, n_procs)
 
 
 @app.command(
     help="Merge IM results together into one flatfile. As well as perform a filter for Ds595"
 )
-def merge_im_results(
+def merge_im_results(  # noqa: D103
     im_dir: Annotated[
         Path,
         typer.Argument(
@@ -414,14 +414,14 @@ def merge_im_results(
             exists=True,
         ),
     ],
-):  # noqa: D103
+):
     merge_flatfiles.merge_im_data(im_dir, output_dir, gmc_ffp, fmax_ffp)
 
 
 @app.command(
     help="Merge all flatfiles together for final output and ensure correct filtering for only results with IM values"
 )
-def merge_flat_files(
+def merge_flat_files(  # noqa: D103
     main_dir: Annotated[
         Path,
         typer.Argument(
@@ -430,7 +430,7 @@ def merge_flat_files(
             file_okay=False,
         ),
     ],
-):  # noqa: D103
+):
     merge_flatfiles.merge_flatfiles(main_dir)
 
 
@@ -448,7 +448,7 @@ def merge_flat_files(
     "- Calculate distances"
     "- Merge flat files"
 )
-def run_full_nzgmdb(
+def run_full_nzgmdb(  # noqa: D103
     main_dir: Annotated[
         Path,
         typer.Argument(
@@ -553,7 +553,7 @@ def run_full_nzgmdb(
             is_flag=True,
         ),
     ] = False,
-):  # noqa: D103
+):
     main_dir.mkdir(parents=True, exist_ok=True)
 
     # Generate the site basin flatfile

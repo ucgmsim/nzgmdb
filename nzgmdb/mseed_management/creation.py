@@ -5,7 +5,6 @@ from pathlib import Path
 
 import numpy as np
 import pandas as pd
-from empirical.util import classdef, openquake_wrapper_vectorized, z_model_calculations
 from obspy import Stream
 from obspy.clients.fdsn import Client as FDSN_Client
 from obspy.clients.fdsn.header import FDSNNoDataException
@@ -15,6 +14,7 @@ from obspy.io.mseed import InternalMSEEDError, ObsPyMSEEDFilesizeTooSmallError
 from obspy.taup import TauPyModel
 
 from nzgmdb.management import config as cfg
+from empirical.util import classdef, openquake_wrapper_vectorized, z_model_calculations
 
 
 def get_waveforms(

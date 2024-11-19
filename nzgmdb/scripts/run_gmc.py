@@ -140,7 +140,7 @@ def process_batch(
 
 
 @app.command()
-def run_gmc_processing(
+def run_gmc_processing(  # noqa: D103
     main_dir: Annotated[
         Path,
         typer.Argument(
@@ -204,7 +204,7 @@ def run_gmc_processing(
             file_okay=False,
         ),
     ] = None,
-):  # noqa: D103
+):
     # Obtain other paths
     gmc_dir = file_structure.get_gmc_dir(main_dir)
     gmc_dir.mkdir(exist_ok=True, parents=True)

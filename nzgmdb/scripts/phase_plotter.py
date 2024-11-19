@@ -14,7 +14,7 @@ app = typer.Typer()
 
 
 @app.command(help="Plots waveform and phase arrival times.")
-def make_plot(
+def make_plot(  # noqa: D103
     mseed_file: Annotated[
         Path,
         typer.Argument(
@@ -39,14 +39,14 @@ def make_plot(
             file_okay=False,
         ),
     ],
-):  # noqa: D103
+):
     plotting.plot_phase_arrivals_on_mseed_waveforms(
         mseed_file, phase_arrival_table, output_dir
     )
 
 
 @app.command(help="Plots waveform and phase arrival times for a batch of mseed files.")
-def batch_plot(
+def batch_plot(  # noqa: D103
     main_dir: Annotated[
         Path,
         typer.Argument(
@@ -72,7 +72,7 @@ def batch_plot(
         ),
     ],
     n_procs: Annotated[int, typer.Option(help="Number of processes to use")] = 1,
-):  # noqa: D103
+):
     plotting.batch_plot_phase_arrivals(
         main_dir, phase_arrival_table, output_dir, n_procs
     )
@@ -81,7 +81,7 @@ def batch_plot(
 @app.command(
     help="Plots a histogram of the differences in phase arrival times from picker and Geonet"
 )
-def plot_hist(
+def plot_hist(  # noqa: D103
     phase_arrival_table: Annotated[
         Path,
         typer.Argument(
@@ -100,7 +100,7 @@ def plot_hist(
     ],
     num_bins: Annotated[int, typer.Option(help="Number of bins in the histogram")] = 50,
     dpi: Annotated[int, typer.Option(help="dpi of saved plot")] = 500,
-):  # noqa: D103
+):
     plotting.plot_time_diffs_hist(phase_arrival_table, output_dir, num_bins, dpi)
 
 

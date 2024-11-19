@@ -353,7 +353,7 @@ def custom_multiprocess_geonet(event_dir: Path, event_id: str, n_procs: int = 1)
 @app.command(
     help="Run the NZGMDB pipeline for a specific event in near-real-time mode."
 )
-def run_event(
+def run_event(  # noqa: D103
     event_id: Annotated[
         str,
         typer.Argument(
@@ -437,7 +437,7 @@ def run_event(
         ),
     ] = datetime.datetime.utcnow()
     - datetime.timedelta(minutes=1),
-):  # noqa: D103
+):
     # Run the custom multiprocess geonet, site table and geonet steps
     result = custom_multiprocess_geonet(event_dir, event_id, n_procs)
 
@@ -482,7 +482,7 @@ def run_event(
 @app.command(
     help="Poll earthquake data, process events, and run the NZGMDB pipeline for real-time data."
 )
-def poll_earthquake_data(
+def poll_earthquake_data(  # noqa: D103
     main_dir: Annotated[
         Path,
         typer.Argument(
@@ -546,7 +546,7 @@ def poll_earthquake_data(
             is_flag=True,
         ),
     ] = False,
-):  # noqa: D103
+):
     init_start_date = None
     while True:
         # Get the last 2 minutes worth of data and check if there are any new events
