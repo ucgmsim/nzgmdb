@@ -61,3 +61,9 @@ class InvalidTraceLengthError(Exception):
     """Exception raised when the trace length is invalid for an mseed file."""
 
     pass
+
+
+class NoStationsError(Exception):
+    """Exception raised when no stations are computed for a given earthquake."""
+
+    pass

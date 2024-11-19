@@ -177,7 +177,6 @@ def assess_snr_and_get_fmax(
         num_valid_points_in_interval
         > config.get_value("initial_screening_min_points_above_thresh")
     ).all():
-
         # keep the record
         skipped_record = None
 

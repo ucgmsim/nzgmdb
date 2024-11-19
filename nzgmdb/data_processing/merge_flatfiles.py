@@ -2,7 +2,6 @@ from pathlib import Path
 
 import pandas as pd
 
-from nzgmdb.data_retrieval import github
 from nzgmdb.management import config as cfg
 from nzgmdb.management import file_structure
 
@@ -202,7 +201,7 @@ def merge_flatfiles(main_dir: Path):
     # Get the recorders information for location codes
     config = cfg.Config()
     locations_url = config.get_value("locations_url")
-    locations_df = github.download_and_read_csv(locations_url)
+    locations_df = pd.read_csv(locations_url)
     # Ensure the Station and Location pairings are unique
     locations_df = locations_df.drop_duplicates(subset=["Station", "Location"])
 
@@ -314,16 +313,18 @@ def merge_flatfiles(main_dir: Path):
 
     # Merge in the location codes extra depth information where the station and location line up
     # locations_df has the column "Station" and "Location" and "Depth"
-    gm_im_df_flat = gm_im_df_flat.merge(
-        locations_df[["Station", "Location", "Depth"]],
-        left_on=["sta", "loc"],
-        right_on=["Station", "Location"],
-        how="left",
+    gm_im_df_flat = (
+        gm_im_df_flat.merge(
+            locations_df[["Station", "Location", "Depth"]],
+            left_on=["sta", "loc"],
+            right_on=["Station", "Location"],
+            how="left",
+        )
+        .drop(columns=["Station", "Location"])
+        .rename(columns={"Depth": "loc_elev"})
     )
-    # Remove the Station and Location columns
-    gm_im_df_flat = gm_im_df_flat.drop(columns=["Station", "Location"])
-    # Rename the Depth column to loc_elev and flip the sign
-    gm_im_df_flat = gm_im_df_flat.rename(columns={"Depth": "loc_elev"})
+
+    # Flip the sign for the location elevation as it previously was depth
     gm_im_df_flat["loc_elev"] = -gm_im_df_flat["loc_elev"]
 
     # Add in a flag for when the location elevation is 0
@@ -331,7 +332,7 @@ def merge_flatfiles(main_dir: Path):
     grouped = gm_im_df_flat.groupby(["evid", "sta", "chan"])
 
     # Custom function to handle NaN values and find the index of the row with the loc_elev value closest to 0
-    def custom_idxmin(group):
+    def custom_idxmin(group: pd.DataFrame):
         # Filter out loc_elev values greater than 5 meters (In either direction)
         group = group[group["loc_elev"].abs() <= config.get_value("locations_max_elev")]
         if group["loc_elev"].isna().all():

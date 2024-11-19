@@ -1,9 +1,10 @@
-import subprocess
 import multiprocessing as mp
 import os
+import subprocess
 import zipfile
-import typer
 from pathlib import Path
+
+import typer
 
 from nzgmdb.management import file_structure
 
@@ -13,7 +14,18 @@ DROPBOX_PATH = "dropbox:/QuakeCoRE/Public/NZGMDB"
 
 
 def zip_folder(folder_path: Path, output_dir: Path, zip_name: str):
-    """Zips the contents of a folder."""
+    """
+    Zips the contents of a folder.
+
+    Parameters
+    ----------
+    folder_path : Path
+        The folder to zip
+    output_dir : Path
+        Directory to save the zip file
+    zip_name : str
+        Name of the zip file
+    """
     zip_filename = output_dir / f"{zip_name}.zip"
     with zipfile.ZipFile(zip_filename, "w", zipfile.ZIP_DEFLATED) as zipf:
         for root, _, files in os.walk(folder_path):
@@ -23,8 +35,19 @@ def zip_folder(folder_path: Path, output_dir: Path, zip_name: str):
     return zip_filename  # Return zip file path for later use
 
 
-def zip_files(file_list, output_dir: Path, zip_name: str):
-    """Zip specific files into one archive."""
+def zip_files(file_list: list, output_dir: Path, zip_name: str):
+    """
+    Zip specific files into one archive.
+
+    Parameters
+    ----------
+    file_list : list
+        List of files to zip
+    output_dir : Path
+        Directory to save the zip file
+    zip_name : str
+        Name of the zip file
+    """
     zip_filename = output_dir / f"{zip_name}.zip"
     with zipfile.ZipFile(zip_filename, "w", zipfile.ZIP_DEFLATED) as zipf:
         for file_path in file_list:
@@ -33,7 +56,17 @@ def zip_files(file_list, output_dir: Path, zip_name: str):
 
 
 def upload_zip_to_dropbox(local_file: Path, dropbox_path: str):
-    """Uploads a file to Dropbox using rclone."""
+    """
+    Uploads a file to Dropbox using rclone.
+    Also checks the file size to ensure it was uploaded correctly.
+
+    Parameters
+    ----------
+    local_file : Path
+        The local file to upload
+    dropbox_path : str
+        The path on Dropbox to upload the file to
+    """
     print(f"Uploading {local_file} to {dropbox_path}")
     p = subprocess.Popen(
         f"rclone --progress copy {local_file} {dropbox_path}",
@@ -41,11 +74,25 @@ def upload_zip_to_dropbox(local_file: Path, dropbox_path: str):
         stdout=subprocess.PIPE,
         stderr=subprocess.PIPE,
     )
-    stdout, stderr = p.communicate()
+    _, _ = p.communicate()
     if p.returncode != 0:
-        print(f"Error uploading {local_file}: {stderr}")
+        return local_file
     else:
-        print(f"Successfully uploaded {local_file}")
+        # Check file size is correct and uploaded successfully
+        local_size = local_file.stat().st_size
+        cmd = f"rclone lsf --format=s {dropbox_path}/{local_file.name}"
+        p = subprocess.Popen(
+            cmd, shell=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE
+        )
+        out, err = p.communicate()
+        output_decoded = out.decode("utf-8").strip()
+        if not output_decoded:
+            # File does not exist on Dropbox
+            return local_file
+        if int(output_decoded) != local_size:
+            # File size does not match
+            return local_file
+        return None
 
 
 def main(
@@ -53,7 +100,18 @@ def main(
     n_procs: int,
     version: str = None,
 ):
-    """Main function to zip and upload all required files."""
+    """
+    Main function to zip and upload all required files.
+
+    Parameters
+    ----------
+    input_dir : Path
+        The directory containing the NZGMDB results
+    n_procs : int
+        Number of processes to use
+    version : str
+        Version of the results, defaults to the directory name (used for folder name on dropbox)
+    """
     output_dir = input_dir / "zips"
     output_dir.mkdir(parents=True, exist_ok=True)
 
@@ -68,23 +126,23 @@ def main(
     waveform_output_dir = output_dir / "waveforms"
     waveform_output_dir.mkdir(exist_ok=True)
     year_folders = [f for f in waveforms_dir.iterdir() if f.is_dir()]
-    # with mp.Pool(n_procs) as pool:
-    #     waveforms_zip_files = pool.starmap(
-    #         zip_folder,
-    #         [(folder, output_dir, folder.stem) for folder in year_folders],
-    #     )
+    with mp.Pool(n_procs) as pool:
+        waveforms_zip_files = pool.starmap(
+            zip_folder,
+            [(folder, output_dir, folder.stem) for folder in year_folders],
+        )
     # Also zip each event folder
-    # event_zips = {}
-    # for year_folder in year_folders:
-    #     year_output_dir = waveform_output_dir / year_folder.name
-    #     year_output_dir.mkdir(exist_ok=True)
-    #     event_folders = [f for f in year_folder.iterdir() if f.is_dir()]
-    #     with mp.Pool(n_procs) as pool:
-    #         year_event_zips = pool.starmap(
-    #             zip_folder,
-    #             [(folder, year_output_dir, folder.stem) for folder in event_folders],
-    #         )
-    #     event_zips[year_folder.name] = year_event_zips
+    event_zips = {}
+    for year_folder in year_folders:
+        year_output_dir = waveform_output_dir / year_folder.name
+        year_output_dir.mkdir(exist_ok=True)
+        event_folders = [f for f in year_folder.iterdir() if f.is_dir()]
+        with mp.Pool(n_procs) as pool:
+            year_event_zips = pool.starmap(
+                zip_folder,
+                [(folder, year_output_dir, folder.stem) for folder in event_folders],
+            )
+        event_zips[year_folder.name] = year_event_zips
 
     # 2) Zip flatfiles_{ver}.zip
     flatfiles = [flatfiles_dir / file for file in file_structure.FlatfileNames]
@@ -107,48 +165,44 @@ def main(
     dropbox_version_dir = f"{DROPBOX_PATH}/{version}"
     dropbox_waveforms_path = f"{dropbox_version_dir}/waveforms"
     # Upload waveform year zips
-    # with mp.Pool(n_procs) as pool:
-    #     pool.starmap(
-    #         upload_zip_to_dropbox,
-    #         [(zip_file, dropbox_waveforms_path) for zip_file in waveforms_zip_files],
-    #     )
+    with mp.Pool(n_procs) as pool:
+        failed_files = pool.starmap(
+            upload_zip_to_dropbox,
+            [(zip_file, dropbox_waveforms_path) for zip_file in waveforms_zip_files],
+        )
     # Upload event zips
-    # for year, event_zips in event_zips.items():
-    #     dropbox_year_path = f"{dropbox_waveforms_path}/{year}"
-    #     with mp.Pool(n_procs) as pool:
-    #         pool.starmap(
-    #             upload_zip_to_dropbox,
-    #             [(zip_file, dropbox_year_path) for zip_file in event_zips],
-    #         )
+    for year, event_zips in event_zips.items():
+        dropbox_year_path = f"{dropbox_waveforms_path}/{year}"
+        with mp.Pool(n_procs) as pool:
+            failed_files.extend(
+                pool.starmap(
+                    upload_zip_to_dropbox,
+                    [(zip_file, dropbox_year_path) for zip_file in event_zips],
+                )
+            )
 
-    # upload_zip_to_dropbox(flatfiles_zip, dropbox_version_dir)
-    # upload_zip_to_dropbox(skipped_zip, dropbox_version_dir)
-    # upload_zip_to_dropbox(pre_flatfiles_zip, dropbox_version_dir)
-    # upload_zip_to_dropbox(snr_fas_zip, dropbox_version_dir)
+    failed_files.append(upload_zip_to_dropbox(flatfiles_zip, dropbox_version_dir))
+    failed_files.append(upload_zip_to_dropbox(skipped_zip, dropbox_version_dir))
+    failed_files.append(upload_zip_to_dropbox(pre_flatfiles_zip, dropbox_version_dir))
+    failed_files.append(upload_zip_to_dropbox(snr_fas_zip, dropbox_version_dir))
 
-    # Verify that the files are uploaded
-    print("Files uploaded to Dropbox")
-    cmd = f"rclone ls {dropbox_version_dir}"
-    p = subprocess.Popen(
-        cmd, shell=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE
-    )
-    out, err = p.communicate()
-    lines = out.decode("utf-8").split("\n")[:-1]
+    # Remove any None values from the failed_files list
+    failed_files = [f for f in failed_files if f is not None]
 
-    # Check file sizes and ensure matches local files
-    for line in lines:
-        size, file = line.lstrip().split(" ")
-        # Get local files size
-        local_file = output_dir / file
-        local_size = local_file.stat().st_size
-        if int(size) != local_size:
-            print(f"Error: {file} size mismatch: {size} != {local_size}")
-        else:
-            print(f"{file} size matches")
+    if failed_files:
+        # Save the failed files to a file
+        failed_files_file = output_dir / "failed_files.txt"
+        with open(failed_files_file, "w") as f:
+            f.write("\n".join([str(f) for f in failed_files]))
+        print(
+            f"Failed to upload {len(failed_files)} files. See {failed_files_file} for paths."
+        )
+    else:
+        print("All files uploaded successfully.")
 
 
 @app.command()
-def upload_to_dropbox(
+def upload_to_dropbox(  # noqa: D103
     input_directory: Path = typer.Argument(
         ..., help="Directory containing the results"
     ),
@@ -162,6 +216,45 @@ def upload_to_dropbox(
         n_procs,
         version,
     )
+
+
+@app.command()
+def upload_failed_files(  # noqa: D103
+    failed_files_file: Path = typer.Argument(
+        ..., help="File containing the failed files"
+    ),
+    version: str = typer.Option(
+        None, help="Version of the results, defaults to the directory name"
+    ),
+    n_procs: int = typer.Option(1, help="Number of processes to use"),
+):
+    with open(failed_files_file, "r") as f:
+        failed_files = f.read().splitlines()
+
+    if version is None:
+        version = failed_files_file.parent.name
+
+    dropbox_version_dir = f"{DROPBOX_PATH}/{version}"
+
+    with mp.Pool(n_procs) as pool:
+        failed_files = pool.starmap(
+            upload_zip_to_dropbox,
+            [(Path(f), dropbox_version_dir) for f in failed_files],
+        )
+
+    failed_files = [f for f in failed_files if f is not None]
+    if failed_files:
+        # Save the failed files to a file
+        failed_files_file = (
+            failed_files_file.parent / f"{failed_files_file.stem}_rerun.txt"
+        )
+        with open(failed_files_file, "w") as f:
+            f.write("\n".join([str(f) for f in failed_files]))
+        print(
+            f"Failed to upload {len(failed_files)} files. See {failed_files_file.stem}_rerun.txt for paths."
+        )
+    else:
+        print("All files uploaded successfully.")
 
 
 if __name__ == "__main__":
