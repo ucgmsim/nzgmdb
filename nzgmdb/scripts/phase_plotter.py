@@ -1,6 +1,6 @@
 """
-    Contains function scripts to plot
-    phase arrival times on mseed waveforms
+Contains function scripts to plot
+phase arrival times on mseed waveforms
 """
 
 from pathlib import Path

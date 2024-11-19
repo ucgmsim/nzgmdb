@@ -1,5 +1,5 @@
 """
-    Contains the functions to add tectonic domain to the data
+Contains the functions to add tectonic domain to the data
 """
 
 import multiprocessing

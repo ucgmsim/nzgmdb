@@ -1,4 +1,4 @@
-""" P-phase Picker """
+"""P-phase Picker"""
 
 import numpy as np
 import scipy.linalg as alg

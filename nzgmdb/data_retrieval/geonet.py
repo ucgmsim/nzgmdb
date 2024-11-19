@@ -1,5 +1,5 @@
 """
-    Functions to manage Geonet Data
+Functions to manage Geonet Data
 """
 
 import datetime

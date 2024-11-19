@@ -1,6 +1,6 @@
 """
-    Contains functions for generating
-    the phase arrival table
+Contains functions for generating
+the phase arrival table
 """
 
 import itertools
@@ -298,9 +298,7 @@ def generate_phase_arrival_table(
         ] = (
             all_picker_and_geonet_df.loc[condition_not_nan, "datetime_picker"]
             - all_picker_and_geonet_df.loc[condition_not_nan, "datetime_geonet"]
-        ).astype(
-            np.float64
-        )
+        ).astype(np.float64)
 
         all_picker_and_geonet_df.to_csv(
             output_dir / "full_phase_arrival_table.csv", index=False

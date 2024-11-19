@@ -1,5 +1,5 @@
-import warnings
 import http.client
+import warnings
 from collections.abc import Iterable
 from pathlib import Path
 
@@ -13,8 +13,8 @@ from obspy.geodetics import kilometers2degrees
 from obspy.io.mseed import InternalMSEEDError, ObsPyMSEEDFilesizeTooSmallError
 from obspy.taup import TauPyModel
 
-from nzgmdb.management import config as cfg
 from empirical.util import classdef, openquake_wrapper_vectorized, z_model_calculations
+from nzgmdb.management import config as cfg
 
 
 def get_waveforms(

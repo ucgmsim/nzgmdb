@@ -1,7 +1,7 @@
 """
-    Contains functions for plotting
-    phase arrival times on waveforms
-    from mseed files.
+Contains functions for plotting
+phase arrival times on waveforms
+from mseed files.
 """
 
 import functools
@@ -91,7 +91,6 @@ def plot_phase_arrivals_on_mseed_waveforms(
             arrival_times_as_list.append(np.nan)
 
     if arrival_times_as_list:
-
         # Create the output subdirectory if it doesn't already exist
         plot_subdir.mkdir(parents=True, exist_ok=True)
 
