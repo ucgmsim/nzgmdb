@@ -1,5 +1,5 @@
-import http.client
 import warnings
+import http.client
 from collections.abc import Iterable
 from pathlib import Path
 
