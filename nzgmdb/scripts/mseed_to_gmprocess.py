@@ -9,7 +9,7 @@ app = typer.Typer()
 
 
 @app.command(help="Converts mseed data to gmprocess format and file structure")
-def mseed_to_gmprocess(
+def mseed_to_gmprocess(   # noqa: D103
     main_dir: Annotated[
         Path,
         typer.Argument(
@@ -29,7 +29,7 @@ def mseed_to_gmprocess(
     n_procs: Annotated[
         int, typer.Option(help="The number of processes to use for processing")
     ] = 1,
-):  # noqa: D103
+):
     convert_mseed_to_gmprocess(main_dir, output_dir, n_procs)
 
 

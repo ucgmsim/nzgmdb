@@ -1,10 +1,11 @@
 import http.client
 import warnings
-from pathlib import Path
 from collections.abc import Iterable
+from pathlib import Path
 
 import numpy as np
 import pandas as pd
+from empirical.util import classdef, openquake_wrapper_vectorized, z_model_calculations
 from obspy import Stream
 from obspy.clients.fdsn import Client as FDSN_Client
 from obspy.clients.fdsn.header import FDSNNoDataException
@@ -13,7 +14,6 @@ from obspy.geodetics import kilometers2degrees
 from obspy.io.mseed import InternalMSEEDError, ObsPyMSEEDFilesizeTooSmallError
 from obspy.taup import TauPyModel
 
-from empirical.util import classdef, openquake_wrapper_vectorized, z_model_calculations
 from nzgmdb.management import config as cfg
 
 
