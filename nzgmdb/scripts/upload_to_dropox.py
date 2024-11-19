@@ -1,9 +1,10 @@
-import subprocess
 import multiprocessing as mp
 import os
+import subprocess
 import zipfile
-import typer
 from pathlib import Path
+
+import typer
 
 from nzgmdb.management import file_structure
 
@@ -13,7 +14,18 @@ DROPBOX_PATH = "dropbox:/QuakeCoRE/Public/NZGMDB"
 
 
 def zip_folder(folder_path: Path, output_dir: Path, zip_name: str):
-    """Zips the contents of a folder."""
+    """
+    Zips the contents of a folder.
+
+    Parameters
+    ----------
+    folder_path : Path
+        The folder to zip
+    output_dir : Path
+        Directory to save the zip file
+    zip_name : str
+        Name of the zip file
+    """
     zip_filename = output_dir / f"{zip_name}.zip"
     with zipfile.ZipFile(zip_filename, "w", zipfile.ZIP_DEFLATED) as zipf:
         for root, _, files in os.walk(folder_path):
@@ -23,8 +35,19 @@ def zip_folder(folder_path: Path, output_dir: Path, zip_name: str):
     return zip_filename  # Return zip file path for later use
 
 
-def zip_files(file_list, output_dir: Path, zip_name: str):
-    """Zip specific files into one archive."""
+def zip_files(file_list: list, output_dir: Path, zip_name: str):
+    """
+    Zip specific files into one archive.
+
+    Parameters
+    ----------
+    file_list : list
+        List of files to zip
+    output_dir : Path
+        Directory to save the zip file
+    zip_name : str
+        Name of the zip file
+    """
     zip_filename = output_dir / f"{zip_name}.zip"
     with zipfile.ZipFile(zip_filename, "w", zipfile.ZIP_DEFLATED) as zipf:
         for file_path in file_list:
@@ -33,7 +56,17 @@ def zip_files(file_list, output_dir: Path, zip_name: str):
 
 
 def upload_zip_to_dropbox(local_file: Path, dropbox_path: str):
-    """Uploads a file to Dropbox using rclone."""
+    """
+    Uploads a file to Dropbox using rclone.
+    Also checks the file size to ensure it was uploaded correctly.
+
+    Parameters
+    ----------
+    local_file : Path
+        The local file to upload
+    dropbox_path : str
+        The path on Dropbox to upload the file to
+    """
     print(f"Uploading {local_file} to {dropbox_path}")
     p = subprocess.Popen(
         f"rclone --progress copy {local_file} {dropbox_path}",
@@ -67,7 +100,18 @@ def main(
     n_procs: int,
     version: str = None,
 ):
-    """Main function to zip and upload all required files."""
+    """
+    Main function to zip and upload all required files.
+
+    Parameters
+    ----------
+    input_dir : Path
+        The directory containing the NZGMDB results
+    n_procs : int
+        Number of processes to use
+    version : str
+        Version of the results, defaults to the directory name (used for folder name on dropbox)
+    """
     output_dir = input_dir / "zips"
     output_dir.mkdir(parents=True, exist_ok=True)
 
@@ -158,7 +202,7 @@ def main(
 
 
 @app.command()
-def upload_to_dropbox(
+def upload_to_dropbox(  # noqa: D103
     input_directory: Path = typer.Argument(
         ..., help="Directory containing the results"
     ),
@@ -175,7 +219,7 @@ def upload_to_dropbox(
 
 
 @app.command()
-def upload_failed_files(
+def upload_failed_files(  # noqa: D103
     failed_files_file: Path = typer.Argument(
         ..., help="File containing the failed files"
     ),
