@@ -4,7 +4,7 @@ File that contains the function scripts that can be called to run the NZGMDB pip
 
 from datetime import datetime
 from pathlib import Path
-from typing import Annotated, List
+from typing import Annotated
 
 import pandas as pd
 import typer
@@ -50,14 +50,14 @@ def fetch_geonet_data(
         ),
     ] = 500,
     only_event_ids: Annotated[
-        List[str],
+        list[str],
         typer.Option(
             help="A list of event ids to filter the earthquake data, separated by commas",
             callback=lambda x: [] if x is None else x[0].split(","),
         ),
     ] = None,
     only_sites: Annotated[
-        List[str],
+        list[str],
         typer.Option(
             help="A list of site names to filter the earthquake data, separated by commas",
             callback=lambda x: [] if x is None else x[0].split(","),
@@ -70,7 +70,7 @@ def fetch_geonet_data(
             is_flag=True,
         ),
     ] = False,
-):
+):  # noqa: D103
     geonet.parse_geonet_information(
         main_dir,
         start_date,
@@ -101,7 +101,7 @@ def merge_tect_domain(
         ),
     ],
     n_procs: Annotated[int, typer.Option(help="Number of processes to use")] = 1,
-):
+):  # noqa: D103
     tect_domain.add_tect_domain(eq_source_ffp, output_dir, n_procs)
 
 
@@ -129,7 +129,7 @@ def make_phase_arrival_table(
     full_output: Annotated[
         bool, typer.Option(help="output arrival times from GeoNet and Picker")
     ] = False,
-):
+):  # noqa: D103
     gen_phase_arrival_table.generate_phase_arrival_table(
         main_dir, output_dir, n_procs, full_output
     )
@@ -195,7 +195,7 @@ def calculate_snr(
             help="The batch size for the SNR calculation for how many mseeds to process at a time",
         ),
     ] = 5000,
-):
+):  # noqa: D103
     # Define the default paths if not provided
     if phase_table_path is None:
         phase_table_path = (
@@ -247,7 +247,7 @@ def calc_fmax(
         ),
     ] = None,
     n_procs: Annotated[int, typer.Option(help="Number of processes to use")] = 1,
-):
+):  # noqa: D103
     if meta_output_dir is None:
         meta_output_dir = file_structure.get_flatfile_dir(main_dir)
     if snr_fas_output_dir is None:
@@ -286,7 +286,7 @@ def process_records(
         ),
     ] = None,
     n_procs: Annotated[int, typer.Option(help="The number of processes to use")] = 1,
-):
+):  # noqa: D103
     if gmc_ffp is None:
         gmc_ffp = (
             file_structure.get_flatfile_dir(main_dir)
@@ -331,7 +331,7 @@ def run_im_calculation(
             file_okay=False,
         ),
     ] = None,
-):
+):  # noqa: D103
     if output_dir is None:
         output_dir = file_structure.get_im_dir(main_dir)
     ims.compute_ims_for_all_processed_records(
@@ -349,7 +349,7 @@ def generate_site_table_basin(
             file_okay=False,
         ),
     ],
-):
+):  # noqa: D103
     main_dir.mkdir(parents=True, exist_ok=True)
     # Generate the site basin flatfile
     flatfile_dir = file_structure.get_flatfile_dir(main_dir)
@@ -376,7 +376,7 @@ def calculate_distances(
         ),
     ],
     n_procs: Annotated[int, typer.Option(help="The number of processes to use")] = 1,
-):
+):  # noqa: D103
     distances.calc_distances(main_dir, n_procs)
 
 
@@ -414,7 +414,7 @@ def merge_im_results(
             exists=True,
         ),
     ],
-):
+):  # noqa: D103
     merge_flatfiles.merge_im_data(im_dir, output_dir, gmc_ffp, fmax_ffp)
 
 
@@ -430,7 +430,7 @@ def merge_flat_files(
             file_okay=False,
         ),
     ],
-):
+):  # noqa: D103
     merge_flatfiles.merge_flatfiles(main_dir)
 
 
@@ -521,14 +521,14 @@ def run_full_nzgmdb(
         ),
     ] = False,
     only_event_ids: Annotated[
-        List[str],
+        list[str],
         typer.Option(
             help="A list of event ids to filter the earthquake data, separated by commas",
             callback=lambda x: [] if x is None else x[0].split(","),
         ),
     ] = None,
     only_sites: Annotated[
-        List[str],
+        list[str],
         typer.Option(
             help="A list of site names to filter the earthquake data, separated by commas",
             callback=lambda x: [] if x is None else x[0].split(","),
@@ -553,7 +553,7 @@ def run_full_nzgmdb(
             is_flag=True,
         ),
     ] = False,
-):
+):  # noqa: D103
     main_dir.mkdir(parents=True, exist_ok=True)
 
     # Generate the site basin flatfile

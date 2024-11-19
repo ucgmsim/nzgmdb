@@ -3,7 +3,7 @@ import io
 import time
 from multiprocessing import Process, Queue
 from pathlib import Path
-from typing import Annotated, List
+from typing import Annotated
 
 import numpy as np
 import pandas as pd
@@ -72,7 +72,7 @@ def download_earthquake_data(
     return df
 
 
-def remove_processed_station(processes: List[Process], output_queue: Queue):
+def remove_processed_station(processes: list[Process], output_queue: Queue):
     """
     Remove the processed station from the queue and end the processes
 
@@ -437,8 +437,7 @@ def run_event(
         ),
     ] = datetime.datetime.utcnow()
     - datetime.timedelta(minutes=1),
-):
-
+):  # noqa: D103
     # Run the custom multiprocess geonet, site table and geonet steps
     result = custom_multiprocess_geonet(event_dir, event_id, n_procs)
 
@@ -547,7 +546,7 @@ def poll_earthquake_data(
             is_flag=True,
         ),
     ] = False,
-):
+):  # noqa: D103
     init_start_date = None
     while True:
         # Get the last 2 minutes worth of data and check if there are any new events

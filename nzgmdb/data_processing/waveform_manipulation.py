@@ -92,7 +92,7 @@ def initial_preprocessing(
         try:
             mseed.rotate("->ZNE", inventory=inv)
         except (
-            Exception
+            Exception  # noqa: BLE001
         ):  # Due to obspy raising an Exception instead of a specific error
             # Error for no matching channel metadata found
             raise custom_errors.RotationError(

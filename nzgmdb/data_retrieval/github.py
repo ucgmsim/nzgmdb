@@ -41,7 +41,7 @@ def get_csv_file_urls(
 
     Parameters:
     ----------
-    contents : List[Dict[str, str]]
+    contents : list[dict[str, str]]
         The list of directory contents.
     owner : str
         The owner of the GitHub repository.

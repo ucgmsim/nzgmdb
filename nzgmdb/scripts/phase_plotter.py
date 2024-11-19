@@ -39,7 +39,7 @@ def make_plot(
             file_okay=False,
         ),
     ],
-):
+):  # noqa: D103
     plotting.plot_phase_arrivals_on_mseed_waveforms(
         mseed_file, phase_arrival_table, output_dir
     )
@@ -72,7 +72,7 @@ def batch_plot(
         ),
     ],
     n_procs: Annotated[int, typer.Option(help="Number of processes to use")] = 1,
-):
+):  # noqa: D103
     plotting.batch_plot_phase_arrivals(
         main_dir, phase_arrival_table, output_dir, n_procs
     )
@@ -100,7 +100,7 @@ def plot_hist(
     ],
     num_bins: Annotated[int, typer.Option(help="Number of bins in the histogram")] = 50,
     dpi: Annotated[int, typer.Option(help="dpi of saved plot")] = 500,
-):
+):  # noqa: D103
     plotting.plot_time_diffs_hist(phase_arrival_table, output_dir, num_bins, dpi)
 
 

@@ -6,7 +6,13 @@ import scipy.signal as sig
 
 
 def p_phase_picker(
-    x: np.ndarray, dt: int, wftype: str, Tn=0, xi=0.6, nbins=0, o="to_peak"
+    x: np.ndarray,
+    dt: int,
+    wftype: str,
+    Tn: int = 0,
+    xi: float = 0.6,
+    nbins: int = 0,
+    o: str = "to_peak",
 ) -> int:
     """
     P-phase picker based on the fixed-base viscously damped single-degree-of-freedom (SDF) oscillator model
@@ -135,22 +141,57 @@ def p_phase_picker(
     return int(np.round(p_wave_index))
 
 
-def butter_bandpass(lowcut, highcut, fs, order=5):
-    """Butterworth Bandpass Filter Design"""
+def butter_bandpass(lowcut: float, highcut: float, fs: float, order: int = 5):
+    """
+    Butterworth Bandpass Filter Design
+
+    Parameters
+    ----------
+    lowcut : float
+        Lower cutoff frequency
+    highcut : float
+        Upper cutoff frequency
+    fs : float
+        Sampling frequency
+    order : int
+        Filter order
+    """
     nyq = 1 / (2 * fs)  # Nyquist frequency
     Wn = [lowcut / nyq, highcut / nyq]  # Butterworth bandpass non-dimensional frequency
     b, a = sig.butter(order, Wn, btype="bandpass")
     return b, a
 
 
-def butter_bandpass_filter(data, lowcut, highcut, fs, order=4):
-    """Butterworth Acausal Bandpass Filter"""
+def butter_bandpass_filter(
+    data: np.array, lowcut: float, highcut: float, fs: float, order: int = 4
+):
+    """
+    Butterworth Acausal Bandpass Filter
+
+    Parameters
+    ----------
+    data : np.array
+        Input data
+    lowcut : float
+        Lower cutoff frequency
+    highcut : float
+        Upper cutoff frequency
+    fs : float
+        Sampling frequency
+    order : int
+        Filter order
+
+    Returns
+    -------
+    y : np.array
+        Filtered data
+    """
     b, a = butter_bandpass(lowcut, highcut, fs, order)
     y = sig.filtfilt(b, a, data, axis=0)
     return y
 
 
-def state_level(y, n):
+def state_level(y: np.array, n: int):
     """
     Compute the state levels for the histogram method
 

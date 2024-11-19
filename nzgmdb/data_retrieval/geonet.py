@@ -8,7 +8,6 @@ import multiprocessing
 import queue
 import time
 from pathlib import Path
-from typing import List
 
 import numpy as np
 import obspy
@@ -26,7 +25,7 @@ from nzgmdb.management import custom_errors, file_structure
 from nzgmdb.mseed_management import creation
 
 
-def get_max_magnitude(magnitudes: List[Magnitude], mag_type: str):
+def get_max_magnitude(magnitudes: list[Magnitude], mag_type: str):
     """
     Helper function to get the maximum magnitude of a certain type
 
@@ -416,7 +415,7 @@ def fetch_event_data(
     rrups: np.ndarray,
     f_rrup: interp1d,
     output_queue: multiprocessing.Queue,
-    only_sites: List[str] = None,
+    only_sites: list[str] = None,
 ):
     """
     Fetch the event data from the geonet client to form the event and magnitude dataframes
@@ -490,7 +489,7 @@ def fetch_event_data(
 
 
 def remove_processed_event_data(
-    processes: List[multiprocessing.Process], output_queue: queue.Queue
+    processes: list[multiprocessing.Process], output_queue: queue.Queue
 ):
     """
     Remove the processed event data from the queue and end the processes
@@ -551,7 +550,7 @@ def process_batch(
     rrups: np.ndarray,
     f_rrup: interp1d,
     n_procs: int = 1,
-    only_sites: List[str] = None,
+    only_sites: list[str] = None,
 ):
     """
     Process a batch of events to fetch the event data and create the dataframes
@@ -787,8 +786,8 @@ def parse_geonet_information(
     end_date: datetime,
     n_procs: int = 1,
     batch_size: int = 500,
-    only_event_ids: List[str] = None,
-    only_sites: List[str] = None,
+    only_event_ids: list[str] = None,
+    only_sites: list[str] = None,
     real_time: bool = False,
 ):
     """
@@ -896,7 +895,7 @@ def parse_geonet_information(
                 print(f"Warning: {file} is empty or has no valid columns to parse.")
 
     if not sta_mag_dfs:
-        raise custom_errors.NoStations(
+        raise custom_errors.NoStationsError(
             "No station magnitude data was found, please check the origin of the earthquake"
         )
 

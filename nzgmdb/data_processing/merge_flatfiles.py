@@ -354,7 +354,7 @@ def merge_flatfiles(main_dir: Path):
     grouped = gm_im_df_flat.groupby(["evid", "sta", "chan"])
 
     # Custom function to handle NaN values and find the index of the row with the loc_elev value closest to 0
-    def custom_idxmin(group):
+    def custom_idxmin(group: pd.DataFrame):
         # Filter out loc_elev values greater than 5 meters (In either direction)
         group = group[group["loc_elev"].abs() <= config.get_value("locations_max_elev")]
         if group["loc_elev"].isna().all():

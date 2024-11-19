@@ -29,7 +29,7 @@ def mseed_to_gmprocess(
     n_procs: Annotated[
         int, typer.Option(help="The number of processes to use for processing")
     ] = 1,
-):
+):  # noqa: D103
     convert_mseed_to_gmprocess(main_dir, output_dir, n_procs)
 
 

@@ -154,7 +154,7 @@ def batch_plot_phase_arrivals(
 
 
 def plot_time_diffs_hist(
-    phase_arrival_table: Path, output_dir: Path, num_bins=50, dpi=500
+    phase_arrival_table: Path, output_dir: Path, num_bins: int = 50, dpi: int = 500
 ):
     """
 

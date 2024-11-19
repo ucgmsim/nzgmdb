@@ -2,7 +2,7 @@ import multiprocessing as mp
 import queue
 import time
 from pathlib import Path
-from typing import List
+from typing import list
 
 import numpy as np
 import obspy
@@ -205,7 +205,7 @@ def compute_snr_for_single_mseed(
     end_snr_compute(output_queue, meta_df, None)
 
 
-def remove_processed_snr_data(processes: List[mp.Process], output_queue: queue.Queue):
+def remove_processed_snr_data(processes: list[mp.Process], output_queue: queue.Queue):
     """
     Remove the processed snr data from the queue and end the processes
 
