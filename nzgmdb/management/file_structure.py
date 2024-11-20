@@ -60,6 +60,7 @@ class SkippedRecordFilenames(StrEnum):
     PROCESSING_SKIPPED_RECORDS = "processing_skipped_records.csv"
     SNR_SKIPPED_RECORDS = "snr_skipped_records.csv"
     FMAX_SKIPPED_RECORDS = "fmax_skipped_records.csv"
+    QUALITY_SKIPPED_RECORDS = "quality_skipped_records.csv"
 
 
 def get_mseed_dir(main_dir: Path, year: int, event_id: str):

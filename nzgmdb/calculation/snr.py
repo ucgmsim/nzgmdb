@@ -2,7 +2,6 @@ import multiprocessing as mp
 import queue
 import time
 from pathlib import Path
-from typing import list
 
 import numpy as np
 import obspy

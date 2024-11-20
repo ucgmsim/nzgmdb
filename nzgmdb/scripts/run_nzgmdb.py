@@ -455,9 +455,17 @@ def create_quality_db(
             file_okay=False,
         ),
     ],
-    n_procs: Annotated[int, typer.Option(help="The number of processes to use")] = 1,
+    bypass_records_ffp: Annotated[
+        Path,
+        typer.Option(
+            help="The full file path to the bypass records file",
+            readable=True,
+            exists=True,
+            dir_okay=False,
+        ),
+    ] = None,
 ):
-    quality_db.create_quality_db(main_dir, n_procs)
+    quality_db.create_quality_db(main_dir, bypass_records_ffp)
 
 
 @app.command(
