@@ -9,10 +9,10 @@ import numpy as np
 import pandas as pd
 import requests
 import typer
+import scipy as sp
 from obspy.clients.fdsn import Client as FDSN_Client
 from obspy.core.event import Event
 from obspy.core.inventory import Network, Station
-from scipy.interpolate import interp1d
 
 from nzgmdb.data_retrieval import geonet, sites
 from nzgmdb.management import config as cfg
@@ -188,7 +188,7 @@ def custom_multiprocess_geonet(event_dir: Path, event_id: str, n_procs: int = 1)
     Returns
     -------
     bool
-        True if the event was processed, None if the event was skipped
+        True if the event was processed, False if the event was skipped
     """
     # Generate the site basin flatfile
     flatfile_dir = file_structure.get_flatfile_dir(event_dir)
@@ -249,7 +249,7 @@ def custom_multiprocess_geonet(event_dir: Path, event_id: str, n_procs: int = 1)
     mags = mw_rrup[:, 0]
     rrups = mw_rrup[:, 1]
     # Generate cubic interpolation for magnitude distance relationship
-    f_rrup = interp1d(mags, rrups, kind="cubic")
+    f_rrup = sp.interpolate.interp1d(mags, rrups, kind="cubic")
 
     # Get Networks / Stations within a certain radius of the event
     inv_sub_sta = geonet.get_stations_within_radius(
@@ -258,7 +258,7 @@ def custom_multiprocess_geonet(event_dir: Path, event_id: str, n_procs: int = 1)
 
     # Check if there are any stations
     if len(inv_sub_sta) == 0:
-        return None
+        return False
 
     # Create the Process and Queue for output results
     processes = []
@@ -311,7 +311,7 @@ def custom_multiprocess_geonet(event_dir: Path, event_id: str, n_procs: int = 1)
 
     if len(sta_mag_table) == 0:
         # No station data, skip this event
-        return None
+        return False
     else:
         sta_mag_df = pd.DataFrame(
             sta_mag_table,
@@ -438,6 +438,14 @@ def run_event(
     ] = datetime.datetime.utcnow()
     - datetime.timedelta(minutes=1),
 ):
+    """
+    Run the NZGMDB pipeline for a specific event in near-real-time mode.
+
+    Returns
+    -------
+    bool
+        True if the event was processed, False if the event was skipped
+    """
 
     # Run the custom multiprocess geonet, site table and geonet steps
     result = custom_multiprocess_geonet(event_dir, event_id, n_procs)
@@ -468,7 +476,7 @@ def run_event(
         # Define the URL for the endpoint
         url = f"{SEISMIC_NOW_URL}?earthquake_id={event_id}"
 
-        # Send a GET request to the endpoint
+        # Send a POST request to the endpoint
         response = requests.post(url)
 
         # Check the response status

@@ -334,10 +334,8 @@ def compute_snr_for_mseed_data(
                     finished_meta_data, finished_skipped_records = (
                         remove_processed_snr_data(processes, output_queue)
                     )
-                    if len(finished_meta_data) > 0:
-                        meta_dfs.extend(finished_meta_data)
-                    if len(finished_skipped_records) > 0:
-                        skipped_record_dfs.extend(finished_skipped_records)
+                    meta_dfs.extend(finished_meta_data)
+                    skipped_record_dfs.extend(finished_skipped_records)
 
                 # Start a new process
                 process = mp.Process(
