@@ -12,7 +12,7 @@ shapely
 gmprocess
 matplotlib
 empirical @ git+https://github.com/ucgmsim/Empirical_Engine.git
-oq-engine @ git+https://github.com/gem/oq-engine.git
+oq-engine @ git+https://github.com/gem/oq-engine.git#egg=openquake-engine
 qcore @ git+https://github.com/ucgmsim/qcore.git
 IM_calculation @ git+https://github.com/ucgmsim/IM_calculation.git
 Velocity_Model @ git+https://github.com/ucgmsim/Velocity-Model.git

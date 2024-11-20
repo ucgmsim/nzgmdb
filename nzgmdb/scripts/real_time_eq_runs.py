@@ -1,22 +1,19 @@
 import datetime
 import io
 import time
-from multiprocessing import Process, Queue
 from pathlib import Path
-from typing import Annotated, List
+from typing import Annotated
 
 import numpy as np
 import pandas as pd
 import requests
-import typer
 import scipy as sp
+import typer
 from obspy.clients.fdsn import Client as FDSN_Client
-from obspy.core.event import Event
-from obspy.core.inventory import Network, Station
 
 from nzgmdb.data_retrieval import geonet, sites
 from nzgmdb.management import config as cfg
-from nzgmdb.management import file_structure
+from nzgmdb.management import custom_multiprocess, file_structure
 from nzgmdb.scripts import run_nzgmdb
 
 app = typer.Typer()
@@ -70,106 +67,6 @@ def download_earthquake_data(
     df = df[df["magnitude"] >= mag_filter]
 
     return df
-
-
-def remove_processed_station(processes: List[Process], output_queue: Queue):
-    """
-    Remove the processed station from the queue and end the processes
-
-    Parameters
-    ----------
-    processes : list[mp.Process]
-        The list of processes currently running
-    output_queue : queue.Queue
-        The queue to receive the output from the processes
-
-    Returns
-    -------
-    sta_mag_lines : list
-        The list of station magnitude lines
-    skipped_records : list
-        The list of skipped records
-    """
-    # Collect all results from the queue (If there is any)
-    sta_mag_lines = []
-    skipped_records = []
-
-    # Check the queue for completed jobs
-    while not output_queue.empty():
-        # Non-blocking check
-        completed_info = output_queue.get(timeout=0.1)
-        sta_mag_line = completed_info[0]
-        skipped_record = completed_info[1]
-        station_done = completed_info[2]
-        if skipped_record is not None:
-            skipped_records.extend(skipped_record)
-        if sta_mag_line is not None:
-            sta_mag_lines.extend(sta_mag_line)
-
-        # Remove corresponding process
-        for p in processes:
-            if p.station == station_done:
-                p.terminate()
-                processes.remove(p)
-                break
-
-    return sta_mag_lines, skipped_records
-
-
-def get_station_data(
-    station: Station,
-    network: Network,
-    event_cat: Event,
-    event_id: str,
-    main_dir: Path,
-    client_NZ: FDSN_Client,
-    pref_mag: float,
-    pref_mag_type: str,
-    site_table: pd.DataFrame,
-    output_queue: Queue,
-):
-    """
-    Get the station data for the given station and network
-
-    Parameters
-    ----------
-    station : obspy.core.inventory.Station
-        The station object
-    network : obspy.core.inventory.Network
-        The network object
-    event_cat : obspy.core.event.Event
-        The event catalog object
-    event_id : str
-        The event ID
-    main_dir : Path
-        The main directory for the event
-    client_NZ : obspy.clients.fdsn.Client
-        The FDSN client
-    pref_mag : float
-        The preferred magnitude
-    pref_mag_type : str
-        The preferred magnitude type
-    site_table : pd.DataFrame
-        The site table dataframe
-    output_queue : queue.Queue
-        The queue to output the results
-    """
-    sta_mag_line, skipped_records = geonet.fetch_sta_mag_line(
-        station,
-        network,
-        event_cat,
-        event_id,
-        main_dir,
-        client_NZ,
-        pref_mag,
-        pref_mag_type,
-        site_table,
-    )
-    # Tell the main process that this record is done
-    output_queue.put((sta_mag_line, skipped_records, station.code))
-    # Wait forever till the process is terminated by main process
-    while True:
-        time.sleep(10)
 
 
 def custom_multiprocess_geonet(event_dir: Path, event_id: str, n_procs: int = 1):
@@ -260,54 +157,34 @@ def custom_multiprocess_geonet(event_dir: Path, event_id: str, n_procs: int = 1)
     if len(inv_sub_sta) == 0:
         return False
 
-    # Create the Process and Queue for output results
-    processes = []
-    output_queue = Queue()
     sta_mag_table = []
     skipped_records = []
 
-    # Get the station magnitude lines
+    # Iterate over the networks
     for network in inv_sub_sta:
-        for station in network:
-            # If we have reached the limit of n_procs, wait for some processes to finish
-            while len(processes) >= n_procs:
-                # Remove the processed Station from the queue
-                finished_sta_mag_table, finished_skipped_records = (
-                    remove_processed_station(processes, output_queue)
-                )
-                sta_mag_table.extend(finished_sta_mag_table)
-                skipped_records.extend(finished_skipped_records)
-                # Wait 1 second before checking again (prevents missing completed jobs)
-                time.sleep(1)
+        # Generate the stations to process
+        stations = [station for station in network]
 
-            # Start a new process
-            process = Process(
-                target=get_station_data,
-                args=(
-                    station,
-                    network,
-                    event_cat,
-                    event_id,
-                    event_dir,
-                    client_NZ,
-                    event_line[7],
-                    event_line[8],
-                    site_df,
-                    output_queue,
-                ),
-            )
-            process.station = station.code
-            processes.append(process)
-            process.start()
-
-    # Wait for all remaining processes to finish
-    while processes:
-        # Remove the processed Station from the queue
-        finished_sta_mag_table, finished_skipped_records = remove_processed_station(
-            processes, output_queue
+        # Use custom_multiprocess to process the records
+        results = custom_multiprocess.custom_multiprocess(
+            geonet.fetch_sta_mag_line,
+            stations,
+            n_procs,
+            network,
+            event_cat,
+            event_id,
+            event_dir,
+            client_NZ,
+            event_line[7],
+            event_line[8],
+            site_df,
         )
-        sta_mag_table.extend(finished_sta_mag_table)
-        skipped_records.extend(finished_skipped_records)
+
+        # Extract the results
+        for result in results:
+            finished_sta_mag_table, finished_skipped_records = result
+            sta_mag_table.extend(finished_sta_mag_table)
+            skipped_records.extend(finished_skipped_records)
 
     if len(sta_mag_table) == 0:
         # No station data, skip this event
@@ -401,13 +278,13 @@ def run_event(
         typer.Option(
             help="Number of processes to use in the pipeline.",
         ),
-    ],
+    ] = 1,
     gmc_procs: Annotated[
         int,
         typer.Option(
             help="Number of GMC processes to use.",
         ),
-    ],
+    ] = 1,
     ko_matrix_path: Annotated[
         Path,
         typer.Option(

@@ -4,9 +4,6 @@
 
 import datetime
 import io
-import multiprocessing
-import queue
-import time
 from pathlib import Path
 from typing import List
 
@@ -22,7 +19,7 @@ from scipy.interpolate import interp1d
 
 from nzgmdb.data_processing import filtering
 from nzgmdb.management import config as cfg
-from nzgmdb.management import custom_errors, file_structure
+from nzgmdb.management import custom_errors, custom_multiprocess, file_structure
 from nzgmdb.mseed_management import creation
 
 
@@ -415,7 +412,6 @@ def fetch_event_data(
     mags: np.ndarray,
     rrups: np.ndarray,
     f_rrup: interp1d,
-    output_queue: multiprocessing.Queue,
     only_sites: List[str] = None,
 ):
     """
@@ -439,8 +435,6 @@ def fetch_event_data(
         The rrups from the Mw_rrup file
     f_rrup : interp1d
         The cubic interpolation function for the magnitude distance relationship
-    output_queue : multiprocessing.Queue
-        The queue to output the event line, sta_mag_lines and skipped_records
     only_sites : list[str] (optional)
         Will only fetch the data for the sites in the list
     """
@@ -482,62 +476,7 @@ def fetch_event_data(
     else:
         sta_mag_lines, skipped_records = None, None
 
-    output_queue.put((event_line, sta_mag_lines, skipped_records))
-    print(f"Finished processing event {event_id}")
-    # Wait forever till the process is terminated by main process
-    while True:
-        time.sleep(10)
-
-
-def remove_processed_event_data(
-    processes: List[multiprocessing.Process], output_queue: queue.Queue
-):
-    """
-    Remove the processed event data from the queue and end the processes
-
-    Parameters
-    ----------
-    processes : list[multiprocessing.Process]
-        The list of processes currently running
-    output_queue : queue.Queue
-        The queue to receive the output from the processes
-
-    Returns
-    -------
-    event_data : list
-        The list of event data
-    sta_mag_data : list
-        The list of station magnitude data
-    skipped_records : list
-        The list of skipped records
-    """
-    # Collect all results from the queue (If there is any)
-    event_data = []
-    sta_mag_data = []
-    skipped_records = []
-
-    # Check the queue for completed jobs
-    while not output_queue.empty():
-        # Non-blocking check
-        completed_info = output_queue.get(timeout=0.1)
-
-        event_data.append(completed_info[0])
-        if completed_info[1]:
-            sta_mag_data.extend(completed_info[1])
-        if completed_info[2]:
-            skipped_records.extend(completed_info[2])
-
-        # Get the event_id to remove the corresponding process
-        event_id_done = completed_info[0][0]
-
-        # Remove corresponding process
-        for p in processes:
-            if p.event_id == event_id_done:
-                p.terminate()
-                processes.remove(p)
-                break
-
-    return event_data, sta_mag_data, skipped_records
+    return event_line, sta_mag_lines, skipped_records
 
 
 def process_batch(
@@ -581,53 +520,25 @@ def process_batch(
     only_sites : list[str] (optional)
         Will only fetch the data for the sites in the list
     """
-    processes = []
-    output_queue = multiprocessing.Queue()
-    event_data = []
-    sta_mag_data = []
-    skipped_records = []
+    # Use custom_multiprocess to fetch the event data
+    results = custom_multiprocess.custom_multiprocess(
+        fetch_event_data,
+        batch_events,
+        n_procs,
+        main_dir,
+        client_NZ,
+        inventory,
+        site_table,
+        mags,
+        rrups,
+        f_rrup,
+        only_sites,
+    )
 
-    for idx, event_id in enumerate(batch_events):
-        # If we have reached the limit, wait for some processes to finish
-        while len(processes) >= n_procs:
-            finished_event_data, finished_sta_mag_data, finished_skipped_records = (
-                remove_processed_event_data(processes, output_queue)
-            )
-            event_data.extend(finished_event_data)
-            sta_mag_data.extend(finished_sta_mag_data)
-            skipped_records.extend(finished_skipped_records)
-
-            # Wait 1 second before checking again (prevents missing completed jobs)
-            time.sleep(1)
-
-        # Start a new process
-        print(
-            f"Starting new process for event {event_id} {idx + 1}/{len(batch_events)}"
-        )
-        process = multiprocessing.Process(
-            target=fetch_event_data,
-            args=(
-                event_id,
-                main_dir,
-                client_NZ,
-                inventory,
-                site_table,
-                mags,
-                rrups,
-                f_rrup,
-                output_queue,
-                only_sites,
-            ),
-        )
-        process.event_id = event_id
-        processes.append(process)
-        process.start()
-
-    # Wait for all remaining processes to finish and check the queue
-    while processes:
-        finished_event_data, finished_sta_mag_data, finished_skipped_records = (
-            remove_processed_event_data(processes, output_queue)
-        )
+    # Extract the results
+    event_data, sta_mag_data, skipped_records = [], [], []
+    for result in results:
+        finished_event_data, finished_sta_mag_data, finished_skipped_records = result
         event_data.extend(finished_event_data)
         sta_mag_data.extend(finished_sta_mag_data)
         skipped_records.extend(finished_skipped_records)

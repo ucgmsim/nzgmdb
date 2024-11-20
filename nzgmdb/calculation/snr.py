@@ -11,29 +11,15 @@ from pandas.errors import EmptyDataError
 
 import IM_calculation.IM.snr_calculation as snr_calc
 from nzgmdb.management import config as cfg
-from nzgmdb.management import custom_errors, file_structure
+from nzgmdb.management import custom_errors, file_structure, custom_multiprocess
 from nzgmdb.mseed_management import reading
 from nzgmdb.phase_arrival import tp_selection
-
-
-def end_snr_compute(
-    output_queue: queue.Queue, meta_df: pd.DataFrame, skipped_record: pd.DataFrame
-):
-    """
-    Send the outputs to the output queue and wait for the process to be killed by
-    the main process
-    """
-    output_queue.put((meta_df, skipped_record))
-    # Wait forever till the process is terminated by main process
-    while True:
-        time.sleep(10)
 
 
 def compute_snr_for_single_mseed(
     mseed_file: Path,
     phase_table_path: Path,
     output_dir: Path,
-    output_queue: mp.Queue,
     apply_smoothing: bool = True,
     ko_matrix_path: Path = None,
     common_frequency_vector: np.ndarray = None,
@@ -49,8 +35,6 @@ def compute_snr_for_single_mseed(
         Path to the phase arrival table
     output_dir : Path
         Path to the output directory
-    output_queue : mp.Queue
-        Queue to store the output data, meta_df and skipped_record
     apply_smoothing : bool, optional
         Whether to apply smoothing to the SNR calculation, by default True
     ko_matrix_path : Path, optional
@@ -70,8 +54,6 @@ def compute_snr_for_single_mseed(
         or noise was less than 1 second
 
     """
-    skipped_record = None
-
     # Get the station from the filename
     station = mseed_file.name.split("_")[1]
 
@@ -87,35 +69,35 @@ def compute_snr_for_single_mseed(
             "reason": "Failed to find inventory information",
         }
         skipped_record = pd.DataFrame([skipped_record_dict])
-        end_snr_compute(output_queue, None, skipped_record)
+        return None, skipped_record
     except custom_errors.SensitivityRemovalError:
         skipped_record_dict = {
             "record_id": mseed_file.stem,
             "reason": "Failed to remove sensitivity",
         }
         skipped_record = pd.DataFrame([skipped_record_dict])
-        end_snr_compute(output_queue, None, skipped_record)
+        return None, skipped_record
     except custom_errors.All3ComponentsNotPresentError:
         skipped_record_dict = {
             "record_id": mseed_file.stem,
             "reason": "File did not contain 3 components",
         }
         skipped_record = pd.DataFrame([skipped_record_dict])
-        end_snr_compute(output_queue, None, skipped_record)
+        return None, skipped_record
     except custom_errors.RotationError:
         skipped_record_dict = {
             "record_id": mseed_file.stem,
             "reason": "Failed to rotate the data",
         }
         skipped_record = pd.DataFrame([skipped_record_dict])
-        end_snr_compute(output_queue, None, skipped_record)
+        return None, skipped_record
     except custom_errors.InvalidTraceLengthError:
         skipped_record_dict = {
             "record_id": mseed_file.stem,
             "reason": "Invalid trace length from mseed file",
         }
         skipped_record = pd.DataFrame([skipped_record_dict])
-        end_snr_compute(output_queue, None, skipped_record)
+        return None, skipped_record
 
     stats = obspy.read(str(mseed_file))[0].stats
 
@@ -128,14 +110,14 @@ def compute_snr_for_single_mseed(
             "reason": "No P-wave found in phase arrival table",
         }
         skipped_record = pd.DataFrame([skipped_record_dict])
-        end_snr_compute(output_queue, None, skipped_record)
+        return None, skipped_record
     except custom_errors.TPNotInWaveformError:
         skipped_record_dict = {
             "record_id": mseed_file.stem,
             "reason": "TP not in waveform bounds",
         }
         skipped_record = pd.DataFrame([skipped_record_dict])
-        end_snr_compute(output_queue, None, skipped_record)
+        return None, skipped_record
 
     (
         snr,
@@ -159,7 +141,7 @@ def compute_snr_for_single_mseed(
             "reason": "Noise was less than 1 second",
         }
         skipped_record = pd.DataFrame([skipped_record_dict])
-        end_snr_compute(output_queue, None, skipped_record)
+        return None, skipped_record
 
     # Save the SNR data
     # Create dataframe with the snr, fas_noise and fas_signal
@@ -202,53 +184,7 @@ def compute_snr_for_single_mseed(
         "endtime": stats.endtime,
     }
     meta_df = pd.DataFrame([meta_dict])
-    end_snr_compute(output_queue, meta_df, None)
-
-
-def remove_processed_snr_data(processes: List[mp.Process], output_queue: queue.Queue):
-    """
-    Remove the processed snr data from the queue and end the processes
-
-    Parameters
-    ----------
-    processes : list[mp.Process]
-        The list of processes currently running
-    output_queue : queue.Queue
-        The queue to receive the output from the processes
-
-    Returns
-    -------
-    meta_dfs : list
-        The list of metadata dataframes
-    skipped_records : list
-        The list of skipped records
-    """
-    # Collect all results from the queue (If there is any)
-    meta_dfs = []
-    skipped_records = []
-
-    # Check the queue for completed jobs
-    while not output_queue.empty():
-        # Non-blocking check
-        completed_info = output_queue.get(timeout=0.1)
-
-        finished_meta_data = completed_info[0]
-        finished_skipped_records = completed_info[1]
-        if finished_meta_data is None:
-            skipped_records.append(finished_skipped_records)
-            record_id_done = finished_skipped_records.iloc[0]["record_id"]
-        else:
-            meta_dfs.append(finished_meta_data)
-            record_id_done = finished_meta_data.iloc[0]["record_id"]
-
-        # Remove corresponding process
-        for p in processes:
-            if p.record_id == record_id_done:
-                p.terminate()
-                processes.remove(p)
-                break
-
-    return meta_dfs, skipped_records
+    return meta_df, None
 
 
 def compute_snr_for_mseed_data(
@@ -323,48 +259,26 @@ def compute_snr_for_mseed_data(
     for index, batch in enumerate(mseed_batches):
         if index not in processed_suffixes:
             print(f"Processing batch {index + 1}/{len(mseed_batches)}")
-            processes = []
-            output_queue = mp.Queue()
+            results = custom_multiprocess.custom_multiprocess(
+                compute_snr_for_single_mseed,
+                batch,
+                n_procs,
+                phase_table_path,
+                snr_fas_output_dir,
+                apply_smoothing,
+                ko_matrix_path,
+                common_frequency_vector,
+            )
+
             meta_dfs = []
             skipped_record_dfs = []
 
-            for mseed_file in batch:
-                # If we have reached the limit, wait for some processes to finish
-                while len(processes) >= n_procs:
-                    finished_meta_data, finished_skipped_records = (
-                        remove_processed_snr_data(processes, output_queue)
-                    )
-                    meta_dfs.extend(finished_meta_data)
-                    skipped_record_dfs.extend(finished_skipped_records)
-
-                # Start a new process
-                process = mp.Process(
-                    target=compute_snr_for_single_mseed,
-                    args=(
-                        mseed_file,
-                        phase_table_path,
-                        snr_fas_output_dir,
-                        output_queue,
-                        apply_smoothing,
-                        ko_matrix_path,
-                        common_frequency_vector,
-                    ),
-                )
-                process.record_id = mseed_file.stem
-                processes.append(process)
-                process.start()
-
-            # Wait for all remaining processes to finish and check the queue
-            while processes:
-                finished_meta_data, finished_skipped_records = (
-                    remove_processed_snr_data(processes, output_queue)
-                )
-                if len(finished_meta_data) > 0:
-                    meta_dfs.extend(finished_meta_data)
-                if len(finished_skipped_records) > 0:
-                    skipped_record_dfs.extend(finished_skipped_records)
-                # Wait 1 second before checking again (prevents missing completed jobs)
-                time.sleep(1)
+            for result in results:
+                meta_df, skipped_record = result
+                if meta_df is None:
+                    skipped_record_dfs.append(skipped_record)
+                else:
+                    meta_dfs.append(meta_df)
 
             # Check that there are metadata dataframes that are not None
             if not all(value is None for value in meta_dfs):
@@ -438,8 +352,8 @@ def compute_snr_for_mseed_data(
             ]
         )
     # Check that there are skipped records that are not None
-    if not all(value is None for value in skipped_record_dfs):
-        skipped_records_df = pd.concat(skipped_record_dfs, ignore_index=True)
+    if not all(value is None for value in skipped_records_dfs):
+        skipped_records_df = pd.concat(skipped_records_dfs, ignore_index=True)
         print(f"Skipped {len(skipped_records_df)} records")
     else:
         print("No skipped records")
