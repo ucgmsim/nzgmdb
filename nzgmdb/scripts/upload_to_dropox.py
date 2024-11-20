@@ -129,7 +129,7 @@ def main(
     with mp.Pool(n_procs) as pool:
         waveforms_zip_files = pool.starmap(
             zip_folder,
-            [(folder, output_dir, folder.stem) for folder in year_folders],
+            [(folder, waveform_output_dir, folder.stem) for folder in year_folders],
         )
     # Also zip each event folder
     event_zips = {}
@@ -236,10 +236,19 @@ def upload_failed_files(  # noqa: D103
 
     dropbox_version_dir = f"{DROPBOX_PATH}/{version}"
 
+    def determine_dropbox_path(local_file: Path):
+        parts = local_file.parts
+        if "zips" in parts:
+            zips_index = parts.index("zips")
+            relative_path = "/".join(parts[zips_index + 1 :])
+            return f"{dropbox_version_dir}/{relative_path}"
+        else:
+            return dropbox_version_dir
+
     with mp.Pool(n_procs) as pool:
         failed_files = pool.starmap(
             upload_zip_to_dropbox,
-            [(Path(f), dropbox_version_dir) for f in failed_files],
+            [(Path(f), determine_dropbox_path(Path(f))) for f in failed_files],
         )
 
     failed_files = [f for f in failed_files if f is not None]
