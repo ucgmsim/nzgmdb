@@ -539,7 +539,7 @@ def process_batch(
     event_data, sta_mag_data, skipped_records = [], [], []
     for result in results:
         finished_event_data, finished_sta_mag_data, finished_skipped_records = result
-        event_data.extend(finished_event_data)
+        event_data.append(finished_event_data)
         sta_mag_data.extend(finished_sta_mag_data)
         skipped_records.extend(finished_skipped_records)
 
@@ -549,7 +549,7 @@ def process_batch(
 
     # Create the event df
     event_df = pd.DataFrame(
-        [event_data],
+        event_data,
         columns=[
             "evid",
             "datetime",
