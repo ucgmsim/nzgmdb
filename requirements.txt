@@ -14,5 +14,5 @@ matplotlib
 empirical @ git+https://github.com/ucgmsim/Empirical_Engine.git
 openquake-engine @ git+https://github.com/gem/oq-engine.git
 qcore @ git+https://github.com/ucgmsim/qcore.git
-im-calculation @ git+https://github.com/ucgmsim/IM_calculation.git
+im-calc @ git+https://github.com/ucgmsim/IM_calculation.git
 Velocity_Model @ git+https://github.com/ucgmsim/Velocity-Model.git
