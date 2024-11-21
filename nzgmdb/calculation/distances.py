@@ -589,6 +589,26 @@ def compute_distances_for_event(
         ]
     )
 
+    # Create the plane DataFrame
+    plane_df = pd.DataFrame(
+        [
+            {
+                "evid": event_id,
+                "strike": strike,
+                "dip": dip,
+                "rake": rake,
+                "f_length": length,
+                "f_width": dip_dist,
+                "z_tor": ztor,
+                "z_bor": dbottom,
+                "hyp_lat": hyp_lat,
+                "hyp_lon": hyp_lon,
+                "hyp_strike": hyp_strike,
+                "hyp_dip": hyp_dip,
+            },
+        ]
+    )
+
     return propagation_data_combo, extra_event_data
 
 
