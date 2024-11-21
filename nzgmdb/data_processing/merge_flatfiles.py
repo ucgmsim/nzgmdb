@@ -220,6 +220,9 @@ def merge_flatfiles(main_dir: Path):
     site_basin_df = pd.read_csv(
         flatfile_dir / file_structure.PreFlatfileNames.SITE_TABLE
     )
+    plane_data_df = pd.read_csv(
+        flatfile_dir / file_structure.PreFlatfileNames.FAULT_PLANE_TABLE
+    )
 
     # Get the recorders information for location codes
     config = cfg.Config()
@@ -237,6 +240,7 @@ def merge_flatfiles(main_dir: Path):
     # Ensure that the other dfs only have the unique events
     event_df = event_df[event_df.evid.isin(unique_events)]
     phase_table_df = phase_table_df[phase_table_df.evid.isin(unique_events)]
+    plane_data_df = plane_data_df[plane_data_df.evid.isin(unique_events)]
 
     # Ensure that the site_basin_df only has the unique sites found in the im_df
     unique_sites = im_df["sta"].unique()
@@ -564,4 +568,7 @@ def merge_flatfiles(main_dir: Path):
     df_rotd100_flat.to_csv(
         flatfile_dir / file_structure.FlatfileNames.GROUND_MOTION_IM_ROTD100_FLAT,
         index=False,
+    )
+    plane_data_df.to_csv(
+        flatfile_dir / file_structure.FlatfileNames.FAULT_PLANE_TABLE, index=False
     )

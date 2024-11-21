@@ -378,6 +378,8 @@ def compute_distances_for_event(
         The propagation data for the event
     extra_event_data : pd.DataFrame
         The extra event data for the event which includes the correct nodal plane information
+    plane_df : pd.DataFrame
+        The plane data for the event to represent the fault plane
     """
 
     # Extract out the relevant event_row data
@@ -387,7 +389,7 @@ def compute_distances_for_event(
     # Check if the event doesn't have IM data
     # If it doesn't, skip the event
     if im_event_df.empty:
-        return None, None
+        return None, None, None
 
     # Get the station data
     event_sta_df = station_df[station_df["sta"].isin(im_event_df["sta"])].reset_index()
@@ -589,27 +591,43 @@ def compute_distances_for_event(
         ]
     )
 
+    # Create None corners for the ff type
+    if f_type == "ff":
+        corner_0, corner_1, corner_2, corner_3 = [[None, None, None]] * 4
     # Create the plane DataFrame
     plane_df = pd.DataFrame(
         [
             {
                 "evid": event_id,
+                "f_type": f_type,
                 "strike": strike,
                 "dip": dip,
                 "rake": rake,
-                "f_length": length,
-                "f_width": dip_dist,
+                "length": length,
+                "dip_dist": dip_dist,
                 "z_tor": ztor,
-                "z_bor": dbottom,
+                "dbottom": dbottom,
                 "hyp_lat": hyp_lat,
                 "hyp_lon": hyp_lon,
                 "hyp_strike": hyp_strike,
                 "hyp_dip": hyp_dip,
+                "corner_0_lat": corner_0[0],
+                "corner_0_lon": corner_0[1],
+                "corner_0_depth": corner_0[2],
+                "corner_1_lat": corner_1[0],
+                "corner_1_lon": corner_1[1],
+                "corner_1_depth": corner_1[2],
+                "corner_2_lat": corner_2[0],
+                "corner_2_lon": corner_2[1],
+                "corner_2_depth": corner_2[2],
+                "corner_3_lat": corner_3[0],
+                "corner_3_lon": corner_3[1],
+                "corner_3_depth": corner_3[2],
             },
         ]
     )
 
-    return propagation_data_combo, extra_event_data
+    return propagation_data_combo, extra_event_data, plane_df
 
 
 def distance_in_taupo(
@@ -807,9 +825,10 @@ def calc_distances(main_dir: Path, n_procs: int = 1):
         )
 
     # Combine the results
-    propagation_results, extra_event_results = zip(*result_dfs)
+    propagation_results, extra_event_results, plane_results = zip(*result_dfs)
     propagation_data = pd.concat(propagation_results)
     extra_event_data = pd.concat(extra_event_results)
+    plane_data = pd.concat(plane_results)
 
     # Merge the extra event data with the event data
     event_df = pd.merge(event_df, extra_event_data, on="evid", how="right")
@@ -822,4 +841,7 @@ def calc_distances(main_dir: Path, n_procs: int = 1):
         flatfile_dir
         / file_structure.PreFlatfileNames.EARTHQUAKE_SOURCE_TABLE_DISTANCES,
         index=False,
+    )
+    plane_data.to_csv(
+        flatfile_dir / file_structure.PreFlatfileNames.FAULT_PLANE_TABLE, index=False
     )
