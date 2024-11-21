@@ -549,7 +549,7 @@ def process_batch(
 
     # Create the event df
     event_df = pd.DataFrame(
-        event_data,
+        [event_data],
         columns=[
             "evid",
             "datetime",
