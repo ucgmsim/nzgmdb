@@ -1,8 +1,4 @@
-import multiprocessing as mp
-import queue
-import time
 from pathlib import Path
-from typing import List
 
 import numpy as np
 import obspy
@@ -11,7 +7,7 @@ from pandas.errors import EmptyDataError
 
 import IM_calculation.IM.snr_calculation as snr_calc
 from nzgmdb.management import config as cfg
-from nzgmdb.management import custom_errors, file_structure, custom_multiprocess
+from nzgmdb.management import custom_errors, custom_multiprocess, file_structure
 from nzgmdb.mseed_management import reading
 from nzgmdb.phase_arrival import tp_selection
 
