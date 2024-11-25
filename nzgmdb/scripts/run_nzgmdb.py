@@ -67,7 +67,6 @@ def fetch_geonet_data(  # noqa: D103
         bool,
         typer.Option(
             help="If True, the function will run in real time mode by using a different client",
-            is_flag=True,
         ),
     ] = False,
 ):

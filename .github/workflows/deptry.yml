@@ -15,5 +15,7 @@ jobs:
       - run: pip install deptry
       # Remove pyproject.toml so that deptry doesn't get confused
       - run: rm pyproject.toml
+      # Run the install
+      - run: pip install -r requirements.txt
       # Run deptry to check that all dependencies are present.
-      - run: deptry . --package-module-name-map "IM_calculation=IM_calculation,Velocity_Model=Velocity_Model,pyyaml=yaml" --per-rule-ignores "DEP002=oq-engine"
+      - run: deptry . --per-rule-ignores "DEP002=openquake-engine"
