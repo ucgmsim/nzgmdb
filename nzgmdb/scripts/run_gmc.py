@@ -1,6 +1,5 @@
 import functools
 import multiprocessing
-import subprocess
 from pathlib import Path
 from typing import Annotated
 
@@ -8,46 +7,9 @@ import numpy as np
 import pandas as pd
 import typer
 
-from nzgmdb.management import file_structure
+from nzgmdb.management import file_structure, commands
 
 app = typer.Typer()
-
-
-def run_command(
-    command: str, env_sh: Path, env_activate_command: str, log_file_path: Path
-):
-    """
-    Run a shell command with optional Conda environment activation.
-
-    Parameters
-    ----------
-    command : str
-        The command to run.
-    env_sh : Path
-        The path to the conda.sh script.
-    env_activate_command : str
-        The command to activate the conda environment needed.
-    log_file_path : Path
-        The path to the log file.
-
-    Raises
-    ------
-    Exception
-        If the command fails.
-    """
-    with open(log_file_path, "w") as log_file:
-        # Create the command to source conda.sh, activate the environment, and execute the full command
-        command = f"source {env_sh} && {env_activate_command} && {command}"
-        try:
-            subprocess.check_call(
-                command,
-                stdout=log_file,
-                stderr=log_file,
-                shell=True,
-                executable="/bin/bash",
-            )
-        except subprocess.CalledProcessError:
-            raise Exception(f"Command failed please check logs in {log_file_path}")
 
 
 def process_batch(
@@ -111,7 +73,7 @@ def process_batch(
         else:
             # Activate gmc environment and extract features for the subfolder
             features_command = f"python {gmc_scripts_path}/extract_features.py {gmc_dir} {waveform_dir} mseed --ko_matrices_dir {ko_matrices_dir} --record_list_ffp {batch_txt}"
-            run_command(
+            commands.run_command(
                 features_command, conda_sh, gmc_activate, log_file_path_features
             )
 
@@ -130,7 +92,7 @@ def process_batch(
         predict_command = (
             f"python {gmc_scripts_path}/predict.py {gmc_dir} {predictions_output}"
         )
-        run_command(
+        commands.run_command(
             predict_command, conda_sh, gmc_predict_activate, log_file_path_predict
         )
 

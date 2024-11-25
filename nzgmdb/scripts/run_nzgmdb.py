@@ -124,13 +124,35 @@ def make_phase_arrival_table(  # noqa: D103
             help="The directory to save the phase arrival table", file_okay=False
         ),
     ],
+    run_phasenet_script_ffp: Annotated[
+        Path,
+        typer.Argument(
+            help="The script full file path to run PhaseNet (In NZGMDB/phase_arrival).",
+            exists=True,
+            dir_okay=False,
+        ),
+    ],
+    conda_sh: Annotated[
+        Path,
+        typer.Argument(
+            help="Path to activate your mamba conda.sh script.",
+        ),
+    ],
+    env_activate_command: Annotated[
+        str,
+        typer.Argument(
+            help="The command to activate the environment for running PhaseNet.",
+        ),
+    ],
     n_procs: Annotated[int, typer.Option(help="Number of processes to use")] = 1,
-    full_output: Annotated[
-        bool, typer.Option(help="output arrival times from GeoNet and Picker")
-    ] = False,
 ):
     gen_phase_arrival_table.generate_phase_arrival_table(
-        main_dir, output_dir, n_procs, full_output
+        main_dir,
+        output_dir,
+        run_phasenet_script_ffp,
+        conda_sh,
+        env_activate_command,
+        n_procs,
     )
 
 
