@@ -1,3 +1,4 @@
+import argparse
 import json
 from pathlib import Path
 from typing import Annotated
@@ -5,11 +6,8 @@ from typing import Annotated
 import numpy as np
 import obspy
 import pandas as pd
-import typer
 from obspy.clients.fdsn import Client as FDSN_Client
 from obspy.clients.fdsn.header import FDSNNoDataException
-
-app = typer.Typer()
 
 
 def run_phase_net(
@@ -138,23 +136,17 @@ def process_mseed(mseed_file: Path):
     )
 
 
-@app.command(help="Run PhaseNet on mseed files.")
-def run_phasenet(
-    mseed_files_ffp: Annotated[
-        Path,
-        typer.Argument(
-            help="File path to a list of mseed files to process.",
-            dir_okay=False,
-        ),
-    ],
-    output_dir: Annotated[
-        Path,
-        typer.Argument(
-            help="output directory for skipped records and phase arrival information.",
-            file_okay=False,
-        ),
-    ],
-):
+def run_phasenet(mseed_files_ffp: Path, output_dir: Path):
+    """
+    Run PhaseNet on the mseed files.
+
+    Parameters
+    ----------
+    mseed_files_ffp : Path
+        Full File path to a list of mseed full file paths to process.
+    output_dir : Path
+        Output directory for skipped records and phase arrival information.
+    """
     # Read the .txt for the mseed files to process
     with open(mseed_files_ffp, "r") as f:
         mseed_files = f.readlines()
@@ -196,4 +188,16 @@ def run_phasenet(
 
 
 if __name__ == "__main__":
-    app()
+    parser = argparse.ArgumentParser(description="Run PhaseNet on mseed files.")
+    parser.add_argument(
+        "mseed_files_ffp",
+        type=Path,
+        help="File path to a list of mseed files to process.",
+    )
+    parser.add_argument(
+        "output_dir",
+        type=Path,
+        help="Output directory for skipped records and phase arrival information.",
+    )
+    args = parser.parse_args()
+    run_phasenet(args.mseed_files_ffp, args.output_dir)
