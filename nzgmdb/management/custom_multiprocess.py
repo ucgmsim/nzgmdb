@@ -73,6 +73,9 @@ def custom_multiprocess(
     for task in tasks:
         task_queue.put(task)
 
+    # Check length of tasks and reduce n_procs if necessary
+    n_procs = min(n_procs, len(tasks))
+
     # Start the processes
     processes = {}
     for _ in range(n_procs):

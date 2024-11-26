@@ -257,148 +257,153 @@ def fetch_sta_mag_line(
     only_sites : list[str] (optional)
         Will only fetch the data for the sites in the list
     """
-    sta_mag_line = []
-    skipped_records = []
-    # Get the clipping threshold
-    config = cfg.Config()
-    threshold = config.get_value("clip_threshold")
+    try:
+        sta_mag_line = []
+        skipped_records = []
+        # Get the clipping threshold
+        config = cfg.Config()
+        threshold = config.get_value("clip_threshold")
 
-    # Get the preferred_origin
-    preferred_origin = event_cat.preferred_origin()
-    ev_lat = preferred_origin.latitude
-    ev_lon = preferred_origin.longitude
+        # Get the preferred_origin
+        preferred_origin = event_cat.preferred_origin()
+        ev_lat = preferred_origin.latitude
+        ev_lon = preferred_origin.longitude
 
-    # Get the r_hyp
-    dist, _, _ = obspy.geodetics.gps2dist_azimuth(
-        ev_lat,
-        ev_lon,
-        station.latitude,
-        station.longitude,
-    )
-    r_epi = dist / 1000
-    ev_depth = preferred_origin.depth / 1000
-    r_hyp = ((r_epi) ** 2 + (ev_depth + station.elevation) ** 2) ** 0.5
+        # Get the r_hyp
+        dist, _, _ = obspy.geodetics.gps2dist_azimuth(
+            ev_lat,
+            ev_lon,
+            station.latitude,
+            station.longitude,
+        )
+        r_epi = dist / 1000
+        ev_depth = preferred_origin.depth / 1000
+        r_hyp = ((r_epi) ** 2 + (ev_depth + station.elevation) ** 2) ** 0.5
 
-    # Get the vs30 value
-    site_vs30_row = site_table.loc[
-        (site_table["net"] == network.code) & (site_table["sta"] == station.code),
-        "Vs30",
-    ]
-    vs30 = None if site_vs30_row.empty else site_vs30_row.values[0]
+        # Get the vs30 value
+        site_vs30_row = site_table.loc[
+            (site_table["net"] == network.code) & (site_table["sta"] == station.code),
+            "Vs30",
+        ]
+        vs30 = None if site_vs30_row.empty else site_vs30_row.values[0]
 
-    # Get the waveforms
-    st = creation.get_waveforms(
-        preferred_origin,
-        client_NZ,
-        network.code,
-        station.code,
-        event_cat.preferred_magnitude().mag,
-        r_hyp,
-        r_epi,
-        vs30,
-    )
-    # Check that data was found
-    if st is None:
-        skipped_records.append([f"{event_id}_{station.code}", "No Waveform Data"])
-        return sta_mag_line, skipped_records
+        # Get the waveforms
+        st = creation.get_waveforms(
+            preferred_origin,
+            client_NZ,
+            network.code,
+            station.code,
+            event_cat.preferred_magnitude().mag,
+            r_hyp,
+            r_epi,
+            vs30,
+        )
+        # Check that data was found
+        if st is None:
+            skipped_records.append([f"{event_id}_{station.code}", "No Waveform Data"])
+            return sta_mag_line, skipped_records
 
-    # Get the unique channels (Using first 2 keys) and locations
-    unique_channels = set([(tr.stats.channel[:2], tr.stats.location) for tr in st])
+        # Get the unique channels (Using first 2 keys) and locations
+        unique_channels = set([(tr.stats.channel[:2], tr.stats.location) for tr in st])
 
-    # Split the stream into mseeds
-    mseeds = creation.split_stream_into_mseeds(st, unique_channels)
+        # Split the stream into mseeds
+        mseeds = creation.split_stream_into_mseeds(st, unique_channels)
 
-    # Get the station magnitudes
-    station_magnitudes = [
-        mag
-        for mag in event_cat.station_magnitudes
-        if mag.waveform_id.station_code == station.code
-    ]
+        # Get the station magnitudes
+        station_magnitudes = [
+            mag
+            for mag in event_cat.station_magnitudes
+            if mag.waveform_id.station_code == station.code
+        ]
 
-    for mseed in mseeds:
-        # Check the data is not all 0's
-        if all([np.allclose(tr.data, 0) for tr in mseed]):
-            stats = mseed[0].stats
-            skipped_records.append(
-                [
-                    f"{event_id}_{stats.station}_{stats.location}_{stats.channel}",
-                    "All 0's",
-                ]
-            )
-            continue
-
-        # Calculate clip to determine if the record should be dropped
-        clip = filtering.get_clip_probability(pref_mag, r_hyp, st)
-
-        # Check if the record should be dropped
-        if clip > threshold:
-            stats = mseed[0].stats
-            skipped_records.append(
-                [
-                    f"{event_id}_{stats.station}_{stats.location}_{stats.channel}",
-                    "Clipped",
-                ]
-            )
-            continue
-
-        # Create the directory structure for the given event
-        year = event_cat.origins[0].time.year
-        mseed_dir = file_structure.get_mseed_dir(main_dir, year, event_id)
-
-        # Write the mseed file
-        creation.write_mseed(mseed, event_id, station.code, mseed_dir)
-
-        for trace in mseed:
-            chan = trace.stats.channel
-            loc = trace.stats.location
-            # Find the station magnitude
-            # Ensures that the station codes matches and that if the channel code ends with Z then it makes
-            # sure that the station magnitude is for the Z channel, otherwise any that match with the first two
-            # characters of the channel code is sufficient
-            sta_mag = None
-            for mag in station_magnitudes:
-                if mag.waveform_id.channel_code[:2] == chan[:2]:
-                    sta_mag = mag
-                    if chan[-1] == "Z":
-                        break
-
-            if sta_mag:
-                sta_mag_mag = sta_mag.mag
-                sta_mag_type = sta_mag.station_magnitude_type
-                amp = next(
-                    (
-                        amp
-                        for amp in event_cat.amplitudes
-                        if amp.resource_id == sta_mag.amplitude_id
-                    ),
-                    None,
+        for mseed in mseeds:
+            # Check the data is not all 0's
+            if all([np.allclose(tr.data, 0) for tr in mseed]):
+                stats = mseed[0].stats
+                skipped_records.append(
+                    [
+                        f"{event_id}_{stats.station}_{stats.location}_{stats.channel}",
+                        "All 0's",
+                    ]
                 )
-            else:
-                sta_mag_mag = None
-                sta_mag_type = pref_mag_type
-                amp = None
+                continue
 
-            # Get the amp values
-            amp_amp = amp.generic_amplitude if amp else None
-            amp_unit = amp.unit if amp and "unit" in amp else None
+            # Calculate clip to determine if the record should be dropped
+            clip = filtering.get_clip_probability(pref_mag, r_hyp, st)
 
-            mag_id = f"{event_id}m{len(sta_mag_line) + 1}"
-            sta_mag_line.append(
-                [
-                    mag_id,
-                    network.code,
-                    station.code,
-                    loc,
-                    chan,
-                    event_id,
-                    sta_mag_mag,
-                    sta_mag_type,
-                    "uncorrected",
-                    amp_amp,
-                    amp_unit,
-                ]
-            )
+            # Check if the record should be dropped
+            if clip > threshold:
+                stats = mseed[0].stats
+                skipped_records.append(
+                    [
+                        f"{event_id}_{stats.station}_{stats.location}_{stats.channel}",
+                        "Clipped",
+                    ]
+                )
+                continue
 
+            # Create the directory structure for the given event
+            year = event_cat.origins[0].time.year
+            mseed_dir = file_structure.get_mseed_dir(main_dir, year, event_id)
+
+            # Write the mseed file
+            creation.write_mseed(mseed, event_id, station.code, mseed_dir)
+
+            for trace in mseed:
+                chan = trace.stats.channel
+                loc = trace.stats.location
+                # Find the station magnitude
+                # Ensures that the station codes matches and that if the channel code ends with Z then it makes
+                # sure that the station magnitude is for the Z channel, otherwise any that match with the first two
+                # characters of the channel code is sufficient
+                sta_mag = None
+                for mag in station_magnitudes:
+                    if mag.waveform_id.channel_code[:2] == chan[:2]:
+                        sta_mag = mag
+                        if chan[-1] == "Z":
+                            break
+
+                if sta_mag:
+                    sta_mag_mag = sta_mag.mag
+                    sta_mag_type = sta_mag.station_magnitude_type
+                    amp = next(
+                        (
+                            amp
+                            for amp in event_cat.amplitudes
+                            if amp.resource_id == sta_mag.amplitude_id
+                        ),
+                        None,
+                    )
+                else:
+                    sta_mag_mag = None
+                    sta_mag_type = pref_mag_type
+                    amp = None
+
+                # Get the amp values
+                amp_amp = amp.generic_amplitude if amp else None
+                amp_unit = amp.unit if amp and "unit" in amp else None
+
+                mag_id = f"{event_id}m{len(sta_mag_line) + 1}"
+                sta_mag_line.append(
+                    [
+                        mag_id,
+                        network.code,
+                        station.code,
+                        loc,
+                        chan,
+                        event_id,
+                        sta_mag_mag,
+                        sta_mag_type,
+                        "uncorrected",
+                        amp_amp,
+                        amp_unit,
+                    ]
+                )
+    except Exception as e:
+        print(f"Error with {event_id}_{station.code}")
+        print(e)
+        skipped_records = [f"{event_id}_{station.code}", "Error"]
+        sta_mag_line = []
     return sta_mag_line, skipped_records
 
 
