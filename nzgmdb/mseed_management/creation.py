@@ -133,6 +133,10 @@ def get_waveforms(
                 continue  # try again
             else:
                 return None
+        except Exception as e:
+            print(f"Error getting waveforms for {net}.{sta}")
+            print(e)
+            return None
     return st
 
 
