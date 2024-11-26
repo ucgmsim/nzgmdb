@@ -9,12 +9,11 @@ import IM_calculation.IM.snr_calculation as snr_calc
 from nzgmdb.management import config as cfg
 from nzgmdb.management import custom_errors, custom_multiprocess, file_structure
 from nzgmdb.mseed_management import reading
-from nzgmdb.phase_arrival import tp_selection
 
 
 def compute_snr_for_single_mseed(
     mseed_file: Path,
-    phase_table_path: Path,
+    phase_table: pd.DataFrame,
     output_dir: Path,
     apply_smoothing: bool = True,
     ko_matrix_path: Path = None,
@@ -27,8 +26,8 @@ def compute_snr_for_single_mseed(
     ----------
     mseed_file : Path
         Path to the mseed file
-    phase_table_path : Path
-        Path to the phase arrival table
+    phase_table : pd.DataFrame
+        Phase arrival table
     output_dir : Path
         Path to the output directory
     apply_smoothing : bool, optional
@@ -95,19 +94,22 @@ def compute_snr_for_single_mseed(
         skipped_record = pd.DataFrame([skipped_record_dict])
         return None, skipped_record
 
-    stats = obspy.read(str(mseed_file))[0].stats
-
-    # Index of the start of the P-wave
+    # Get the TP from the phase arrival table
     try:
-        tp = tp_selection.get_tp_from_phase_table(phase_table_path, stats, event_id)
-    except custom_errors.NoPWaveFoundError:
+        tp = phase_table[phase_table["record_id"] == mseed_file.stem][
+            "p_wave_ix"
+        ].values[0]
+    except IndexError:
         skipped_record_dict = {
             "record_id": mseed_file.stem,
             "reason": "No P-wave found in phase arrival table",
         }
         skipped_record = pd.DataFrame([skipped_record_dict])
         return None, skipped_record
-    except custom_errors.TPNotInWaveformError:
+
+    # Ensure the tp is within the range of the waveform
+    stats = obspy.read(str(mseed_file))[0].stats
+    if tp > stats.npts or tp < 0:
         skipped_record_dict = {
             "record_id": mseed_file.stem,
             "reason": "TP not in waveform bounds",
@@ -137,7 +139,7 @@ def compute_snr_for_single_mseed(
             "reason": "Failed to find Ko matrix",
         }
         skipped_record = pd.DataFrame([skipped_record_dict])
-        end_snr_compute(output_queue, None, skipped_record)
+        return None, skipped_record
 
     if snr is None:
         skipped_record_dict = {
@@ -258,6 +260,9 @@ def compute_snr_for_mseed_data(
     # Create batches of mseed files for checkpointing
     mseed_batches = np.array_split(mseed_files, np.ceil(len(mseed_files) / batch_size))
 
+    # Load the phase arrival table
+    phase_table = pd.read_csv(phase_table_path)
+
     for index, batch in enumerate(mseed_batches):
         if index not in processed_suffixes:
             print(f"Processing batch {index + 1}/{len(mseed_batches)}")
@@ -265,7 +270,7 @@ def compute_snr_for_mseed_data(
                 compute_snr_for_single_mseed,
                 batch,
                 n_procs,
-                phase_table_path,
+                phase_table,
                 snr_fas_output_dir,
                 apply_smoothing,
                 ko_matrix_path,

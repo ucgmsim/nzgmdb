@@ -260,10 +260,9 @@ def merge_tectclass(event_df: pd.DataFrame):
     event_df["tect_method"] = event_df["tect_method"].astype("str")
 
     # Replace the tect_class and tect_method with the NZSMDB data where it exists
-    event_df.loc[not event_df.NZSMDB_TectClass.isnull(), "tect_class"] = event_df[
-        not event_df.NZSMDB_TectClass.isnull()
-    ].NZSMDB_TectClass.values
-    event_df.loc[not event_df.NZSMDB_TectClass.isnull(), "tect_method"] = "NZSMDB"
+    mask = ~event_df.NZSMDB_TectClass.isnull()
+    event_df.loc[mask, "tect_class"] = event_df.loc[mask, "NZSMDB_TectClass"].values
+    event_df.loc[mask, "tect_method"] = "NZSMDB"
 
     # Drop unnecessary columns
     event_df = event_df.drop(columns=["NZSMDB_TectClass"])

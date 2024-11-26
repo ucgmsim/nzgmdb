@@ -21,6 +21,7 @@ def process_batch(
     conda_sh: Path,
     gmc_activate: str,
     gmc_predict_activate: str,
+    phase_arrival_table_ffp: Path,
 ):
     """
     Process a single subfolder: extract features and run predictions.
@@ -43,6 +44,8 @@ def process_batch(
         The command to activate the GMC environment for extracting features.
     gmc_predict_activate : str
         The command to activate the GMC prediction environment.
+    phase_arrival_table_ffp : Path
+        The full file path to the phase arrival table
 
     Raises
     ------
@@ -72,7 +75,7 @@ def process_batch(
             )
         else:
             # Activate gmc environment and extract features for the subfolder
-            features_command = f"python {gmc_scripts_path}/extract_features.py {gmc_dir} {waveform_dir} mseed --ko_matrices_dir {ko_matrices_dir} --record_list_ffp {batch_txt}"
+            features_command = f"python {gmc_scripts_path}/extract_features.py {gmc_dir} {waveform_dir} mseed --ko_matrices_dir {ko_matrices_dir} --record_list_ffp {batch_txt} --phase_arrival_table {phase_arrival_table_ffp}"
             commands.run_command(
                 features_command, conda_sh, gmc_activate, log_file_path_features
             )
@@ -181,6 +184,12 @@ def run_gmc_processing(  # noqa: D103
     )
     final_predictions_output = output_dir / file_structure.FlatfileNames.GMC_PREDICTIONS
 
+    # Get the phase arrival table
+    flatfile_dir = file_structure.get_flatfile_dir(main_dir)
+    phase_arrival_table_ffp = (
+        flatfile_dir / file_structure.PreFlatfileNames.PHASE_ARRIVAL_TABLE
+    )
+
     # Get all the mseed files
     mseed_files = list(waveform_dir.rglob("*.mseed"))
 
@@ -196,6 +205,7 @@ def run_gmc_processing(  # noqa: D103
         conda_sh=conda_sh,
         gmc_activate=gmc_activate,
         gmc_predict_activate=gmc_predict_activate,
+        phase_arrival_table_ffp=phase_arrival_table_ffp,
     )
 
     # Use multiprocessing with starmap and the partial function

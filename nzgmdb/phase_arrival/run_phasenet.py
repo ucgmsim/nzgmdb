@@ -1,3 +1,4 @@
+import json
 from pathlib import Path
 from typing import Annotated
 
@@ -118,14 +119,19 @@ def process_mseed(mseed_file: Path):
         mseed[0].stats["delta"],
         return_prob_series=True,
     )
+
+    # Convert the probability series to JSON strings
+    p_prob_series_json = json.dumps(p_prob_series.tolist())
+    s_prob_series_json = json.dumps(s_prob_series.tolist())
+
     return (
         pd.DataFrame(
             {
                 "record_id": [mseed_file.stem],
                 "p_wave_ix": [p_wave_ix],
                 "s_wave_ix": [s_wave_ix],
-                "p_prob_series": [p_prob_series],
-                "s_prob_series": [s_prob_series],
+                "p_prob_series": [p_prob_series_json],
+                "s_prob_series": [s_prob_series_json],
             }
         ),
         None,

@@ -660,7 +660,7 @@ def run_full_nzgmdb(  # noqa: D103
             geonet_batch_size,
             only_event_ids,
             only_sites,
-            False,
+            real_time,
         )
 
     # Merge the tectonic domains
@@ -690,8 +690,16 @@ def run_full_nzgmdb(  # noqa: D103
         ).exists()
     ):
         print("Generating phase arrival table")
+        run_phasenet_script_ffp = (
+            Path(__file__).parent.parent / "phase_arrival/run_phasenet.py"
+        )
         gen_phase_arrival_table.generate_phase_arrival_table(
-            main_dir, flatfile_dir, n_procs
+            main_dir,
+            flatfile_dir,
+            run_phasenet_script_ffp,
+            conda_sh,
+            gmc_activate,
+            n_procs,
         )
 
     # Generate SNR
@@ -722,46 +730,20 @@ def run_full_nzgmdb(  # noqa: D103
         calc_fmax(main_dir, flatfile_dir, waveform_dir, snr_fas_output_dir, n_procs)
 
     # Run GMC
-    if real_time:
-        # Create a dummy GMC predictions file
-        gmc_ffp = flatfile_dir / file_structure.FlatfileNames.GMC_PREDICTIONS
-        record_ids = [
-            file.stem
-            for file in file_structure.get_waveform_dir(main_dir).rglob("*.mseed")
-        ]
-        gmc_data = {}
-        for record_id in record_ids:
-            for comp in ["X", "Y", "Z"]:
-                gmc_data[f"{record_id}_{comp}"] = {
-                    "record_id": f"{record_id}_{comp}",
-                    "score_mean": 0.9,
-                    "score_std": 0,
-                    "fmin_mean": 0.05,
-                    "fmin_std": 0.01,
-                    "multi_mean": 0.1,
-                    "multi_std": 0.01,
-                    "record": record_id,
-                    "component": comp,
-                    "station": record_id.split("_")[2],
-                    "event_id": record_id.split("_")[0],
-                }
-        gmc_df = pd.DataFrame(gmc_data).T
-        gmc_df.to_csv(gmc_ffp, index=False)
-    else:
-        if not (
-            checkpoint
-            and (flatfile_dir / file_structure.FlatfileNames.GMC_PREDICTIONS).exists()
-        ):
-            print("Running GMC")
-            run_gmc.run_gmc_processing(
-                main_dir,
-                gm_classifier_dir,
-                ko_matrix_path,
-                conda_sh,
-                gmc_activate,
-                gmc_predict_activate,
-                gmc_procs,
-            )
+    if not (
+        checkpoint
+        and (flatfile_dir / file_structure.FlatfileNames.GMC_PREDICTIONS).exists()
+    ):
+        print("Running GMC")
+        run_gmc.run_gmc_processing(
+            main_dir,
+            gm_classifier_dir,
+            ko_matrix_path,
+            conda_sh,
+            gmc_activate,
+            gmc_predict_activate,
+            gmc_procs,
+        )
 
     # Run filtering and processing of mseeds
     gmc_ffp = flatfile_dir / file_structure.FlatfileNames.GMC_PREDICTIONS
