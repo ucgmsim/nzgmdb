@@ -36,6 +36,7 @@ def worker(
 
         # Perform the task
         try:
+            print(f"Processing task: {task.code} for {mp.current_process().pid}")
             result = func(task, *args)
             result_queue.put(result)
         except Exception as e:

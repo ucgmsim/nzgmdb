@@ -137,6 +137,7 @@ def get_waveforms(
             print(f"Error getting waveforms for {net}.{sta}")
             print(e)
             return None
+    print(f"Got Waveform for station {sta}")
     return st
 
 

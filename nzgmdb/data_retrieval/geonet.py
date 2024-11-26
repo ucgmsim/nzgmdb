@@ -287,6 +287,8 @@ def fetch_sta_mag_line(
         ]
         vs30 = None if site_vs30_row.empty else site_vs30_row.values[0]
 
+        print(f"About to fetch for station {station.code}")
+
         # Get the waveforms
         st = creation.get_waveforms(
             preferred_origin,
@@ -316,6 +318,8 @@ def fetch_sta_mag_line(
             if mag.waveform_id.station_code == station.code
         ]
 
+        print(f"Enter Loop for station {station.code}")
+
         for mseed in mseeds:
             # Check the data is not all 0's
             if all([np.allclose(tr.data, 0) for tr in mseed]):
@@ -341,6 +345,8 @@ def fetch_sta_mag_line(
                     ]
                 )
                 continue
+
+            print(f"Writing mseed for {station.code}")
 
             # Create the directory structure for the given event
             year = event_cat.origins[0].time.year
@@ -399,11 +405,13 @@ def fetch_sta_mag_line(
                         amp_unit,
                     ]
                 )
+            print(f"Finished writing mseed for {station.code}")
     except Exception as e:
         print(f"Error with {event_id}_{station.code}")
         print(e)
         skipped_records = [f"{event_id}_{station.code}", "Error"]
         sta_mag_line = []
+    print(f"Finished FULL for station {station.code}")
     return sta_mag_line, skipped_records
 
 
