@@ -31,16 +31,22 @@ def worker(
             # Get the task
             task = task_queue.get_nowait()
         except Empty:
+            print(f"Queue {mp.current_process().pid} Empty")
             break
 
         # Perform the task
-        result = func(task, *args)
-        result_queue.put(result)
+        try:
+            result = func(task, *args)
+            result_queue.put(result)
+        except Exception as e:
+            print(f"Error processing task: {task} for {mp.current_process().pid}")
+            print(e)
 
     # Signal that the process has finished
     finished_queue.put(mp.current_process().pid)
     # Sentinel value to signal the end of results
     result_queue.put(None)
+    print(f"Process {mp.current_process().pid} finished")
 
 
 def custom_multiprocess(
@@ -89,8 +95,10 @@ def custom_multiprocess(
     processes_to_end = []
     while processes:
         pid = finished_queue.get()
+        print(f"Process {pid} finished")
         processes_to_end.append(processes.pop(pid))
 
+    print("Collecting Results")
     # Collect results until all sentinel values are received
     results = []
     sentinel_count = 0
