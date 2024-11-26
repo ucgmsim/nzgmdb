@@ -36,7 +36,7 @@ def run_full_fmax_calc(
     n_procs : int, optional
         Number of processes to use, by default 1.
     """
-    mseed_files = waveform_dir.rglob("*.mseed")
+    mseed_files = list(waveform_dir.rglob("*.mseed"))
 
     results = custom_multiprocess.custom_multiprocess(
         assess_snr_and_get_fmax, mseed_files, n_procs, snr_fas_output_dir
