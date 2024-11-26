@@ -318,7 +318,7 @@ def fetch_sta_mag_line(
             if mag.waveform_id.station_code == station.code
         ]
 
-        print(f"Enter Loop for station {station.code}")
+        print(f"Enter Loop for station {station.code} of length {len(mseeds)}")
 
         for mseed in mseeds:
             # Check the data is not all 0's
@@ -355,7 +355,10 @@ def fetch_sta_mag_line(
             # Write the mseed file
             creation.write_mseed(mseed, event_id, station.code, mseed_dir)
 
+            print(f"Finished writing mseed for {station.code} getting traces {len(mseed)}")
+
             for trace in mseed:
+                print(f"Running trace {trace} for station {station.code}")
                 chan = trace.stats.channel
                 loc = trace.stats.location
                 # Find the station magnitude
@@ -370,6 +373,7 @@ def fetch_sta_mag_line(
                             break
 
                 if sta_mag:
+                    print(f"Getting sta_mag for {station.code} and trace {trace}")
                     sta_mag_mag = sta_mag.mag
                     sta_mag_type = sta_mag.station_magnitude_type
                     amp = next(
