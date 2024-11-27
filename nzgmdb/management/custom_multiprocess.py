@@ -112,7 +112,7 @@ def custom_multiprocess(
         file_writer_process.start()
 
         # Add the writing queue to the arguments
-        args = (writing_queue,) + args
+        args = args + (writing_queue,)
 
     # Check length of tasks and reduce n_procs if necessary
     n_procs = min(n_procs, len(tasks))
