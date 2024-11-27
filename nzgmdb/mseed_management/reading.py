@@ -73,7 +73,7 @@ def create_waveform_from_processed(
     ffp_000: Path,
     ffp_090: Path,
     ffp_ver: Path,
-    delta: float,
+    delta: float = None,
 ):
     """
     Create a waveform object from processed data using the 3 component files
@@ -98,6 +98,12 @@ def create_waveform_from_processed(
     comp_000 = pd.read_csv(ffp_000, sep=r"\s+", header=None, skiprows=2).values.ravel()
     comp_090 = pd.read_csv(ffp_090, sep=r"\s+", header=None, skiprows=2).values.ravel()
     comp_ver = pd.read_csv(ffp_ver, sep=r"\s+", header=None, skiprows=2).values.ravel()
+
+    if delta is None:
+        # Get the DT value from 2nd row 2nd value
+        delta = pd.read_csv(ffp_000, sep=r"\s+", header=None, nrows=2, skiprows=1).iloc[
+            0, 1
+        ]
 
     # Remove NaN values
     comp_000 = comp_000[~np.isnan(comp_000)]

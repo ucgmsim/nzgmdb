@@ -170,6 +170,7 @@ def custom_multiprocess_geonet(event_dir: Path, event_id: str, n_procs: int = 1)
             geonet.fetch_sta_mag_line,
             stations,
             n_procs,
+            True,
             network,
             event_cat,
             event_id,
@@ -305,13 +306,15 @@ def run_event(  # noqa: D103
         typer.Option(
             help="Start date for the event.",
         ),
-    ] = datetime.datetime.utcnow() - datetime.timedelta(days=8),
+    ] = datetime.datetime.utcnow()
+    - datetime.timedelta(days=8),
     end_date: Annotated[
         datetime.datetime,
         typer.Option(
             help="End date for the event.",
         ),
-    ] = datetime.datetime.utcnow() - datetime.timedelta(minutes=1),
+    ] = datetime.datetime.utcnow()
+    - datetime.timedelta(minutes=1),
 ):
     """
     Run the NZGMDB pipeline for a specific event in near-real-time mode.

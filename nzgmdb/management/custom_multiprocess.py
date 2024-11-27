@@ -2,6 +2,8 @@ import multiprocessing as mp
 from queue import Empty
 from typing import Any, Callable
 
+from nzgmdb.mseed_management import creation
+
 
 def worker(
     task_queue: mp.Queue,
@@ -50,8 +52,24 @@ def worker(
     print(f"Process {mp.current_process().pid} finished")
 
 
+# Worker function that handles file-writing tasks
+def file_writer_worker(queue, finish_queue):
+    while True:
+        task = queue.get()  # Get a task from the queue
+        if task is None:  # Stop signal
+            break
+        mseed, event_id, station_code, mseed_dir = task
+        creation.write_mseed(mseed, event_id, station_code, mseed_dir)
+    finish_queue.put(mp.current_process().pid)  # Signal that the process has finished
+    print(f"File writer process {mp.current_process().pid} finished")
+
+
 def custom_multiprocess(
-    func: Callable[..., Any], tasks: list[Any], n_procs: int, *args: Any
+    func: Callable[..., Any],
+    tasks: list[Any],
+    n_procs: int,
+    writing_process=False,
+    *args: Any,
 ) -> list[Any]:
     """
     Custom multiprocess function to distribute tasks among multiple processes.
@@ -64,6 +82,8 @@ def custom_multiprocess(
         List of tasks to be processed.
     n_procs : int
         Number of processes to use.
+    writing_process : bool
+        Whether to create a specific writing process to write files to handle IO.
     *args : Any
         Additional arguments to pass to the function.
 
@@ -79,6 +99,20 @@ def custom_multiprocess(
     # Add tasks to the queue
     for task in tasks:
         task_queue.put(task)
+
+    if writing_process:
+        n_procs -= 1
+        # Queue for file-writing tasks
+        writing_queue = mp.Queue()
+        finished_writing_queue = mp.Queue()
+        # Start the file writer worker
+        file_writer_process = mp.Process(
+            target=file_writer_worker, args=(writing_queue, finished_writing_queue)
+        )
+        file_writer_process.start()
+
+        # Add the writing queue to the arguments
+        args = (writing_queue,) + args
 
     # Check length of tasks and reduce n_procs if necessary
     n_procs = min(n_procs, len(tasks))
@@ -113,5 +147,12 @@ def custom_multiprocess(
     # Terminate the processes
     for p in processes_to_end:
         p.terminate()
+
+    if writing_process:
+        print("Adding stop signal to file writer queue")
+        writing_queue.put(None)  # Stop the file writer process
+        pid = finished_writing_queue.get()
+        print("Terminating file writer process")
+        file_writer_process.terminate()
 
     return results
