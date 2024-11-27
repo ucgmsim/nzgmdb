@@ -29,10 +29,9 @@ def worker(
         Additional arguments to pass to the function.
     """
     while True:
-        try:
-            # Get the task
-            task = task_queue.get_nowait()
-        except Empty:
+        # Get the task
+        task = task_queue.get()
+        if task is None:
             print(f"Queue {mp.current_process().pid} Empty")
             break
 
@@ -99,6 +98,7 @@ def custom_multiprocess(
     # Add tasks to the queue
     for task in tasks:
         task_queue.put(task)
+    task_queue.put(None)  # Sentinel value to signal the end of tasks
 
     if writing_process:
         n_procs -= 1
