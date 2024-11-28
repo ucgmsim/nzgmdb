@@ -96,6 +96,8 @@ def compute_snr_for_single_mseed(
         skipped_record = pd.DataFrame([skipped_record_dict])
         return None, skipped_record
 
+    print(f"Getting tp for {mseed_file.stem} for {mp.current_process().pid}")
+
     # Get the TP from the phase arrival table
     try:
         tp = phase_table[phase_table["record_id"] == mseed_file.stem][
