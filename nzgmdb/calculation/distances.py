@@ -1,5 +1,6 @@
 import functools
 import multiprocessing as mp
+import zipfile
 from collections import defaultdict
 from pathlib import Path
 from typing import Optional
@@ -771,6 +772,19 @@ def calc_distances(main_dir: Path, n_procs: int = 1):
         np.array(wgs2nztm.transform(tvz_points.latitude, tvz_points.longitude))
     )[0]
     taupo_polygon = Polygon(taupo_transform)
+
+    # Check the SrfSourceModels directory for the srf files
+    if not (data_dir / "SrfSourceModels").exists():
+        # Check for the SrfSourceModels.zip and unzip it
+        srf_zip = data_dir / "SrfSourceModels.zip"
+        if srf_zip.exists():
+            with zipfile.ZipFile(srf_zip, "r") as zip_ref:
+                # Extract all the contents to the destination directory
+                zip_ref.extractall(data_dir)
+        else:
+            raise FileNotFoundError(
+                "The SrfSourceModels directory and zip file does not exist"
+            )
 
     # Get the srf files as a dictionary of file paths and event_id as the key
     srf_files = {}
