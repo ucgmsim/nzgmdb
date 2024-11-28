@@ -490,7 +490,7 @@ def fetch_event_data(
                         event_line[7],
                         event_line[8],
                         site_table,
-                        None
+                        None,
                     )
                     sta_mag_lines.extend(sta_mag_line)
                     skipped_records.extend(new_skipped_records)
