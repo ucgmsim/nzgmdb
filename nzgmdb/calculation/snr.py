@@ -50,6 +50,7 @@ def compute_snr_for_single_mseed(
         or noise was less than 1 second
 
     """
+    print(f"Processing {mseed_file.stem} for {mp.current_process().pid}")
     # Get the station from the filename
     station = mseed_file.name.split("_")[1]
 
@@ -117,6 +118,8 @@ def compute_snr_for_single_mseed(
         }
         skipped_record = pd.DataFrame([skipped_record_dict])
         return None, skipped_record
+
+    print(f"Calculating SNR for {mseed_file.stem} for {mp.current_process().pid}")
 
     try:
         (
