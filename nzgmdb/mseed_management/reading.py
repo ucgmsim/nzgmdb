@@ -1,4 +1,5 @@
 from pathlib import Path
+import concurrent.futures
 
 import numpy as np
 import obspy
@@ -7,6 +8,24 @@ import pandas as pd
 from IM_calculation.IM import read_waveform
 from nzgmdb.data_processing import waveform_manipulation
 from nzgmdb.management import custom_errors
+
+
+def read_mseed_with_timeout(mseed_file: Path, timeout: int = 20, max_retries: int = 3):
+    def read_mseed(file):
+        return obspy.read(str(file))
+
+    for attempt in range(max_retries):
+        with concurrent.futures.ThreadPoolExecutor() as executor:
+            future = executor.submit(read_mseed, mseed_file)
+            try:
+                mseed = future.result(timeout=timeout)
+                return mseed
+            except concurrent.futures.TimeoutError:
+                print(f"Attempt {attempt + 1} timed out. Retrying...")
+            except Exception as e:
+                print(f"Attempt {attempt + 1} failed with error: {e}")
+                break
+    raise Exception(f"Failed to read mseed file {mseed_file} after {max_retries} attempts")
 
 
 def create_waveform_from_mseed(
@@ -41,7 +60,13 @@ def create_waveform_from_mseed(
     """
     print(f"Reading mseed file {mseed_file}")
     # Read the mseed file
-    mseed = obspy.read(str(mseed_file))
+    # mseed = obspy.read(str(mseed_file))
+    try:
+        mseed = read_mseed_with_timeout(mseed_file)
+    except Exception as e:
+        raise custom_errors.All3ComponentsNotPresentError(
+            f"Error reading mseed file {mseed_file} with error: {e}"
+        )
 
     if len(mseed) != 3:
         raise custom_errors.All3ComponentsNotPresentError(
@@ -50,7 +75,7 @@ def create_waveform_from_mseed(
 
     # Process the data if needed
     if pre_process:
-        print(f'Pre-processing data from {mseed_file}')
+        print(f"Pre-processing data from {mseed_file}")
         mseed = waveform_manipulation.initial_preprocessing(mseed)
 
     # Stack the data

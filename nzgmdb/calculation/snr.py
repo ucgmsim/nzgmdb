@@ -113,7 +113,13 @@ def compute_snr_for_single_mseed(
 
     print(f"Reading {mseed_file.stem} for {mp.current_process().pid}")
     # Ensure the tp is within the range of the waveform
-    stats = obspy.read(str(mseed_file))[0].stats
+    try:
+        stats = reading.read_mseed_with_timeout(mseed_file)[0].stats
+    except Exception as e:
+        raise custom_errors.All3ComponentsNotPresentError(
+            f"Error reading mseed file {mseed_file} with error: {e}"
+        )
+    # stats = obspy.read(str(mseed_file))[0].stats
     if tp > stats.npts or tp < 0:
         skipped_record_dict = {
             "record_id": mseed_file.stem,
