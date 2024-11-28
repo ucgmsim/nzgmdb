@@ -1,4 +1,5 @@
 from pathlib import Path
+import multiprocessing as mp
 
 import numpy as np
 import obspy
@@ -169,11 +170,13 @@ def compute_snr_for_single_mseed(
     year_dir = output_dir / str(stats.starttime.year)
     event_dir = year_dir / event_id
     event_dir.mkdir(parents=True, exist_ok=True)
+    print(f"Saving SNR {mseed_file.stem} for {mp.current_process().pid}")
     snr_fas_df.to_csv(
         event_dir
         / f"{event_id}_{station}_{stats.channel[:2]}_{stats.location}_snr_fas.csv",
         index_label="frequency",
     )
+    print(f"Saved {mseed_file.stem}")
     # Add to the metadata dataframe
     meta_dict = {
         "record_id": mseed_file.stem,
