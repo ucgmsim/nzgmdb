@@ -98,7 +98,6 @@ def custom_multiprocess(
     # Add tasks to the queue
     for task in tasks:
         task_queue.put(task)
-    task_queue.put(None)  # Sentinel value to signal the end of tasks
 
     if writing_process:
         n_procs -= 1
@@ -116,6 +115,9 @@ def custom_multiprocess(
 
     # Check length of tasks and reduce n_procs if necessary
     n_procs = min(n_procs, len(tasks))
+
+    for _ in range(n_procs):
+        task_queue.put(None)  # Sentinel value to signal the end of tasks
 
     # Start the processes
     processes = {}
