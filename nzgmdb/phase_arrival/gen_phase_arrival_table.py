@@ -112,6 +112,7 @@ def generate_phase_arrival_table(
         process_batch,
         batches,
         n_procs,
+        False,
         run_phasenet_script_ffp,
         conda_sh,
         env_activate_command,

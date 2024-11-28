@@ -195,6 +195,7 @@ def compute_ims_for_all_processed_records(
         calculate_im_for_record,
         comp_000_files,
         n_procs,
+        False,
         output_path,
         components,
         ims,

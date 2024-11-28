@@ -270,6 +270,7 @@ def compute_snr_for_mseed_data(
                 compute_snr_for_single_mseed,
                 batch,
                 n_procs,
+                False,
                 phase_table,
                 snr_fas_output_dir,
                 apply_smoothing,

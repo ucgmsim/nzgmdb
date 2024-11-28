@@ -39,7 +39,7 @@ def run_full_fmax_calc(
     mseed_files = list(waveform_dir.rglob("*.mseed"))
 
     results = custom_multiprocess.custom_multiprocess(
-        assess_snr_and_get_fmax, mseed_files, n_procs, snr_fas_output_dir
+        assess_snr_and_get_fmax, mseed_files, n_procs, False, snr_fas_output_dir
     )
 
     if len(results) == 0:
