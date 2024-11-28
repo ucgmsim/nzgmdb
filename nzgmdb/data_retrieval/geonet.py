@@ -490,6 +490,7 @@ def fetch_event_data(
                         event_line[7],
                         event_line[8],
                         site_table,
+                        None
                     )
                     sta_mag_lines.extend(sta_mag_line)
                     skipped_records.extend(new_skipped_records)
@@ -545,6 +546,7 @@ def process_batch(
         fetch_event_data,
         batch_events,
         n_procs,
+        False,
         main_dir,
         client_NZ,
         inventory,
