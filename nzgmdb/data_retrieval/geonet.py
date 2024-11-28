@@ -355,15 +355,14 @@ def fetch_sta_mag_line(
             mseed_dir = file_structure.get_mseed_dir(main_dir, year, event_id)
 
             # Write the mseed file
-            # creation.write_mseed(mseed, event_id, station.code, mseed_dir)
-            write_queue.put((mseed, event_id, station.code, mseed_dir))
+            creation.write_mseed(mseed, event_id, station.code, mseed_dir)
+            # write_queue.put((mseed, event_id, station.code, mseed_dir))
 
             print(
                 f"Finished writing mseed for {station.code} getting traces {len(mseed)}"
             )
 
             for trace in mseed:
-                print(f"Running trace {trace} for station {station.code}")
                 chan = trace.stats.channel
                 loc = trace.stats.location
                 # Find the station magnitude
