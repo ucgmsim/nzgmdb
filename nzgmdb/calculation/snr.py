@@ -109,6 +109,7 @@ def compute_snr_for_single_mseed(
         skipped_record = pd.DataFrame([skipped_record_dict])
         return None, skipped_record
 
+    print(f"Reading {mseed_file.stem} for {mp.current_process().pid}")
     # Ensure the tp is within the range of the waveform
     stats = obspy.read(str(mseed_file))[0].stats
     if tp > stats.npts or tp < 0:
@@ -116,6 +117,7 @@ def compute_snr_for_single_mseed(
             "record_id": mseed_file.stem,
             "reason": "TP not in waveform bounds",
         }
+        print(f"TP not in waveform bounds for {mseed_file.stem}")
         skipped_record = pd.DataFrame([skipped_record_dict])
         return None, skipped_record
 
