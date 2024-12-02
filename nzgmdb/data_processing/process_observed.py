@@ -41,7 +41,7 @@ def process_single_mseed(mseed_file: Path, gmc_df: pd.DataFrame, fmax_df: pd.Dat
     # Check if there is any row, if not skip
     if gmc_rows.empty:
         skipped_record_dict = {
-            "mseed_file": mseed_stem,
+            "record_id": mseed_stem,
             "reason": "No record found in GMC predictions",
         }
         skipped_record = pd.DataFrame([skipped_record_dict])
@@ -57,7 +57,7 @@ def process_single_mseed(mseed_file: Path, gmc_df: pd.DataFrame, fmax_df: pd.Dat
     # Check the length of the mseed file for 3 components
     if len(mseed) != 3:
         skipped_record_dict = {
-            "mseed_file": mseed_stem,
+            "record_id": mseed_stem,
             "reason": "File did not contain 3 components",
         }
         skipped_record = pd.DataFrame([skipped_record_dict])
@@ -68,21 +68,21 @@ def process_single_mseed(mseed_file: Path, gmc_df: pd.DataFrame, fmax_df: pd.Dat
         mseed = waveform_manipulation.initial_preprocessing(mseed)
     except custom_errors.InventoryNotFoundError:
         skipped_record_dict = {
-            "mseed_file": mseed_stem,
+            "record_id": mseed_stem,
             "reason": "Failed to find Inventory information",
         }
         skipped_record = pd.DataFrame([skipped_record_dict])
         return skipped_record
     except custom_errors.SensitivityRemovalError:
         skipped_record_dict = {
-            "mseed_file": mseed_stem,
+            "record_id": mseed_stem,
             "reason": "Failed to remove sensitivity",
         }
         skipped_record = pd.DataFrame([skipped_record_dict])
         return skipped_record
     except custom_errors.RotationError:
         skipped_record_dict = {
-            "mseed_file": mseed_stem,
+            "record_id": mseed_stem,
             "reason": "Failed to rotate the data",
         }
         skipped_record = pd.DataFrame([skipped_record_dict])
@@ -107,7 +107,7 @@ def process_single_mseed(mseed_file: Path, gmc_df: pd.DataFrame, fmax_df: pd.Dat
     # Filter out records that have too low of a fmax value
     if fmax is not None and fmax <= fmax_min:
         skipped_record_dict = {
-            "mseed_file": mseed_stem,
+            "record_id": mseed_stem,
             "reason": f"Fmax value is less than {fmax_min}",
         }
         return pd.DataFrame([skipped_record_dict])
@@ -115,19 +115,19 @@ def process_single_mseed(mseed_file: Path, gmc_df: pd.DataFrame, fmax_df: pd.Dat
     # Filter by score, fmin and multi mean
     if gmc_rows["score_mean"].min() < score_min:
         skipped_record_dict = {
-            "mseed_file": mseed_stem,
+            "record_id": mseed_stem,
             "reason": f"Score mean is less than {score_min}",
         }
         return pd.DataFrame([skipped_record_dict])
     if fmin > fmin_max:
         skipped_record_dict = {
-            "mseed_file": mseed_stem,
+            "record_id": mseed_stem,
             "reason": f"Fmin mean is greater than {fmin_max}",
         }
         return pd.DataFrame([skipped_record_dict])
     if gmc_rows["multi_mean"].max() > multi_max:
         skipped_record_dict = {
-            "mseed_file": mseed_stem,
+            "record_id": mseed_stem,
             "reason": f"Multi mean is greater than {multi_max}",
         }
         return pd.DataFrame([skipped_record_dict])
@@ -141,14 +141,14 @@ def process_single_mseed(mseed_file: Path, gmc_df: pd.DataFrame, fmax_df: pd.Dat
         ) = waveform_manipulation.high_and_low_cut_processing(mseed, dt, fmin, fmax)
     except custom_errors.LowcutHighcutError:
         skipped_record_dict = {
-            "mseed_file": mseed_stem,
+            "record_id": mseed_stem,
             "reason": "Lowcut frequency is greater than the highcut frequency",
         }
         skipped_record = pd.DataFrame([skipped_record_dict])
         return skipped_record
     except custom_errors.ComponentSelectionError:
         skipped_record_dict = {
-            "mseed_file": mseed_stem,
+            "record_id": mseed_stem,
             "reason": "Failed to find N, E, X, or Y components",
         }
         skipped_record = pd.DataFrame([skipped_record_dict])
@@ -196,7 +196,12 @@ def process_mseeds_to_txt(
 
     # Load the GMC and Fmax files
     gmc_df = pd.read_csv(gmc_ffp)
-    fmax_df = pd.read_csv(fmax_ffp)
+    try:
+        fmax_df = pd.read_csv(fmax_ffp)
+    except pd.errors.EmptyDataError:
+        fmax_df = pd.DataFrame(
+            columns=["record_id", "fmax_000", "fmax_090", "fmax_ver"]
+        )
 
     # Use multiprocessing to process the mseed files
     with multiprocessing.Pool(processes=n_procs) as pool:
@@ -209,8 +214,11 @@ def process_mseeds_to_txt(
             mseed_files,
         )
 
-    # Combine the skipped records
-    skipped_records = pd.concat(skipped_records)
+    if not all(value is None for value in skipped_records):
+        # Combine the skipped records
+        skipped_records = pd.concat(skipped_records)
+    else:
+        skipped_records = pd.DataFrame(columns=["record_id", "reason"])
 
     # Save the skipped records
     flatfile_dir = file_structure.get_flatfile_dir(main_dir)

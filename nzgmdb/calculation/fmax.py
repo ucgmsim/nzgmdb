@@ -31,9 +31,12 @@ def run_full_fmax_calc(
         Number of processes to use, by default 1.
     """
 
-    metadata_df = pd.read_csv(
-        meta_output_dir / file_structure.FlatfileNames.SNR_METADATA
-    )
+    try:
+        metadata_df = pd.read_csv(
+            meta_output_dir / file_structure.FlatfileNames.SNR_METADATA
+        )
+    except pd.errors.EmptyDataError:
+        metadata_df = pd.DataFrame()
     snr_filenames = snr_fas_output_dir.glob("**/*snr_fas.csv")
 
     with multiprocessing.Pool(n_procs) as pool:
@@ -45,23 +48,32 @@ def run_full_fmax_calc(
             snr_filenames,
         )
 
-    # Unpack the results
-    meta_dfs, skipped_record_dfs = zip(*results)
+    if len(results) == 0:
+        print("No SNR records to process")
+        meta_dfs, skipped_record_dfs = [None], [None]
+    else:
+        # Unpack the results
+        meta_dfs, skipped_record_dfs = zip(*results)
 
     # Check that there are dataframes that are not None before concatenating
     if not all(value is None for value in meta_dfs):
         fmax_df = pd.concat(meta_dfs).reset_index(drop=True)
+    else:
+        fmax_df = pd.DataFrame(
+            columns=["record_id", "fmax_000", "fmax_090", "fmax_ver"]
+        )
     if not all(value is None for value in skipped_record_dfs):
         skipped_records_df = pd.concat(skipped_record_dfs).reset_index(drop=True)
+    else:
+        skipped_records_df = pd.DataFrame(columns=["record_id", "reason"])
 
     print(f"Skipped {len(skipped_records_df)} records")
-
-    fmax_df.to_csv(meta_output_dir / file_structure.FlatfileNames.FMAX, index=False)
-
     skipped_records_df.to_csv(
         meta_output_dir / file_structure.SkippedRecordFilenames.FMAX_SKIPPED_RECORDS,
         index=False,
     )
+
+    fmax_df.to_csv(meta_output_dir / file_structure.FlatfileNames.FMAX, index=False)
 
 
 def assess_snr_and_get_fmax(

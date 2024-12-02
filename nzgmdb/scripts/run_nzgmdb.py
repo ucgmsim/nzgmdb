@@ -6,6 +6,7 @@ from datetime import datetime
 from pathlib import Path
 from typing import Annotated, List
 
+import pandas as pd
 import typer
 
 from nzgmdb.calculation import distances, fmax, ims, snr
@@ -62,9 +63,22 @@ def fetch_geonet_data(
             callback=lambda x: [] if x is None else x[0].split(","),
         ),
     ] = None,
+    real_time: Annotated[
+        bool,
+        typer.Option(
+            help="If True, the function will run in real time mode by using a different client",
+        ),
+    ] = False,
 ):
     geonet.parse_geonet_information(
-        main_dir, start_date, end_date, n_procs, batch_size, only_event_ids, only_sites
+        main_dir,
+        start_date,
+        end_date,
+        n_procs,
+        batch_size,
+        only_event_ids,
+        only_sites,
+        real_time,
     )
 
 
@@ -531,6 +545,13 @@ def run_full_nzgmdb(
             help="The batch size for the SNR calculation for how many mseeds to process at a time",
         ),
     ] = 5000,
+    real_time: Annotated[
+        bool,
+        typer.Option(
+            help="If True, the function will run in real time mode by using a different client",
+            is_flag=True,
+        ),
+    ] = False,
 ):
     main_dir.mkdir(parents=True, exist_ok=True)
 
@@ -561,6 +582,7 @@ def run_full_nzgmdb(
             geonet_batch_size,
             only_event_ids,
             only_sites,
+            real_time,
         )
 
     # Merge the tectonic domains
@@ -621,20 +643,46 @@ def run_full_nzgmdb(
         calc_fmax(main_dir, flatfile_dir, snr_fas_output_dir, n_procs)
 
     # Run GMC
-    if not (
-        checkpoint
-        and (flatfile_dir / file_structure.FlatfileNames.GMC_PREDICTIONS).exists()
-    ):
-        print("Running GMC")
-        run_gmc.run_gmc_processing(
-            main_dir,
-            gm_classifier_dir,
-            ko_matrix_path,
-            conda_sh,
-            gmc_activate,
-            gmc_predict_activate,
-            gmc_procs,
-        )
+    if real_time:
+        # Create a dummy GMC predictions file
+        gmc_ffp = flatfile_dir / file_structure.FlatfileNames.GMC_PREDICTIONS
+        record_ids = [
+            file.stem
+            for file in file_structure.get_waveform_dir(main_dir).rglob("*.mseed")
+        ]
+        gmc_data = {}
+        for record_id in record_ids:
+            for comp in ["X", "Y", "Z"]:
+                gmc_data[f"{record_id}_{comp}"] = {
+                    "record_id": f"{record_id}_{comp}",
+                    "score_mean": 0.9,
+                    "score_std": 0,
+                    "fmin_mean": 0.05,
+                    "fmin_std": 0.01,
+                    "multi_mean": 0.1,
+                    "multi_std": 0.01,
+                    "record": record_id,
+                    "component": comp,
+                    "station": record_id.split("_")[2],
+                    "event_id": record_id.split("_")[0],
+                }
+        gmc_df = pd.DataFrame(gmc_data).T
+        gmc_df.to_csv(gmc_ffp, index=False)
+    else:
+        if not (
+            checkpoint
+            and (flatfile_dir / file_structure.FlatfileNames.GMC_PREDICTIONS).exists()
+        ):
+            print("Running GMC")
+            run_gmc.run_gmc_processing(
+                main_dir,
+                gm_classifier_dir,
+                ko_matrix_path,
+                conda_sh,
+                gmc_activate,
+                gmc_predict_activate,
+                gmc_procs,
+            )
 
     # Run filtering and processing of mseeds
     gmc_ffp = flatfile_dir / file_structure.FlatfileNames.GMC_PREDICTIONS

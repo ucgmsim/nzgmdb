@@ -1,5 +1,6 @@
-import functools
 import multiprocessing as mp
+import queue
+import time
 from pathlib import Path
 from typing import Dict, List
 
@@ -10,7 +11,7 @@ import pandas as pd
 from IM_calculation.IM import im_calculation
 from IM_calculation.IM.read_waveform import Waveform
 from nzgmdb.management import config as cfg
-from nzgmdb.management import file_structure
+from nzgmdb.management import custom_multiprocess, file_structure
 from nzgmdb.mseed_management import reading
 from qcore.constants import Components
 
@@ -67,7 +68,6 @@ def compute_im_for_waveform(
 def calculate_im_for_record(
     ffp_000: Path,
     output_path: Path,
-    output_queue: mp.Queue,
     components: List[Components],
     ims: List[str],
     im_options: Dict[str, List[float]],
@@ -92,8 +92,8 @@ def calculate_im_for_record(
         The path to the KO matrices, by default None
     """
     # Load the mseed file
+    mseed_file = ffp_000.parent.parent / "mseed" / f"{ffp_000.stem}.mseed"
     try:
-        mseed_file = ffp_000.parent.parent / "mseed" / f"{ffp_000.stem}.mseed"
         mseed = obspy.read(mseed_file)
     except FileNotFoundError:
         skipped_record_dict = {
@@ -101,8 +101,7 @@ def calculate_im_for_record(
             "reason": "Failed to find the mseed file",
         }
         skipped_record = pd.DataFrame([skipped_record_dict])
-        # return skipped_record
-        output_queue.put(skipped_record)
+        return skipped_record
 
     # Get the 090 and ver components full file paths
     ffp_090 = ffp_000.parent / f"{ffp_000.stem}.090"
@@ -114,12 +113,11 @@ def calculate_im_for_record(
         )
     except FileNotFoundError:
         skipped_record_dict = {
-            "record_id": ffp_000.stem,
+            "record_id": mseed_file.stem,
             "reason": "Failed to find all components",
         }
         skipped_record = pd.DataFrame([skipped_record_dict])
-        # return skipped_record
-        output_queue.put(skipped_record)
+        return skipped_record
 
     # Get the event_id and create the output directory
     event_id = file_structure.get_event_id_from_mseed(mseed_file)
@@ -193,43 +191,17 @@ def compute_ims_for_all_processed_records(
         "FAS": im_calculation.validate_fas_frequency(fas_frequencies),
     }
 
-    # Create the Process and Queue for output results
-    processes = []
-    output_queue = mp.Queue()
-
-    for comp_000_file in comp_000_files:
-        # If we have reached the limit of n_procs, wait for some processes to finish
-        while len(processes) >= n_procs:
-            for p in processes:
-                p.join(0.1)  # Check if any process has finished, without blocking
-                if not p.is_alive():
-                    processes.remove(p)
-
-        # Start a new process
-        process = mp.Process(
-            target=calculate_im_for_record,
-            args=(
-                comp_000_file,
-                output_path,
-                output_queue,
-                components,
-                ims,
-                im_options,
-                ko_matrices_path,
-            ),
-        )
-        processes.append(process)
-        process.start()
-
-    # Wait for all remaining processes to finish
-    for process in processes:
-        process.join()
-
-    # Collect all results from the queue
-    skipped_records = []
-    while not output_queue.empty():
-        result = output_queue.get()
-        skipped_records.append(result)
+    # Use custom_multiprocess to process the records
+    skipped_records = custom_multiprocess.custom_multiprocess(
+        calculate_im_for_record,
+        comp_000_files,
+        n_procs,
+        output_path,
+        components,
+        ims,
+        im_options,
+        ko_matrices_path,
+    )
 
     print("Finished calculating IMs")
 
@@ -241,11 +213,7 @@ def compute_ims_for_all_processed_records(
         skipped_records_df = pd.concat(skipped_records).reset_index(drop=True)
     else:
         print("No skipped records")
-        skipped_record_dict = {
-            "record_id": None,
-            "reason": None,
-        }
-        skipped_records_df = pd.DataFrame([skipped_record_dict])
+        skipped_records_df = pd.DataFrame(columns=["record_id", "reason"])
 
     if checkpoint:
         # Add the skipped records to the existing skipped records
