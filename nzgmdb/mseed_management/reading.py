@@ -1,3 +1,4 @@
+from datetime import datetime
 from pathlib import Path
 import concurrent.futures
 
@@ -43,10 +44,11 @@ class Mseed:
         self.start_time = None
         self.end_time = None
         self.dt = None
-        self.event_id = None
-        self.station = None
-        self.location = None
-        self.channel = None
+        file_split = file_path.stem.split("_")
+        self.event_id = file_split[0]
+        self.station = file_split[1]
+        self.location = file_split[2]
+        self.channel = file_split[3]
         self.traces = []
 
         # Read the file and extract information
@@ -70,43 +72,11 @@ class Mseed:
                 comp = mseedlib.sourceid2nslc(traceid.sourceid)[-1][-1]
                 # Add the trace
                 self.traces.append(Trace(data_samples, comp))
-
-
-def read_mseed(mseed_file: Path):
-    """
-    Reads a mseed file using mseedlib to avoid potential process stalling
-
-    Parameters
-    ----------
-    mseed_file : Path
-        The mseed file to read
-    """
-    nptype = {"i": np.int32, "f": np.float32, "d": np.float64, "t": np.char}
-    mstl = mseedlib.MSTraceList()
-    mstl.read_file(str(mseed_file), unpack_data=False, record_list=True)
-
-    for traceid in mstl.traceids():
-        for segment in traceid.segments():
-            # Fetch estimated sample size and type
-            (sample_size, sample_type) = segment.sample_size_type
-            dtype = nptype[sample_type]
-            # Allocate NumPy array for data samples
-            data_samples = np.zeros(segment.samplecnt, dtype=dtype)
-            # Unpack data samples into allocated NumPy array
-            segment.unpack_recordlist(
-                buffer_pointer=np.ctypeslib.as_ctypes(data_samples),
-                buffer_bytes=data_samples.nbytes,
-            )
-            # Create a dictionary for the trace with basic metadata
-            comp = mseedlib.sourceid2nslc(traceid.sourceid)[-1][-1]
-            output_dict[comp_mapping[comp]] = {
-                "start_time": segment.starttime_str(),
-                "end_time": segment.endtime_str(),
-                "dt": 1 / segment.samprate,
-                "data_samples": data_samples.tolist(),
-            }
-
-    return mstl
+                # Add extra metadata
+                if self.start_time is None:
+                    self.start_time = datetime.fromtimestamp(segment.starttime_seconds)
+                    self.end_time = datetime.fromtimestamp(segment.endtime_seconds)
+                    self.dt = 1 / segment.samprate
 
 
 def create_waveform_from_mseed(
@@ -144,13 +114,13 @@ def create_waveform_from_mseed(
     # mseed = obspy.read(str(mseed_file))
     try:
         # mseed = read_mseed_with_timeout(mseed_file)
-        mseed = read_mseed(mseed_file)
+        mseed = Mseed(mseed_file)
     except Exception as e:
         raise custom_errors.All3ComponentsNotPresentError(
             f"Error reading mseed file {mseed_file} with error: {e}"
         )
 
-    if len(mseed) != 3:
+    if len(mseed.traces) != 3:
         raise custom_errors.All3ComponentsNotPresentError(
             f"All 3 components are not present in the mseed file {mseed_file}"
         )

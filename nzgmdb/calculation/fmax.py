@@ -3,16 +3,15 @@ Calculates the maximum useable frequency (fmax).
 """
 
 import functools
-import multiprocessing
 from pathlib import Path
 from typing import Optional
 
 import numpy as np
-import obspy
 import pandas as pd
 
 from nzgmdb.management import config as cfg
 from nzgmdb.management import file_structure, custom_multiprocess
+from nzgmdb.mseed_management import reading
 
 
 def run_full_fmax_calc(
@@ -97,8 +96,8 @@ def assess_snr_and_get_fmax(
     record_id = str(filename.stem)
 
     # read the mseed file to get the delta
-    mseed = obspy.read(str(filename))
-    dt = mseed[0].stats.delta
+    mseed = reading.Mseed(filename)
+    dt = mseed.dt
 
     # current_row["delta"] is a pd.Series() containing 1 float so .iloc[0]
     # is used to get the float from the pd.Series()
