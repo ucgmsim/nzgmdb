@@ -1,6 +1,7 @@
 from pathlib import Path
 import concurrent.futures
 
+import mseedlib
 import numpy as np
 import obspy
 import pandas as pd
@@ -25,7 +26,87 @@ def read_mseed_with_timeout(mseed_file: Path, timeout: int = 20, max_retries: in
             except Exception as e:
                 print(f"Attempt {attempt + 1} failed with error: {e}")
                 break
-    raise Exception(f"Failed to read mseed file {mseed_file} after {max_retries} attempts")
+    raise Exception(
+        f"Failed to read mseed file {mseed_file} after {max_retries} attempts"
+    )
+
+
+class Trace:
+    def __init__(self, data, channel_id):
+        self.data = data
+        self.channel_id = channel_id
+
+
+class Mseed:
+    def __init__(self, file_path: Path):
+        self.file_path = file_path
+        self.start_time = None
+        self.end_time = None
+        self.dt = None
+        self.event_id = None
+        self.station = None
+        self.location = None
+        self.channel = None
+        self.traces = []
+
+        # Read the file and extract information
+        nptype = {"i": np.int32, "f": np.float32, "d": np.float64, "t": np.char}
+        mstl = mseedlib.MSTraceList()
+        mstl.read_file(str(file_path), unpack_data=False, record_list=True)
+
+        for traceid in mstl.traceids():
+            for segment in traceid.segments():
+                # Fetch estimated sample size and type
+                (sample_size, sample_type) = segment.sample_size_type
+                dtype = nptype[sample_type]
+                # Allocate NumPy array for data samples
+                data_samples = np.zeros(segment.samplecnt, dtype=dtype)
+                # Unpack data samples into allocated NumPy array
+                segment.unpack_recordlist(
+                    buffer_pointer=np.ctypeslib.as_ctypes(data_samples),
+                    buffer_bytes=data_samples.nbytes,
+                )
+                # Get the component
+                comp = mseedlib.sourceid2nslc(traceid.sourceid)[-1][-1]
+                # Add the trace
+                self.traces.append(Trace(data_samples, comp))
+
+
+def read_mseed(mseed_file: Path):
+    """
+    Reads a mseed file using mseedlib to avoid potential process stalling
+
+    Parameters
+    ----------
+    mseed_file : Path
+        The mseed file to read
+    """
+    nptype = {"i": np.int32, "f": np.float32, "d": np.float64, "t": np.char}
+    mstl = mseedlib.MSTraceList()
+    mstl.read_file(str(mseed_file), unpack_data=False, record_list=True)
+
+    for traceid in mstl.traceids():
+        for segment in traceid.segments():
+            # Fetch estimated sample size and type
+            (sample_size, sample_type) = segment.sample_size_type
+            dtype = nptype[sample_type]
+            # Allocate NumPy array for data samples
+            data_samples = np.zeros(segment.samplecnt, dtype=dtype)
+            # Unpack data samples into allocated NumPy array
+            segment.unpack_recordlist(
+                buffer_pointer=np.ctypeslib.as_ctypes(data_samples),
+                buffer_bytes=data_samples.nbytes,
+            )
+            # Create a dictionary for the trace with basic metadata
+            comp = mseedlib.sourceid2nslc(traceid.sourceid)[-1][-1]
+            output_dict[comp_mapping[comp]] = {
+                "start_time": segment.starttime_str(),
+                "end_time": segment.endtime_str(),
+                "dt": 1 / segment.samprate,
+                "data_samples": data_samples.tolist(),
+            }
+
+    return mstl
 
 
 def create_waveform_from_mseed(
@@ -62,7 +143,8 @@ def create_waveform_from_mseed(
     # Read the mseed file
     # mseed = obspy.read(str(mseed_file))
     try:
-        mseed = read_mseed_with_timeout(mseed_file)
+        # mseed = read_mseed_with_timeout(mseed_file)
+        mseed = read_mseed(mseed_file)
     except Exception as e:
         raise custom_errors.All3ComponentsNotPresentError(
             f"Error reading mseed file {mseed_file} with error: {e}"
