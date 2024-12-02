@@ -1,82 +1,12 @@
-from datetime import datetime
 from pathlib import Path
-import concurrent.futures
 
-import mseedlib
 import numpy as np
-import obspy
 import pandas as pd
 
 from IM_calculation.IM import read_waveform
 from nzgmdb.data_processing import waveform_manipulation
 from nzgmdb.management import custom_errors
-
-
-def read_mseed_with_timeout(mseed_file: Path, timeout: int = 20, max_retries: int = 3):
-    def read_mseed(file):
-        return obspy.read(str(file))
-
-    for attempt in range(max_retries):
-        with concurrent.futures.ThreadPoolExecutor() as executor:
-            future = executor.submit(read_mseed, mseed_file)
-            try:
-                mseed = future.result(timeout=timeout)
-                return mseed
-            except concurrent.futures.TimeoutError:
-                print(f"Attempt {attempt + 1} timed out. Retrying...")
-            except Exception as e:
-                print(f"Attempt {attempt + 1} failed with error: {e}")
-                break
-    raise Exception(
-        f"Failed to read mseed file {mseed_file} after {max_retries} attempts"
-    )
-
-
-class Trace:
-    def __init__(self, data, channel_id):
-        self.data = data
-        self.channel_id = channel_id
-
-
-class Mseed:
-    def __init__(self, file_path: Path):
-        self.file_path = file_path
-        self.start_time = None
-        self.end_time = None
-        self.dt = None
-        file_split = file_path.stem.split("_")
-        self.event_id = file_split[0]
-        self.station = file_split[1]
-        self.location = file_split[2]
-        self.channel = file_split[3]
-        self.traces = []
-
-        # Read the file and extract information
-        nptype = {"i": np.int32, "f": np.float32, "d": np.float64, "t": np.char}
-        mstl = mseedlib.MSTraceList()
-        mstl.read_file(str(file_path), unpack_data=False, record_list=True)
-
-        for traceid in mstl.traceids():
-            for segment in traceid.segments():
-                # Fetch estimated sample size and type
-                (sample_size, sample_type) = segment.sample_size_type
-                dtype = nptype[sample_type]
-                # Allocate NumPy array for data samples
-                data_samples = np.zeros(segment.samplecnt, dtype=dtype)
-                # Unpack data samples into allocated NumPy array
-                segment.unpack_recordlist(
-                    buffer_pointer=np.ctypeslib.as_ctypes(data_samples),
-                    buffer_bytes=data_samples.nbytes,
-                )
-                # Get the component
-                comp = mseedlib.sourceid2nslc(traceid.sourceid)[-1][-1]
-                # Add the trace
-                self.traces.append(Trace(data_samples, comp))
-                # Add extra metadata
-                if self.start_time is None:
-                    self.start_time = datetime.fromtimestamp(segment.starttime_seconds)
-                    self.end_time = datetime.fromtimestamp(segment.endtime_seconds)
-                    self.dt = 1 / segment.samprate
+from nzgmdb.mseed_management.custom_mseed import Mseed
 
 
 def create_waveform_from_mseed(
@@ -111,14 +41,7 @@ def create_waveform_from_mseed(
     """
     print(f"Reading mseed file {mseed_file}")
     # Read the mseed file
-    # mseed = obspy.read(str(mseed_file))
-    try:
-        # mseed = read_mseed_with_timeout(mseed_file)
-        mseed = Mseed(mseed_file)
-    except Exception as e:
-        raise custom_errors.All3ComponentsNotPresentError(
-            f"Error reading mseed file {mseed_file} with error: {e}"
-        )
+    mseed = Mseed(mseed_file)
 
     if len(mseed.traces) != 3:
         raise custom_errors.All3ComponentsNotPresentError(
@@ -133,7 +56,7 @@ def create_waveform_from_mseed(
     # Stack the data
     print(f"Stacking data from {mseed_file}")
     try:
-        data = np.stack([tr.data for tr in mseed], axis=1)
+        data = np.stack([tr.data for tr in mseed.traces], axis=1)
         data = data.astype(np.float64)
     except ValueError:
         print(f"Error reading data from {mseed_file}")
@@ -145,7 +68,7 @@ def create_waveform_from_mseed(
 
     # Create the waveform object
     waveform = read_waveform.create_waveform_from_data(
-        data, NT=mseed[0].stats.npts, DT=mseed[0].stats.delta
+        data, NT=len(mseed.traces[0].data), DT=mseed.dt
     )
 
     print(f"Waveform object created from {mseed_file}")
