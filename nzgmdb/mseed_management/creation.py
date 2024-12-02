@@ -3,6 +3,7 @@ import warnings
 from collections.abc import Iterable
 from pathlib import Path
 
+import mseedlib
 import numpy as np
 import pandas as pd
 from obspy import Stream
@@ -188,6 +189,71 @@ def split_stream_into_mseeds(st: Stream, unique_channels: Iterable):
     return mseeds
 
 
+def write_stream_to_mseed(stream: Stream, output_file: Path):
+    """
+    Write an ObsPy Stream object to a MiniSEED file using mseedlib.
+
+    Parameters
+    ----------
+    stream : obspy.core.stream.Stream
+        The Stream object to write to MiniSEED
+    output_file : Path
+        The path to the output MiniSEED file
+
+    Raises
+    ------
+    ValueError
+        If the sample type of the trace data is not supported
+    """
+    mstl = mseedlib.MSTraceList()
+
+    for trace in stream:
+        # Construct FDSN source ID
+        sourceid = f"FDSN:{trace.stats.network}_{trace.stats.station}_{trace.stats.location}_{trace.stats.channel}"
+
+        # Convert start time to nanoseconds
+        start_time = mseedlib.timestr2nstime(
+            trace.stats.starttime.strftime("%Y-%m-%dT%H:%M:%S.%fZ")
+        )
+
+        # Determine sample type
+        if trace.data.dtype == np.int32:
+            sample_type = "i"
+        elif trace.data.dtype == np.float32:
+            sample_type = "f"
+        elif trace.data.dtype == np.float64:
+            sample_type = "d"
+        else:
+            raise ValueError(f"Unsupported sample type: {trace.data.dtype}")
+
+        # Add trace data to MSTraceList
+        mstl.add_data(
+            sourceid=sourceid,
+            data_samples=trace.data.tolist(),
+            sample_type=sample_type,
+            sample_rate=trace.stats.sampling_rate,
+            start_time=start_time,
+        )
+
+    # Record handler to write MiniSEED records to file
+    def record_handler(record: bytes, handler_data: dict):
+        """
+        Write MiniSEED record to file handler.
+
+        Parameters
+        ----------
+        record : bytes
+            The MiniSEED record to write
+        handler_data : dict
+            Dictionary containing the file handler to write
+        """
+        handler_data["fh"].write(record)
+
+    # Write to MiniSEED file
+    with open(output_file, "wb") as file_handle:
+        mstl.pack(record_handler, {"fh": file_handle}, flush_data=True)
+
+
 def write_mseed(mseed: Stream, event_id: str, station: str, output_directory: Path):
     """
     Write the mseed files to the output directory
@@ -213,4 +279,4 @@ def write_mseed(mseed: Stream, event_id: str, station: str, output_directory: Pa
     output_directory.mkdir(exist_ok=True, parents=True)
 
     # Write the mseed file
-    mseed.write(str(mseed_ffp), format="MSEED")
+    write_stream_to_mseed(mseed, mseed_ffp)

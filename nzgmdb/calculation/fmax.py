@@ -96,8 +96,8 @@ def assess_snr_and_get_fmax(
     record_id = str(filename.stem)
 
     # read the mseed file to get the delta
-    mseed = reading.Mseed(filename)
-    dt = mseed.dt
+    mseed = reading.read_mseed_to_stream(filename)
+    dt = mseed[0].stats.delta
 
     # current_row["delta"] is a pd.Series() containing 1 float so .iloc[0]
     # is used to get the float from the pd.Series()

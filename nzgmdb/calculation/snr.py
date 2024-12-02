@@ -114,7 +114,7 @@ def compute_snr_for_single_mseed(
     print(f"Reading {mseed_file.stem} for {mp.current_process().pid}")
     # Ensure the tp is within the range of the waveform
     try:
-        stats = reading.read_mseed_with_timeout(mseed_file)[0].stats
+        stats = reading.read_mseed_to_stream(mseed_file)[0].stats
     except Exception as e:
         raise custom_errors.All3ComponentsNotPresentError(
             f"Error reading mseed file {mseed_file} with error: {e}"

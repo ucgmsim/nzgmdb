@@ -1,12 +1,69 @@
 from pathlib import Path
 
+import mseedlib
 import numpy as np
 import pandas as pd
+from obspy.core import Stream, Trace, UTCDateTime
 
 from IM_calculation.IM import read_waveform
 from nzgmdb.data_processing import waveform_manipulation
 from nzgmdb.management import custom_errors
-from nzgmdb.mseed_management.custom_mseed import Mseed
+
+
+def read_mseed_to_stream(file_path: Path):
+    """
+    Read a MiniSEED file using mseedlib and convert it to an ObsPy Stream object.
+
+    Parameters
+    ----------
+    file_path : Path
+        Path to the MiniSEED file
+
+    Returns
+    -------
+    Stream
+        ObsPy Stream object containing the data from the MiniSEED file
+    """
+    stream = Stream()
+    nptype = {"i": np.int32, "f": np.float32, "d": np.float64, "t": np.char}
+    mstl = mseedlib.MSTraceList()
+    mstl.read_file(str(file_path), unpack_data=False, record_list=True)
+
+    for traceid in mstl.traceids():
+        for segment in traceid.segments():
+            # Determine data type and allocate array
+            (sample_size, sample_type) = segment.sample_size_type
+            dtype = nptype[sample_type]
+            data_samples = np.zeros(segment.samplecnt, dtype=dtype)
+
+            # Unpack data samples
+            segment.unpack_recordlist(
+                buffer_pointer=np.ctypeslib.as_ctypes(data_samples),
+                buffer_bytes=data_samples.nbytes,
+            )
+
+            # Get metadata
+            sourceid = traceid.sourceid.split("FDSN:")[1]
+            parts = sourceid.split("_")
+            if len(parts) > 4:
+                network, station, location, *channel = parts
+                channel = "".join(channel)
+            else:
+                network, station, location, channel = parts
+            start_time = UTCDateTime(segment.starttime_seconds)
+            sampling_rate = segment.samprate
+
+            # Create ObsPy Trace and add to Stream
+            trace = Trace(data=data_samples)
+            trace.stats.network = network
+            trace.stats.station = station
+            trace.stats.location = location
+            trace.stats.channel = channel
+            trace.stats.starttime = start_time
+            trace.stats.sampling_rate = sampling_rate
+            stream.append(trace)
+
+    return stream
 
 
 def create_waveform_from_mseed(
@@ -41,9 +98,9 @@ def create_waveform_from_mseed(
     """
     print(f"Reading mseed file {mseed_file}")
     # Read the mseed file
-    mseed = Mseed(mseed_file)
+    mseed = read_mseed_to_stream(mseed_file)
 
-    if len(mseed.traces) != 3:
+    if len(mseed) != 3:
         raise custom_errors.All3ComponentsNotPresentError(
             f"All 3 components are not present in the mseed file {mseed_file}"
         )
@@ -56,7 +113,7 @@ def create_waveform_from_mseed(
     # Stack the data
     print(f"Stacking data from {mseed_file}")
     try:
-        data = np.stack([tr.data for tr in mseed.traces], axis=1)
+        data = np.stack([tr.data for tr in mseed], axis=1)
         data = data.astype(np.float64)
     except ValueError:
         print(f"Error reading data from {mseed_file}")
@@ -68,7 +125,7 @@ def create_waveform_from_mseed(
 
     # Create the waveform object
     waveform = read_waveform.create_waveform_from_data(
-        data, NT=len(mseed.traces[0].data), DT=mseed.dt
+        data, NT=len(mseed[0].data), DT=mseed[0].stats.delta
     )
 
     print(f"Waveform object created from {mseed_file}")
