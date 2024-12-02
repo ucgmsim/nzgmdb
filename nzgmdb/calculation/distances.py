@@ -276,6 +276,10 @@ def get_nodal_plane_info(
         nodal_plane_info["ztor"] = nodal_plane_info["srf_points"][0][2]
         nodal_plane_info["dbottom"] = nodal_plane_info["srf_points"][-1][2]
 
+        # Create None corners for the ff type
+        if f_type == "ff":
+            corner_0, corner_1, corner_2, corner_3 = [[None, None, None]] * 4
+
         # Get strike, dip, rake, length and width if there is only 1 plane
         if len(nodal_plane_info["srf_header"]) == 1:
             fault_strike = nodal_plane_info["srf_header"][0]["strike"]
@@ -586,26 +590,6 @@ def compute_distances_for_event(
                 "f_type": f_type,
                 "z_tor": ztor,
                 "z_bor": dbottom,
-            },
-        ]
-    )
-
-    # Create None corners for the ff type
-    if f_type == "ff":
-        corner_0, corner_1, corner_2, corner_3 = [[None, None, None]] * 4
-    # Create the plane DataFrame
-    plane_df = pd.DataFrame(
-        [
-            {
-                "evid": event_id,
-                "f_type": f_type,
-                "strike": strike,
-                "dip": dip,
-                "rake": rake,
-                "length": length,
-                "dip_dist": dip_dist,
-                "z_tor": ztor,
-                "dbottom": dbottom,
                 "hyp_lat": hyp_lat,
                 "hyp_lon": hyp_lon,
                 "hyp_strike": hyp_strike,
@@ -626,7 +610,24 @@ def compute_distances_for_event(
         ]
     )
 
-    return propagation_data_combo, extra_event_data, plane_df
+    # Create the plane DataFrame
+    plane_df = pd.DataFrame(
+        [
+            {
+                "evid": event_id,
+                "f_type": f_type,
+                "strike": strike,
+                "dip": dip,
+                "rake": rake,
+                "length": length,
+                "dip_dist": dip_dist,
+                "z_tor": ztor,
+                "dbottom": dbottom,
+            },
+        ]
+    )
+
+    return propagation_data_combo, extra_event_data
 
 
 def distance_in_taupo(
