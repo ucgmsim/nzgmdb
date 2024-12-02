@@ -4,6 +4,7 @@ import zipfile
 from pathlib import Path
 
 import typer
+from trimesh.util import is_file
 
 from nzgmdb.management import file_structure
 
@@ -45,14 +46,14 @@ def upload_zip_to_dropbox(local_file: Path, dropbox_path: str):
         The path on Dropbox to upload the file to
     """
     print(f"Uploading {local_file} to {dropbox_path}")
-    p = subprocess.Popen(
-        f"rclone --progress copy {local_file} {dropbox_path}",
-        shell=True,
-        stdout=subprocess.PIPE,
-        stderr=subprocess.PIPE,
-    )
-    _, _ = p.communicate()
-    if p.returncode != 0:
+    try:
+        subprocess.check_call(
+            f"rclone --progress copy {local_file} {dropbox_path}",
+            shell=True,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+        )
+    except subprocess.CalledProcessError:
         return local_file
     else:
         # Check file size is correct and uploaded successfully
@@ -213,7 +214,7 @@ def determine_dropbox_path(dropbox_version_dir: str, local_file: Path):
 @app.command()
 def upload_to_dropbox(  # noqa: D103
     input_directory: Path = typer.Argument(
-        ..., help="Directory containing the results"
+        help="Directory containing the results", file_okay=False, exists=True
     ),
     version: str = typer.Option(
         None, help="Version of the results, defaults to the directory name"
@@ -230,7 +231,7 @@ def upload_to_dropbox(  # noqa: D103
 @app.command()
 def upload_failed_files(  # noqa: D103
     failed_files_file: Path = typer.Argument(
-        ..., help="File containing the failed files"
+        help="File containing the failed files", dir_okay=False, exists=True
     ),
     version: str = typer.Option(
         None, help="Version of the results, defaults to the directory name"
