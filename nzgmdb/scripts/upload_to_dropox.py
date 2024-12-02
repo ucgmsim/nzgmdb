@@ -4,7 +4,6 @@ import zipfile
 from pathlib import Path
 
 import typer
-from trimesh.util import is_file
 
 from nzgmdb.management import file_structure
 
