@@ -1,8 +1,4 @@
-import multiprocessing as mp
-import queue
-import time
 from pathlib import Path
-from typing import Dict, List
 
 import numpy as np
 import obspy
@@ -20,9 +16,9 @@ def compute_im_for_waveform(
     waveform: Waveform,
     record_id: str,
     event_output_path: Path,
-    components: List[Components],
-    ims: List[str],
-    im_options: Dict[str, List[float]],
+    components: list[Components],
+    ims: list[str],
+    im_options: dict[str, list[float]],
     ko_matrices_path: Path = None,
 ):
     """
@@ -36,11 +32,11 @@ def compute_im_for_waveform(
         The record id
     event_output_path : Path
         The path to the event output directory
-    components : List[Components]
+    components : list[Components]
         The components of the record
-    ims : List[str]
+    ims : list[str]
         The IMs to calculate
-    im_options : Dict[str, List[float]]
+    im_options : dict[str, list[float]]
         The options for the IMs
     ko_matrices_path : Path, optional
         The path to the KO matrices, by default None
@@ -68,9 +64,9 @@ def compute_im_for_waveform(
 def calculate_im_for_record(
     ffp_000: Path,
     output_path: Path,
-    components: List[Components],
-    ims: List[str],
-    im_options: Dict[str, List[float]],
+    components: list[Components],
+    ims: list[str],
+    im_options: dict[str, list[float]],
     ko_matrices_path: Path = None,
 ):
     """
@@ -82,11 +78,11 @@ def calculate_im_for_record(
         The full file path to the 000 component file
     output_path : Path
         The path to the output directory
-    components : List[Components]
+    components : list[Components]
         The components of the record
-    ims : List[str]
+    ims : list[str]
         The IMs to calculate
-    im_options : Dict[str, List[float]]
+    im_options : dict[str, list[float]]
         The options for the IMs
     ko_matrices_path : Path, optional
         The path to the KO matrices, by default None

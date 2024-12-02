@@ -74,23 +74,19 @@ def custom_multiprocess(
         task_queue.put(task)
 
     # Start the processes
-    processes = []
+    processes = {}
     for _ in range(n_procs):
         p = mp.Process(
             target=worker, args=(task_queue, result_queue, finished_queue, func, *args)
         )
         p.start()
-        processes.append(p)
+        processes[p.pid] = p
 
     # Wait for all processes to finish
     processes_to_end = []
     while processes:
         pid = finished_queue.get()
-        for p in processes:
-            if p.pid == pid:
-                processes.remove(p)
-                processes_to_end.append(p)
-                break
+        processes_to_end.append(processes.pop(pid))
 
     # Collect results until all sentinel values are received
     results = []

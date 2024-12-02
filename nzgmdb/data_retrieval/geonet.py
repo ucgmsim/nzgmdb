@@ -1,11 +1,10 @@
 """
-    Functions to manage Geonet Data
+Functions to manage Geonet Data
 """
 
 import datetime
 import io
 from pathlib import Path
-from typing import List
 
 import numpy as np
 import obspy
@@ -23,7 +22,7 @@ from nzgmdb.management import custom_errors, custom_multiprocess, file_structure
 from nzgmdb.mseed_management import creation
 
 
-def get_max_magnitude(magnitudes: List[Magnitude], mag_type: str):
+def get_max_magnitude(magnitudes: list[Magnitude], mag_type: str):
     """
     Helper function to get the maximum magnitude of a certain type
 
@@ -412,7 +411,7 @@ def fetch_event_data(
     mags: np.ndarray,
     rrups: np.ndarray,
     f_rrup: interp1d,
-    only_sites: List[str] = None,
+    only_sites: list[str] = None,
 ):
     """
     Fetch the event data from the geonet client to form the event and magnitude dataframes
@@ -480,7 +479,7 @@ def fetch_event_data(
 
 
 def process_batch(
-    batch_events: List[str],
+    batch_events: np.ndarray[str],
     batch_index: int,
     main_dir: Path,
     client_NZ: FDSN_Client,
@@ -490,15 +489,15 @@ def process_batch(
     rrups: np.ndarray,
     f_rrup: interp1d,
     n_procs: int = 1,
-    only_sites: List[str] = None,
+    only_sites: list[str] = None,
 ):
     """
     Process a batch of events to fetch the event data and create the dataframes
 
     Parameters
     ----------
-    batch_events : list[str]
-        The list of event ids to fetch the data for
+    batch_events : np.ndarray[str]
+        The array of event ids to fetch the data for
     batch_index : int
         The index of the current batch
     main_dir : Path
@@ -698,8 +697,8 @@ def parse_geonet_information(
     end_date: datetime,
     n_procs: int = 1,
     batch_size: int = 500,
-    only_event_ids: List[str] = None,
-    only_sites: List[str] = None,
+    only_event_ids: list[str] = None,
+    only_sites: list[str] = None,
     real_time: bool = False,
 ):
     """
@@ -765,9 +764,7 @@ def parse_geonet_information(
     processed_suffixes = set(int(f.stem.split("_")[-1]) for f in processed_files)
 
     # Create batches from the event_ids
-    batches = [
-        event_ids[i : i + batch_size] for i in range(0, len(event_ids), batch_size)
-    ]
+    batches = np.array_split(event_ids, np.ceil(len(event_ids) / batch_size))
 
     for index, batch in enumerate(batches):
         if index not in processed_suffixes:
@@ -809,7 +806,7 @@ def parse_geonet_information(
                 print(f"Warning: {file} is empty or has no valid columns to parse.")
 
     if not sta_mag_dfs:
-        raise custom_errors.NoStations(
+        raise custom_errors.NoStationsError(
             "No station magnitude data was found, please check the origin of the earthquake"
         )
 

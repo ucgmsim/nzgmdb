@@ -59,7 +59,7 @@ zero_padding_time: 5
 no_response_stations:
   - CPLB
 no_response_conversion: 1000000
-low_cut_default: 0.05
+low_cut_default: 0.04
 order_default: 4
 poly_order_default: 6
 # Filtering

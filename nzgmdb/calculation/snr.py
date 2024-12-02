@@ -248,9 +248,7 @@ def compute_snr_for_mseed_data(
     print(f"Total number of mseed files to process: {len(mseed_files)}")
 
     # Create batches of mseed files for checkpointing
-    mseed_batches = [
-        mseed_files[i : i + batch_size] for i in range(0, len(mseed_files), batch_size)
-    ]
+    mseed_batches = np.array_split(mseed_files, np.ceil(len(mseed_files) / batch_size))
 
     for index, batch in enumerate(mseed_batches):
         if index not in processed_suffixes:
