@@ -518,7 +518,6 @@ def run_full_nzgmdb(  # noqa: D103
         bool,
         typer.Option(
             help="If True, the function will check for already completed files and skip them",
-            is_flag=True,
         ),
     ] = False,
     only_event_ids: Annotated[
@@ -551,14 +550,12 @@ def run_full_nzgmdb(  # noqa: D103
         bool,
         typer.Option(
             help="If True, the function will run in real time mode by using a different client",
-            is_flag=True,
         ),
     ] = False,
     upload: Annotated[
         bool,
         typer.Option(
             help="If True, the function will upload the results to Dropbox",
-            is_flag=True,
         ),
     ] = False,
 ):
