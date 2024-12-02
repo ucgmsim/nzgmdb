@@ -379,8 +379,6 @@ def compute_distances_for_event(
         The propagation data for the event
     extra_event_data : pd.DataFrame
         The extra event data for the event which includes the correct nodal plane information
-    plane_df : pd.DataFrame
-        The plane data for the event to represent the fault plane
     """
 
     # Extract out the relevant event_row data
@@ -390,7 +388,7 @@ def compute_distances_for_event(
     # Check if the event doesn't have IM data
     # If it doesn't, skip the event
     if im_event_df.empty:
-        return None, None, None
+        return None, None
 
     # Get the station data
     event_sta_df = station_df[station_df["sta"].isin(im_event_df["sta"])].reset_index()
