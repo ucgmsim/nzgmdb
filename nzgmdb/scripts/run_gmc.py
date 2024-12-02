@@ -2,7 +2,7 @@ import functools
 import multiprocessing
 import subprocess
 from pathlib import Path
-from typing import Annotated, List
+from typing import Annotated
 
 import numpy as np
 import pandas as pd
@@ -51,7 +51,7 @@ def run_command(
 
 
 def process_batch(
-    mseed_batch: List[Path],
+    mseed_batch: list[Path],
     gmc_dir: Path,
     waveform_dir: Path,
     gmc_scripts_path: Path,
@@ -65,7 +65,7 @@ def process_batch(
 
     Parameters
     ----------
-    mseed_batch : List[Path]
+    mseed_batch : list[Path]
         The list of mseed files to process.
     gmc_dir : Path
         The directory to store the GMC results for the current batch.
@@ -135,12 +135,12 @@ def process_batch(
         )
 
         print(f"Successfully processed Batch {batch_num}")
-    except Exception as e:
+    except Exception as e:  # noqa: BLE001
         print(f"Failed to process Batch {batch_num}: {str(e)}")
 
 
 @app.command()
-def run_gmc_processing(
+def run_gmc_processing(  # noqa: D103
     main_dir: Annotated[
         Path,
         typer.Argument(

@@ -63,7 +63,7 @@ class InvalidTraceLengthError(Exception):
     pass
 
 
-class NoStations(Exception):
+class NoStationsError(Exception):
     """Exception raised when no stations are computed for a given earthquake."""
 
     pass

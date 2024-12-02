@@ -4,6 +4,10 @@ from nzgmdb.management import file_structure
 
 
 class Config:
+    """
+    Class to manage the config file for constants and configuration settings for a NZGMDB run.
+    """
+
     _instance = None
     config_path = file_structure.get_data_dir() / "config.yaml"
 

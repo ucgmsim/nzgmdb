@@ -95,9 +95,9 @@ def create_waveform_from_processed(
         The waveform object created from the data
     """
     # Load all components
-    comp_000 = pd.read_csv(ffp_000, sep="\s+", header=None, skiprows=2).values.ravel()
-    comp_090 = pd.read_csv(ffp_090, sep="\s+", header=None, skiprows=2).values.ravel()
-    comp_ver = pd.read_csv(ffp_ver, sep="\s+", header=None, skiprows=2).values.ravel()
+    comp_000 = pd.read_csv(ffp_000, sep=r"\s+", header=None, skiprows=2).values.ravel()
+    comp_090 = pd.read_csv(ffp_090, sep=r"\s+", header=None, skiprows=2).values.ravel()
+    comp_ver = pd.read_csv(ffp_ver, sep=r"\s+", header=None, skiprows=2).values.ravel()
 
     # Remove NaN values
     comp_000 = comp_000[~np.isnan(comp_000)]

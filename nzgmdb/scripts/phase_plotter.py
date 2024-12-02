@@ -1,6 +1,6 @@
 """
-    Contains function scripts to plot
-    phase arrival times on mseed waveforms
+Contains function scripts to plot
+phase arrival times on mseed waveforms
 """
 
 from pathlib import Path
@@ -14,7 +14,7 @@ app = typer.Typer()
 
 
 @app.command(help="Plots waveform and phase arrival times.")
-def make_plot(
+def make_plot(  # noqa: D103
     mseed_file: Annotated[
         Path,
         typer.Argument(
@@ -46,7 +46,7 @@ def make_plot(
 
 
 @app.command(help="Plots waveform and phase arrival times for a batch of mseed files.")
-def batch_plot(
+def batch_plot(  # noqa: D103
     main_dir: Annotated[
         Path,
         typer.Argument(
@@ -81,7 +81,7 @@ def batch_plot(
 @app.command(
     help="Plots a histogram of the differences in phase arrival times from picker and Geonet"
 )
-def plot_hist(
+def plot_hist(  # noqa: D103
     phase_arrival_table: Annotated[
         Path,
         typer.Argument(

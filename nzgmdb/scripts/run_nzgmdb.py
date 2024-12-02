@@ -4,7 +4,7 @@ File that contains the function scripts that can be called to run the NZGMDB pip
 
 from datetime import datetime
 from pathlib import Path
-from typing import Annotated, List
+from typing import Annotated
 
 import pandas as pd
 import typer
@@ -22,7 +22,7 @@ app = typer.Typer()
 @app.command(
     help="Fetch earthquake data from Geonet and generates the earthquake source and station magnitude tables."
 )
-def fetch_geonet_data(
+def fetch_geonet_data(  # noqa: D103
     main_dir: Annotated[
         Path,
         typer.Argument(
@@ -50,14 +50,14 @@ def fetch_geonet_data(
         ),
     ] = 500,
     only_event_ids: Annotated[
-        List[str],
+        list[str],
         typer.Option(
             help="A list of event ids to filter the earthquake data, separated by commas",
             callback=lambda x: [] if x is None else x[0].split(","),
         ),
     ] = None,
     only_sites: Annotated[
-        List[str],
+        list[str],
         typer.Option(
             help="A list of site names to filter the earthquake data, separated by commas",
             callback=lambda x: [] if x is None else x[0].split(","),
@@ -83,7 +83,7 @@ def fetch_geonet_data(
 
 
 @app.command(help="Add tectonic domains to the earthquake source table")
-def merge_tect_domain(
+def merge_tect_domain(  # noqa: D103
     eq_source_ffp: Annotated[
         Path,
         typer.Argument(
@@ -108,7 +108,7 @@ def merge_tect_domain(
     help="Generate the phase arrival table, taking mseed data and finding the phase arrivals using a p_wave picker. "
     "Requires the mseed files to be generated."
 )
-def make_phase_arrival_table(
+def make_phase_arrival_table(  # noqa: D103
     main_dir: Annotated[
         Path,
         typer.Argument(
@@ -142,7 +142,7 @@ def make_phase_arrival_table(
     "Note: Can't have the common frequency vector as an input due to typer limitations. "
     "Instead change the configuration file."
 )
-def calculate_snr(
+def calculate_snr(  # noqa: D103
     main_dir: Annotated[
         Path,
         typer.Argument(
@@ -222,7 +222,7 @@ def calculate_snr(
     "Requires the snr_fas files and the snr metadata. "
     "Several parameters are set in the config file."
 )
-def calc_fmax(
+def calc_fmax(  # noqa: D103
     main_dir: Annotated[
         Path,
         typer.Argument(
@@ -259,7 +259,7 @@ def calc_fmax(
     help="Process the mseed files to txt files. "
     "Saves the skipped records to a csv file and gives reasons why they were skipped"
 )
-def process_records(
+def process_records(  # noqa: D103
     main_dir: Annotated[
         Path,
         typer.Argument(
@@ -301,7 +301,7 @@ def process_records(
 
 
 @app.command(help="Run IM Calculation on processed waveform files")
-def run_im_calculation(
+def run_im_calculation(  # noqa: D103
     main_dir: Annotated[
         Path,
         typer.Argument(
@@ -339,7 +339,7 @@ def run_im_calculation(
 
 
 @app.command(help="Generate the site table basin flatfile")
-def generate_site_table_basin(
+def generate_site_table_basin(  # noqa: D103
     main_dir: Annotated[
         Path,
         typer.Argument(
@@ -365,7 +365,7 @@ def generate_site_table_basin(
 @app.command(
     help="Calculate the distances between the earthquake source and the station"
 )
-def calculate_distances(
+def calculate_distances(  # noqa: D103
     main_dir: Annotated[
         Path,
         typer.Argument(
@@ -382,7 +382,7 @@ def calculate_distances(
 @app.command(
     help="Merge IM results together into one flatfile. As well as perform a filter for Ds595"
 )
-def merge_im_results(
+def merge_im_results(  # noqa: D103
     im_dir: Annotated[
         Path,
         typer.Argument(
@@ -420,7 +420,7 @@ def merge_im_results(
 @app.command(
     help="Merge all flatfiles together for final output and ensure correct filtering for only results with IM values"
 )
-def merge_flat_files(
+def merge_flat_files(  # noqa: D103
     main_dir: Annotated[
         Path,
         typer.Argument(
@@ -447,7 +447,7 @@ def merge_flat_files(
     "- Calculate distances"
     "- Merge flat files"
 )
-def run_full_nzgmdb(
+def run_full_nzgmdb(  # noqa: D103
     main_dir: Annotated[
         Path,
         typer.Argument(
@@ -520,14 +520,14 @@ def run_full_nzgmdb(
         ),
     ] = False,
     only_event_ids: Annotated[
-        List[str],
+        list[str],
         typer.Option(
             help="A list of event ids to filter the earthquake data, separated by commas",
             callback=lambda x: [] if x is None else x[0].split(","),
         ),
     ] = None,
     only_sites: Annotated[
-        List[str],
+        list[str],
         typer.Option(
             help="A list of site names to filter the earthquake data, separated by commas",
             callback=lambda x: [] if x is None else x[0].split(","),
