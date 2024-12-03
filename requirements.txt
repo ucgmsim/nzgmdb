@@ -2,6 +2,7 @@ typer>0.12.3
 pandas
 numpy<2.0.0
 obspy
+mseedlib
 scipy
 requests
 fiona
@@ -16,3 +17,4 @@ openquake-engine @ git+https://github.com/gem/oq-engine.git
 qcore @ git+https://github.com/ucgmsim/qcore.git
 im-calc @ git+https://github.com/ucgmsim/IM_calculation.git
 Velocity_Model @ git+https://github.com/ucgmsim/Velocity-Model.git
+source-modelling @ git+https://github.com/ucgmsim/source_modelling.git

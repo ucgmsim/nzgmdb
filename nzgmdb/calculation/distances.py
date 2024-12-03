@@ -15,7 +15,8 @@ from shapely.geometry.polygon import LineString, Polygon
 from nzgmdb.CCLD import ccldpy
 from nzgmdb.management import config as cfg
 from nzgmdb.management import file_structure
-from qcore import coordinates, geo, grid, src_site_dist, srf
+from qcore import coordinates, geo, grid, src_site_dist
+from source_modelling import srf
 
 
 def calc_fnorm_slip(
@@ -269,39 +270,43 @@ def get_nodal_plane_info(
     # Check if the event_id is in the srf_files
     if event_id in srf_files:
         srf_file = str(srf_files[event_id])
-        nodal_plane_info["srf_points"] = srf.read_srf_points(srf_file)
-        nodal_plane_info["srf_header"] = srf.read_header(srf_file, idx=True)
+        srf_model = srf.read_srf(srf_file)
+
+        n_points = srf_model.header["nstk"] * srf_model.header["ndip"]
+        split_indices = np.cumsum(n_points)
+        split_points = np.split(srf_model.points, split_indices[:-1])
+        slip_weights = [np.sum(df["slip"]) for df in split_points]
+        slip_weights /= sum(slip_weights)
+        nodal_plane_info["strike"] = np.average(
+            srf_model.header["stk"], weights=slip_weights
+        )
+        nodal_plane_info["dip"] = np.average(
+            srf_model.header["dip"], weights=slip_weights
+        )
+        nodal_plane_info["rake"] = np.average(
+            [np.average(df["rake"]) for df in split_points], weights=slip_weights
+        )
         nodal_plane_info["f_type"] = "ff"
-        cmt = geonet_cmt_df[geonet_cmt_df.PublicID == event_id].iloc[0]
-        nodal_plane_info["ztor"] = nodal_plane_info["srf_points"][0][2]
-        nodal_plane_info["dbottom"] = nodal_plane_info["srf_points"][-1][2]
 
-        # Create None corners for the ff type
-        if f_type == "ff":
-            corner_0, corner_1, corner_2, corner_3 = [[None, None, None]] * 4
+        # Check if there is only 1 plane
+        if len(srf_model.header) == 1:
+            # We can add single plane information
+            nodal_plane_info["srf_points"] = srf.read_srf_points(srf_file)
+            nodal_plane_info["srf_header"] = srf.read_header(srf_file, idx=True)
 
-        # Get strike, dip, rake, length and width if there is only 1 plane
-        if len(nodal_plane_info["srf_header"]) == 1:
-            fault_strike = nodal_plane_info["srf_header"][0]["strike"]
-            strike1_diff = abs(fault_strike - cmt.strike1)
-            if strike1_diff > 180:
-                strike1_diff = 360 - strike1_diff
-            strike2_diff = abs(fault_strike - cmt.strike2)
-            if strike2_diff > 180:
-                strike2_diff = 360 - strike2_diff
-
-            if strike1_diff < strike2_diff:
-                nodal_plane_info["strike"] = cmt.strike1
-                nodal_plane_info["rake"] = cmt.rake1
-                nodal_plane_info["dip"] = cmt.dip1
-            else:
-                nodal_plane_info["strike"] = cmt.strike2
-                nodal_plane_info["rake"] = cmt.rake2
-                nodal_plane_info["dip"] = cmt.dip2
+            nodal_plane_info["ztor"] = nodal_plane_info["srf_points"][0][2]
+            nodal_plane_info["dbottom"] = nodal_plane_info["srf_points"][-1][2]
 
             # Get the length and dip_dist
             nodal_plane_info["length"] = nodal_plane_info["srf_header"][0]["length"]
             nodal_plane_info["dip_dist"] = nodal_plane_info["srf_header"][0]["width"]
+        else:
+            # Ensure the corners are None
+            nodal_plane_info["corner_0"] = [None, None, None]
+            nodal_plane_info["corner_1"] = [None, None, None]
+            nodal_plane_info["corner_2"] = [None, None, None]
+            nodal_plane_info["corner_3"] = [None, None, None]
+
     elif event_id in modified_cmt_df.PublicID.values:
         # Event is in the modified CMT data
         nodal_plane_info["f_type"] = "cmt"
@@ -821,6 +826,10 @@ def calc_distances(main_dir: Path, n_procs: int = 1):
     im_station_df = im_df[["sta"]].drop_duplicates()
     station_df = pd.merge(im_station_df, station_df, on="sta", how="left")
     station_df["depth"] = station_df["elev"] / -1000
+
+    # Filter event_df
+    srf_ids = [srf_file.stem for srf_file in srf_files.values()]
+    event_df = event_df[event_df.evid.isin(srf_ids)]
 
     with mp.Pool(n_procs) as p:
         result_dfs = p.map(
