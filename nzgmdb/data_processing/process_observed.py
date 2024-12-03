@@ -2,13 +2,12 @@ import functools
 import multiprocessing
 from pathlib import Path
 
-import obspy
 import pandas as pd
-
 import qcore.timeseries as ts
+
 from nzgmdb.data_processing import waveform_manipulation
-from nzgmdb.management import config as cfg
 from nzgmdb.management import custom_errors, file_structure
+from nzgmdb.mseed_management import reading
 
 
 def process_single_mseed(mseed_file: Path, gmc_df: pd.DataFrame, fmax_df: pd.DataFrame):
@@ -39,7 +38,7 @@ def process_single_mseed(mseed_file: Path, gmc_df: pd.DataFrame, fmax_df: pd.Dat
     gmc_rows = gmc_df[gmc_df["record"] == mseed_stem]
 
     # Read mseed information
-    mseed = obspy.read(mseed_file)
+    mseed = reading.read_mseed_to_stream(mseed_file)
 
     # Extract mseed values
     dt = mseed.traces[0].stats.delta

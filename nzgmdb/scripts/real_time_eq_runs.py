@@ -1,5 +1,7 @@
 import datetime
+import functools
 import io
+import multiprocessing as mp
 import time
 from pathlib import Path
 from typing import Annotated
@@ -13,7 +15,7 @@ from obspy.clients.fdsn import Client as FDSN_Client
 
 from nzgmdb.data_retrieval import geonet, sites
 from nzgmdb.management import config as cfg
-from nzgmdb.management import custom_multiprocess, file_structure
+from nzgmdb.management import file_structure
 from nzgmdb.scripts import run_nzgmdb
 
 app = typer.Typer()
@@ -165,21 +167,22 @@ def custom_multiprocess_geonet(event_dir: Path, event_id: str, n_procs: int = 1)
         # Generate the stations to process
         stations = [station for station in network]
 
-        # Use custom_multiprocess to process the records
-        results = custom_multiprocess.custom_multiprocess(
-            geonet.fetch_sta_mag_line,
-            stations,
-            n_procs,
-            True,
-            network,
-            event_cat,
-            event_id,
-            event_dir,
-            client_NZ,
-            event_line[7],
-            event_line[8],
-            site_df,
-        )
+        # Fetch results
+        with mp.Pool(n_procs) as p:
+            results = p.map(
+                functools.partial(
+                    geonet.fetch_sta_mag_line,
+                    network=network,
+                    event_cat=event_cat,
+                    event_id=event_id,
+                    event_dir=event_dir,
+                    client_NZ=client_NZ,
+                    pref_mag=event_line[8],
+                    pref_mag_type=event_line[9],
+                    site_table=site_df,
+                ),
+                stations,
+            )
 
         # Extract the results
         for result in results:

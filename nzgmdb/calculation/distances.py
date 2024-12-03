@@ -8,13 +8,13 @@ import numpy as np
 import pandas as pd
 from obspy.clients.fdsn import Client as FDSN_Client
 from pyproj import Transformer
+from qcore import coordinates, geo, grid, src_site_dist, srf
 from shapely.geometry import Point
 from shapely.geometry.polygon import LineString, Polygon
 
 from nzgmdb.CCLD import ccldpy
 from nzgmdb.management import config as cfg
 from nzgmdb.management import file_structure
-from qcore import coordinates, geo, grid, src_site_dist, srf
 
 
 def calc_fnorm_slip(

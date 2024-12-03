@@ -3,9 +3,9 @@ from pathlib import Path
 import mseedlib
 import numpy as np
 import pandas as pd
+from IM_calculation.IM import read_waveform
 from obspy.core import Stream, Trace, UTCDateTime
 
-from IM_calculation.IM import read_waveform
 from nzgmdb.data_processing import waveform_manipulation
 from nzgmdb.management import custom_errors
 

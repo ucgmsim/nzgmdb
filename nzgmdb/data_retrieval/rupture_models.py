@@ -1,9 +1,9 @@
 import numpy as np
 import pandas as pd
+from qcore import geo
 
 from nzgmdb.data_retrieval import github
 from nzgmdb.management import config as cfg
-from qcore import geo
 
 
 def get_seismic_data_from_url(

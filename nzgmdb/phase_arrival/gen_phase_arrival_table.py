@@ -3,12 +3,14 @@ Contains functions for generating
 the phase arrival table
 """
 
+import functools
+import multiprocessing as mp
 from pathlib import Path
 
 import numpy as np
 import pandas as pd
 
-from nzgmdb.management import commands, custom_multiprocess, file_structure
+from nzgmdb.management import commands, file_structure
 
 
 def process_batch(
@@ -108,15 +110,17 @@ def generate_phase_arrival_table(
         (batch, (phase_dir / f"batch_{idx}")) for idx, batch in enumerate(mseed_batches)
     ]
 
-    custom_multiprocess.custom_multiprocess(
-        process_batch,
-        batches,
-        n_procs,
-        False,
-        run_phasenet_script_ffp,
-        conda_sh,
-        env_activate_command,
-    )
+    # Fetch results
+    with mp.Pool(n_procs) as p:
+        p.map(
+            functools.partial(
+                process_batch,
+                run_phasenet_script_ffp=run_phasenet_script_ffp,
+                conda_sh=conda_sh,
+                env_activate_command=env_activate_command,
+            ),
+            batches,
+        )
 
     # For each subfolder combine the phase_arrival_table.csv and skipped_records.csv into a single file
     phase_results = []

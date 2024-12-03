@@ -1,14 +1,14 @@
-from pathlib import Path
+import functools
 import multiprocessing as mp
+from pathlib import Path
 
+import IM_calculation.IM.snr_calculation as snr_calc
 import numpy as np
-import obspy
 import pandas as pd
 from pandas.errors import EmptyDataError
 
-import IM_calculation.IM.snr_calculation as snr_calc
 from nzgmdb.management import config as cfg
-from nzgmdb.management import custom_errors, custom_multiprocess, file_structure
+from nzgmdb.management import custom_errors, file_structure
 from nzgmdb.mseed_management import reading
 
 
@@ -119,7 +119,6 @@ def compute_snr_for_single_mseed(
         raise custom_errors.All3ComponentsNotPresentError(
             f"Error reading mseed file {mseed_file} with error: {e}"
         )
-    # stats = obspy.read(str(mseed_file))[0].stats
     if tp > stats.npts or tp < 0:
         skipped_record_dict = {
             "record_id": mseed_file.stem,
@@ -282,17 +281,19 @@ def compute_snr_for_mseed_data(
     for index, batch in enumerate(mseed_batches):
         if index not in processed_suffixes:
             print(f"Processing batch {index + 1}/{len(mseed_batches)}")
-            results = custom_multiprocess.custom_multiprocess(
-                compute_snr_for_single_mseed,
-                batch,
-                n_procs,
-                False,
-                phase_table,
-                snr_fas_output_dir,
-                apply_smoothing,
-                ko_matrix_path,
-                common_frequency_vector,
-            )
+            # Process the batch
+            with mp.Pool(n_procs) as p:
+                results = p.map(
+                    functools.partial(
+                        compute_snr_for_single_mseed,
+                        phase_table=phase_table,
+                        output_dir=snr_fas_output_dir,
+                        apply_smoothing=apply_smoothing,
+                        ko_matrix_path=ko_matrix_path,
+                        common_frequency_vector=common_frequency_vector,
+                    ),
+                    batch,
+                )
 
             meta_dfs = []
             skipped_record_dfs = []
