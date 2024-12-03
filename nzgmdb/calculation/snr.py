@@ -50,7 +50,6 @@ def compute_snr_for_single_mseed(
         or noise was less than 1 second
 
     """
-    print(f"Processing {mseed_file.stem} for {mp.current_process().pid}")
     # Get the station from the filename
     station = mseed_file.name.split("_")[1]
 
@@ -96,8 +95,6 @@ def compute_snr_for_single_mseed(
         skipped_record = pd.DataFrame([skipped_record_dict])
         return None, skipped_record
 
-    print(f"Getting tp for {mseed_file.stem} for {mp.current_process().pid}")
-
     # Get the TP from the phase arrival table
     try:
         tp = phase_table[phase_table["record_id"] == mseed_file.stem][
@@ -111,7 +108,6 @@ def compute_snr_for_single_mseed(
         skipped_record = pd.DataFrame([skipped_record_dict])
         return None, skipped_record
 
-    print(f"Reading {mseed_file.stem} for {mp.current_process().pid}")
     # Ensure the tp is within the range of the waveform
     try:
         stats = reading.read_mseed_to_stream(mseed_file)[0].stats
@@ -124,11 +120,8 @@ def compute_snr_for_single_mseed(
             "record_id": mseed_file.stem,
             "reason": "TP not in waveform bounds",
         }
-        print(f"TP not in waveform bounds for {mseed_file.stem}")
         skipped_record = pd.DataFrame([skipped_record_dict])
         return None, skipped_record
-
-    print(f"Calculating SNR for {mseed_file.stem} for {mp.current_process().pid}")
 
     try:
         (
@@ -182,13 +175,11 @@ def compute_snr_for_single_mseed(
     year_dir = output_dir / str(stats.starttime.year)
     event_dir = year_dir / event_id
     event_dir.mkdir(parents=True, exist_ok=True)
-    print(f"Saving SNR {mseed_file.stem} for {mp.current_process().pid}")
     snr_fas_df.to_csv(
         event_dir
         / f"{event_id}_{station}_{stats.channel[:2]}_{stats.location}_snr_fas.csv",
         index_label="frequency",
     )
-    print(f"Saved {mseed_file.stem}")
     # Add to the metadata dataframe
     meta_dict = {
         "record_id": mseed_file.stem,

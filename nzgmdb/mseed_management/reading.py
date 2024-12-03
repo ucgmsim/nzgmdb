@@ -96,7 +96,6 @@ def create_waveform_from_mseed(
     All3ComponentsNotPresentError
         If all 3 components are not present in the mseed file
     """
-    print(f"Reading mseed file {mseed_file}")
     # Read the mseed file
     mseed = read_mseed_to_stream(mseed_file)
 
@@ -107,28 +106,21 @@ def create_waveform_from_mseed(
 
     # Process the data if needed
     if pre_process:
-        print(f"Pre-processing data from {mseed_file}")
         mseed = waveform_manipulation.initial_preprocessing(mseed)
 
     # Stack the data
-    print(f"Stacking data from {mseed_file}")
     try:
         data = np.stack([tr.data for tr in mseed], axis=1)
         data = data.astype(np.float64)
     except ValueError:
-        print(f"Error reading data from {mseed_file}")
         raise custom_errors.InvalidTraceLengthError(
             f"Error reading data from {mseed_file}"
         )
-
-    print(f"Creating waveform object from {mseed_file}")
 
     # Create the waveform object
     waveform = read_waveform.create_waveform_from_data(
         data, NT=len(mseed[0].data), DT=mseed[0].stats.delta
     )
-
-    print(f"Waveform object created from {mseed_file}")
 
     return waveform
 
