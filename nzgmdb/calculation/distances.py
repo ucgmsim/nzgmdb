@@ -7,16 +7,17 @@ from typing import Optional
 
 import numpy as np
 import pandas as pd
+from empirical.util import estimations
 from obspy.clients.fdsn import Client as FDSN_Client
 from pyproj import Transformer
+from qcore import coordinates, geo, grid, src_site_dist
 from shapely.geometry import Point
 from shapely.geometry.polygon import LineString, Polygon
+from source_modelling import srf
 
 from nzgmdb.CCLD import ccldpy
 from nzgmdb.management import config as cfg
 from nzgmdb.management import file_structure
-from qcore import coordinates, geo, grid, src_site_dist
-from source_modelling import srf
 
 
 def calc_fnorm_slip(
@@ -269,37 +270,76 @@ def get_nodal_plane_info(
 
     # Check if the event_id is in the srf_files
     if event_id in srf_files:
-        srf_file = str(srf_files[event_id])
-        srf_model = srf.read_srf(srf_file)
-
-        n_points = srf_model.header["nstk"] * srf_model.header["ndip"]
-        split_indices = np.cumsum(n_points)
-        split_points = np.split(srf_model.points, split_indices[:-1])
-        slip_weights = [np.sum(df["slip"]) for df in split_points]
-        slip_weights /= sum(slip_weights)
-        nodal_plane_info["strike"] = np.average(
-            srf_model.header["stk"], weights=slip_weights
-        )
-        nodal_plane_info["dip"] = np.average(
-            srf_model.header["dip"], weights=slip_weights
-        )
-        nodal_plane_info["rake"] = np.average(
-            [np.average(df["rake"]) for df in split_points], weights=slip_weights
-        )
+        # Read the srf file to determine the nodal plane information
+        srf_model = srf.read_srf(srf_files[event_id])
         nodal_plane_info["f_type"] = "ff"
 
+        # Find the total slip and average rake for each subfault
+        total_slip = [
+            np.sum(plane_points["slip"]) for plane_points in srf_model.segments
+        ]
+        avg_rake = [
+            np.average(plane_points["rake"]) for plane_points in srf_model.segments
+        ]
+
+        # Calculate the average strike, dip and rake based on weighted average of slip
+        (
+            nodal_plane_info["strike"],
+            nodal_plane_info["dip"],
+            nodal_plane_info["rake"],
+        ) = estimations.calculate_avg_strike_dip_rake(
+            srf_model.planes, avg_rake, total_slip
+        )
+
+        config = cfg.Config()
+        points_per_km = config.get_value("points_per_km")
+
+        srf_points = []
+        for plane in srf_model.planes:
+            corner_0, corner_1, corner_2, _ = plane.corners
+            # Utilise grid functions from qcore to get the mesh grid
+            plane_points = grid.coordinate_meshgrid(
+                corner_0, corner_1, corner_2, 1000 / points_per_km
+            )
+            # Reshape to (n, 3)
+            plane_points = plane_points.reshape(-1, 3)
+            srf_points.append(plane_points)
+        srf_points = np.vstack(srf_points)
+        # Swap the lat and lon for the srf points
+        nodal_plane_info["srf_points"] = srf_points[:, [1, 0, 2]]
+
+        # Generate the srf header
+        nodal_plane_info["srf_header"] = (
+            srf_model.header[["nstk", "ndip", "stk", "len", "wid"]]
+            .rename(
+                columns={
+                    "nstk": "nstrike",
+                    "ndip": "ndip",
+                    "stk": "strike",
+                    "len": "length",
+                    "wid": "width",
+                }
+            )
+            .to_dict(orient="records")
+        )
+
+        # We can add single plane information
+        nodal_plane_info["ztor"] = min(
+            [plane.top_m / 1000 for plane in srf_model.planes]
+        )
+        nodal_plane_info["dbottom"] = max(
+            [plane.bottom_m / 1000 for plane in srf_model.planes]
+        )
+        nodal_plane_info["length"] = sum([plane.length for plane in srf_model.planes])
+        nodal_plane_info["dip_dist"] = sum([plane.width for plane in srf_model.planes])
+
         # Check if there is only 1 plane
-        if len(srf_model.header) == 1:
-            # We can add single plane information
-            nodal_plane_info["srf_points"] = srf.read_srf_points(srf_file)
-            nodal_plane_info["srf_header"] = srf.read_header(srf_file, idx=True)
-
-            nodal_plane_info["ztor"] = nodal_plane_info["srf_points"][0][2]
-            nodal_plane_info["dbottom"] = nodal_plane_info["srf_points"][-1][2]
-
-            # Get the length and dip_dist
-            nodal_plane_info["length"] = nodal_plane_info["srf_header"][0]["length"]
-            nodal_plane_info["dip_dist"] = nodal_plane_info["srf_header"][0]["width"]
+        if len(srf_model.planes) == 1:
+            plane = srf_model.planes[0]
+            nodal_plane_info["corner_0"] = plane.corners[0]
+            nodal_plane_info["corner_1"] = plane.corners[1]
+            nodal_plane_info["corner_2"] = plane.corners[2]
+            nodal_plane_info["corner_3"] = plane.corners[3]
         else:
             # Ensure the corners are None
             nodal_plane_info["corner_0"] = [None, None, None]
@@ -427,6 +467,10 @@ def compute_distances_for_event(
         hyp_lon,
         hyp_strike,
         hyp_dip,
+        corner_0,
+        corner_1,
+        corner_2,
+        corner_3,
     ) = (
         nodal_plane_info["strike"],
         nodal_plane_info["rake"],
@@ -442,6 +486,10 @@ def compute_distances_for_event(
         nodal_plane_info["hyp_lon"],
         nodal_plane_info["hyp_strike"],
         nodal_plane_info["hyp_dip"],
+        nodal_plane_info["corner_0"],
+        nodal_plane_info["corner_1"],
+        nodal_plane_info["corner_2"],
+        nodal_plane_info["corner_3"],
     )
 
     if srf_header is None or srf_points is None:
@@ -611,23 +659,6 @@ def compute_distances_for_event(
                 "corner_3_lat": corner_3[0],
                 "corner_3_lon": corner_3[1],
                 "corner_3_depth": corner_3[2],
-            },
-        ]
-    )
-
-    # Create the plane DataFrame
-    plane_df = pd.DataFrame(
-        [
-            {
-                "evid": event_id,
-                "f_type": f_type,
-                "strike": strike,
-                "dip": dip,
-                "rake": rake,
-                "length": length,
-                "dip_dist": dip_dist,
-                "z_tor": ztor,
-                "dbottom": dbottom,
             },
         ]
     )
@@ -827,10 +858,6 @@ def calc_distances(main_dir: Path, n_procs: int = 1):
     station_df = pd.merge(im_station_df, station_df, on="sta", how="left")
     station_df["depth"] = station_df["elev"] / -1000
 
-    # Filter event_df
-    srf_ids = [srf_file.stem for srf_file in srf_files.values()]
-    event_df = event_df[event_df.evid.isin(srf_ids)]
-
     with mp.Pool(n_procs) as p:
         result_dfs = p.map(
             functools.partial(
@@ -847,10 +874,9 @@ def calc_distances(main_dir: Path, n_procs: int = 1):
         )
 
     # Combine the results
-    propagation_results, extra_event_results, plane_results = zip(*result_dfs)
+    propagation_results, extra_event_results = zip(*result_dfs)
     propagation_data = pd.concat(propagation_results)
     extra_event_data = pd.concat(extra_event_results)
-    plane_data = pd.concat(plane_results)
 
     # Merge the extra event data with the event data
     event_df = pd.merge(event_df, extra_event_data, on="evid", how="right")
@@ -863,7 +889,4 @@ def calc_distances(main_dir: Path, n_procs: int = 1):
         flatfile_dir
         / file_structure.PreFlatfileNames.EARTHQUAKE_SOURCE_TABLE_DISTANCES,
         index=False,
-    )
-    plane_data.to_csv(
-        flatfile_dir / file_structure.PreFlatfileNames.FAULT_PLANE_TABLE, index=False
     )
