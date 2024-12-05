@@ -205,36 +205,17 @@ def write_stream_to_mseed(stream: Stream, output_file: Path):
         If the sample type of the trace data is not supported
     """
     mstl = mseedlib.MSTraceList()
-
     for trace in stream:
-        # Construct FDSN source ID
-        sourceid = f"FDSN:{trace.stats.network}_{trace.stats.station}_{trace.stats.location}_{trace.stats.channel}"
-
-        # Convert start time to nanoseconds
-        start_time = mseedlib.timestr2nstime(
-            trace.stats.starttime.strftime("%Y-%m-%dT%H:%M:%S.%fZ")
-        )
-
-        # Determine sample type
-        if trace.data.dtype == np.int32:
-            sample_type = "i"
-        elif trace.data.dtype == np.float32:
-            sample_type = "f"
-        elif trace.data.dtype == np.float64:
-            sample_type = "d"
-        else:
-            raise ValueError(f"Unsupported sample type: {trace.data.dtype}")
-
-        # Add trace data to MSTraceList
+        start_time = mseedlib.timestr2nstime(trace.stats.starttime.strftime("%Y-%m-%dT%H:%M:%S.%fZ"))
+        sourceid = f"FDSN:{trace.stats.network}_{trace.stats.station}_{trace.stats.location}_{'_'.join(trace.stats.channel)}"
         mstl.add_data(
             sourceid=sourceid,
-            data_samples=trace.data.tolist(),
-            sample_type=sample_type,
+            data_samples=trace.data,
+            sample_type="i",
             sample_rate=trace.stats.sampling_rate,
             start_time=start_time,
         )
 
-    # Record handler to write MiniSEED records to file
     def record_handler(record: bytes, handler_data: dict):
         """
         Write MiniSEED record to file handler.
@@ -248,9 +229,8 @@ def write_stream_to_mseed(stream: Stream, output_file: Path):
         """
         handler_data["fh"].write(record)
 
-    # Write to MiniSEED file
-    with open(output_file, "wb") as file_handle:
-        mstl.pack(record_handler, {"fh": file_handle}, flush_data=True)
+    with open(output_file, "wb") as f:
+        mstl.pack(record_handler, {"fh": f}, flush_data=True, format_version=2)
 
 
 def write_mseed(mseed: Stream, event_id: str, station: str, output_directory: Path):
