@@ -1,3 +1,4 @@
+import os
 import subprocess
 from pathlib import Path
 
@@ -27,6 +28,8 @@ def run_command(
     with open(log_file_path, "w") as log_file:
         # Create the command to source conda.sh, activate the environment, and execute the full command
         command = f"source {env_sh} && {env_activate_command} && {command}"
+        env = os.environ.copy()
+        # env["LD_LIBRARY_PATH"] = "/home/joel/anaconda3/lib"
         try:
             subprocess.check_call(
                 command,
@@ -34,6 +37,7 @@ def run_command(
                 stderr=log_file,
                 shell=True,
                 executable="/bin/bash",
+                # env=env,
             )
         except subprocess.CalledProcessError:
             raise Exception(f"Command failed please check logs in {log_file_path}")

@@ -1,3 +1,9 @@
+import os
+
+# os.environ["LD_LIBRARY_PATH"] = (
+#     os.environ.get("LD_LIBRARY_PATH", "") + ":/home/joel/anaconda3/lib"
+# )
+print(f"LD_LIBRARY_PATH: {os.environ['LD_LIBRARY_PATH']}")
 import argparse
 import json
 from pathlib import Path
@@ -237,4 +243,5 @@ if __name__ == "__main__":
         help="Output directory for skipped records and phase arrival information.",
     )
     args = parser.parse_args()
+    # Set the environment variable
     run_phasenet(args.mseed_files_ffp, args.output_dir)
