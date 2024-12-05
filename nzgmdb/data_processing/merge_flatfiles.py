@@ -213,7 +213,8 @@ def merge_flatfiles(main_dir: Path):
     unique_events = im_df.evid.unique()
     # Ensure that the other dfs only have the unique events
     event_df = event_df[event_df.evid.isin(unique_events)]
-    phase_table_df = phase_table_df[phase_table_df.evid.isin(unique_events)]
+
+    phase_table_df = phase_table_df[phase_table_df["record_id"].isin(im_df["record_id"])]
 
     # Ensure that the site_basin_df only has the unique sites found in the im_df
     unique_sites = im_df["sta"].unique()
