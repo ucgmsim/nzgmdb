@@ -330,18 +330,18 @@ def fetch_sta_mag_line(
             continue
 
         # Calculate clip to determine if the record should be dropped
-        clip = filtering.get_clip_probability(pref_mag, r_hyp, st)
+        # clip = filtering.get_clip_probability(pref_mag, r_hyp, st)
 
         # Check if the record should be dropped
-        if clip > threshold:
-            stats = mseed[0].stats
-            skipped_records.append(
-                [
-                    f"{event_id}_{stats.station}_{stats.location}_{stats.channel}",
-                    "Clipped",
-                ]
-            )
-            continue
+        # if clip > threshold:
+        #     stats = mseed[0].stats
+        #     skipped_records.append(
+        #         [
+        #             f"{event_id}_{stats.station}_{stats.location}_{stats.channel}",
+        #             "Clipped",
+        #         ]
+        #     )
+        #     continue
 
         # Create the directory structure for the given event
         year = event_cat.origins[0].time.year

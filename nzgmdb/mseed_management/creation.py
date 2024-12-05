@@ -119,7 +119,7 @@ def get_waveforms(
                     net,
                     sta,
                     "*",
-                    channel_codes,
+                    "*",
                     start_time,
                     end_time,
                     attach_response=True,
