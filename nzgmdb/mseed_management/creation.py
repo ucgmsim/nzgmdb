@@ -6,7 +6,6 @@ from pathlib import Path
 import mseedlib
 import numpy as np
 import pandas as pd
-from empirical.util import classdef, openquake_wrapper_vectorized, z_model_calculations
 from obspy import Stream
 from obspy.clients.fdsn import Client as FDSN_Client
 from obspy.clients.fdsn.header import FDSNNoDataException
@@ -15,6 +14,7 @@ from obspy.geodetics import kilometers2degrees
 from obspy.io.mseed import InternalMSEEDError, ObsPyMSEEDFilesizeTooSmallError
 from obspy.taup import TauPyModel
 
+from empirical.util import classdef, openquake_wrapper_vectorized, z_model_calculations
 from nzgmdb.management import config as cfg
 
 
@@ -206,7 +206,9 @@ def write_stream_to_mseed(stream: Stream, output_file: Path):
     """
     mstl = mseedlib.MSTraceList()
     for trace in stream:
-        start_time = mseedlib.timestr2nstime(trace.stats.starttime.strftime("%Y-%m-%dT%H:%M:%S.%fZ"))
+        start_time = mseedlib.timestr2nstime(
+            trace.stats.starttime.strftime("%Y-%m-%dT%H:%M:%S.%fZ")
+        )
         sourceid = f"FDSN:{trace.stats.network}_{trace.stats.station}_{trace.stats.location}_{'_'.join(trace.stats.channel)}"
         mstl.add_data(
             sourceid=sourceid,
