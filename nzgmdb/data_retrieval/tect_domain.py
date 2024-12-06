@@ -65,7 +65,6 @@ def replace_cmt_data_on_event(
         The CMT dataframe
     """
     # Manage index and column renaming
-    event_df = event_df.set_index("evid")
     cmt_df = cmt_df.rename(
         columns={"Mw": "mag", "Latitude": "lat", "Longitude": "lon", "CD": "depth"}
     ).set_index("PublicID")
@@ -361,8 +360,8 @@ def add_tect_domain(
     # Read the geonet CMT and event data
     config = cfg.Config()
     geonet_cmt_df = pd.read_csv(config.get_value("cmt_url"), low_memory=False)
-    event_df = (
-        pd.read_csv(event_csv_ffp, low_memory=False).set_index("evid").reset_index()
+    event_df = pd.read_csv(
+        event_csv_ffp, low_memory=False, dtype={"evid": str}, index_col="evid"
     )
 
     # Replace the geonet CMT data on the event data
