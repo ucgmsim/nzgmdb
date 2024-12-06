@@ -323,7 +323,6 @@ def get_nodal_plane_info(
             .to_dict(orient="records")
         )
 
-        # We can add single plane information
         nodal_plane_info["ztor"] = min(
             [plane.top_m / 1000 for plane in srf_model.planes]
         )

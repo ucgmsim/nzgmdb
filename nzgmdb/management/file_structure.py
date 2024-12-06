@@ -21,7 +21,6 @@ class PreFlatfileNames(StrEnum):
     SITE_TABLE = "site_table_all.csv"
     PROPAGATION_TABLE = "propagation_path_table_all.csv"
     GROUND_MOTION_IM_CATALOGUE = "ground_motion_im_catalogue.csv"
-    FAULT_PLANE_TABLE = "fault_plane_table_all.csv"
 
 
 class FlatfileNames(StrEnum):
@@ -47,7 +46,6 @@ class FlatfileNames(StrEnum):
     GROUND_MOTION_IM_ROTD50_FLAT = "ground_motion_im_table_rotd50_flat.csv"
     GROUND_MOTION_IM_ROTD100 = "ground_motion_im_table_rotd100.csv"
     GROUND_MOTION_IM_ROTD100_FLAT = "ground_motion_im_table_rotd100_flat.csv"
-    FAULT_PLANE_TABLE = "fault_plane_table.csv"
 
 
 class SkippedRecordFilenames(StrEnum):
