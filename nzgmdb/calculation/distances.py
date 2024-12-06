@@ -784,7 +784,8 @@ def calc_distances(main_dir: Path, n_procs: int = 1):
 
     # Load the eq source table
     event_df = pd.read_csv(
-        flatfile_dir / file_structure.PreFlatfileNames.EARTHQUAKE_SOURCE_TABLE_TECTONIC
+        flatfile_dir / file_structure.PreFlatfileNames.EARTHQUAKE_SOURCE_TABLE_TECTONIC,
+        dtype={"evid": str},
     )
 
     # Get the focal domain
@@ -828,10 +829,9 @@ def calc_distances(main_dir: Path, n_procs: int = 1):
 
     # Get the IM data
     im_df = pd.read_csv(
-        flatfile_dir / file_structure.PreFlatfileNames.GROUND_MOTION_IM_CATALOGUE
+        flatfile_dir / file_structure.PreFlatfileNames.GROUND_MOTION_IM_CATALOGUE,
+        dtype={"evid": str},
     )
-    # Convert the evid to a string
-    im_df["evid"] = im_df["evid"].astype(str)
 
     # Get the station information
     client_NZ = FDSN_Client("GEONET")
