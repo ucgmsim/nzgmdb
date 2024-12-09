@@ -663,24 +663,46 @@ def download_earthquake_data(
     max_mag = config.get_value("max_mag")
 
     # Loop over the dates to extract the csv data to a dataframe
+    # dfs = []
+    # for index, first_date in enumerate(response_dates[1:]):
+    #     second_date = response_dates[index]
+    #     endpoint = (
+    #         f"{geonet_url}/csv?bbox={bbox}&startdate={first_date}&enddate={second_date}"
+    #     )
+    #     response = requests.get(endpoint)
+    #
+    #     # Check if the response is valid
+    #     if response.status_code != 200:
+    #         raise ValueError("Could not get the earthquake data")
+    #
+    #     # Read the response into a dataframe
+    #     df = pd.read_csv(io.StringIO(response.text))
+    #     # Filter the data based on magnitude
+    #     df = df[(df["magnitude"] >= min_mag) & (df["magnitude"] <= max_mag)]
+    #
+    #     dfs.append(df)
+
+    years = [2000, 2002, 2004, 2006, 2008, 2013, 2015, 2017, 2019, 2021, 2023]
+    months = ["01", "12"]
+
     dfs = []
-    for index, first_date in enumerate(response_dates[1:]):
-        second_date = response_dates[index]
-        endpoint = (
-            f"{geonet_url}/csv?bbox={bbox}&startdate={first_date}&enddate={second_date}"
-        )
-        response = requests.get(endpoint)
+    for year in years:
+        for month in months:
+            start_date = f"{year}-{month}-01"
+            end_date = f"{year}-{month}-31"
+            endpoint = f"{geonet_url}/csv?bbox={bbox}&startdate={start_date}&enddate={end_date}"
+            response = requests.get(endpoint)
 
-        # Check if the response is valid
-        if response.status_code != 200:
-            raise ValueError("Could not get the earthquake data")
+            # Check if the response is valid
+            if response.status_code != 200:
+                raise ValueError("Could not get the earthquake data")
 
-        # Read the response into a dataframe
-        df = pd.read_csv(io.StringIO(response.text))
-        # Filter the data based on magnitude
-        df = df[(df["magnitude"] >= min_mag) & (df["magnitude"] <= max_mag)]
+            # Read the response into a dataframe
+            df = pd.read_csv(io.StringIO(response.text))
+            # Filter the data based on magnitude
+            df = df[(df["magnitude"] >= min_mag) & (df["magnitude"] <= max_mag)]
 
-        dfs.append(df)
+            dfs.append(df)
 
     # Concatenate the dataframes and sort by origintime
     geonet = (
