@@ -1,5 +1,7 @@
 import http.client
 import warnings
+import time
+import http
 from collections.abc import Iterable
 from pathlib import Path
 
@@ -135,9 +137,17 @@ def get_waveforms(
             else:
                 return None
         except Exception as e:
-            print(f"Error getting waveforms for {net}.{sta}")
-            print(e)
-            return None
+            # Check if the exception is a 503 Service Unavailable
+            if hasattr(e, "code") and e.code == 503:
+                print(f"Error getting waveforms for {net}.{sta}")
+                print("Service temporarily unavailable")
+                print("HTTP Status code: 503")
+                print("Retrying in 2 minutes...")
+                time.sleep(120)  # Wait for 2 minutes before retrying
+            else:
+                print(f"Unexpected error getting waveforms for {net}.{sta}")
+                print(e)
+                return None
     return st
 
 
