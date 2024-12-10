@@ -1,5 +1,6 @@
 import functools
 import multiprocessing as mp
+import zipfile
 from collections import defaultdict
 from pathlib import Path
 from typing import Optional
@@ -11,7 +12,9 @@ from pyproj import Transformer
 from qcore import coordinates, geo, grid, src_site_dist, srf
 from shapely.geometry import Point
 from shapely.geometry.polygon import LineString, Polygon
+from source_modelling import srf
 
+from empirical.util import estimations
 from nzgmdb.CCLD import ccldpy
 from nzgmdb.management import config as cfg
 from nzgmdb.management import file_structure
@@ -267,36 +270,82 @@ def get_nodal_plane_info(
 
     # Check if the event_id is in the srf_files
     if event_id in srf_files:
-        srf_file = str(srf_files[event_id])
-        nodal_plane_info["srf_points"] = srf.read_srf_points(srf_file)
-        nodal_plane_info["srf_header"] = srf.read_header(srf_file, idx=True)
+        # Read the srf file to determine the nodal plane information
+        srf_model = srf.read_srf(srf_files[event_id])
         nodal_plane_info["f_type"] = "ff"
-        cmt = geonet_cmt_df[geonet_cmt_df.PublicID == event_id].iloc[0]
-        nodal_plane_info["ztor"] = nodal_plane_info["srf_points"][0][2]
-        nodal_plane_info["dbottom"] = nodal_plane_info["srf_points"][-1][2]
 
-        # Get strike, dip, rake, length and width if there is only 1 plane
-        if len(nodal_plane_info["srf_header"]) == 1:
-            fault_strike = nodal_plane_info["srf_header"][0]["strike"]
-            strike1_diff = abs(fault_strike - cmt.strike1)
-            if strike1_diff > 180:
-                strike1_diff = 360 - strike1_diff
-            strike2_diff = abs(fault_strike - cmt.strike2)
-            if strike2_diff > 180:
-                strike2_diff = 360 - strike2_diff
+        # Find the total slip and average rake for each subfault
+        total_slip = [
+            np.sum(plane_points["slip"]) for plane_points in srf_model.segments
+        ]
+        avg_rake = [
+            np.average(plane_points["rake"]) for plane_points in srf_model.segments
+        ]
 
-            if strike1_diff < strike2_diff:
-                nodal_plane_info["strike"] = cmt.strike1
-                nodal_plane_info["rake"] = cmt.rake1
-                nodal_plane_info["dip"] = cmt.dip1
-            else:
-                nodal_plane_info["strike"] = cmt.strike2
-                nodal_plane_info["rake"] = cmt.rake2
-                nodal_plane_info["dip"] = cmt.dip2
+        # Calculate the average strike, dip and rake based on weighted average of slip
+        (
+            nodal_plane_info["strike"],
+            nodal_plane_info["dip"],
+            nodal_plane_info["rake"],
+        ) = estimations.calculate_avg_strike_dip_rake(
+            srf_model.planes, avg_rake, total_slip
+        )
 
-            # Get the length and dip_dist
-            nodal_plane_info["length"] = nodal_plane_info["srf_header"][0]["length"]
-            nodal_plane_info["dip_dist"] = nodal_plane_info["srf_header"][0]["width"]
+        config = cfg.Config()
+        points_per_km = config.get_value("points_per_km")
+
+        srf_points = []
+        for plane in srf_model.planes:
+            corner_0, corner_1, corner_2, _ = plane.corners
+            # Utilise grid functions from qcore to get the mesh grid
+            plane_points = grid.coordinate_meshgrid(
+                corner_0, corner_1, corner_2, 1000 / points_per_km
+            )
+            # Reshape to (n, 3)
+            plane_points = plane_points.reshape(-1, 3)
+            srf_points.append(plane_points)
+        srf_points = np.vstack(srf_points)
+        # Swap the lat and lon for the srf points
+        nodal_plane_info["srf_points"] = srf_points[:, [1, 0, 2]]
+
+        # Generate the srf header
+        nodal_plane_info["srf_header"] = (
+            srf_model.header[["nstk", "ndip", "stk", "len", "wid"]]
+            .rename(
+                columns={
+                    "nstk": "nstrike",
+                    "ndip": "ndip",
+                    "stk": "strike",
+                    "len": "length",
+                    "wid": "width",
+                }
+            )
+            .to_dict(orient="records")
+        )
+
+        nodal_plane_info["ztor"] = min(
+            [plane.top_m / 1000 for plane in srf_model.planes]
+        )
+        nodal_plane_info["dbottom"] = max(
+            [plane.bottom_m / 1000 for plane in srf_model.planes]
+        )
+        nodal_plane_info["length"] = sum([plane.length for plane in srf_model.planes])
+        nodal_plane_info["dip_dist"] = sum([plane.width for plane in srf_model.planes])
+
+        # Check if there is only 1 plane
+        if len(srf_model.planes) == 1:
+            plane = srf_model.planes[0]
+            nodal_plane_info["corner_0"] = plane.corners[0]
+            nodal_plane_info["corner_1"] = plane.corners[1]
+            nodal_plane_info["corner_2"] = plane.corners[2]
+            nodal_plane_info["corner_3"] = plane.corners[3]
+        else:
+            # Ensure the corners are None
+            nodal_plane_info["corner_0"] = [None, None, None]
+            nodal_plane_info["corner_1"] = [None, None, None]
+            nodal_plane_info["corner_2"] = [None, None, None]
+            nodal_plane_info["corner_3"] = [None, None, None]
+
     elif event_id in modified_cmt_df.PublicID.values:
         # Event is in the modified CMT data
         nodal_plane_info["f_type"] = "cmt"
@@ -417,6 +466,10 @@ def compute_distances_for_event(
         hyp_lon,
         hyp_strike,
         hyp_dip,
+        corner_0,
+        corner_1,
+        corner_2,
+        corner_3,
     ) = (
         nodal_plane_info["strike"],
         nodal_plane_info["rake"],
@@ -432,6 +485,10 @@ def compute_distances_for_event(
         nodal_plane_info["hyp_lon"],
         nodal_plane_info["hyp_strike"],
         nodal_plane_info["hyp_dip"],
+        nodal_plane_info["corner_0"],
+        nodal_plane_info["corner_1"],
+        nodal_plane_info["corner_2"],
+        nodal_plane_info["corner_3"],
     )
 
     if srf_header is None or srf_points is None:
@@ -585,6 +642,22 @@ def compute_distances_for_event(
                 "f_type": f_type,
                 "z_tor": ztor,
                 "z_bor": dbottom,
+                "hyp_lat": hyp_lat,
+                "hyp_lon": hyp_lon,
+                "hyp_strike": hyp_strike,
+                "hyp_dip": hyp_dip,
+                "corner_0_lat": corner_0[0],
+                "corner_0_lon": corner_0[1],
+                "corner_0_depth": corner_0[2],
+                "corner_1_lat": corner_1[0],
+                "corner_1_lon": corner_1[1],
+                "corner_1_depth": corner_1[2],
+                "corner_2_lat": corner_2[0],
+                "corner_2_lon": corner_2[1],
+                "corner_2_depth": corner_2[2],
+                "corner_3_lat": corner_3[0],
+                "corner_3_lon": corner_3[1],
+                "corner_3_depth": corner_3[2],
             },
         ]
     )
@@ -734,6 +807,19 @@ def calc_distances(main_dir: Path, n_procs: int = 1):
         np.array(wgs2nztm.transform(tvz_points.latitude, tvz_points.longitude))
     )[0]
     taupo_polygon = Polygon(taupo_transform)
+
+    # Check the SrfSourceModels directory for the srf files
+    if not (data_dir / "SrfSourceModels").exists():
+        # Check for the SrfSourceModels.zip and unzip it
+        srf_zip = data_dir / "SrfSourceModels.zip"
+        if srf_zip.exists():
+            with zipfile.ZipFile(srf_zip, "r") as zip_ref:
+                # Extract all the contents to the destination directory
+                zip_ref.extractall(data_dir)
+        else:
+            raise FileNotFoundError(
+                "The SrfSourceModels directory and zip file does not exist"
+            )
 
     # Get the srf files as a dictionary of file paths and event_id as the key
     srf_files = {}
