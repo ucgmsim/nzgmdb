@@ -223,7 +223,7 @@ def upload_to_dropbox(  # noqa: D103
     main(
         input_directory,
         n_procs,
-        version,
+        version if version is not None else input_directory.name,
     )
 
 

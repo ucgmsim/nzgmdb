@@ -9,6 +9,7 @@ import requests
 import typer
 
 from nzgmdb.management import config as cfg
+from nzgmdb.management import custom_errors
 from nzgmdb.scripts import run_nzgmdb
 
 app = typer.Typer()
@@ -142,13 +143,15 @@ def run_event(  # noqa: D103
         typer.Option(
             help="Start date for the event.",
         ),
-    ] = datetime.datetime.utcnow() - datetime.timedelta(days=8),
+    ] = datetime.datetime.utcnow()
+    - datetime.timedelta(days=8),
     end_date: Annotated[
         datetime.datetime,
         typer.Option(
             help="End date for the event.",
         ),
-    ] = datetime.datetime.utcnow() - datetime.timedelta(minutes=1),
+    ] = datetime.datetime.utcnow()
+    - datetime.timedelta(minutes=1),
 ):
     """
     Run the NZGMDB pipeline for a specific event in near-real-time mode.
@@ -158,22 +161,28 @@ def run_event(  # noqa: D103
     bool
         True if the event was processed, False if the event was skipped
     """
-    # Run the rest of the pipeline
-    run_nzgmdb.run_full_nzgmdb(
-        event_dir,
-        start_date,
-        end_date,
-        gm_classifier_dir,
-        conda_sh,
-        gmc_activate,
-        gmc_predict_activate,
-        gmc_procs,
-        n_procs,
-        ko_matrix_path=ko_matrix_path,
-        checkpoint=True,
-        only_event_ids=[event_id],
-        real_time=True,
-    )
+    try:
+        # Run the rest of the pipeline
+        run_nzgmdb.run_full_nzgmdb(
+            event_dir,
+            start_date,
+            end_date,
+            gm_classifier_dir,
+            conda_sh,
+            gmc_activate,
+            gmc_predict_activate,
+            gmc_procs,
+            n_procs,
+            ko_matrix_path=ko_matrix_path,
+            checkpoint=True,
+            only_event_ids=[event_id],
+            real_time=True,
+        )
+    except custom_errors.NoStationsError:
+        print(f"Event {event_id} has no stations, skipping")
+        # Remove the event directory
+        event_dir.rmdir()
+        return False
 
     if add_seismic_now:
         # Define the URL for the endpoint
@@ -188,6 +197,7 @@ def run_event(  # noqa: D103
         else:
             print(f"Failed to add event. Status code: {response.status_code}")
             print(f"Response: {response.text}")
+            return False
     return True
 
 
@@ -297,7 +307,7 @@ def poll_earthquake_data(  # noqa: D103
                     end_date,
                 )
 
-                if result is None:
+                if not result:
                     # remove the event directory
                     event_dir.rmdir()
                 init_start_date = end_date
