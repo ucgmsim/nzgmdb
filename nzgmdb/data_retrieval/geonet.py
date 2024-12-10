@@ -319,6 +319,8 @@ def fetch_sta_mag_line(
         if mag.waveform_id.station_code == station.code
     ]
 
+    print(f"Split mseed into {len(mseeds)} for {station.code}")
+
     for mseed in mseeds:
         # Check the data is not all 0's
         if all([np.allclose(tr.data, 0) for tr in mseed]):
@@ -332,7 +334,9 @@ def fetch_sta_mag_line(
             continue
 
         # Calculate clip to determine if the record should be dropped
+        print(f"About to get clip for {station.code}")
         clip = filtering.get_clip_probability(pref_mag, r_hyp, st)
+        print(f"Got clip for {station.code}")
 
         # Check if the record should be dropped
         if clip > threshold:
