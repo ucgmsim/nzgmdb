@@ -168,6 +168,7 @@ def custom_multiprocess_geonet(event_dir: Path, event_id: str, n_procs: int = 1)
         stations = [station for station in network]
 
         # Fetch results
+        print(f"Start Loop for {len(stations)}")
         with mp.Pool(n_procs) as p:
             results = p.map(
                 functools.partial(
@@ -184,12 +185,14 @@ def custom_multiprocess_geonet(event_dir: Path, event_id: str, n_procs: int = 1)
                 stations,
             )
 
+        print("Extracting results")
+
         # Extract the results
         for result in results:
             finished_sta_mag_table, finished_skipped_records = result
             sta_mag_table.extend(finished_sta_mag_table)
             skipped_records.extend(finished_skipped_records)
-
+    print("Outside loop")
     if len(sta_mag_table) == 0:
         # No station data, skip this event
         return False
@@ -327,10 +330,10 @@ def run_event(  # noqa: D103
     bool
         True if the event was processed, False if the event was skipped
     """
-
+    print("Testing")
     # Run the custom multiprocess geonet, site table and geonet steps
     result = custom_multiprocess_geonet(event_dir, event_id, n_procs)
-
+    print(f"Result: {result}")
     if result is None:
         # Skip this event
         print(f"Skipping event {event_id}")
@@ -352,6 +355,7 @@ def run_event(  # noqa: D103
         only_event_ids=[event_id],
         real_time=True,
     )
+    print(f"Event {event_id} processed")
 
     if add_seismic_now:
         # Define the URL for the endpoint
