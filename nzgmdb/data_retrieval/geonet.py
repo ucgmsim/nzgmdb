@@ -289,6 +289,7 @@ def fetch_sta_mag_line(
     vs30 = None if site_vs30_row.empty else site_vs30_row.values[0]
 
     # Get the waveforms
+    print(f"Getting waveforms for {station.code}")
     st = creation.get_waveforms(
         preferred_origin,
         client_NZ,
@@ -299,6 +300,7 @@ def fetch_sta_mag_line(
         r_epi,
         vs30,
     )
+    print(f"Got waveforms for {station.code}")
     # Check that data was found
     if st is None:
         skipped_records.append([f"{event_id}_{station.code}", "No Waveform Data"])
@@ -349,6 +351,7 @@ def fetch_sta_mag_line(
 
         # Write the mseed file
         creation.write_mseed(mseed, event_id, station.code, mseed_dir)
+        print(f"Written mseed for {station.code}")
 
         for trace in mseed:
             chan = trace.stats.channel
