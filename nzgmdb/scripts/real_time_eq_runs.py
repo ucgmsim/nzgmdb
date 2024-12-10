@@ -330,7 +330,6 @@ def run_event(  # noqa: D103
     bool
         True if the event was processed, False if the event was skipped
     """
-    print("Testing")
     # Run the custom multiprocess geonet, site table and geonet steps
     result = custom_multiprocess_geonet(event_dir, event_id, n_procs)
     print(f"Result: {result}")
