@@ -361,8 +361,8 @@ def add_tect_domain(
     config = cfg.Config()
     geonet_cmt_df = pd.read_csv(config.get_value("cmt_url"), low_memory=False)
     event_df = pd.read_csv(
-        event_csv_ffp, low_memory=False, dtype={"evid": str}
-    ).set_index("evid")
+        event_csv_ffp, low_memory=False, dtype={"evid": str}, index_col="evid"
+    )
 
     # Replace the geonet CMT data on the event data
     event_df = replace_cmt_data_on_event(event_df, geonet_cmt_df)

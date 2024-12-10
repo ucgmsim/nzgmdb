@@ -1,6 +1,3 @@
-import multiprocessing as mp
-import queue
-import time
 from pathlib import Path
 
 import numpy as np
@@ -10,7 +7,7 @@ import pandas as pd
 from IM_calculation.IM import im_calculation
 from IM_calculation.IM.read_waveform import Waveform
 from nzgmdb.management import config as cfg
-from nzgmdb.management import file_structure
+from nzgmdb.management import custom_multiprocess, file_structure
 from nzgmdb.mseed_management import reading
 from qcore.constants import Components
 
@@ -64,23 +61,9 @@ def compute_im_for_waveform(
     im_result_df.to_csv(event_output_path / f"{record_id}_IM.csv", index=False)
 
 
-def end_im_compute(
-    output_queue: queue.Queue, record_id: str, skipped_record: pd.DataFrame
-):
-    """
-    Send the outputs to the output queue and wait for the process to be killed by
-    the main process
-    """
-    output_queue.put((record_id, skipped_record))
-    # Wait forever till the process is terminated by main process
-    while True:
-        time.sleep(10)
-
-
 def calculate_im_for_record(
     ffp_000: Path,
     output_path: Path,
-    output_queue: mp.Queue,
     components: list[Components],
     ims: list[str],
     im_options: dict[str, list[float]],
@@ -114,7 +97,7 @@ def calculate_im_for_record(
             "reason": "Failed to find the mseed file",
         }
         skipped_record = pd.DataFrame([skipped_record_dict])
-        end_im_compute(output_queue, ffp_000.stem, skipped_record)
+        return skipped_record
 
     # Get the 090 and ver components full file paths
     ffp_090 = ffp_000.parent / f"{ffp_000.stem}.090"
@@ -130,7 +113,7 @@ def calculate_im_for_record(
             "reason": "Failed to find all components",
         }
         skipped_record = pd.DataFrame([skipped_record_dict])
-        end_im_compute(output_queue, mseed_file.stem, skipped_record)
+        return skipped_record
 
     # Get the event_id and create the output directory
     event_id = file_structure.get_event_id_from_mseed(mseed_file)
@@ -147,47 +130,6 @@ def calculate_im_for_record(
         im_options,
         ko_matrices_path,
     )
-    # Tell the main process that this record is done
-    end_im_compute(output_queue, mseed_file.stem, None)
-
-
-def remove_processed_im_data(processes: list[mp.Process], output_queue: queue.Queue):
-    """
-    Remove the processed IM data from the queue and end the processes
-
-    Parameters
-    ----------
-    processes : list[mp.Process]
-        The list of processes currently running
-    output_queue : queue.Queue
-        The queue to receive the output from the processes
-
-    Returns
-    -------
-    skipped_records : list
-        The list of skipped records
-    """
-    # Collect all results from the queue (If there is any)
-    skipped_records = []
-
-    # Check the queue for completed jobs
-    while not output_queue.empty():
-        # Non-blocking check
-        completed_info = output_queue.get(timeout=0.1)
-        skipped_record = completed_info[1]
-        if skipped_record is not None:
-            skipped_records.append(skipped_record)
-        # Get the record_id to remove the corresponding process
-        record_id_done = completed_info[0]
-
-        # Remove corresponding process
-        for p in processes:
-            if p.record_id == record_id_done:
-                p.terminate()
-                processes.remove(p)
-                break
-
-    return skipped_records
 
 
 def compute_ims_for_all_processed_records(
@@ -245,42 +187,17 @@ def compute_ims_for_all_processed_records(
         "FAS": im_calculation.validate_fas_frequency(fas_frequencies),
     }
 
-    # Create the Process and Queue for output results
-    processes = []
-    output_queue = mp.Queue()
-    skipped_records = []
-
-    for comp_000_file in comp_000_files:
-        # If we have reached the limit of n_procs, wait for some processes to finish
-        while len(processes) >= n_procs:
-            # Remove the processed IM data from the queue
-            finished_skipped_records = remove_processed_im_data(processes, output_queue)
-            skipped_records.extend(finished_skipped_records)
-            # Wait 1 second before checking again (prevents missing completed jobs)
-            time.sleep(1)
-
-        # Start a new process
-        process = mp.Process(
-            target=calculate_im_for_record,
-            args=(
-                comp_000_file,
-                output_path,
-                output_queue,
-                components,
-                ims,
-                im_options,
-                ko_matrices_path,
-            ),
-        )
-        process.record_id = comp_000_file.stem
-        processes.append(process)
-        process.start()
-
-    # Wait for all remaining processes to finish
-    while processes:
-        # Remove the processed IM data from the queue
-        finished_skipped_records = remove_processed_im_data(processes, output_queue)
-        skipped_records.extend(finished_skipped_records)
+    # Use custom_multiprocess to process the records
+    skipped_records = custom_multiprocess.custom_multiprocess(
+        calculate_im_for_record,
+        comp_000_files,
+        n_procs,
+        output_path,
+        components,
+        ims,
+        im_options,
+        ko_matrices_path,
+    )
 
     print("Finished calculating IMs")
 
