@@ -304,7 +304,6 @@ def fetch_sta_mag_line(
         skipped_records.append([f"{event_id}_{station.code}", "No Waveform Data"])
         return sta_mag_line, skipped_records
 
-    print(f"Waveform was not none for {station.code}")
     # Get the unique channels (Using first 2 keys) and locations
     unique_channels = set([(tr.stats.channel[:2], tr.stats.location) for tr in st])
 
@@ -317,8 +316,6 @@ def fetch_sta_mag_line(
         for mag in event_cat.station_magnitudes
         if mag.waveform_id.station_code == station.code
     ]
-
-    print(f"Split mseed into {len(mseeds)} for {station.code}")
 
     for mseed in mseeds:
         # Check the data is not all 0's
@@ -333,9 +330,7 @@ def fetch_sta_mag_line(
             continue
 
         # Calculate clip to determine if the record should be dropped
-        print(f"About to get clip for {station.code}")
         clip = filtering.get_clip_probability(pref_mag, r_hyp, st)
-        print(f"Got clip for {station.code}")
 
         # Check if the record should be dropped
         if clip > threshold:
@@ -353,9 +348,7 @@ def fetch_sta_mag_line(
         mseed_dir = file_structure.get_mseed_dir(main_dir, year, event_id)
 
         # Write the mseed file
-        print("About to write mseed for ", station.code)
         creation.write_mseed(mseed, event_id, station.code, mseed_dir)
-        print(f"Written mseed for {station.code}")
 
         for trace in mseed:
             chan = trace.stats.channel
