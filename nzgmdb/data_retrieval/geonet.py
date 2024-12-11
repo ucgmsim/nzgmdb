@@ -16,7 +16,6 @@ from obspy.core.inventory import Inventory, Network, Station
 from pandas.errors import EmptyDataError
 from scipy.interpolate import interp1d
 
-from nzgmdb.data_processing import filtering
 from nzgmdb.management import config as cfg
 from nzgmdb.management import custom_errors, custom_multiprocess, file_structure
 from nzgmdb.mseed_management import creation
@@ -323,20 +322,6 @@ def fetch_sta_mag_line(
                 [
                     f"{event_id}_{stats.station}_{stats.location}_{stats.channel}",
                     "All 0's",
-                ]
-            )
-            continue
-
-        # Calculate clip to determine if the record should be dropped
-        clip = filtering.get_clip_probability(pref_mag, r_hyp, st)
-
-        # Check if the record should be dropped
-        if clip > threshold:
-            stats = mseed[0].stats
-            skipped_records.append(
-                [
-                    f"{event_id}_{stats.station}_{stats.location}_{stats.channel}",
-                    "Clipped",
                 ]
             )
             continue

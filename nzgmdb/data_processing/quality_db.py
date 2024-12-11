@@ -5,6 +5,7 @@ import pandas as pd
 
 from nzgmdb.management import config as cfg
 from nzgmdb.management import file_structure
+from nzgmdb.data_processing import filtering
 from nzgmdb.management.file_structure import FlatfileNames
 
 
@@ -271,7 +272,9 @@ def filter_fmax(
         The skipped records
     """
     # Find fmax_min
-    catalog["fmax_min"] = catalog[["fmax_X", "fmax_Y", "fmax_Z"]].apply(min, axis=1)
+    catalog.loc[:, "fmax_min"] = catalog[["fmax_X", "fmax_Y", "fmax_Z"]].apply(
+        min, axis=1
+    )
 
     # Find records that have too low of a fmax_min value
     fmax_min_filter = catalog[catalog["fmax_min"] < fmax_min]
@@ -292,6 +295,9 @@ def filter_fmax(
 
     # Filter out the fmax_min records out of the catalog
     catalog = catalog[~catalog["record_id"].isin(fmax_min_filter["record_id"])]
+
+    # Remove the fmax_min column
+    catalog = catalog.drop(columns=["fmax_min"])
 
     return catalog, skipped_records
 
@@ -385,12 +391,33 @@ def filter_ground_level_locations(
     return catalog, skipped_records
 
 
-def filter_duplicate_channels(
-    catalog: pd.DataFrame, bypass_records: np.ndarray = None, include_z: bool = False
+def apply_clipNet_filter(
+    catalog: pd.DataFrame,
+    clipNet_min: float = None,
+    bypass_records: np.ndarray = None,
 ):
     """
+
+    """
+    # Calculate clip to determine if the record should be dropped
+    # Check if the record should be dropped
+    # if clip > threshold:
+    #     stats = mseed[0].stats
+    #     skipped_records.append(
+    #         [
+    #             f"{event_id}_{stats.station}_{stats.location}_{stats.channel}",
+    #             "Clipped",
+    #         ]
+    #     )
+    #     continue
+    pass
+
+
+def filter_duplicate_channels(catalog: pd.DataFrame, bypass_records: np.ndarray = None):
+    """
     Filter the catalog based on the duplicate channels.
-    Compares the score_X and score_Y values and keeps the record with the highest score.
+    Selects HN over BN except for the bypass records if the BN
+    for the duplicate evid / sta is selected.
 
     Parameters
     ----------
@@ -398,8 +425,6 @@ def filter_duplicate_channels(
         The catalog dataframe to filter
     bypass_records : np.ndarray, optional
         The records to bypass the quality checks
-    include_z : bool, optional
-        Whether to include the Z component, by default False
 
     Returns
     -------
@@ -408,23 +433,37 @@ def filter_duplicate_channels(
     pd.DataFrame
         The skipped records
     """
-    # Group the catalog by record_id and find the index of the minimum score_X and score_Y value or score_Z if include_z
-    duplicate_channels_filter = catalog.groupby("record_id").apply(
-        lambda x: x.loc[
-            x[
-                (
-                    ["score_X", "score_Y", "score_Z"]
-                    if include_z
-                    else ["score_X", "score_Y"]
-                )
-            ].idxmin()
-        ]
-    )
-    # TODO: Deal with the case where there is a score value of Nan due to bypass
-    # Is the bypass meant to select this channel over others?
+    # Find same evid_sta combos by combining evid and sta columns
+    catalog["evid_sta"] = catalog["evid"].astype(str) + "_" + catalog["sta"]
 
-    # Remove the bypass records if they exist
+    # Get the ones that are duplicated
+    dup_mask = catalog["evid_sta"].duplicated(keep=False)
+
+    # Select all the BN ones from the original dataframe to remove that are duplicates
+    duplicate_channels_filter = catalog.loc[dup_mask & (catalog["chan"] == "BN")]
+
+    # Remove the bypass records if they exist and add other duplicated channels to ignore
     if bypass_records is not None:
+        # Get the catalog records that are in the bypass_records
+        bypass_records_mask = catalog.loc[
+            catalog["record_id"].isin(bypass_records), "evid_sta"
+        ]
+        bypass_records_mask = catalog[catalog["evid_sta"].isin(bypass_records_mask)]
+
+        # remove the bypass records from the bypass_records_mask
+        add_to_duplicated = bypass_records_mask[
+            ~bypass_records_mask["record_id"].isin(bypass_records)
+        ]
+
+        # Add the non bypass records to the duplicate_channels_filter that are duplicates
+        duplicate_channels_filter = pd.concat(
+            [
+                duplicate_channels_filter,
+                catalog.loc[catalog["record_id"].isin(add_to_duplicated["record_id"])],
+            ]
+        )
+
+        # Remove the bypass records from the duplicate_channels_filter
         duplicate_channels_filter = duplicate_channels_filter[
             ~duplicate_channels_filter["record_id"].isin(bypass_records)
         ]
@@ -441,6 +480,12 @@ def filter_duplicate_channels(
     catalog = catalog[
         ~catalog["record_id"].isin(duplicate_channels_filter["record_id"])
     ]
+
+    # Ensure that there is no duplictes in the evid_sta column
+    assert len(catalog["evid_sta"].unique()) == len(catalog)
+
+    # Remove the evid_sta column
+    catalog = catalog.drop(columns=["evid_sta"])
 
     return catalog, skipped_records
 
