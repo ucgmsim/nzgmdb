@@ -318,13 +318,23 @@ def fetch_sta_mag_line(
     ]
 
     for mseed in mseeds:
-        # Check the data is not all 0's
-        if all([np.allclose(tr.data, 0) for tr in mseed]):
+        try:
+            # Check the data is not all 0's
+            if all([np.allclose(tr.data, 0) for tr in mseed]):
+                stats = mseed[0].stats
+                skipped_records.append(
+                    [
+                        f"{event_id}_{stats.station}_{stats.location}_{stats.channel}",
+                        "All 0's",
+                    ]
+                )
+                continue
+        except TypeError:
             stats = mseed[0].stats
             skipped_records.append(
                 [
                     f"{event_id}_{stats.station}_{stats.location}_{stats.channel}",
-                    "All 0's",
+                    "TypeError when checking for all 0's",
                 ]
             )
             continue
