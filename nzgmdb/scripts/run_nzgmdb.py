@@ -627,7 +627,7 @@ def run_full_nzgmdb(  # noqa: D103
             geonet_batch_size,
             only_event_ids,
             only_sites,
-            False,
+            real_time,
         )
 
     # Merge the tectonic domains

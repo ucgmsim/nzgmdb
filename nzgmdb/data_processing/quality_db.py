@@ -623,7 +623,8 @@ def create_quality_db(
     3) Check against GMC predictions fmax
     5) Check against GMC predictions fmin
     6) Ensure we use ground level locations
-    7) Select which channel to use for duplicate HN, BN for the same evid / sta
+    7) Filter out clipped records
+    8) Select which channel to use for duplicate HN, BN for the same evid / sta
 
     Parameters
     ----------
