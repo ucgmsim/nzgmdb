@@ -1,9 +1,5 @@
 import os
 
-# os.environ["LD_LIBRARY_PATH"] = (
-#     os.environ.get("LD_LIBRARY_PATH", "") + ":/home/joel/anaconda3/lib"
-# )
-print(f"LD_LIBRARY_PATH: {os.environ['LD_LIBRARY_PATH']}")
 import argparse
 import json
 from pathlib import Path
@@ -111,6 +107,15 @@ def process_mseed(mseed_file: Path):
             trace.stats.starttime = start_time
             trace.stats.sampling_rate = sampling_rate
             mseed.append(trace)
+
+    if len(mseed) != 3:
+        skipped_record = pd.DataFrame(
+            {
+                "record_id": [mseed_file.stem],
+                "reason": ["File did not contain 3 components"],
+            }
+        )
+        return None, skipped_record
 
     # Small Processing
     mseed.detrend("demean")
