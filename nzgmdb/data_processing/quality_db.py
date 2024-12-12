@@ -5,7 +5,6 @@ import pandas as pd
 
 from nzgmdb.management import config as cfg
 from nzgmdb.management import file_structure
-from nzgmdb.data_processing import filtering
 from nzgmdb.management.file_structure import FlatfileNames
 
 
@@ -393,24 +392,43 @@ def filter_ground_level_locations(
 
 def apply_clipNet_filter(
     catalog: pd.DataFrame,
-    clipNet_min: float = None,
+    clipped_records_ffp: Path,
     bypass_records: np.ndarray = None,
 ):
     """
+    Apply the ClipNet filter to the catalog
+    Removes the clipped records from the catalog and creates a skipped records dataframe
 
+    Parameters
+    ----------
+    catalog : pd.DataFrame
+        The catalog dataframe to filter
+    clipped_records_ffp : Path
+        The file path to the clipped records (created during the GeoNet processing)
+    bypass_records : np.ndarray, optional
+        The records to bypass the quality
     """
-    # Calculate clip to determine if the record should be dropped
-    # Check if the record should be dropped
-    # if clip > threshold:
-    #     stats = mseed[0].stats
-    #     skipped_records.append(
-    #         [
-    #             f"{event_id}_{stats.station}_{stats.location}_{stats.channel}",
-    #             "Clipped",
-    #         ]
-    #     )
-    #     continue
-    pass
+    # Read the clipped records
+    clipped_records = pd.read_csv(clipped_records_ffp)
+
+    # Remove the bypass records if they exist
+    if bypass_records is not None:
+        clipped_records = clipped_records[
+            ~clipped_records["record_id"].isin(bypass_records)
+        ]
+
+    # Create the skipped_records dataframe from clipped_records
+    skipped_records = pd.DataFrame(
+        {
+            "record_id": clipped_records["record_id"],
+            "reason": "Clipped by ClipNet",
+        }
+    )
+
+    # Filter out the clipped records out of the catalog
+    catalog = catalog[~catalog["record_id"].isin(clipped_records["record_id"])]
+
+    return catalog, skipped_records
 
 
 def filter_duplicate_channels(catalog: pd.DataFrame, bypass_records: np.ndarray = None):
@@ -492,11 +510,12 @@ def filter_duplicate_channels(catalog: pd.DataFrame, bypass_records: np.ndarray 
 
 def apply_all_filters(
     catalog: pd.DataFrame,
+    clipped_records_ffp: Path,
+    bypass_records: np.ndarray = None,
     score_min: float = None,
     multi_max: float = None,
     fmax_min: float = None,
     fmin_max: float = None,
-    bypass_records: np.ndarray = None,
 ):
     """
     Apply all the quality filters to the catalog
@@ -507,12 +526,17 @@ def apply_all_filters(
     4) Filter by fmax
     5) Filter by fmin
     6) Ensure we use ground level locations
-    7) Select which channel to use for duplicate HN, BN for the same evid / sta
+    7) Filter out clipped records
+    8) Select which channel to use for duplicate HN, BN for the same evid / sta
 
     Parameters
     ----------
     catalog : pd.DataFrame
         The catalog dataframe to filter
+    clipped_records_ffp : Path
+        The file path to the clipped records (created during the GeoNet processing)
+    bypass_records : np.ndarray, optional
+        The records to bypass the quality checks
     score_min: float, optional
         The minimum score value to filter on
     multi_max: float, optional
@@ -521,8 +545,6 @@ def apply_all_filters(
         The minimum fmax value to filter on
     fmin_max: float, optional
         The maximum fmin value to filter on
-    bypass_records : np.ndarray, optional
-        The records to bypass the quality checks
 
     Returns
     -------
@@ -561,6 +583,11 @@ def apply_all_filters(
     # Filter by ground level locations
     catalog, skipped_records_ground = filter_ground_level_locations(
         catalog, bypass_records
+    )
+
+    # Filter by clipped records
+    catalog, skipped_records_clipped = apply_clipNet_filter(
+        catalog, clipped_records_ffp, bypass_records
     )
 
     # Filter by duplicate channels
@@ -616,6 +643,11 @@ def create_quality_db(
         dtype={"evid": str},
     )
 
+    # Get the clipped records
+    clipped_records_ffp = (
+        flatfile_dir / file_structure.SkippedRecordFilenames.CLIPPED_RECORDS
+    )
+
     # Load the bypass records if they exist
     bypass_records = (
         pd.read_csv(bypass_records_ffp)["record_id"].to_numpy()
@@ -624,7 +656,9 @@ def create_quality_db(
     )
 
     # Apply all the filters
-    gm_df, skipped_records = apply_all_filters(gm_df, bypass_records)
+    gm_df, skipped_records = apply_all_filters(
+        gm_df, clipped_records_ffp, bypass_records
+    )
 
     # Filter the other flatfiles based on the records in the rotd50_flat dataframe
     filter_flatfiles_on_catalouge(flatfile_dir, output_dir, gm_df)
