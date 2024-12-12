@@ -137,7 +137,7 @@ def compute_snr_for_single_mseed(
             "reason": "Failed to find Ko matrix",
         }
         skipped_record = pd.DataFrame([skipped_record_dict])
-        end_snr_compute(output_queue, None, skipped_record)
+        return None, skipped_record
 
     if snr is None:
         skipped_record_dict = {

@@ -16,10 +16,10 @@ from obspy.core.inventory import Inventory, Network, Station
 from pandas.errors import EmptyDataError
 from scipy.interpolate import interp1d
 
+from nzgmdb.data_processing import filtering
 from nzgmdb.management import config as cfg
 from nzgmdb.management import custom_errors, custom_multiprocess, file_structure
 from nzgmdb.mseed_management import creation
-from nzgmdb.data_processing import filtering
 
 
 def get_max_magnitude(magnitudes: list[Magnitude], mag_type: str):
