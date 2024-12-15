@@ -161,10 +161,9 @@ def process_mseed(mseed_file: Path):
         return None, skipped_record
 
     try:
-        p_wave_ix, s_wave_ix, p_prob_series, s_prob_series = run_phase_net(
+        p_wave_ix, s_wave_ix = run_phase_net(
             np.stack([trace.data for trace in mseed], axis=1)[np.newaxis, ...],
             mseed[0].stats["delta"],
-            return_prob_series=True,
         )
     except ValueError:
         skipped_record = pd.DataFrame(
@@ -175,18 +174,12 @@ def process_mseed(mseed_file: Path):
         )
         return None, skipped_record
 
-    # Convert the probability series to JSON strings
-    p_prob_series_json = json.dumps(p_prob_series.tolist())
-    s_prob_series_json = json.dumps(s_prob_series.tolist())
-
     return (
         pd.DataFrame(
             {
                 "record_id": [mseed_file.stem],
                 "p_wave_ix": [p_wave_ix],
                 "s_wave_ix": [s_wave_ix],
-                "p_prob_series": [p_prob_series_json],
-                "s_prob_series": [s_prob_series_json],
             }
         ),
         None,
@@ -230,8 +223,6 @@ def run_phasenet(mseed_files_ffp: Path, output_dir: Path):
                 "record_id",
                 "p_wave_ix",
                 "s_wave_ix",
-                "p_prob_series",
-                "s_prob_series",
             ]
         )
     phase_arrival_table.to_csv(output_dir / "phase_arrival_table.csv", index=False)
