@@ -1,7 +1,6 @@
 import argparse
-import json
+import h5py
 from pathlib import Path
-from typing import Annotated
 
 import numpy as np
 import obspy
@@ -51,7 +50,7 @@ def run_phase_net(
     return p_wave_ix, s_wave_ix
 
 
-def process_mseed(mseed_file: Path):
+def process_mseed(mseed_file: Path, h5_ffp: Path):
     """
     Process an mseed file and return the phase arrival data.
 
@@ -59,6 +58,8 @@ def process_mseed(mseed_file: Path):
     ----------
     mseed_file : Path
         Path to the mseed file.
+    h5_ffp : Path
+        Path to the HDF5 file to save the probability series.
 
     Returns
     -------
@@ -112,15 +113,36 @@ def process_mseed(mseed_file: Path):
         )
         return None, skipped_record
 
-    p_wave_ix, s_wave_ix, p_prob_series, s_prob_series = run_phase_net(
-        np.stack([trace.data for trace in mseed], axis=1)[np.newaxis, ...],
-        mseed[0].stats["delta"],
-        return_prob_series=True,
-    )
+    try:
+        p_wave_ix, s_wave_ix, p_prob_series, s_prob_series = run_phase_net(
+            np.stack([trace.data for trace in mseed], axis=1)[np.newaxis, ...],
+            mseed[0].stats["delta"],
+            return_prob_series=True,
+        )
+    except ValueError:
+        skipped_record = pd.DataFrame(
+            {
+                "record_id": [mseed_file.stem],
+                "reason": ["Zero size array after re-sample"],
+            }
+        )
+        return None, skipped_record
 
-    # Convert the probability series to JSON strings
-    p_prob_series_json = json.dumps(p_prob_series.tolist())
-    s_prob_series_json = json.dumps(s_prob_series.tolist())
+    # Save the prob_series
+    with h5py.File(h5_ffp, "w") as f:
+        group = f.create_group(mseed_file.stem)
+        group.create_dataset(
+            "p_prob_series",
+            data=p_prob_series.astype(np.float32),
+            dtype="float32",
+            compression="lzf",
+        )
+        group.create_dataset(
+            "s_prob_series",
+            data=s_prob_series.astype(np.float32),
+            dtype="float32",
+            compression="lzf",
+        )
 
     return (
         pd.DataFrame(
@@ -128,8 +150,6 @@ def process_mseed(mseed_file: Path):
                 "record_id": [mseed_file.stem],
                 "p_wave_ix": [p_wave_ix],
                 "s_wave_ix": [s_wave_ix],
-                "p_prob_series": [p_prob_series_json],
-                "s_prob_series": [s_prob_series_json],
             }
         ),
         None,
@@ -153,12 +173,13 @@ def run_phasenet(mseed_files_ffp: Path, output_dir: Path):
 
     skipped_records = []
     phase_arrival_table = []
+    h5_ffp = output_dir / "prob_series.h5"
 
     # Process each mseed file
     for mseed_file in mseed_files:
         mseed_file = mseed_file.strip()
         mseed_file = Path(mseed_file)
-        phase_arrival, skipped_record = process_mseed(mseed_file)
+        phase_arrival, skipped_record = process_mseed(mseed_file, h5_ffp)
         if phase_arrival is not None:
             phase_arrival_table.append(phase_arrival)
         if skipped_record is not None:
@@ -173,8 +194,6 @@ def run_phasenet(mseed_files_ffp: Path, output_dir: Path):
                 "record_id",
                 "p_wave_ix",
                 "s_wave_ix",
-                "p_prob_series",
-                "s_prob_series",
             ]
         )
     phase_arrival_table.to_csv(output_dir / "phase_arrival_table.csv", index=False)
