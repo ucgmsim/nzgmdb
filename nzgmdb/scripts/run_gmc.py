@@ -75,7 +75,7 @@ def process_batch(
             )
         else:
             # Activate gmc environment and extract features for the subfolder
-            features_command = f"python {gmc_scripts_path}/extract_features.py {gmc_dir} {waveform_dir} mseed --ko_matrices_dir {ko_matrices_dir} --record_list_ffp {batch_txt} --phase_arrival_table {phase_arrival_table_ffp}"
+            features_command = f"python {gmc_scripts_path}/extract_features.py {gmc_dir} {waveform_dir} mseed --ko_matrices_dir {ko_matrices_dir} --record_list_ffp {batch_txt}"
             commands.run_command(
                 features_command, conda_sh, gmc_activate, log_file_path_features
             )
