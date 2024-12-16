@@ -98,8 +98,7 @@ def assess_snr_and_get_fmax(
                      if not None, contains record_id, reason.
     """
     config = cfg.Config()
-
-    record_id = str(filename.stem)
+    record_id = filename.stem
 
     # read the mseed file to get the delta
     mseed = obspy.read(str(filename))
