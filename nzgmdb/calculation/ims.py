@@ -1,14 +1,16 @@
+import functools
+import multiprocessing as mp
 from pathlib import Path
 
 import numpy as np
 import pandas as pd
+
 from IM_calculation.IM import im_calculation
 from IM_calculation.IM.read_waveform import Waveform
-from qcore.constants import Components
-
 from nzgmdb.management import config as cfg
 from nzgmdb.management import file_structure
 from nzgmdb.mseed_management import reading
+from qcore.constants import Components
 
 
 def compute_im_for_waveform(
