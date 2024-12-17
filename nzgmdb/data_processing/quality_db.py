@@ -46,7 +46,7 @@ def filter_flatfiles_on_catalouge(
 
     for file in file_to_filter:
         # Load the new file and filter based on record_id
-        df = pd.read_csv(flatfile_dir / file)
+        df = pd.read_csv(flatfile_dir / file, dtype={"evid": str})
         if file == FlatfileNames.EARTHQUAKE_SOURCE_TABLE:
             # filter by evid
             df_filtered = df[df["evid"].isin(rotd50_flat["evid"])]
@@ -75,9 +75,7 @@ def filter_flatfiles_on_catalouge(
             # Assert the same length of unique values
             assert len(df["evid_sta"].unique()) == len(df)
             # Create the rodtd50 evid_sta
-            rotd50_flat["evid_sta"] = (
-                rotd50_flat["evid"].astype(str) + "_" + rotd50_flat["sta"].astype(str)
-            )
+            rotd50_flat["evid_sta"] = rotd50_flat["evid"] + "_" + rotd50_flat["sta"]
             df_filtered = df[df["evid_sta"].isin(rotd50_flat["evid_sta"])]
             # remove the evid_sta column
             df_filtered = df_filtered.drop(columns=["evid_sta"])
