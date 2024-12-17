@@ -129,7 +129,7 @@ def process_mseed(mseed_file: Path, h5_ffp: Path):
         return None, skipped_record
 
     # Save the prob_series
-    with h5py.File(h5_ffp, "w") as f:
+    with h5py.File(h5_ffp, "a") as f:
         group = f.create_group(mseed_file.stem)
         group.create_dataset(
             "p_prob_series",
