@@ -105,7 +105,7 @@ def calculate_im_for_record(
 
     try:
         waveform = reading.create_waveform_from_processed(
-            ffp_000, ffp_090, ffp_ver, delta=mseed[0].stats.delta
+            ffp_090, ffp_000, ffp_ver, delta=mseed[0].stats.delta
         )
     except FileNotFoundError:
         skipped_record_dict = {

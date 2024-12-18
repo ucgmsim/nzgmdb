@@ -220,6 +220,9 @@ def high_and_low_cut_processing(
     ComponentSelectionError
         If no N, E, X, or Y components are found in the mseed
     """
+    # Check that the traces are the same length
+    if not all(len(tr) == len(mseed[0]) for tr in mseed):
+        raise custom_errors.InvalidTraceLengthError("Traces are not the same length")
 
     # Load config variables
     config = cfg.Config()

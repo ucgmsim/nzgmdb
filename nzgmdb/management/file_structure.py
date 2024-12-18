@@ -54,12 +54,14 @@ class SkippedRecordFilenames(StrEnum):
     """
 
     GEONET_SKIPPED_RECORDS = "geonet_skipped_records.csv"
+    CLIPPED_RECORDS = "clipped_records.csv"
     IM_CALC_SKIPPED_RECORDS = "im_calc_skipped_records.csv"
     IM_MERGE_SKIPPED_RECORDS = "im_merge_skipped_records.csv"
     MISSING_SITES = "missing_sites.csv"
     PROCESSING_SKIPPED_RECORDS = "processing_skipped_records.csv"
     SNR_SKIPPED_RECORDS = "snr_skipped_records.csv"
     FMAX_SKIPPED_RECORDS = "fmax_skipped_records.csv"
+    QUALITY_SKIPPED_RECORDS = "quality_skipped_records.csv"
 
 
 def get_mseed_dir(main_dir: Path, year: int, event_id: str):

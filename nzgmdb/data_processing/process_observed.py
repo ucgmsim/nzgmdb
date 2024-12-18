@@ -7,7 +7,6 @@ import pandas as pd
 
 import qcore.timeseries as ts
 from nzgmdb.data_processing import waveform_manipulation
-from nzgmdb.management import config as cfg
 from nzgmdb.management import custom_errors, file_structure
 
 
@@ -37,15 +36,6 @@ def process_single_mseed(mseed_file: Path, gmc_df: pd.DataFrame, fmax_df: pd.Dat
     # Check if the mseed file is in the GMC predictions
     mseed_stem = mseed_file.stem
     gmc_rows = gmc_df[gmc_df["record"] == mseed_stem]
-
-    # Check if there is any row, if not skip
-    if gmc_rows.empty:
-        skipped_record_dict = {
-            "record_id": mseed_stem,
-            "reason": "No record found in GMC predictions",
-        }
-        skipped_record = pd.DataFrame([skipped_record_dict])
-        return skipped_record
 
     # Read mseed information
     mseed = obspy.read(mseed_file)
@@ -89,7 +79,7 @@ def process_single_mseed(mseed_file: Path, gmc_df: pd.DataFrame, fmax_df: pd.Dat
         return skipped_record
 
     # Get the GMC fmin and fmax values
-    fmin = gmc_rows["fmin_mean"].max()
+    fmin = None if gmc_rows.empty else gmc_rows["fmin_mean"].max()
     search_name = "_".join(mseed_stem.split("_")[:-1])
     fmax_rows = fmax_df[fmax_df["record_id"] == search_name]
     fmax = (
@@ -98,40 +88,6 @@ def process_single_mseed(mseed_file: Path, gmc_df: pd.DataFrame, fmax_df: pd.Dat
         else min(fmax_rows.loc[:, ["fmax_000", "fmax_090", "fmax_ver"]].values[0])
     )
 
-    config = cfg.Config()
-    fmax_min = config.get_value("fmax_min")
-    score_min = config.get_value("score_min")
-    fmin_max = config.get_value("fmin_max")
-    multi_max = config.get_value("multi_max")
-
-    # Filter out records that have too low of a fmax value
-    if fmax is not None and fmax <= fmax_min:
-        skipped_record_dict = {
-            "record_id": mseed_stem,
-            "reason": f"Fmax value is less than {fmax_min}",
-        }
-        return pd.DataFrame([skipped_record_dict])
-
-    # Filter by score, fmin and multi mean
-    if gmc_rows["score_mean"].min() < score_min:
-        skipped_record_dict = {
-            "record_id": mseed_stem,
-            "reason": f"Score mean is less than {score_min}",
-        }
-        return pd.DataFrame([skipped_record_dict])
-    if fmin > fmin_max:
-        skipped_record_dict = {
-            "record_id": mseed_stem,
-            "reason": f"Fmin mean is greater than {fmin_max}",
-        }
-        return pd.DataFrame([skipped_record_dict])
-    if gmc_rows["multi_mean"].max() > multi_max:
-        skipped_record_dict = {
-            "record_id": mseed_stem,
-            "reason": f"Multi mean is greater than {multi_max}",
-        }
-        return pd.DataFrame([skipped_record_dict])
-
     # Perform high and lowcut processing
     try:
         (
@@ -139,6 +95,13 @@ def process_single_mseed(mseed_file: Path, gmc_df: pd.DataFrame, fmax_df: pd.Dat
             acc_bb_090,
             acc_bb_ver,
         ) = waveform_manipulation.high_and_low_cut_processing(mseed, dt, fmin, fmax)
+    except custom_errors.InvalidTraceLengthError:
+        skipped_record_dict = {
+            "record_id": mseed_stem,
+            "reason": "Invalid trace length for the mseed file",
+        }
+        skipped_record = pd.DataFrame([skipped_record_dict])
+        return skipped_record
     except custom_errors.LowcutHighcutError:
         skipped_record_dict = {
             "record_id": mseed_stem,

@@ -10,7 +10,7 @@ import pandas as pd
 import typer
 
 from nzgmdb.calculation import distances, fmax, ims, snr
-from nzgmdb.data_processing import merge_flatfiles, process_observed
+from nzgmdb.data_processing import merge_flatfiles, process_observed, quality_db
 from nzgmdb.data_retrieval import geonet, sites, tect_domain
 from nzgmdb.management import file_structure
 from nzgmdb.phase_arrival import gen_phase_arrival_table
@@ -238,6 +238,13 @@ def calc_fmax(  # noqa: D103
             file_okay=False,
         ),
     ] = None,
+    waveform_dir: Annotated[
+        Path,
+        typer.Option(
+            help="Path to the directory containing the mseed files to process",
+            file_okay=False,
+        ),
+    ] = None,
     snr_fas_output_dir: Annotated[
         Path,
         typer.Option(
@@ -249,10 +256,12 @@ def calc_fmax(  # noqa: D103
 ):
     if meta_output_dir is None:
         meta_output_dir = file_structure.get_flatfile_dir(main_dir)
+    if waveform_dir is None:
+        waveform_dir = file_structure.get_waveform_dir(main_dir)
     if snr_fas_output_dir is None:
         snr_fas_output_dir = file_structure.get_snr_fas_dir(main_dir)
 
-    fmax.run_full_fmax_calc(meta_output_dir, snr_fas_output_dir, n_procs)
+    fmax.run_full_fmax_calc(meta_output_dir, waveform_dir, snr_fas_output_dir, n_procs)
 
 
 @app.command(
@@ -434,6 +443,31 @@ def merge_flat_files(  # noqa: D103
 
 
 @app.command(
+    help="Create a quality database for the NZGMDB results by running quality checks"
+)
+def create_quality_db(  # noqa: D103
+    main_dir: Annotated[
+        Path,
+        typer.Argument(
+            help="The main directory of the NZGMDB results (Highest level directory)",
+            exists=True,
+            file_okay=False,
+        ),
+    ],
+    bypass_records_ffp: Annotated[
+        Path,
+        typer.Option(
+            help="The full file path to the bypass records file",
+            readable=True,
+            exists=True,
+            dir_okay=False,
+        ),
+    ] = None,
+):
+    quality_db.create_quality_db(main_dir, bypass_records_ffp)
+
+
+@app.command(
     help="Run the Entire NZGMDB pipeline."
     "- Fetch Geonet data "
     "- Merge tectonic domains "
@@ -557,6 +591,12 @@ def run_full_nzgmdb(  # noqa: D103
             help="If True, the function will upload the results to Dropbox",
         ),
     ] = False,
+    create_quality_db: Annotated[
+        bool,
+        typer.Option(
+            help="If True, the function will create a quality database",
+        ),
+    ] = False,
 ):
     main_dir.mkdir(parents=True, exist_ok=True)
 
@@ -645,7 +685,8 @@ def run_full_nzgmdb(  # noqa: D103
     # Calculate Fmax
     if not (checkpoint and (flatfile_dir / file_structure.FlatfileNames.FMAX).exists()):
         print("Calculating Fmax")
-        calc_fmax(main_dir, flatfile_dir, snr_fas_output_dir, n_procs)
+        waveform_dir = file_structure.get_waveform_dir(main_dir)
+        calc_fmax(main_dir, flatfile_dir, waveform_dir, snr_fas_output_dir, n_procs)
 
     # Run GMC
     if real_time:
@@ -737,6 +778,10 @@ def run_full_nzgmdb(  # noqa: D103
     ):
         print("Merging flat files")
         merge_flat_files(main_dir)
+
+    if create_quality_db:
+        print("Creating quality database")
+        quality_db.create_quality_db(main_dir)
 
     # Upload to dropbox
     if upload:
