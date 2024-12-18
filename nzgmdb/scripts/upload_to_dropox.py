@@ -1,5 +1,4 @@
 import multiprocessing as mp
-import os
 import subprocess
 import zipfile
 from pathlib import Path
@@ -11,28 +10,6 @@ from nzgmdb.management import file_structure
 app = typer.Typer()
 
 DROPBOX_PATH = "dropbox:/QuakeCoRE/Public/NZGMDB"
-
-
-def zip_folder(folder_path: Path, output_dir: Path, zip_name: str):
-    """
-    Zips the contents of a folder.
-
-    Parameters
-    ----------
-    folder_path : Path
-        The folder to zip
-    output_dir : Path
-        Directory to save the zip file
-    zip_name : str
-        Name of the zip file
-    """
-    zip_filename = output_dir / f"{zip_name}.zip"
-    with zipfile.ZipFile(zip_filename, "w", zipfile.ZIP_DEFLATED) as zipf:
-        for root, _, files in os.walk(folder_path):
-            for file in files:
-                file_path = Path(root) / file
-                zipf.write(file_path, file_path.relative_to(folder_path.parent))
-    return zip_filename  # Return zip file path for later use
 
 
 def zip_files(file_list: list, output_dir: Path, zip_name: str):
@@ -68,14 +45,14 @@ def upload_zip_to_dropbox(local_file: Path, dropbox_path: str):
         The path on Dropbox to upload the file to
     """
     print(f"Uploading {local_file} to {dropbox_path}")
-    p = subprocess.Popen(
-        f"rclone --progress copy {local_file} {dropbox_path}",
-        shell=True,
-        stdout=subprocess.PIPE,
-        stderr=subprocess.PIPE,
-    )
-    _, _ = p.communicate()
-    if p.returncode != 0:
+    try:
+        subprocess.check_call(
+            f"rclone --progress copy {local_file} {dropbox_path}",
+            shell=True,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+        )
+    except subprocess.CalledProcessError:
         return local_file
     else:
         # Check file size is correct and uploaded successfully
@@ -128,8 +105,11 @@ def main(
     year_folders = [f for f in waveforms_dir.iterdir() if f.is_dir()]
     with mp.Pool(n_procs) as pool:
         waveforms_zip_files = pool.starmap(
-            zip_folder,
-            [(folder, output_dir, folder.stem) for folder in year_folders],
+            zip_files,
+            [
+                (list(folder.rglob("*.*")), waveform_output_dir, folder.stem)
+                for folder in year_folders
+            ],
         )
     # Also zip each event folder
     event_zips = {}
@@ -139,8 +119,11 @@ def main(
         event_folders = [f for f in year_folder.iterdir() if f.is_dir()]
         with mp.Pool(n_procs) as pool:
             year_event_zips = pool.starmap(
-                zip_folder,
-                [(folder, year_output_dir, folder.stem) for folder in event_folders],
+                zip_files,
+                [
+                    (list(folder.rglob("*.*")), year_output_dir, folder.stem)
+                    for folder in event_folders
+                ],
             )
         event_zips[year_folder.name] = year_event_zips
 
@@ -159,10 +142,21 @@ def main(
     pre_flatfiles_zip = zip_files(pre_flatfiles, output_dir, f"pre_flatfiles_{version}")
 
     # 5) Zip snr_fas_{ver}.zip
-    snr_fas_zip = zip_folder(snr_fas_dir, output_dir, f"snr_fas_{version}")
+    snr_files = list(snr_fas_dir.rglob("*.csv"))
+    snr_fas_zip = zip_files(snr_files, output_dir, f"snr_fas_{version}")
+
+    dropbox_version_dir = f"{DROPBOX_PATH}/{version}"
+
+    # Check if there is a quality_db directory and zip it
+    quality_db_dir = input_dir / "quality_db"
+    if quality_db_dir.exists():
+        quality_db_files = list(quality_db_dir.rglob("*.csv"))
+        quality_db_zip = zip_files(quality_db_files, output_dir, f"quality_flatfiles_{version}")
+
+        # Upload quality_db zip to Dropbox
+        upload_zip_to_dropbox(quality_db_zip, dropbox_version_dir)
 
     # Upload everything to Dropbox
-    dropbox_version_dir = f"{DROPBOX_PATH}/{version}"
     dropbox_waveforms_path = f"{dropbox_version_dir}/waveforms"
     # Upload waveform year zips
     with mp.Pool(n_procs) as pool:
@@ -201,10 +195,35 @@ def main(
         print("All files uploaded successfully.")
 
 
+def determine_dropbox_path(dropbox_version_dir: str, local_file: Path):
+    """
+    Helper function to determine the dropbox path for a local failed file.
+
+    Parameters
+    ----------
+    dropbox_version_dir : str
+        The version directory on Dropbox
+    local_file : Path
+        The local file that failed to upload
+
+    Returns
+    -------
+    str
+        The path on Dropbox to upload the file to
+    """
+    parts = local_file.parts
+    if "zips" in parts:
+        zips_index = parts.index("zips")
+        relative_path = "/".join(parts[zips_index + 1 :])
+        return f"{dropbox_version_dir}/{relative_path}"
+    else:
+        return dropbox_version_dir
+
+
 @app.command()
 def upload_to_dropbox(  # noqa: D103
     input_directory: Path = typer.Argument(
-        ..., help="Directory containing the results"
+        help="Directory containing the results", file_okay=False, exists=True
     ),
     version: str = typer.Option(
         None, help="Version of the results, defaults to the directory name"
@@ -221,7 +240,7 @@ def upload_to_dropbox(  # noqa: D103
 @app.command()
 def upload_failed_files(  # noqa: D103
     failed_files_file: Path = typer.Argument(
-        ..., help="File containing the failed files"
+        help="File containing the failed files", dir_okay=False, exists=True
     ),
     version: str = typer.Option(
         None, help="Version of the results, defaults to the directory name"
@@ -239,7 +258,10 @@ def upload_failed_files(  # noqa: D103
     with mp.Pool(n_procs) as pool:
         failed_files = pool.starmap(
             upload_zip_to_dropbox,
-            [(Path(f), dropbox_version_dir) for f in failed_files],
+            [
+                (Path(f), determine_dropbox_path(dropbox_version_dir, Path(f)))
+                for f in failed_files
+            ],
         )
 
     failed_files = [f for f in failed_files if f is not None]

@@ -46,7 +46,7 @@ def filter_flatfiles_on_catalouge(
 
     for file in file_to_filter:
         # Load the new file and filter based on record_id
-        df = pd.read_csv(flatfile_dir / file)
+        df = pd.read_csv(flatfile_dir / file, dtype={"evid": str})
         if file == FlatfileNames.EARTHQUAKE_SOURCE_TABLE:
             # filter by evid
             df_filtered = df[df["evid"].isin(rotd50_flat["evid"])]
@@ -75,9 +75,7 @@ def filter_flatfiles_on_catalouge(
             # Assert the same length of unique values
             assert len(df["evid_sta"].unique()) == len(df)
             # Create the rodtd50 evid_sta
-            rotd50_flat["evid_sta"] = (
-                rotd50_flat["evid"].astype(str) + "_" + rotd50_flat["sta"].astype(str)
-            )
+            rotd50_flat["evid_sta"] = rotd50_flat["evid"] + "_" + rotd50_flat["sta"]
             df_filtered = df[df["evid_sta"].isin(rotd50_flat["evid_sta"])]
             # remove the evid_sta column
             df_filtered = df_filtered.drop(columns=["evid_sta"])
@@ -271,7 +269,9 @@ def filter_fmax(
         The skipped records
     """
     # Find fmax_min
-    catalog["fmax_min"] = catalog[["fmax_X", "fmax_Y", "fmax_Z"]].apply(min, axis=1)
+    catalog.loc[:, "fmax_min"] = catalog[["fmax_X", "fmax_Y", "fmax_Z"]].apply(
+        min, axis=1
+    )
 
     # Find records that have too low of a fmax_min value
     fmax_min_filter = catalog[catalog["fmax_min"] < fmax_min]
@@ -292,6 +292,9 @@ def filter_fmax(
 
     # Filter out the fmax_min records out of the catalog
     catalog = catalog[~catalog["record_id"].isin(fmax_min_filter["record_id"])]
+
+    # Remove the fmax_min column
+    catalog = catalog.drop(columns=["fmax_min"])
 
     return catalog, skipped_records
 
@@ -385,12 +388,52 @@ def filter_ground_level_locations(
     return catalog, skipped_records
 
 
-def filter_duplicate_channels(
-    catalog: pd.DataFrame, bypass_records: np.ndarray = None, include_z: bool = False
+def apply_clipNet_filter(
+    catalog: pd.DataFrame,
+    clipped_records_ffp: Path,
+    bypass_records: np.ndarray = None,
 ):
     """
+    Apply the ClipNet filter to the catalog
+    Removes the clipped records from the catalog and creates a skipped records dataframe
+
+    Parameters
+    ----------
+    catalog : pd.DataFrame
+        The catalog dataframe to filter
+    clipped_records_ffp : Path
+        The file path to the clipped records (created during the GeoNet processing)
+    bypass_records : np.ndarray, optional
+        The records to bypass the quality
+    """
+    # Read the clipped records
+    clipped_records = pd.read_csv(clipped_records_ffp)
+
+    # Remove the bypass records if they exist
+    if bypass_records is not None:
+        clipped_records = clipped_records[
+            ~clipped_records["record_id"].isin(bypass_records)
+        ]
+
+    # Create the skipped_records dataframe from clipped_records
+    skipped_records = pd.DataFrame(
+        {
+            "record_id": clipped_records["record_id"],
+            "reason": "Clipped by ClipNet",
+        }
+    )
+
+    # Filter out the clipped records out of the catalog
+    catalog = catalog[~catalog["record_id"].isin(clipped_records["record_id"])]
+
+    return catalog, skipped_records
+
+
+def filter_duplicate_channels(catalog: pd.DataFrame, bypass_records: np.ndarray = None):
+    """
     Filter the catalog based on the duplicate channels.
-    Compares the score_X and score_Y values and keeps the record with the highest score.
+    Selects HN over BN except for the bypass records if the BN
+    for the duplicate evid / sta is selected.
 
     Parameters
     ----------
@@ -398,8 +441,6 @@ def filter_duplicate_channels(
         The catalog dataframe to filter
     bypass_records : np.ndarray, optional
         The records to bypass the quality checks
-    include_z : bool, optional
-        Whether to include the Z component, by default False
 
     Returns
     -------
@@ -408,23 +449,37 @@ def filter_duplicate_channels(
     pd.DataFrame
         The skipped records
     """
-    # Group the catalog by record_id and find the index of the minimum score_X and score_Y value or score_Z if include_z
-    duplicate_channels_filter = catalog.groupby("record_id").apply(
-        lambda x: x.loc[
-            x[
-                (
-                    ["score_X", "score_Y", "score_Z"]
-                    if include_z
-                    else ["score_X", "score_Y"]
-                )
-            ].idxmin()
-        ]
-    )
-    # TODO: Deal with the case where there is a score value of Nan due to bypass
-    # Is the bypass meant to select this channel over others?
+    # Find same evid_sta combos by combining evid and sta columns
+    catalog["evid_sta"] = catalog["evid"].astype(str) + "_" + catalog["sta"]
 
-    # Remove the bypass records if they exist
+    # Get the ones that are duplicated
+    dup_mask = catalog["evid_sta"].duplicated(keep=False)
+
+    # Select all the BN ones from the original dataframe to remove that are duplicates
+    duplicate_channels_filter = catalog.loc[dup_mask & (catalog["chan"] == "BN")]
+
+    # Remove the bypass records if they exist and add other duplicated channels to ignore
     if bypass_records is not None:
+        # Get the catalog records that are in the bypass_records
+        bypass_records_mask = catalog.loc[
+            catalog["record_id"].isin(bypass_records), "evid_sta"
+        ]
+        bypass_records_mask = catalog[catalog["evid_sta"].isin(bypass_records_mask)]
+
+        # remove the bypass records from the bypass_records_mask
+        add_to_duplicated = bypass_records_mask[
+            ~bypass_records_mask["record_id"].isin(bypass_records)
+        ]
+
+        # Add the non bypass records to the duplicate_channels_filter that are duplicates
+        duplicate_channels_filter = pd.concat(
+            [
+                duplicate_channels_filter,
+                catalog.loc[catalog["record_id"].isin(add_to_duplicated["record_id"])],
+            ]
+        )
+
+        # Remove the bypass records from the duplicate_channels_filter
         duplicate_channels_filter = duplicate_channels_filter[
             ~duplicate_channels_filter["record_id"].isin(bypass_records)
         ]
@@ -442,16 +497,23 @@ def filter_duplicate_channels(
         ~catalog["record_id"].isin(duplicate_channels_filter["record_id"])
     ]
 
+    # Ensure that there is no duplictes in the evid_sta column
+    assert len(catalog["evid_sta"].unique()) == len(catalog)
+
+    # Remove the evid_sta column
+    catalog = catalog.drop(columns=["evid_sta"])
+
     return catalog, skipped_records
 
 
 def apply_all_filters(
     catalog: pd.DataFrame,
+    clipped_records_ffp: Path,
+    bypass_records: np.ndarray = None,
     score_min: float = None,
     multi_max: float = None,
     fmax_min: float = None,
     fmin_max: float = None,
-    bypass_records: np.ndarray = None,
 ):
     """
     Apply all the quality filters to the catalog
@@ -462,12 +524,17 @@ def apply_all_filters(
     4) Filter by fmax
     5) Filter by fmin
     6) Ensure we use ground level locations
-    7) Select which channel to use for duplicate HN, BN for the same evid / sta
+    7) Filter out clipped records
+    8) Select which channel to use for duplicate HN, BN for the same evid / sta
 
     Parameters
     ----------
     catalog : pd.DataFrame
         The catalog dataframe to filter
+    clipped_records_ffp : Path
+        The file path to the clipped records (created during the GeoNet processing)
+    bypass_records : np.ndarray, optional
+        The records to bypass the quality checks
     score_min: float, optional
         The minimum score value to filter on
     multi_max: float, optional
@@ -476,8 +543,6 @@ def apply_all_filters(
         The minimum fmax value to filter on
     fmin_max: float, optional
         The maximum fmin value to filter on
-    bypass_records : np.ndarray, optional
-        The records to bypass the quality checks
 
     Returns
     -------
@@ -518,6 +583,11 @@ def apply_all_filters(
         catalog, bypass_records
     )
 
+    # Filter by clipped records
+    catalog, skipped_records_clipped = apply_clipNet_filter(
+        catalog, clipped_records_ffp, bypass_records
+    )
+
     # Filter by duplicate channels
     catalog, skipped_records_duplicate = filter_duplicate_channels(
         catalog, bypass_records
@@ -551,7 +621,8 @@ def create_quality_db(
     3) Check against GMC predictions fmax
     5) Check against GMC predictions fmin
     6) Ensure we use ground level locations
-    7) Select which channel to use for duplicate HN, BN for the same evid / sta
+    7) Filter out clipped records
+    8) Select which channel to use for duplicate HN, BN for the same evid / sta
 
     Parameters
     ----------
@@ -571,6 +642,11 @@ def create_quality_db(
         dtype={"evid": str},
     )
 
+    # Get the clipped records
+    clipped_records_ffp = (
+        flatfile_dir / file_structure.SkippedRecordFilenames.CLIPPED_RECORDS
+    )
+
     # Load the bypass records if they exist
     bypass_records = (
         pd.read_csv(bypass_records_ffp)["record_id"].to_numpy()
@@ -579,7 +655,9 @@ def create_quality_db(
     )
 
     # Apply all the filters
-    gm_df, skipped_records = apply_all_filters(gm_df, bypass_records)
+    gm_df, skipped_records = apply_all_filters(
+        gm_df, clipped_records_ffp, bypass_records
+    )
 
     # Filter the other flatfiles based on the records in the rotd50_flat dataframe
     filter_flatfiles_on_catalouge(flatfile_dir, output_dir, gm_df)
