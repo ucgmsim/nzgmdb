@@ -3,7 +3,6 @@ Calculates the maximum useable frequency (fmax).
 """
 
 import functools
-import multiprocessing
 from pathlib import Path
 from typing import Optional
 
@@ -12,7 +11,7 @@ import obspy
 import pandas as pd
 
 from nzgmdb.management import config as cfg
-from nzgmdb.management import file_structure, custom_multiprocess
+from nzgmdb.management import custom_multiprocess, file_structure
 
 
 def run_full_fmax_calc(

@@ -6,7 +6,6 @@ from datetime import datetime
 from pathlib import Path
 from typing import Annotated
 
-import pandas as pd
 import typer
 
 from nzgmdb.calculation import distances, fmax, ims, snr

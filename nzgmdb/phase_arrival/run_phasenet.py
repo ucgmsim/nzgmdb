@@ -1,7 +1,7 @@
 import argparse
-import h5py
 from pathlib import Path
 
+import h5py
 import numpy as np
 import obspy
 import pandas as pd
@@ -15,7 +15,20 @@ def run_phase_net(
     t: np.ndarray = None,
     return_prob_series: bool = False,
 ):
-    """Uses PhaseNet to get the p- & s-wave pick"""
+    """
+    Uses PhaseNet to get the p- & s-wave pick
+
+    Parameters
+    ----------
+    input_data : np.ndarray
+        The input data to run PhaseNet on. Shape (1, n_samples, 3)
+    dt : float
+        The sampling rate of the input data
+    t : np.ndarray, optional
+        The time vector of the input data, by default None
+    return_prob_series : bool, optional
+        Whether to return the probability series, by default False
+    """
     import phase_net as ph
 
     # Only supports a single record
