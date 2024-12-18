@@ -7,7 +7,7 @@ import numpy as np
 import pandas as pd
 import typer
 
-from nzgmdb.management import file_structure, commands
+from nzgmdb.management import commands, file_structure
 
 app = typer.Typer()
 
