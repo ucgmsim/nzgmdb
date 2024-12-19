@@ -29,7 +29,7 @@ def run_phase_net(
     return_prob_series : bool, optional
         Whether to return the probability series, by default False
     """
-    import phase_net as ph  # noqa: DEP001
+    import phase_net as ph
 
     # Only supports a single record
     assert input_data.shape[0] == 1
