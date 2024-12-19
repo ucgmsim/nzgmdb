@@ -18,4 +18,4 @@ jobs:
       # Run the install
       - run: pip install -r requirements.txt
       # Run deptry to check that all dependencies are present.
-      - run: deptry . --per-rule-ignores "DEP001=phase_net" "DEP002=openquake-engine"
+      - run: deptry . --per-rule-ignores "DEP001=phase_net,DEP002=openquake-engine"
