@@ -45,7 +45,7 @@ def run_phase_net(
         input_resampled[0, :, 1] = np.interp(t_new, t, input_data[0, :, 1])
         input_resampled[0, :, 2] = np.interp(t_new, t, input_data[0, :, 2])
 
-        assert np.all(~np.isnan(input_resampled))
+        assert not np.any(np.isnan(input_resampled))
 
         probs = ph.predict(input_resampled)
         p_wave_ix, s_wave_ix = np.argmax(probs[0, :, 1]), np.argmax(probs[0, :, 2])
@@ -181,8 +181,7 @@ def run_phasenet(mseed_files_ffp: Path, output_dir: Path):
         Output directory for skipped records and phase arrival information.
     """
     # Read the .txt for the mseed files to process
-    with open(mseed_files_ffp, "r") as f:
-        mseed_files = f.readlines()
+    mseed_files = mseed_files_ffp.read_text().splitlines()
 
     skipped_records = []
     phase_arrival_table = []
