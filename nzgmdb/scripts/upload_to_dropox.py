@@ -114,6 +114,7 @@ def main(
     """
     output_dir = input_dir / "zips"
     output_dir.mkdir(parents=True, exist_ok=True)
+    dropbox_version_dir = f"{DROPBOX_PATH}/{version}"
 
     if version is None:
         version = input_dir.name
@@ -148,21 +149,6 @@ def main(
     flatfiles = [flatfiles_dir / file for file in file_structure.FlatfileNames]
     flatfiles_zip = zip_files(flatfiles, output_dir, f"flatfiles_{version}")
 
-    # 3) Zip skipped_{ver}.zip
-    skipped_files = [
-        flatfiles_dir / file for file in file_structure.SkippedRecordFilenames
-    ]
-    skipped_zip = zip_files(skipped_files, output_dir, f"skipped_{version}")
-
-    # 4) Zip pre_flatfiles_{ver}.zip
-    pre_flatfiles = [flatfiles_dir / file for file in file_structure.PreFlatfileNames]
-    pre_flatfiles_zip = zip_files(pre_flatfiles, output_dir, f"pre_flatfiles_{version}")
-
-    # 5) Zip snr_fas_{ver}.zip
-    snr_fas_zip = zip_folder(snr_fas_dir, output_dir, f"snr_fas_{version}")
-
-    dropbox_version_dir = f"{DROPBOX_PATH}/{version}"
-
     # Check if there is a quality_db directory and zip it
     quality_db_dir = input_dir / "quality_db"
     if quality_db_dir.exists():
@@ -173,6 +159,20 @@ def main(
 
         # Upload quality_db zip to Dropbox
         upload_zip_to_dropbox(quality_db_zip, dropbox_version_dir)
+
+    # 3) Zip skipped_{ver}.zip
+    skipped_files = [
+        flatfiles_dir / file for file in file_structure.SkippedRecordFilenames
+        if quality_db_dir.exists() or file != file_structure.SkippedRecordFilenames.QUALITY_SKIPPED_RECORDS
+    ]
+    skipped_zip = zip_files(skipped_files, output_dir, f"skipped_{version}")
+
+    # 4) Zip pre_flatfiles_{ver}.zip
+    pre_flatfiles = [flatfiles_dir / file for file in file_structure.PreFlatfileNames]
+    pre_flatfiles_zip = zip_files(pre_flatfiles, output_dir, f"pre_flatfiles_{version}")
+
+    # 5) Zip snr_fas_{ver}.zip
+    snr_fas_zip = zip_folder(snr_fas_dir, output_dir, f"snr_fas_{version}")
 
     # Upload everything to Dropbox
     dropbox_waveforms_path = f"{dropbox_version_dir}/waveforms"
