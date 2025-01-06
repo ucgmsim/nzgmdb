@@ -145,8 +145,18 @@ def main(
     snr_files = list(snr_fas_dir.rglob("*.csv"))
     snr_fas_zip = zip_files(snr_files, output_dir, f"snr_fas_{version}")
 
-    # Upload everything to Dropbox
     dropbox_version_dir = f"{DROPBOX_PATH}/{version}"
+
+    # Check if there is a quality_db directory and zip it
+    quality_db_dir = input_dir / "quality_db"
+    if quality_db_dir.exists():
+        quality_db_files = list(quality_db_dir.rglob("*.csv"))
+        quality_db_zip = zip_files(quality_db_files, output_dir, f"quality_flatfiles_{version}")
+
+        # Upload quality_db zip to Dropbox
+        upload_zip_to_dropbox(quality_db_zip, dropbox_version_dir)
+
+    # Upload everything to Dropbox
     dropbox_waveforms_path = f"{dropbox_version_dir}/waveforms"
     # Upload waveform year zips
     with mp.Pool(n_procs) as pool:

@@ -55,6 +55,7 @@ class SkippedRecordFilenames(StrEnum):
     """
 
     GEONET_SKIPPED_RECORDS = "geonet_skipped_records.csv"
+    CLIPPED_RECORDS = "clipped_records.csv"
     IM_CALC_SKIPPED_RECORDS = "im_calc_skipped_records.csv"
     IM_MERGE_SKIPPED_RECORDS = "im_merge_skipped_records.csv"
     MISSING_SITES = "missing_sites.csv"

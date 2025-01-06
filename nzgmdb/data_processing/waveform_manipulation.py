@@ -276,16 +276,16 @@ def high_and_low_cut_processing(
         tr_endtime_trim = tr.stats.endtime
         tr.trim(tr_starttime_trim, tr_endtime_trim)
 
-        # Calculate the velocity
-        vel_000 = (
-            integrate.cumulative_trapezoid(y=acc_bb_000, dx=dt, initial=0.0) * g / 10.0
-        )
-        vel_090 = (
-            integrate.cumulative_trapezoid(y=acc_bb_090, dx=dt, initial=0.0) * g / 10.0
-        )
-        vel_ver = (
-            integrate.cumulative_trapezoid(y=acc_bb_ver, dx=dt, initial=0.0) * g / 10.0
-        )
+    # Calculate the velocity
+    vel_000 = (
+        integrate.cumulative_trapezoid(y=acc_bb_000, dx=dt, initial=0.0) * g / 10.0
+    )
+    vel_090 = (
+        integrate.cumulative_trapezoid(y=acc_bb_090, dx=dt, initial=0.0) * g / 10.0
+    )
+    vel_ver = (
+        integrate.cumulative_trapezoid(y=acc_bb_ver, dx=dt, initial=0.0) * g / 10.0
+    )
 
     # Calculate the displacement
     disp_000 = integrate.cumulative_trapezoid(y=vel_000, dx=dt, initial=0.0)

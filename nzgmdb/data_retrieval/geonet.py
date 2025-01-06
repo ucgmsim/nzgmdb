@@ -261,6 +261,7 @@ def fetch_sta_mag_line(
     """
     sta_mag_line = []
     skipped_records = []
+    clipped_records = []
     # Get the clipping threshold
     config = cfg.Config()
     threshold = config.get_value("clip_threshold")
@@ -335,13 +336,12 @@ def fetch_sta_mag_line(
         # Check if the record should be dropped
         if clip > threshold:
             stats = mseed[0].stats
-            skipped_records.append(
+            clipped_records.append(
                 [
                     f"{event_id}_{stats.station}_{stats.location}_{stats.channel}",
                     "Clipped",
                 ]
             )
-            continue
 
         # Create the directory structure for the given event
         year = event_cat.origins[0].time.year
@@ -400,7 +400,7 @@ def fetch_sta_mag_line(
                     amp_unit,
                 ]
             )
-    return sta_mag_line, skipped_records
+    return sta_mag_line, skipped_records, clipped_records
 
 
 def fetch_event_data(
@@ -448,6 +448,7 @@ def fetch_event_data(
     if event_line is not None:
         sta_mag_lines = []
         skipped_records = []
+        clipped_records = []
 
         # Get Networks / Stations within a certain radius of the event
         inv_sub_sta = get_stations_within_radius(
@@ -460,23 +461,26 @@ def fetch_event_data(
                 # Check if the station is in the only_sites list if only_sites is defined
                 if only_sites is None or station.code in only_sites:
                     # Get the station magnitude lines
-                    sta_mag_line, new_skipped_records = fetch_sta_mag_line(
-                        station,
-                        network,
-                        event_cat,
-                        event_id,
-                        main_dir,
-                        client_NZ,
-                        event_line[7],
-                        event_line[8],
-                        site_table,
+                    sta_mag_line, new_skipped_records, new_clipped_records = (
+                        fetch_sta_mag_line(
+                            station,
+                            network,
+                            event_cat,
+                            event_id,
+                            main_dir,
+                            client_NZ,
+                            event_line[7],
+                            event_line[8],
+                            site_table,
+                        )
                     )
                     sta_mag_lines.extend(sta_mag_line)
                     skipped_records.extend(new_skipped_records)
+                    clipped_records.extend(new_clipped_records)
     else:
-        sta_mag_lines, skipped_records = None, None
+        sta_mag_lines, skipped_records, clipped_records = None, None, None
 
-    return event_line, sta_mag_lines, skipped_records
+    return event_line, sta_mag_lines, skipped_records, clipped_records
 
 
 def process_batch(
@@ -538,12 +542,18 @@ def process_batch(
         )
 
     # Extract the results
-    event_data, sta_mag_data, skipped_records = [], [], []
+    event_data, sta_mag_data, skipped_records, clipped_records = [], [], [], []
     for result in results:
-        finished_event_data, finished_sta_mag_data, finished_skipped_records = result
+        (
+            finished_event_data,
+            finished_sta_mag_data,
+            finished_skipped_records,
+            finished_clipped_records,
+        ) = result
         event_data.append(finished_event_data)
         sta_mag_data.extend(finished_sta_mag_data)
         skipped_records.extend(finished_skipped_records)
+        clipped_records.extend(finished_clipped_records)
 
     # Create the output directory for the batch files
     flatfile_dir = file_structure.get_flatfile_dir(main_dir)
@@ -613,6 +623,18 @@ def process_batch(
 
     skipped_records_df.to_csv(
         batch_dir / f"geonet_skipped_records_{batch_index}.csv", index=False
+    )
+
+    if len(clipped_records) > 0:
+        # Create the clipped records df
+        clipped_records_df = pd.DataFrame(
+            clipped_records, columns=["record_id", "reason"]
+        )
+    else:
+        clipped_records_df = pd.DataFrame()
+
+    clipped_records_df.to_csv(
+        batch_dir / f"geonet_clipped_records_{batch_index}.csv", index=False
     )
 
 
@@ -790,6 +812,7 @@ def parse_geonet_information(
     event_dfs = []
     sta_mag_dfs = []
     skipped_records_dfs = []
+    clipped_records_dfs = []
 
     for file in batch_dir.iterdir():
         if "earthquake_source_table" in file.stem:
@@ -807,6 +830,11 @@ def parse_geonet_information(
                 skipped_records_dfs.append(pd.read_csv(file))
             except EmptyDataError:
                 print(f"Warning: {file} is empty or has no valid columns to parse.")
+        elif "geonet_clipped_records" in file.stem:
+            try:
+                clipped_records_dfs.append(pd.read_csv(file))
+            except EmptyDataError:
+                print(f"Warning: {file} is empty or has no valid columns to parse.")
 
     if not sta_mag_dfs:
         raise custom_errors.NoStationsError(
@@ -816,6 +844,7 @@ def parse_geonet_information(
     event_df = pd.concat(event_dfs, ignore_index=True)
     sta_mag_df = pd.concat(sta_mag_dfs, ignore_index=True)
     skipped_records_df = pd.concat(skipped_records_dfs, ignore_index=True)
+    clipped_records_df = pd.concat(clipped_records_dfs, ignore_index=True)
 
     # Save the dataframes
     event_df.to_csv(
@@ -828,5 +857,9 @@ def parse_geonet_information(
     )
     skipped_records_df.to_csv(
         flatfile_dir / file_structure.SkippedRecordFilenames.GEONET_SKIPPED_RECORDS,
+        index=False,
+    )
+    clipped_records_df.to_csv(
+        flatfile_dir / file_structure.SkippedRecordFilenames.CLIPPED_RECORDS,
         index=False,
     )
