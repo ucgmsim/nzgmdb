@@ -2,6 +2,7 @@ import datetime
 import functools
 import io
 import multiprocessing as mp
+import shutil
 import time
 from pathlib import Path
 from typing import Annotated
@@ -477,7 +478,7 @@ def poll_earthquake_data(  # noqa: D103
 
                 if result is None:
                     # remove the event directory
-                    event_dir.rmdir()
+                    shutil.rmtree(event_dir)
                 init_start_date = end_date
 
         time.sleep(60)
