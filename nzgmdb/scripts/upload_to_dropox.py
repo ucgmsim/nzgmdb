@@ -162,8 +162,10 @@ def main(
 
     # 3) Zip skipped_{ver}.zip
     skipped_files = [
-        flatfiles_dir / file for file in file_structure.SkippedRecordFilenames
-        if quality_db_dir.exists() or file != file_structure.SkippedRecordFilenames.QUALITY_SKIPPED_RECORDS
+        flatfiles_dir / file
+        for file in file_structure.SkippedRecordFilenames
+        if quality_db_dir.exists()
+        or file != file_structure.SkippedRecordFilenames.QUALITY_SKIPPED_RECORDS
     ]
     skipped_zip = zip_files(skipped_files, output_dir, f"skipped_{version}")
 

@@ -794,9 +794,9 @@ def run_full_nzgmdb(  # noqa: D103
         print("Merging flat files")
         merge_flat_files(main_dir)
 
-    # if create_quality_db:
-    #     print("Creating quality database")
-    #     quality_db.create_quality_db(main_dir, n_procs=n_procs)
+    if create_quality_db:
+        print("Creating quality database")
+        quality_db.create_quality_db(main_dir)
 
     # Upload to dropbox
     if upload:
