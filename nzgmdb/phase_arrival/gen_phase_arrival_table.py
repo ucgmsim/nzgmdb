@@ -9,7 +9,7 @@ import h5py
 import numpy as np
 import pandas as pd
 
-from nzgmdb.management import commands, custom_multiprocess, file_structure
+from nzgmdb.management import custom_multiprocess, file_structure, shell_commands
 
 
 def process_batch(
@@ -57,7 +57,7 @@ def process_batch(
     else:
         # Activate phaseNet environment and run over mseeds for the subfolder
         phasenet_command = f"python {run_phasenet_script_ffp} {batch_txt} {output_dir}"
-        commands.run_command(
+        shell_commands.run_command(
             phasenet_command, conda_sh, env_activate_command, log_file_path_phasenet
         )
 
