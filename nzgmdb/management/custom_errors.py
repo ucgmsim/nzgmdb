@@ -33,18 +33,6 @@ class All3ComponentsNotPresentError(Exception):
     pass
 
 
-class NoPWaveFoundError(Exception):
-    """Exception raised when no P-wave is found in the phase arrival table."""
-
-    pass
-
-
-class TPNotInWaveformError(Exception):
-    """Exception raised when the TP is not in the waveform bounds."""
-
-    pass
-
-
 class LowcutHighcutError(Exception):
     """Exception raised when the lowcut is greater than the highcut."""
 

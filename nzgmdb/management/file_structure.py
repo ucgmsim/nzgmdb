@@ -21,6 +21,7 @@ class PreFlatfileNames(StrEnum):
     SITE_TABLE = "site_table_all.csv"
     PROPAGATION_TABLE = "propagation_path_table_all.csv"
     GROUND_MOTION_IM_CATALOGUE = "ground_motion_im_catalogue.csv"
+    PROB_SERIES = "prob_series.h5"
 
 
 class FlatfileNames(StrEnum):
@@ -59,6 +60,7 @@ class SkippedRecordFilenames(StrEnum):
     IM_MERGE_SKIPPED_RECORDS = "im_merge_skipped_records.csv"
     MISSING_SITES = "missing_sites.csv"
     PROCESSING_SKIPPED_RECORDS = "processing_skipped_records.csv"
+    PHASE_ARRIVAL_SKIPPED_RECORDS = "phase_arrival_skipped_records.csv"
     SNR_SKIPPED_RECORDS = "snr_skipped_records.csv"
     FMAX_SKIPPED_RECORDS = "fmax_skipped_records.csv"
     QUALITY_SKIPPED_RECORDS = "quality_skipped_records.csv"

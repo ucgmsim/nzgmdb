@@ -3,7 +3,6 @@ Calculates the maximum useable frequency (fmax).
 """
 
 import functools
-import multiprocessing
 from pathlib import Path
 from typing import Optional
 
@@ -12,7 +11,7 @@ import obspy
 import pandas as pd
 
 from nzgmdb.management import config as cfg
-from nzgmdb.management import file_structure
+from nzgmdb.management import custom_multiprocess, file_structure
 
 
 def run_full_fmax_calc(
@@ -38,14 +37,9 @@ def run_full_fmax_calc(
     """
     mseed_files = waveform_dir.rglob("*.mseed")
 
-    with multiprocessing.Pool(n_procs) as pool:
-        results = pool.map(
-            functools.partial(
-                assess_snr_and_get_fmax,
-                snr_fas_output_dir=snr_fas_output_dir,
-            ),
-            mseed_files,
-        )
+    results = custom_multiprocess.custom_multiprocess(
+        assess_snr_and_get_fmax, mseed_files, n_procs, snr_fas_output_dir
+    )
 
     if len(results) == 0:
         print("No records to process")

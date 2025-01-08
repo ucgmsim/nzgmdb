@@ -7,10 +7,9 @@ requests
 fiona
 pyproj
 pyyaml
-pytz
 shapely
 gmprocess
-matplotlib
+h5py
 empirical @ git+https://github.com/ucgmsim/Empirical_Engine.git
 openquake-engine @ git+https://github.com/gem/oq-engine.git
 qcore @ git+https://github.com/ucgmsim/qcore.git

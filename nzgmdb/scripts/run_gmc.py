@@ -1,6 +1,5 @@
 import functools
 import multiprocessing
-import subprocess
 from pathlib import Path
 from typing import Annotated
 
@@ -8,46 +7,9 @@ import numpy as np
 import pandas as pd
 import typer
 
-from nzgmdb.management import file_structure
+from nzgmdb.management import file_structure, shell_commands
 
 app = typer.Typer()
-
-
-def run_command(
-    command: str, env_sh: Path, env_activate_command: str, log_file_path: Path
-):
-    """
-    Run a shell command with optional Conda environment activation.
-
-    Parameters
-    ----------
-    command : str
-        The command to run.
-    env_sh : Path
-        The path to the conda.sh script.
-    env_activate_command : str
-        The command to activate the conda environment needed.
-    log_file_path : Path
-        The path to the log file.
-
-    Raises
-    ------
-    Exception
-        If the command fails.
-    """
-    with open(log_file_path, "w") as log_file:
-        # Create the command to source conda.sh, activate the environment, and execute the full command
-        command = f"source {env_sh} && {env_activate_command} && {command}"
-        try:
-            subprocess.check_call(
-                command,
-                stdout=log_file,
-                stderr=log_file,
-                shell=True,
-                executable="/bin/bash",
-            )
-        except subprocess.CalledProcessError:
-            raise Exception(f"Command failed please check logs in {log_file_path}")
 
 
 def process_batch(
@@ -59,6 +21,8 @@ def process_batch(
     conda_sh: Path,
     gmc_activate: str,
     gmc_predict_activate: str,
+    phase_arrival_table_ffp: Path,
+    prob_series_ffp: Path,
 ):
     """
     Process a single subfolder: extract features and run predictions.
@@ -81,6 +45,10 @@ def process_batch(
         The command to activate the GMC environment for extracting features.
     gmc_predict_activate : str
         The command to activate the GMC prediction environment.
+    phase_arrival_table_ffp : Path
+        The full file path to the phase arrival table
+    prob_series_ffp : Path
+        The full file path to the prob_series hdf5 file.
 
     Raises
     ------
@@ -110,8 +78,8 @@ def process_batch(
             )
         else:
             # Activate gmc environment and extract features for the subfolder
-            features_command = f"python {gmc_scripts_path}/extract_features.py {gmc_dir} {waveform_dir} mseed --ko_matrices_dir {ko_matrices_dir} --record_list_ffp {batch_txt}"
-            run_command(
+            features_command = f"python {gmc_scripts_path}/extract_features.py {gmc_dir} {waveform_dir} mseed --ko_matrices_dir {ko_matrices_dir} --record_list_ffp {batch_txt} --phase_arrival_table {phase_arrival_table_ffp} --prob_series {prob_series_ffp}"
+            shell_commands.run_command(
                 features_command, conda_sh, gmc_activate, log_file_path_features
             )
 
@@ -130,7 +98,7 @@ def process_batch(
         predict_command = (
             f"python {gmc_scripts_path}/predict.py {gmc_dir} {predictions_output}"
         )
-        run_command(
+        shell_commands.run_command(
             predict_command, conda_sh, gmc_predict_activate, log_file_path_predict
         )
 
@@ -219,6 +187,13 @@ def run_gmc_processing(  # noqa: D103
     )
     final_predictions_output = output_dir / file_structure.FlatfileNames.GMC_PREDICTIONS
 
+    # Get the phase arrival table
+    flatfile_dir = file_structure.get_flatfile_dir(main_dir)
+    phase_arrival_table_ffp = (
+        flatfile_dir / file_structure.PreFlatfileNames.PHASE_ARRIVAL_TABLE
+    )
+    prob_series_ffp = flatfile_dir / file_structure.PreFlatfileNames.PROB_SERIES
+
     # Get all the mseed files
     mseed_files = list(waveform_dir.rglob("*.mseed"))
 
@@ -234,6 +209,8 @@ def run_gmc_processing(  # noqa: D103
         conda_sh=conda_sh,
         gmc_activate=gmc_activate,
         gmc_predict_activate=gmc_predict_activate,
+        phase_arrival_table_ffp=phase_arrival_table_ffp,
+        prob_series_ffp=prob_series_ffp,
     )
 
     # Use multiprocessing with starmap and the partial function
