@@ -134,7 +134,7 @@ def get_waveforms(
                 continue  # try again
             else:
                 return None
-        except Exception as e:
+        except Exception as e:  # noqa: BLE001
             print(f"Error getting waveforms for {net}.{sta}")
             print(e)
             return None

@@ -3,8 +3,8 @@ import multiprocessing
 from pathlib import Path
 
 import pandas as pd
-import qcore.timeseries as ts
 
+import qcore.timeseries as ts
 from nzgmdb.data_processing import waveform_manipulation
 from nzgmdb.management import custom_errors, file_structure
 from nzgmdb.mseed_management import reading

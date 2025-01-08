@@ -10,10 +10,10 @@ import fiona
 import numpy as np
 import pandas as pd
 from pyproj import Transformer
-from qcore import geo, point_in_polygon
 
 from nzgmdb.management import config as cfg
 from nzgmdb.management import file_structure
+from qcore import geo, point_in_polygon
 
 
 def merge_NZSMDB_flatfile_on_events(

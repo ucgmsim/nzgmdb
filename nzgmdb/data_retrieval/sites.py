@@ -2,12 +2,12 @@ import fiona
 import numpy as np
 import pandas as pd
 from obspy.clients.fdsn import Client as FDSN_Client
-from qcore import point_in_polygon
-from Velocity_Model.basins import basin_outlines_dict
 
 from nzgmdb.data_retrieval import tect_domain
 from nzgmdb.management import config as cfg
 from nzgmdb.management import file_structure
+from qcore import point_in_polygon
+from Velocity_Model.basins import basin_outlines_dict
 
 
 def create_site_table_response() -> pd.DataFrame:

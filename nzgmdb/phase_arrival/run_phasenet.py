@@ -1,7 +1,7 @@
 import argparse
-import h5py
 from pathlib import Path
 
+import h5py
 import mseedlib
 import numpy as np
 import pandas as pd

@@ -5,13 +5,13 @@ the phase arrival table
 
 import functools
 import multiprocessing as mp
-import h5py
 from pathlib import Path
 
+import h5py
 import numpy as np
 import pandas as pd
 
-from nzgmdb.management import commands, file_structure
+from nzgmdb.management import file_structure, shell_commands
 
 
 def process_batch(
