@@ -182,7 +182,7 @@ def run_event(  # noqa: D103
     except custom_errors.NoStationsError:
         print(f"Event {event_id} has no stations, skipping")
         # Remove the event directory
-        event_dir.rmdir()
+        shutil.rmtree(event_dir)
         return False
 
     if add_seismic_now:

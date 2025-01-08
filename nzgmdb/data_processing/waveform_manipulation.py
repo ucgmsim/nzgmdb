@@ -23,8 +23,8 @@ def initial_preprocessing(
 
     Parameters
     ----------
-    mseed : Mseed
-        The waveform data in the custom Mseed object
+    mseed : Stream
+        The stream data in obspy format
     apply_taper : bool, optional
         Whether to apply the tapering, by default True
     apply_zero_padding : bool, optional
@@ -45,13 +45,6 @@ def initial_preprocessing(
         If the rotation fails
     """
     # Small Processing
-    # for trace in mseed.traces:
-    #     # Convert data if it's not a floating point type.
-    #     if not np.issubdtype(trace.data.dtype, np.floating):
-    #         trace.data = np.require(trace.data, dtype=np.float64)
-    #     trace.data -= trace.data[0] + np.arange(len(trace.data)) * (
-    #         trace.data[-1] - trace.data[0]
-    #     ) / float(len(trace.data) - 1)
     mseed.detrend("demean")
     mseed.detrend("linear")
 
