@@ -16,7 +16,20 @@ def run_phase_net(
     t: np.ndarray = None,
     return_prob_series: bool = False,
 ):
-    """Uses PhaseNet to get the p- & s-wave pick"""
+    """
+    Uses PhaseNet to get the p- & s-wave pick
+
+    Parameters
+    ----------
+    input_data : np.ndarray
+        The input data to run PhaseNet on. Shape (1, n_samples, 3)
+    dt : float
+        The sampling rate of the input data
+    t : np.ndarray, optional
+        The time vector of the input data, by default None
+    return_prob_series : bool, optional
+        Whether to return the probability series, by default False
+    """
     import phase_net as ph
 
     # Only supports a single record
@@ -33,7 +46,7 @@ def run_phase_net(
         input_resampled[0, :, 1] = np.interp(t_new, t, input_data[0, :, 1])
         input_resampled[0, :, 2] = np.interp(t_new, t, input_data[0, :, 2])
 
-        assert np.all(~np.isnan(input_resampled))
+        assert not np.any(np.isnan(input_resampled))
 
         probs = ph.predict(input_resampled)
         p_wave_ix, s_wave_ix = np.argmax(probs[0, :, 1]), np.argmax(probs[0, :, 2])
@@ -167,7 +180,7 @@ def process_mseed(mseed_file: Path, h5_ffp: Path):
         return None, skipped_record
 
     # Save the prob_series
-    with h5py.File(h5_ffp, "w") as f:
+    with h5py.File(h5_ffp, "a") as f:
         group = f.create_group(mseed_file.stem)
         group.create_dataset(
             "p_prob_series",
@@ -206,8 +219,7 @@ def run_phasenet(mseed_files_ffp: Path, output_dir: Path):
         Output directory for skipped records and phase arrival information.
     """
     # Read the .txt for the mseed files to process
-    with open(mseed_files_ffp, "r") as f:
-        mseed_files = f.readlines()
+    mseed_files = mseed_files_ffp.read_text().splitlines()
 
     skipped_records = []
     phase_arrival_table = []
