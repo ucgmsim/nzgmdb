@@ -1,4 +1,5 @@
 from pathlib import Path
+from typing import Optional
 
 import mseedlib
 import numpy as np
@@ -129,7 +130,7 @@ def create_waveform_from_processed(
     ffp_000: Path,
     ffp_090: Path,
     ffp_ver: Path,
-    delta: float = None,
+    delta: Optional[float] = None,
 ):
     """
     Create a waveform object from processed data using the 3 component files
@@ -142,8 +143,9 @@ def create_waveform_from_processed(
         Path to the 090 component file
     ffp_ver : Path
         Path to the vertical component file
-    delta : float
-        The time step between each data point
+    delta : float, optional
+        The time step between each data point.
+        When not provided it is read from the 000 component file
 
     Returns
     -------
