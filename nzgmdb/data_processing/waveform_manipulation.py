@@ -24,7 +24,7 @@ def initial_preprocessing(
     Parameters
     ----------
     mseed : Stream
-        The waveform data
+        The stream data in obspy format
     apply_taper : bool, optional
         Whether to apply the tapering, by default True
     apply_zero_padding : bool, optional

@@ -1,13 +1,14 @@
+import functools
+import multiprocessing as mp
 from pathlib import Path
 
 import numpy as np
-import obspy
 import pandas as pd
 
 from IM_calculation.IM import im_calculation
 from IM_calculation.IM.read_waveform import Waveform
 from nzgmdb.management import config as cfg
-from nzgmdb.management import custom_multiprocess, file_structure
+from nzgmdb.management import file_structure
 from nzgmdb.mseed_management import reading
 from qcore.constants import Components
 
@@ -90,7 +91,7 @@ def calculate_im_for_record(
     # Load the mseed file
     mseed_file = ffp_000.parent.parent / "mseed" / f"{ffp_000.stem}.mseed"
     try:
-        mseed = obspy.read(mseed_file)
+        mseed = reading.read_mseed_to_stream(mseed_file)
     except FileNotFoundError:
         skipped_record_dict = {
             "record_id": ffp_000.stem,
@@ -187,17 +188,19 @@ def compute_ims_for_all_processed_records(
         "FAS": im_calculation.validate_fas_frequency(fas_frequencies),
     }
 
-    # Use custom_multiprocess to process the records
-    skipped_records = custom_multiprocess.custom_multiprocess(
-        calculate_im_for_record,
-        comp_000_files,
-        n_procs,
-        output_path,
-        components,
-        ims,
-        im_options,
-        ko_matrices_path,
-    )
+    # Fetch results
+    with mp.Pool(n_procs) as p:
+        skipped_records = p.map(
+            functools.partial(
+                calculate_im_for_record,
+                output_path=output_path,
+                components=components,
+                ims=ims,
+                im_options=im_options,
+                ko_matrices_path=ko_matrices_path,
+            ),
+            comp_000_files,
+        )
 
     print("Finished calculating IMs")
 

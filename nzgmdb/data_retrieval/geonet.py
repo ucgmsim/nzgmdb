@@ -3,7 +3,9 @@ Functions to manage Geonet Data
 """
 
 import datetime
+import functools
 import io
+import multiprocessing as mp
 from pathlib import Path
 
 import numpy as np
@@ -18,7 +20,7 @@ from scipy.interpolate import interp1d
 
 from nzgmdb.data_processing import filtering
 from nzgmdb.management import config as cfg
-from nzgmdb.management import custom_errors, custom_multiprocess, file_structure
+from nzgmdb.management import custom_errors, file_structure
 from nzgmdb.mseed_management import creation
 
 
@@ -398,7 +400,6 @@ def fetch_sta_mag_line(
                     amp_unit,
                 ]
             )
-
     return sta_mag_line, skipped_records, clipped_records
 
 
@@ -523,20 +524,22 @@ def process_batch(
     only_sites : list[str] (optional)
         Will only fetch the data for the sites in the list
     """
-    # Use custom_multiprocess to fetch the event data
-    results = custom_multiprocess.custom_multiprocess(
-        fetch_event_data,
-        batch_events,
-        n_procs,
-        main_dir,
-        client_NZ,
-        inventory,
-        site_table,
-        mags,
-        rrups,
-        f_rrup,
-        only_sites,
-    )
+    # Fetch results
+    with mp.Pool(n_procs) as p:
+        results = p.map(
+            functools.partial(
+                fetch_event_data,
+                main_dir=main_dir,
+                client_NZ=client_NZ,
+                inventory=inventory,
+                site_table=site_table,
+                mags=mags,
+                rrups=rrups,
+                f_rrup=f_rrup,
+                only_sites=only_sites,
+            ),
+            batch_events,
+        )
 
     # Extract the results
     event_data, sta_mag_data, skipped_records, clipped_records = [], [], [], []

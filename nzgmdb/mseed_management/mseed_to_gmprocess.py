@@ -10,12 +10,12 @@ from json import JSONDecodeError
 from pathlib import Path
 
 import requests
-from obspy import read
 from obspy.clients.fdsn import Client as FDSN_Client
 from obspy.clients.fdsn.header import FDSNNoDataException
 from obspy.core import Stream
 
 from nzgmdb.management import config as cfg
+from nzgmdb.mseed_management import creation, reading
 
 
 def gen_station_xml(station: str, client: FDSN_Client, output_dir: Path):
@@ -128,7 +128,7 @@ def split_mseed(mseed: Stream, output_dir: Path):
             starttime = trace.stats.starttime.strftime("%Y%m%dT%H%M%SZ")
             endtime = trace.stats.endtime.strftime("%Y%m%dT%H%M%SZ")
             filename = f"{trace.stats.network}.{trace.stats.station}.{trace.stats.location}.{trace.stats.channel}__{starttime}__{endtime}.mseed"
-            trace.write(output_dir / filename, format="MSEED")
+            creation.write_stream_to_mseed(trace, output_dir / filename)
 
 
 def get_old_event_id(mseed_ffp: Path):
@@ -185,7 +185,7 @@ def run_for_single_event(
     # This gives more of a chance to find a valid comcat id
     comcat_id = None
     for mseed_ffp in mseeds:
-        mseed = read(mseed_ffp)
+        mseed = reading.read_mseed_to_stream(mseed_ffp)
         found_id = get_comcat_id(mseed, event_lat, event_lon, preferred_magnitude)
         if found_id is not None:
             comcat_id = found_id
@@ -201,7 +201,7 @@ def run_for_single_event(
 
     # For each mseed file, generate the station xml file and split the mseed file
     for mseed_ffp in mseeds:
-        mseed = read(mseed_ffp)
+        mseed = reading.read_mseed_to_stream(mseed_ffp)
 
         # Check that there is at least one trace with a channel starting with B or H
         if any(trace.stats.channel[0] in ["B", "H"] for trace in mseed):

@@ -3,6 +3,7 @@ import warnings
 from collections.abc import Iterable
 from pathlib import Path
 
+import mseedlib
 import numpy as np
 import pandas as pd
 from obspy import Stream
@@ -133,6 +134,10 @@ def get_waveforms(
                 continue  # try again
             else:
                 return None
+        except Exception as e:  # noqa: BLE001
+            print(f"Error getting waveforms for {net}.{sta}")
+            print(e)
+            return None
     return st
 
 
@@ -183,6 +188,43 @@ def split_stream_into_mseeds(st: Stream, unique_channels: Iterable):
     return mseeds
 
 
+def write_stream_to_mseed(stream: Stream, output_file: Path):
+    """
+    Write an ObsPy Stream object to a MiniSEED file using mseedlib.
+
+    Parameters
+    ----------
+    stream : obspy.core.stream.Stream
+        The Stream object to write to MiniSEED
+    output_file : Path
+        The path to the output MiniSEED file
+
+    Raises
+    ------
+    ValueError
+        If the sample type of the trace data is not supported
+    """
+    mstl = mseedlib.MSTraceList()
+    for trace in stream:
+        start_time = mseedlib.timestr2nstime(f"{trace.stats.starttime.isoformat()}Z")
+        sourceid = f"FDSN:{trace.stats.network}_{trace.stats.station}_{trace.stats.location}_{'_'.join(trace.stats.channel)}"
+        mstl.add_data(
+            sourceid=sourceid,
+            data_samples=trace.data,
+            sample_type="i",
+            sample_rate=trace.stats.sampling_rate,
+            start_time=start_time,
+        )
+
+    with open(output_file, "wb") as f:
+        mstl.pack(
+            lambda record, handler_data: handler_data["fh"].write(record),
+            {"fh": f},
+            flush_data=True,
+            format_version=2,
+        )
+
+
 def write_mseed(mseed: Stream, event_id: str, station: str, output_directory: Path):
     """
     Write the mseed files to the output directory
@@ -208,4 +250,4 @@ def write_mseed(mseed: Stream, event_id: str, station: str, output_directory: Pa
     output_directory.mkdir(exist_ok=True, parents=True)
 
     # Write the mseed file
-    mseed.write(str(mseed_ffp), format="MSEED")
+    write_stream_to_mseed(mseed, mseed_ffp)

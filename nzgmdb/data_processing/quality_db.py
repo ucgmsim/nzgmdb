@@ -429,6 +429,47 @@ def apply_clipNet_filter(
     return catalog, skipped_records
 
 
+def filter_missing_sta_info(catalog: pd.DataFrame, bypass_records: np.ndarray = None):
+    """
+    Filter the catalog based on the missing station information
+
+    Parameters
+    ----------
+    catalog : pd.DataFrame
+        The catalog dataframe to filter
+    bypass_records : np.ndarray, optional
+        The records to bypass the quality checks
+
+    Returns
+    -------
+    pd.DataFrame
+        The filtered catalog
+    pd.DataFrame
+        The skipped records
+    """
+    # Find records that are missing station information
+    missing_sta_filter = catalog[catalog["sta_lat"].isna()]
+
+    # Remove the bypass records if they exist
+    if bypass_records is not None:
+        missing_sta_filter = missing_sta_filter[
+            ~missing_sta_filter["record_id"].isin(bypass_records)
+        ]
+
+    # Create the skipped_records dataframe from missing_sta_filter
+    skipped_records = pd.DataFrame(
+        {
+            "record_id": missing_sta_filter["record_id"],
+            "reason": "Missing station information",
+        }
+    )
+
+    # Filter out the missing_sta records out of the catalog
+    catalog = catalog[~catalog["record_id"].isin(missing_sta_filter["record_id"])]
+
+    return catalog, skipped_records
+
+
 def filter_duplicate_channels(catalog: pd.DataFrame, bypass_records: np.ndarray = None):
     """
     Filter the catalog based on the duplicate channels.
@@ -525,7 +566,8 @@ def apply_all_filters(
     5) Filter by fmin
     6) Ensure we use ground level locations
     7) Filter out clipped records
-    8) Select which channel to use for duplicate HN, BN for the same evid / sta
+    8) Filter by missing station information
+    9) Select which channel to use for duplicate HN, BN for the same evid / sta
 
     Parameters
     ----------
@@ -588,6 +630,11 @@ def apply_all_filters(
         catalog, clipped_records_ffp, bypass_records
     )
 
+    # Filter by missing station information
+    catalog, skipped_records_missing_sta = filter_missing_sta_info(
+        catalog, bypass_records
+    )
+
     # Filter by duplicate channels
     catalog, skipped_records_duplicate = filter_duplicate_channels(
         catalog, bypass_records
@@ -622,7 +669,8 @@ def create_quality_db(
     5) Check against GMC predictions fmin
     6) Ensure we use ground level locations
     7) Filter out clipped records
-    8) Select which channel to use for duplicate HN, BN for the same evid / sta
+    8) Filter by missing station information
+    9) Select which channel to use for duplicate HN, BN for the same evid / sta
 
     Parameters
     ----------

@@ -2,9 +2,10 @@ import argparse
 from pathlib import Path
 
 import h5py
+import mseedlib
 import numpy as np
-import obspy
 import pandas as pd
+from obspy import Stream, Trace, UTCDateTime
 from obspy.clients.fdsn import Client as FDSN_Client
 from obspy.clients.fdsn.header import FDSNNoDataException
 
@@ -81,7 +82,44 @@ def process_mseed(mseed_file: Path, h5_ffp: Path):
     pd.DataFrame | None
         The skipped record data.
     """
-    mseed = obspy.read(str(mseed_file))
+    mseed = Stream()
+    nptype = {"i": np.int32, "f": np.float32, "d": np.float64, "t": np.char}
+    mstl = mseedlib.MSTraceList()
+    mstl.read_file(str(mseed_file), unpack_data=False, record_list=True)
+
+    for traceid in mstl.traceids():
+        for segment in traceid.segments():
+            # Determine data type and allocate array
+            (sample_size, sample_type) = segment.sample_size_type
+            dtype = nptype[sample_type]
+            data_samples = np.zeros(segment.samplecnt, dtype=dtype)
+
+            # Unpack data samples
+            segment.unpack_recordlist(
+                buffer_pointer=np.ctypeslib.as_ctypes(data_samples),
+                buffer_bytes=data_samples.nbytes,
+            )
+
+            # Get metadata
+            sourceid = traceid.sourceid.split("FDSN:")[1]
+            parts = sourceid.split("_")
+            if len(parts) > 4:
+                network, station, location, *channel = parts
+                channel = "".join(channel)
+            else:
+                network, station, location, channel = parts
+            start_time = UTCDateTime(segment.starttime_seconds)
+            sampling_rate = segment.samprate
+
+            # Create ObsPy Trace and add to Stream
+            trace = Trace(data=data_samples)
+            trace.stats.network = network
+            trace.stats.station = station
+            trace.stats.location = location
+            trace.stats.channel = channel
+            trace.stats.starttime = start_time
+            trace.stats.sampling_rate = sampling_rate
+            mseed.append(trace)
 
     # Small Processing
     mseed.detrend("demean")
