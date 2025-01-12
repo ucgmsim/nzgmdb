@@ -7,10 +7,11 @@ import functools
 import multiprocessing as mp
 from pathlib import Path
 
+import h5py
 import numpy as np
 import pandas as pd
 
-from nzgmdb.management import commands, file_structure
+from nzgmdb.management import file_structure, shell_commands
 
 
 def process_batch(
@@ -58,7 +59,7 @@ def process_batch(
     else:
         # Activate phaseNet environment and run over mseeds for the subfolder
         phasenet_command = f"python {run_phasenet_script_ffp} {batch_txt} {output_dir}"
-        commands.run_command(
+        shell_commands.run_command(
             phasenet_command, conda_sh, env_activate_command, log_file_path_phasenet
         )
 
@@ -125,11 +126,13 @@ def generate_phase_arrival_table(
     # For each subfolder combine the phase_arrival_table.csv and skipped_records.csv into a single file
     phase_results = []
     skipped_records_results = []
+    prob_series_files = []
     for phase_subfolder in phase_dir.iterdir():
         phase_output = (
             phase_subfolder / file_structure.FlatfileNames.PHASE_ARRIVAL_TABLE
         )
         skipped_output = phase_subfolder / "skipped_records.csv"
+        prob_series_output = phase_subfolder / "prob_series.h5"
         if phase_output.exists():
             df = pd.read_csv(phase_output)
             phase_results.append(df)
@@ -144,6 +147,20 @@ def generate_phase_arrival_table(
             raise FileNotFoundError(
                 f"Failed to find {skipped_output} for {phase_subfolder}. Please check logs in this folder or try a re-run"
             )
+        if prob_series_output.exists():
+            prob_series_files.append(prob_series_output)
+        else:
+            raise FileNotFoundError(
+                f"Failed to find {prob_series_output} for {phase_subfolder}. Please check logs in this folder or try a re-run"
+            )
+
+    # Merge the prob_series files
+    prob_series_output_ffp = output_dir / file_structure.PreFlatfileNames.PROB_SERIES
+    with h5py.File(prob_series_output_ffp, "w") as out_f:
+        for prob_series_file in prob_series_files:
+            with h5py.File(prob_series_file, "r") as in_f:
+                for record_name in in_f.keys():
+                    in_f.copy(record_name, out_f)
 
     # Concatenate the results
     phase_df = pd.concat(phase_results)

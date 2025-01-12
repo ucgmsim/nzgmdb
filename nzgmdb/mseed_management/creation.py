@@ -136,7 +136,7 @@ def get_waveforms(
                 continue  # try again
             else:
                 return None
-        except Exception as e:
+        except Exception as e:  # noqa: BLE001
             # Check if the exception is a 503 Service Unavailable
             if hasattr(e, "code") and e.code == 503:
                 print(f"Error getting waveforms for {net}.{sta}")
@@ -216,9 +216,7 @@ def write_stream_to_mseed(stream: Stream, output_file: Path):
     """
     mstl = mseedlib.MSTraceList()
     for trace in stream:
-        start_time = mseedlib.timestr2nstime(
-            trace.stats.starttime.strftime("%Y-%m-%dT%H:%M:%S.%fZ")
-        )
+        start_time = mseedlib.timestr2nstime(f"{trace.stats.starttime.isoformat()}Z")
         sourceid = f"FDSN:{trace.stats.network}_{trace.stats.station}_{trace.stats.location}_{'_'.join(trace.stats.channel)}"
         mstl.add_data(
             sourceid=sourceid,
@@ -228,21 +226,13 @@ def write_stream_to_mseed(stream: Stream, output_file: Path):
             start_time=start_time,
         )
 
-    def record_handler(record: bytes, handler_data: dict):
-        """
-        Write MiniSEED record to file handler.
-
-        Parameters
-        ----------
-        record : bytes
-            The MiniSEED record to write
-        handler_data : dict
-            Dictionary containing the file handler to write
-        """
-        handler_data["fh"].write(record)
-
     with open(output_file, "wb") as f:
-        mstl.pack(record_handler, {"fh": f}, flush_data=True, format_version=2)
+        mstl.pack(
+            lambda record, handler_data: handler_data["fh"].write(record),
+            {"fh": f},
+            flush_data=True,
+            format_version=2,
+        )
 
 
 def write_mseed(mseed: Stream, event_id: str, station: str, output_directory: Path):

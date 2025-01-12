@@ -1,6 +1,7 @@
 import argparse
 from pathlib import Path
 
+import h5py
 import mseedlib
 import numpy as np
 import pandas as pd
@@ -45,7 +46,7 @@ def run_phase_net(
         input_resampled[0, :, 1] = np.interp(t_new, t, input_data[0, :, 1])
         input_resampled[0, :, 2] = np.interp(t_new, t, input_data[0, :, 2])
 
-        assert np.all(~np.isnan(input_resampled))
+        assert not np.any(np.isnan(input_resampled))
 
         probs = ph.predict(input_resampled)
         p_wave_ix, s_wave_ix = np.argmax(probs[0, :, 1]), np.argmax(probs[0, :, 2])
@@ -63,7 +64,7 @@ def run_phase_net(
     return p_wave_ix, s_wave_ix
 
 
-def process_mseed(mseed_file: Path):
+def process_mseed(mseed_file: Path, h5_ffp: Path):
     """
     Process an mseed file and return the phase arrival data.
 
@@ -71,6 +72,8 @@ def process_mseed(mseed_file: Path):
     ----------
     mseed_file : Path
         Path to the mseed file.
+    h5_ffp : Path
+        Path to the HDF5 file to save the probability series.
 
     Returns
     -------
@@ -171,9 +174,10 @@ def process_mseed(mseed_file: Path):
         return None, skipped_record
 
     try:
-        p_wave_ix, s_wave_ix = run_phase_net(
+        p_wave_ix, s_wave_ix, p_prob_series, s_prob_series = run_phase_net(
             np.stack([trace.data for trace in mseed], axis=1)[np.newaxis, ...],
             mseed[0].stats["delta"],
+            return_prob_series=True,
         )
     except ValueError:
         skipped_record = pd.DataFrame(
@@ -183,6 +187,22 @@ def process_mseed(mseed_file: Path):
             }
         )
         return None, skipped_record
+
+    # Save the prob_series
+    with h5py.File(h5_ffp, "a") as f:
+        group = f.create_group(mseed_file.stem)
+        group.create_dataset(
+            "p_prob_series",
+            data=p_prob_series.astype(np.float32),
+            dtype="float32",
+            compression="lzf",
+        )
+        group.create_dataset(
+            "s_prob_series",
+            data=s_prob_series.astype(np.float32),
+            dtype="float32",
+            compression="lzf",
+        )
 
     return (
         pd.DataFrame(
@@ -208,17 +228,17 @@ def run_phasenet(mseed_files_ffp: Path, output_dir: Path):
         Output directory for skipped records and phase arrival information.
     """
     # Read the .txt for the mseed files to process
-    with open(mseed_files_ffp, "r") as f:
-        mseed_files = f.readlines()
+    mseed_files = mseed_files_ffp.read_text().splitlines()
 
     skipped_records = []
     phase_arrival_table = []
+    h5_ffp = output_dir / "prob_series.h5"
 
     # Process each mseed file
     for mseed_file in mseed_files:
         mseed_file = mseed_file.strip()
         mseed_file = Path(mseed_file)
-        phase_arrival, skipped_record = process_mseed(mseed_file)
+        phase_arrival, skipped_record = process_mseed(mseed_file, h5_ffp)
         if phase_arrival is not None:
             phase_arrival_table.append(phase_arrival)
         if skipped_record is not None:

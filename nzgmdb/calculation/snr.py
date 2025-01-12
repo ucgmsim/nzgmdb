@@ -2,11 +2,11 @@ import functools
 import multiprocessing as mp
 from pathlib import Path
 
-import IM_calculation.IM.snr_calculation as snr_calc
 import numpy as np
 import pandas as pd
 from pandas.errors import EmptyDataError
 
+import IM_calculation.IM.snr_calculation as snr_calc
 from nzgmdb.management import config as cfg
 from nzgmdb.management import custom_errors, file_structure
 from nzgmdb.mseed_management import reading
@@ -109,12 +109,7 @@ def compute_snr_for_single_mseed(
         return None, skipped_record
 
     # Ensure the tp is within the range of the waveform
-    try:
-        stats = reading.read_mseed_to_stream(mseed_file)[0].stats
-    except Exception as e:
-        raise custom_errors.All3ComponentsNotPresentError(
-            f"Error reading mseed file {mseed_file} with error: {e}"
-        )
+    stats = reading.read_mseed_to_stream(mseed_file)[0].stats
     if tp > stats.npts or tp < 0:
         skipped_record_dict = {
             "record_id": mseed_file.stem,

@@ -6,7 +6,6 @@ from datetime import datetime
 from pathlib import Path
 from typing import Annotated
 
-import pandas as pd
 import typer
 
 from nzgmdb.calculation import distances, fmax, ims, snr
@@ -467,7 +466,7 @@ def merge_flat_files(  # noqa: D103
 @app.command(
     help="Create a quality database for the NZGMDB results by running quality checks"
 )
-def create_quality_db(
+def create_quality_db(  # noqa: D103
     main_dir: Annotated[
         Path,
         typer.Argument(
@@ -573,7 +572,6 @@ def run_full_nzgmdb(  # noqa: D103
         bool,
         typer.Option(
             help="If True, the function will check for already completed files and skip them",
-            is_flag=True,
         ),
     ] = False,
     only_event_ids: Annotated[
@@ -606,28 +604,18 @@ def run_full_nzgmdb(  # noqa: D103
         bool,
         typer.Option(
             help="If True, the function will run in real time mode by using a different client",
-            is_flag=True,
         ),
     ] = False,
     upload: Annotated[
         bool,
         typer.Option(
             help="If True, the function will upload the results to Dropbox",
-            is_flag=True,
-        ),
-    ] = False,
-    upload_to_dropbox: Annotated[
-        bool,
-        typer.Option(
-            help="If True, the function will upload the results to Dropbox",
-            is_flag=True,
         ),
     ] = False,
     create_quality_db: Annotated[
         bool,
         typer.Option(
             help="If True, the function will create a quality database",
-            is_flag=True,
         ),
     ] = False,
 ):

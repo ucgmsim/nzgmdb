@@ -1,5 +1,4 @@
 import datetime
-import functools
 import io
 import multiprocessing as mp
 import shutil
@@ -7,16 +6,12 @@ import time
 from pathlib import Path
 from typing import Annotated
 
-import numpy as np
 import pandas as pd
 import requests
-import scipy as sp
 import typer
-from obspy.clients.fdsn import Client as FDSN_Client
 
-from nzgmdb.data_retrieval import geonet, sites
 from nzgmdb.management import config as cfg
-from nzgmdb.management import file_structure
+from nzgmdb.management import custom_errors
 from nzgmdb.scripts import run_nzgmdb
 
 app = typer.Typer()
@@ -70,166 +65,6 @@ def download_earthquake_data(
     df = df[df["magnitude"] >= mag_filter]
 
     return df
-
-
-def custom_multiprocess_geonet(event_dir: Path, event_id: str, n_procs: int = 1):
-    """
-    Multiprocess the GeoNet data retrieval for speed efficiency over stations
-
-    Parameters
-    ----------
-    event_dir : Path
-        The directory for the event
-    event_id : str
-        The event ID
-    n_procs : int
-        The number of processes to use
-
-    Returns
-    -------
-    bool
-        True if the event was processed, False if the event was skipped
-    """
-    # Generate the site basin flatfile
-    flatfile_dir = file_structure.get_flatfile_dir(event_dir)
-    flatfile_dir.mkdir(parents=True, exist_ok=True)
-
-    site_df = sites.create_site_table_response()
-    site_df = sites.add_site_basins(site_df)
-
-    site_df.to_csv(
-        flatfile_dir / file_structure.PreFlatfileNames.SITE_TABLE, index=False
-    )
-
-    # Set constants
-    config = cfg.Config()
-    channel_codes = ",".join(config.get_value("channel_codes"))
-    client_NZ = FDSN_Client(base_url=config.get_value("real_time_url"))
-    inventory = client_NZ.get_stations(channel=channel_codes, level="response")
-    # Get the catalog information
-    cat = client_NZ.get_events(eventid=event_id)
-    event_cat = cat[0]
-
-    # Get the event line and save the output
-    event_line = geonet.fetch_event_line(event_cat, event_id)
-    event_df = pd.DataFrame(
-        [event_line],
-        columns=[
-            "evid",
-            "datetime",
-            "lat",
-            "lon",
-            "depth",
-            "loc_type",
-            "loc_grid",
-            "mag",
-            "mag_type",
-            "mag_method",
-            "mag_unc",
-            "mag_orig",
-            "mag_orig_type",
-            "mag_orig_unc",
-            "ndef",
-            "nsta",
-            "nmag",
-            "t_res",
-            "reloc",
-        ],
-    )
-    # Save the dataframes with a suffix
-    event_df.to_csv(
-        flatfile_dir / file_structure.PreFlatfileNames.EARTHQUAKE_SOURCE_TABLE_GEONET,
-        index=False,
-    )
-
-    # Get the data_dir
-    data_dir = file_structure.get_data_dir()
-
-    mw_rrup = np.loadtxt(data_dir / "Mw_rrup.txt")
-    mags = mw_rrup[:, 0]
-    rrups = mw_rrup[:, 1]
-    # Generate cubic interpolation for magnitude distance relationship
-    f_rrup = sp.interpolate.interp1d(mags, rrups, kind="cubic")
-
-    # Get Networks / Stations within a certain radius of the event
-    inv_sub_sta = geonet.get_stations_within_radius(
-        event_cat, mags, rrups, f_rrup, inventory
-    )
-
-    # Check if there are any stations
-    if len(inv_sub_sta) == 0:
-        return False
-
-    sta_mag_table = []
-    skipped_records = []
-
-    # Iterate over the networks
-    for network in inv_sub_sta:
-        # Generate the stations to process
-        stations = [station for station in network]
-
-        # Fetch results
-        with mp.Pool(n_procs) as p:
-            results = p.map(
-                functools.partial(
-                    geonet.fetch_sta_mag_line,
-                    network=network,
-                    event_cat=event_cat,
-                    event_id=event_id,
-                    event_dir=event_dir,
-                    client_NZ=client_NZ,
-                    pref_mag=event_line[8],
-                    pref_mag_type=event_line[9],
-                    site_table=site_df,
-                ),
-                stations,
-            )
-
-        # Extract the results
-        for result in results:
-            finished_sta_mag_table, finished_skipped_records = result
-            sta_mag_table.extend(finished_sta_mag_table)
-            skipped_records.extend(finished_skipped_records)
-
-    if len(sta_mag_table) == 0:
-        # No station data, skip this event
-        return False
-    else:
-        sta_mag_df = pd.DataFrame(
-            sta_mag_table,
-            columns=[
-                "magid",
-                "net",
-                "sta",
-                "loc",
-                "chan",
-                "evid",
-                "mag",
-                "mag_type",
-                "mag_corr_method",
-                "amp",
-                "amp_unit",
-            ],
-        )
-
-    sta_mag_df.to_csv(
-        flatfile_dir / file_structure.PreFlatfileNames.STATION_MAGNITUDE_TABLE_GEONET,
-        index=False,
-    )
-
-    if len(skipped_records) > 0:
-        # Create the skipped records df
-        skipped_records_df = pd.DataFrame(
-            skipped_records, columns=["skipped_records", "reason"]
-        )
-    else:
-        skipped_records_df = pd.DataFrame()
-
-    skipped_records_df.to_csv(
-        flatfile_dir / file_structure.SkippedRecordFilenames.GEONET_SKIPPED_RECORDS,
-        index=False,
-    )
-    return True
 
 
 @app.command(
@@ -328,31 +163,28 @@ def run_event(  # noqa: D103
     bool
         True if the event was processed, False if the event was skipped
     """
-
-    # Run the custom multiprocess geonet, site table and geonet steps
-    result = custom_multiprocess_geonet(event_dir, event_id, n_procs)
-
-    if result is None:
-        # Skip this event
-        print(f"Skipping event {event_id}")
-        return None
-
-    # Run the rest of the pipeline
-    run_nzgmdb.run_full_nzgmdb(
-        event_dir,
-        start_date,
-        end_date,
-        gm_classifier_dir,
-        conda_sh,
-        gmc_activate,
-        gmc_predict_activate,
-        gmc_procs,
-        n_procs,
-        ko_matrix_path=ko_matrix_path,
-        checkpoint=True,
-        only_event_ids=[event_id],
-        real_time=True,
-    )
+    try:
+        # Run the rest of the pipeline
+        run_nzgmdb.run_full_nzgmdb(
+            event_dir,
+            start_date,
+            end_date,
+            gm_classifier_dir,
+            conda_sh,
+            gmc_activate,
+            gmc_predict_activate,
+            gmc_procs,
+            n_procs,
+            ko_matrix_path=ko_matrix_path,
+            checkpoint=True,
+            only_event_ids=[event_id],
+            real_time=True,
+        )
+    except custom_errors.NoStationsError:
+        print(f"Event {event_id} has no stations, skipping")
+        # Remove the event directory
+        shutil.rmtree(event_dir)
+        return False
 
     if add_seismic_now:
         # Define the URL for the endpoint
@@ -367,6 +199,7 @@ def run_event(  # noqa: D103
         else:
             print(f"Failed to add event. Status code: {response.status_code}")
             print(f"Response: {response.text}")
+            return False
     return True
 
 
@@ -476,7 +309,7 @@ def poll_earthquake_data(  # noqa: D103
                     end_date,
                 )
 
-                if result is None:
+                if not result:
                     # remove the event directory
                     shutil.rmtree(event_dir)
                 init_start_date = end_date

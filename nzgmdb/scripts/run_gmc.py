@@ -7,7 +7,7 @@ import numpy as np
 import pandas as pd
 import typer
 
-from nzgmdb.management import commands, file_structure
+from nzgmdb.management import file_structure, shell_commands
 
 app = typer.Typer()
 
@@ -22,6 +22,7 @@ def process_batch(
     gmc_activate: str,
     gmc_predict_activate: str,
     phase_arrival_table_ffp: Path,
+    prob_series_ffp: Path,
 ):
     """
     Process a single subfolder: extract features and run predictions.
@@ -46,6 +47,8 @@ def process_batch(
         The command to activate the GMC prediction environment.
     phase_arrival_table_ffp : Path
         The full file path to the phase arrival table
+    prob_series_ffp : Path
+        The full file path to the prob_series hdf5 file.
 
     Raises
     ------
@@ -75,8 +78,8 @@ def process_batch(
             )
         else:
             # Activate gmc environment and extract features for the subfolder
-            features_command = f"python {gmc_scripts_path}/extract_features.py {gmc_dir} {waveform_dir} mseed --ko_matrices_dir {ko_matrices_dir} --record_list_ffp {batch_txt}"
-            commands.run_command(
+            features_command = f"python {gmc_scripts_path}/extract_features.py {gmc_dir} {waveform_dir} mseed --ko_matrices_dir {ko_matrices_dir} --record_list_ffp {batch_txt} --phase_arrival_table {phase_arrival_table_ffp} --prob_series {prob_series_ffp}"
+            shell_commands.run_command(
                 features_command, conda_sh, gmc_activate, log_file_path_features
             )
 
@@ -95,7 +98,7 @@ def process_batch(
         predict_command = (
             f"python {gmc_scripts_path}/predict.py {gmc_dir} {predictions_output}"
         )
-        commands.run_command(
+        shell_commands.run_command(
             predict_command, conda_sh, gmc_predict_activate, log_file_path_predict
         )
 
@@ -189,6 +192,7 @@ def run_gmc_processing(  # noqa: D103
     phase_arrival_table_ffp = (
         flatfile_dir / file_structure.PreFlatfileNames.PHASE_ARRIVAL_TABLE
     )
+    prob_series_ffp = flatfile_dir / file_structure.PreFlatfileNames.PROB_SERIES
 
     # Get all the mseed files
     mseed_files = list(waveform_dir.rglob("*.mseed"))
@@ -206,6 +210,7 @@ def run_gmc_processing(  # noqa: D103
         gmc_activate=gmc_activate,
         gmc_predict_activate=gmc_predict_activate,
         phase_arrival_table_ffp=phase_arrival_table_ffp,
+        prob_series_ffp=prob_series_ffp,
     )
 
     # Use multiprocessing with starmap and the partial function
