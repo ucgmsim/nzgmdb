@@ -21,7 +21,7 @@ class PreFlatfileNames(StrEnum):
     SITE_TABLE = "site_table_all.csv"
     PROPAGATION_TABLE = "propagation_path_table_all.csv"
     GROUND_MOTION_IM_CATALOGUE = "ground_motion_im_catalogue.csv"
-    PROB_SERIES = "prob_series.h5"
+    # PROB_SERIES = "prob_series.h5"
 
 
 class FlatfileNames(StrEnum):

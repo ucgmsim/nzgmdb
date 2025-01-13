@@ -179,7 +179,7 @@ def main(
     #             )
     #         )
 
-    failed_files = [] # REMOVE THIS LINE
+    failed_files = []  # REMOVE THIS LINE
     failed_files.append(upload_zip_to_dropbox(flatfiles_zip, dropbox_version_dir))
     # failed_files.append(upload_zip_to_dropbox(skipped_zip, dropbox_version_dir))
     failed_files.append(upload_zip_to_dropbox(pre_flatfiles_zip, dropbox_version_dir))
