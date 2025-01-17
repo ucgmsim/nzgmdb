@@ -50,10 +50,7 @@ def filter_flatfiles_on_catalouge(
         if file == FlatfileNames.EARTHQUAKE_SOURCE_TABLE:
             # filter by evid
             df_filtered = df[df["evid"].isin(rotd50_flat["evid"])]
-        elif file in [
-            FlatfileNames.STATION_MAGNITUDE_TABLE,
-            FlatfileNames.PHASE_ARRIVAL_TABLE,
-        ]:
+        elif file == FlatfileNames.STATION_MAGNITUDE_TABLE:
             # Make the record_id column
             df["record_id"] = (
                 df["evid"]
@@ -490,6 +487,9 @@ def filter_duplicate_channels(catalog: pd.DataFrame, bypass_records: np.ndarray 
     pd.DataFrame
         The skipped records
     """
+    # Remove all channels that are not HN or BN
+    catalog = catalog[catalog["chan"].isin(["HN", "BN"])]
+
     # Find same evid_sta combos by combining evid and sta columns
     catalog["evid_sta"] = catalog["evid"].astype(str) + "_" + catalog["sta"]
 
