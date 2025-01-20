@@ -5,70 +5,18 @@ from pathlib import Path
 import numpy as np
 import pandas as pd
 
-from IM_calculation.IM import im_calculation
-from IM_calculation.IM.read_waveform import Waveform
+from IM import im_calculation, waveform_reading, ims
 from nzgmdb.management import config as cfg
 from nzgmdb.management import file_structure
-from nzgmdb.mseed_management import reading
-from qcore.constants import Components
-
-
-def compute_im_for_waveform(
-    waveform: Waveform,
-    record_id: str,
-    event_output_path: Path,
-    components: list[Components],
-    ims: list[str],
-    im_options: dict[str, list[float]],
-    ko_matrices_path: Path = None,
-):
-    """
-    Compute the IMs for a single waveform and save the results to a csv file
-
-    Parameters
-    ----------
-    waveform : Waveform
-        The waveform object to calculate the IMs for
-    record_id : str
-        The record id
-    event_output_path : Path
-        The path to the event output directory
-    components : list[Components]
-        The components of the record
-    ims : list[str]
-        The IMs to calculate
-    im_options : dict[str, list[float]]
-        The options for the IMs
-    ko_matrices_path : Path, optional
-        The path to the KO matrices, by default None
-    """
-    im_result = im_calculation.compute_measure_single(
-        (waveform, None),
-        ims,
-        components,
-        im_options,
-        components,
-        ko_matrices_path=ko_matrices_path,
-    )
-
-    # Turn the results into a dataframe
-    im_result_df = pd.DataFrame(im_result).T
-
-    # Set a column for the mseed stem and then component and set at the front
-    im_result_df.insert(0, "component", [comp.str_value for comp in components])
-    im_result_df.insert(0, "record_id", record_id)
-
-    # Save the file
-    im_result_df.to_csv(event_output_path / f"{record_id}_IM.csv", index=False)
 
 
 def calculate_im_for_record(
     ffp_000: Path,
     output_path: Path,
-    components: list[Components],
-    ims: list[str],
-    im_options: dict[str, list[float]],
-    ko_matrices_path: Path = None,
+    intensity_measures: list[ims.IM],
+    psa_periods: np.ndarray,
+    fas_frequencies: np.ndarray,
+    ko_bandwith: int = 40,
 ):
     """
     Calculate the IMs for a single record and save the results to a csv file
@@ -79,58 +27,53 @@ def calculate_im_for_record(
         The full file path to the 000 component file
     output_path : Path
         The path to the output directory
-    components : list[Components]
-        The components of the record
-    ims : list[str]
-        The IMs to calculate
-    im_options : dict[str, list[float]]
-        The options for the IMs
-    ko_matrices_path : Path, optional
-        The path to the KO matrices, by default None
+    intensity_measures : list[ims.IM]
+        The list of intensity measures to calculate
+    psa_periods : np.ndarray
+        The periods for calculating the pseudo-spectral acceleration
+    fas_frequencies : np.ndarray
+        The frequencies for calculating the Fourier amplitude spectrum
+    ko_bandwith : int, optional
+        The bandwidth for the Konno-Ohmachi smoothing, by default 40
     """
-    # Load the mseed file
-    mseed_file = ffp_000.parent.parent / "mseed" / f"{ffp_000.stem}.mseed"
-    try:
-        mseed = reading.read_mseed_to_stream(mseed_file)
-    except FileNotFoundError:
-        skipped_record_dict = {
-            "record_id": ffp_000.stem,
-            "reason": "Failed to find the mseed file",
-        }
-        skipped_record = pd.DataFrame([skipped_record_dict])
-        return skipped_record
-
     # Get the 090 and ver components full file paths
     ffp_090 = ffp_000.parent / f"{ffp_000.stem}.090"
     ffp_ver = ffp_000.parent / f"{ffp_000.stem}.ver"
+    record_id = ffp_000.stem
 
     try:
-        waveform = reading.create_waveform_from_processed(
-            ffp_090, ffp_000, ffp_ver, delta=mseed[0].stats.delta
-        )
+        dt, waveform = waveform_reading.read_ascii(ffp_000, ffp_090, ffp_ver)
     except FileNotFoundError:
         skipped_record_dict = {
-            "record_id": mseed_file.stem,
-            "reason": "Failed to find all components",
+            "record_id": record_id,
+            "reason": "Failed to find the waveform ascii files",
         }
         skipped_record = pd.DataFrame([skipped_record_dict])
         return skipped_record
 
     # Get the event_id and create the output directory
-    event_id = file_structure.get_event_id_from_mseed(mseed_file)
+    event_id = file_structure.get_event_id_from_mseed(ffp_000)
     event_output_path = output_path / event_id
     event_output_path.mkdir(exist_ok=True, parents=True)
 
     # Calculate the IMs
-    compute_im_for_waveform(
+    im_result_df = im_calculation.calculate_ims(
         waveform,
-        ffp_000.stem,
-        event_output_path,
-        components,
-        ims,
-        im_options,
-        ko_matrices_path,
+        dt,
+        intensity_measures,
+        psa_periods,
+        fas_frequencies,
+        cores=1,
+        ko_bandwidth=ko_bandwith,
     )
+
+    # Set a column for the record_id and then component and set at the front
+    im_result_df = im_result_df.reset_index()
+    im_result_df = im_result_df.rename(columns={"index": "component"})
+    im_result_df.insert(0, "record_id", record_id)
+
+    # Save the file
+    im_result_df.to_csv(event_output_path / f"{record_id}_IM.csv", index=False)
 
 
 def compute_ims_for_all_processed_records(
@@ -138,7 +81,6 @@ def compute_ims_for_all_processed_records(
     output_path: Path,
     n_procs: int = 1,
     checkpoint: bool = False,
-    ko_matrices_path: Path = None,
 ):
     """
     Compute the IMs for all processed records in the main directory
@@ -153,8 +95,6 @@ def compute_ims_for_all_processed_records(
         The number of processes to use
     checkpoint : bool, optional
         If True, the function will check for already completed files and skip them
-    ko_matrices_path : Path, optional
-        The path to the KO matrices, by default None
     """
     # Get the waveform directory and all the 000 files
     waveform_dir = file_structure.get_waveform_dir(main_dir)
@@ -170,23 +110,14 @@ def compute_ims_for_all_processed_records(
 
     # Load the config and extract the IM options
     config = cfg.Config()
-    ims = config.get_value("ims")
+    intensity_measures = [ims.IM[measure] for measure in config.get_value("ims")]
     psa_periods = np.asarray(config.get_value("psa_periods"))
     fas_frequencies = np.logspace(
         np.log10(config.get_value("common_frequency_start")),
         np.log10(config.get_value("common_frequency_end")),
         num=config.get_value("common_frequency_num"),
     )
-    # Set components from qcore class for IM calculation
-    _, components = Components.get_comps_to_calc_and_store(
-        config.get_value("components")
-    )
-
-    im_options = {
-        "pSA": psa_periods,
-        "SDI": psa_periods,
-        "FAS": im_calculation.validate_fas_frequency(fas_frequencies),
-    }
+    ko_bandwith = config.get_value("ko_bandwidth")
 
     # Fetch results
     with mp.Pool(n_procs) as p:
@@ -194,10 +125,10 @@ def compute_ims_for_all_processed_records(
             functools.partial(
                 calculate_im_for_record,
                 output_path=output_path,
-                components=components,
-                ims=ims,
-                im_options=im_options,
-                ko_matrices_path=ko_matrices_path,
+                intensity_measures=intensity_measures,
+                psa_periods=psa_periods,
+                fas_frequencies=fas_frequencies,
+                ko_bandwith=ko_bandwith,
             ),
             comp_000_files,
         )

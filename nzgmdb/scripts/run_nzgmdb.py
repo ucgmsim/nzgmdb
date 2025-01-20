@@ -158,7 +158,7 @@ def make_phase_arrival_table(  # noqa: D103
 @app.command(
     help="Calculate the signal to noise ratio of the waveforms as well as FAS. "
     "Requires the phase arrival table and mseed files to be generated. "
-    "Allows for custom links to the KO matrix, meta output directory, and SNR and FAS output directory. "
+    "Allows custom output directories for meta output directory, and SNR/FAS output. "
     "If not provided, the default directories are used as if running the full NZGMDB pipeline."
     "Note: Can't have the common frequency vector as an input due to typer limitations. "
     "Instead change the configuration file."
@@ -195,20 +195,6 @@ def calculate_snr(  # noqa: D103
         ),
     ] = None,
     n_procs: Annotated[int, typer.Option(help="Number of processes to use")] = 1,
-    no_smoothing: Annotated[
-        bool,
-        typer.Option(
-            help="Enable to disable smoothing to the SNR calculation", is_flag=True
-        ),
-    ] = False,
-    ko_matrix_path: Annotated[
-        Path,
-        typer.Option(
-            help="Path to the ko matrix directory",
-            exists=True,
-            file_okay=False,
-        ),
-    ] = None,
     batch_size: Annotated[
         int,
         typer.Option(
@@ -232,8 +218,6 @@ def calculate_snr(  # noqa: D103
         meta_output_dir,
         snr_fas_output_dir,
         n_procs,
-        apply_smoothing=not no_smoothing,
-        ko_matrix_path=ko_matrix_path,
         batch_size=batch_size,
     )
 
@@ -352,20 +336,10 @@ def run_im_calculation(  # noqa: D103
             is_flag=True,
         ),
     ] = False,
-    ko_matrix_path: Annotated[
-        Path,
-        typer.Option(
-            help="Path to the ko matrix directory",
-            exists=True,
-            file_okay=False,
-        ),
-    ] = None,
 ):
     if output_dir is None:
         output_dir = file_structure.get_im_dir(main_dir)
-    ims.compute_ims_for_all_processed_records(
-        main_dir, output_dir, n_procs, checkpoint, ko_matrix_path
-    )
+    ims.compute_ims_for_all_processed_records(main_dir, output_dir, n_procs, checkpoint)
 
 
 @app.command(help="Generate the site table basin flatfile")
