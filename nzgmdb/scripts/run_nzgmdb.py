@@ -723,7 +723,7 @@ def run_full_nzgmdb(  # noqa: D103
     # Run IM calculation
     im_dir = file_structure.get_im_dir(main_dir)
     print("Calculating IMs")
-    run_im_calculation(main_dir, im_dir, n_procs, checkpoint, ko_matrix_path)
+    run_im_calculation(main_dir, im_dir, n_procs, checkpoint)
 
     # Merge IM results
     if not (
