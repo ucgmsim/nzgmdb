@@ -179,7 +179,9 @@ def merge_flatfiles(main_dir: Path):
 
     # Load the files
     event_df = pd.read_csv(
-        flatfile_dir / file_structure.PreFlatfileNames.EARTHQUAKE_SOURCE_TABLE_DISTANCES
+        flatfile_dir
+        / file_structure.PreFlatfileNames.EARTHQUAKE_SOURCE_TABLE_DISTANCES,
+        dtype={"evid": str},
     )
     sta_mag_df = pd.read_csv(
         flatfile_dir / file_structure.PreFlatfileNames.STATION_MAGNITUDE_TABLE_GEONET
@@ -192,7 +194,7 @@ def merge_flatfiles(main_dir: Path):
     )
     im_df = pd.read_csv(
         flatfile_dir / file_structure.PreFlatfileNames.GROUND_MOTION_IM_CATALOGUE,
-        dtype={"loc": str},
+        dtype={"loc": str, "evid": str},
     )
     site_basin_df = pd.read_csv(
         flatfile_dir / file_structure.PreFlatfileNames.SITE_TABLE
