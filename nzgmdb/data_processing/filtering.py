@@ -24,7 +24,10 @@ def get_clip_probability(event_mag: float, dist: float, mseed: Stream) -> float:
     dist = np.clip(dist, dist_clip_low, dist_clip_high)
 
     # Get different methods for clipping
-    max_amp_method = MaxAmp(mseed)
+    try:
+        max_amp_method = MaxAmp(mseed)
+    except Exception:
+        print("MaxAmp method failed")
     hist_method = Histogram(mseed)
     ping_method = Ping(mseed)
 

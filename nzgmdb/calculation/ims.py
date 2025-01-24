@@ -56,6 +56,10 @@ def calculate_im_for_record(
     event_output_path = output_path / event_id
     event_output_path.mkdir(exist_ok=True, parents=True)
 
+    nyquist_feq = (1 / dt) * 0.5
+    # Filter the fas_frequencies to be less than or equal to the nyquist frequency
+    fas_frequencies = fas_frequencies[fas_frequencies <= nyquist_feq]
+
     # Calculate the IMs
     im_result_df = im_calculation.calculate_ims(
         waveform,

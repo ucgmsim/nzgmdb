@@ -37,16 +37,14 @@ class FlatfileNames(StrEnum):
     GMC_PREDICTIONS = "gmc_predictions.csv"
     FMAX = "fmax.csv"
     SNR_METADATA = "snr_metadata.csv"
-    GROUND_MOTION_IM_000 = "ground_motion_im_table_000.csv"
     GROUND_MOTION_IM_000_FLAT = "ground_motion_im_table_000_flat.csv"
-    GROUND_MOTION_IM_090 = "ground_motion_im_table_090.csv"
     GROUND_MOTION_IM_090_FLAT = "ground_motion_im_table_090_flat.csv"
-    GROUND_MOTION_IM_VER = "ground_motion_im_table_ver.csv"
     GROUND_MOTION_IM_VER_FLAT = "ground_motion_im_table_ver_flat.csv"
-    GROUND_MOTION_IM_ROTD50 = "ground_motion_im_table_rotd50.csv"
+    GROUND_MOTION_IM_GEOM_FLAT = "ground_motion_im_table_geom_flat.csv"
+    GROUND_MOTION_IM_ROTD0_FLAT = "ground_motion_im_table_rotd0_flat.csv"
     GROUND_MOTION_IM_ROTD50_FLAT = "ground_motion_im_table_rotd50_flat.csv"
-    GROUND_MOTION_IM_ROTD100 = "ground_motion_im_table_rotd100.csv"
     GROUND_MOTION_IM_ROTD100_FLAT = "ground_motion_im_table_rotd100_flat.csv"
+    GROUND_MOTION_IM_EAS_FLAT = "ground_motion_im_table_eas_flat.csv"
 
 
 class SkippedRecordFilenames(StrEnum):

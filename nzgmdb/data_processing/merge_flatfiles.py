@@ -104,10 +104,10 @@ def merge_im_data(
             "PGA",
             "PGV",
             "CAV",
+            "CAV5",
             "AI",
             "Ds575",
             "Ds595",
-            "MMI",
             "score_mean_X",
             "fmin_mean_X",
             "fmax_mean_X",
@@ -130,38 +130,6 @@ def merge_im_data(
         output_dir / file_structure.PreFlatfileNames.GROUND_MOTION_IM_CATALOGUE,
         index=False,
     )
-
-
-def seperate_components(
-    df: pd.DataFrame,
-) -> tuple[pd.DataFrame, pd.DataFrame, pd.DataFrame, pd.DataFrame, pd.DataFrame]:
-    """
-    Separate the components into the different component dataframes
-
-    Parameters
-    ----------
-    df : pd.DataFrame
-        The dataframe to separate, merged large gm_flatfile
-
-    Returns
-    -------
-    df_000 : pd.DataFrame
-        The 000 component dataframe
-    df_090 : pd.DataFrame
-        The 090 component dataframe
-    df_ver : pd.DataFrame
-        The ver component dataframe
-    df_rotd50 : pd.DataFrame
-        The rotd50 component dataframe
-    df_rotd100 : pd.DataFrame
-        The rotd100 component dataframe
-    """
-    df_000 = df[df.component == "000"]
-    df_090 = df[df.component == "090"]
-    df_ver = df[df.component == "ver"]
-    df_rotd50 = df[df.component == "rotd50"]
-    df_rotd100 = df[df.component == "rotd100"]
-    return df_000, df_090, df_ver, df_rotd50, df_rotd100
 
 
 def merge_flatfiles(main_dir: Path):
@@ -463,10 +431,10 @@ def merge_flatfiles(main_dir: Path):
             "PGA",
             "PGV",
             "CAV",
+            "CAV5",
             "AI",
             "Ds575",
             "Ds595",
-            "MMI",
             "score_X",
             "fmin_X",
             "fmax_X",
@@ -487,15 +455,42 @@ def merge_flatfiles(main_dir: Path):
     )
     gm_im_df_flat = gm_im_df_flat[columns]
 
-    # Separate into different components for both flatfile and normal im data
-    df_000, df_090, df_ver, df_rotd50, df_rotd100 = seperate_components(im_df)
+    # Separate into different component files
     (
         df_000_flat,
         df_090_flat,
         df_ver_flat,
+        df_geomean_flat,
+        df_rotd0_flat,
         df_rotd50_flat,
         df_rotd100_flat,
-    ) = seperate_components(gm_im_df_flat)
+        df_eas_flat,
+    ) = (
+        gm_im_df_flat[gm_im_df_flat.component == "000"],
+        gm_im_df_flat[gm_im_df_flat.component == "090"],
+        gm_im_df_flat[gm_im_df_flat.component == "ver"],
+        gm_im_df_flat[gm_im_df_flat.component == "geom"],
+        gm_im_df_flat[gm_im_df_flat.component == "rotd0"],
+        gm_im_df_flat[gm_im_df_flat.component == "rotd50"],
+        gm_im_df_flat[gm_im_df_flat.component == "rotd100"],
+        gm_im_df_flat[gm_im_df_flat.component == "eas"],
+    )
+
+    # Remove NaN columns from the flatfiles with invalid components
+    columns_remove_rotd = ["CAV", "CAV5", "AI", "Ds575", "Ds595"] + fas_columns
+    columns_remove_eas = [
+        "PGA",
+        "PGV",
+        "CAV",
+        "CAV5",
+        "AI",
+        "Ds575",
+        "Ds595",
+    ] + psa_columns
+    df_rotd0_flat = df_rotd0_flat.drop(columns=columns_remove_rotd)
+    df_rotd50_flat = df_rotd50_flat.drop(columns=columns_remove_rotd)
+    df_rotd100_flat = df_rotd100_flat.drop(columns=columns_remove_rotd)
+    df_eas_flat = df_eas_flat.drop(columns=columns_remove_eas)
 
     # Save final outputs
     event_df.to_csv(
@@ -513,22 +508,6 @@ def merge_flatfiles(main_dir: Path):
     prop_df.to_csv(
         flatfile_dir / file_structure.FlatfileNames.PROPAGATION_TABLE, index=False
     )
-    df_000.to_csv(
-        flatfile_dir / file_structure.FlatfileNames.GROUND_MOTION_IM_000, index=False
-    )
-    df_090.to_csv(
-        flatfile_dir / file_structure.FlatfileNames.GROUND_MOTION_IM_090, index=False
-    )
-    df_ver.to_csv(
-        flatfile_dir / file_structure.FlatfileNames.GROUND_MOTION_IM_VER, index=False
-    )
-    df_rotd50.to_csv(
-        flatfile_dir / file_structure.FlatfileNames.GROUND_MOTION_IM_ROTD50, index=False
-    )
-    df_rotd100.to_csv(
-        flatfile_dir / file_structure.FlatfileNames.GROUND_MOTION_IM_ROTD100,
-        index=False,
-    )
     df_000_flat.to_csv(
         flatfile_dir / file_structure.FlatfileNames.GROUND_MOTION_IM_000_FLAT,
         index=False,
@@ -541,11 +520,23 @@ def merge_flatfiles(main_dir: Path):
         flatfile_dir / file_structure.FlatfileNames.GROUND_MOTION_IM_VER_FLAT,
         index=False,
     )
+    df_geomean_flat.to_csv(
+        flatfile_dir / file_structure.FlatfileNames.GROUND_MOTION_IM_GEOM_FLAT,
+        index=False,
+    )
+    df_rotd0_flat.to_csv(
+        flatfile_dir / file_structure.FlatfileNames.GROUND_MOTION_IM_ROTD0_FLAT,
+        index=False,
+    )
     df_rotd50_flat.to_csv(
         flatfile_dir / file_structure.FlatfileNames.GROUND_MOTION_IM_ROTD50_FLAT,
         index=False,
     )
     df_rotd100_flat.to_csv(
         flatfile_dir / file_structure.FlatfileNames.GROUND_MOTION_IM_ROTD100_FLAT,
+        index=False,
+    )
+    df_eas_flat.to_csv(
+        flatfile_dir / file_structure.FlatfileNames.GROUND_MOTION_IM_EAS_FLAT,
         index=False,
     )

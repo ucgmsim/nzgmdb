@@ -680,8 +680,6 @@ def run_full_nzgmdb(  # noqa: D103
             flatfile_dir,
             snr_fas_output_dir,
             n_procs,
-            no_smoothing=no_smoothing,
-            ko_matrix_path=ko_matrix_path,
             batch_size=snr_batch_size,
         )
 
