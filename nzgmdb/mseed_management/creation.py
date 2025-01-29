@@ -110,7 +110,6 @@ def get_waveforms(
         else ds * ds_multiplier
     )
 
-    channel_codes = ",".join(config.get_value("channel_codes"))
     # Get the waveforms with multiple retries when IncompleteReadError occurs
     max_retries = 3
     for attempt in range(max_retries):

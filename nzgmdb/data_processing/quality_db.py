@@ -49,6 +49,8 @@ def filter_flatfiles_on_catalouge(
             # filter by evid
             df_filtered = df[df["evid"].isin(rotd50_flat["evid"])]
         elif file == FlatfileNames.STATION_MAGNITUDE_TABLE:
+            # Ensure loc is str
+            df["loc"] = df["loc"].astype(str)
             # Make the record_id column
             df["record_id"] = (
                 df["evid"]

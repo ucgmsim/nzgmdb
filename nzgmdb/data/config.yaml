@@ -21,9 +21,6 @@ points_per_km: 10
 vs30: 500
 min_time_difference: 15
 ds_multiplier: 2
-channel_codes:
-  - HN?
-  - BN?
 # GMProcess Variables
 gmprocess_url: https://earthquake.usgs.gov/fdsnws/event/1/query
 search_radius: 25 # In Kilometers
