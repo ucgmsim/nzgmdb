@@ -123,6 +123,7 @@ def compute_ims_for_all_processed_records(
         ims.IM.CAV5,
         ims.IM.PGV,
         ims.IM.PGA,
+        ims.IM.pSA
     ]
     psa_periods = np.asarray(config.get_value("psa_periods"))
     fas_frequencies = np.logspace(
