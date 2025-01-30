@@ -113,25 +113,23 @@ def compute_ims_for_all_processed_records(
 
     print(f"Calculating IMs for {len(comp_000_files)} records")
 
-    os.environ['OMP_NUM_THREADS'] = '1'
-    os.environ['MKL_NUM_THREADS'] = '1'
-    os.environ['NUMEXPR_NUM_THREADS'] = '1'
-    os.environ['VECLIB_MAXIMUM_THREADS'] = '1'
-    os.environ['OPENBLAS_NUM_THREADS'] = '1'
-    os.environ['NUMBA_NUM_THREADS'] = '1'
+    os.environ["OMP_NUM_THREADS"] = "1"
+    os.environ["NUMEXPR_NUM_THREADS"] = "1"
+    os.environ["OPENBLAS_NUM_THREADS"] = "1"
+    os.environ["NUMBA_NUM_THREADS"] = "1"
 
     # Load the config and extract the IM options
     config = cfg.Config()
     # intensity_measures = [ims.IM[measure] for measure in config.get_value("ims")]
     intensity_measures = [
-        # ims.IM.CAV,
-        # ims.IM.AI,
-        # ims.IM.Ds575,
-        # ims.IM.Ds595,
-        # ims.IM.CAV5,
-        # ims.IM.PGV,
-        # ims.IM.PGA,
-        # ims.IM.pSA,
+        ims.IM.CAV,
+        ims.IM.AI,
+        ims.IM.Ds575,
+        ims.IM.Ds595,
+        ims.IM.CAV5,
+        ims.IM.PGV,
+        ims.IM.PGA,
+        ims.IM.pSA,
         ims.IM.FAS
     ]
     psa_periods = np.asarray(config.get_value("psa_periods"))
