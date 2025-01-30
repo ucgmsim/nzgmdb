@@ -1,4 +1,5 @@
 import functools
+import os
 import multiprocessing as mp
 from pathlib import Path
 
@@ -111,6 +112,13 @@ def compute_ims_for_all_processed_records(
         comp_000_files = [f for f in comp_000_files if f.stem not in completed_files]
 
     print(f"Calculating IMs for {len(comp_000_files)} records")
+
+    os.environ['OMP_NUM_THREADS'] = '1'
+    os.environ['MKL_NUM_THREADS'] = '1'
+    os.environ['NUMEXPR_NUM_THREADS'] = '1'
+    os.environ['VECLIB_MAXIMUM_THREADS'] = '1'
+    os.environ['OPENBLAS_NUM_THREADS'] = '1'
+    os.environ['NUMBA_NUM_THREADS'] = '1'
 
     # Load the config and extract the IM options
     config = cfg.Config()
