@@ -115,7 +115,15 @@ def compute_ims_for_all_processed_records(
     # Load the config and extract the IM options
     config = cfg.Config()
     # intensity_measures = [ims.IM[measure] for measure in config.get_value("ims")]
-    intensity_measures = [ims.IM.CAV, ims.IM.AI, ims.IM.Ds575, ims.IM.Ds595, ims.IM.CAV5, ims.IM.PGV]
+    intensity_measures = [
+        ims.IM.CAV,
+        ims.IM.AI,
+        ims.IM.Ds575,
+        ims.IM.Ds595,
+        ims.IM.CAV5,
+        ims.IM.PGV,
+        ims.IM.PGA,
+    ]
     psa_periods = np.asarray(config.get_value("psa_periods"))
     fas_frequencies = np.logspace(
         np.log10(config.get_value("common_frequency_start")),
