@@ -102,7 +102,7 @@ def compute_ims_for_all_processed_records(
     """
     # Get the waveform directory and all the 000 files
     waveform_dir = file_structure.get_waveform_dir(main_dir)
-    comp_000_files = waveform_dir.rglob("*.000")
+    comp_000_files = list(waveform_dir.rglob("*.000"))
 
     if checkpoint:
         # Get list of already completed files and remove _IM suffix
@@ -115,7 +115,7 @@ def compute_ims_for_all_processed_records(
     # Load the config and extract the IM options
     config = cfg.Config()
     # intensity_measures = [ims.IM[measure] for measure in config.get_value("ims")]
-    intensity_measures = [ims.IM.PGA]
+    intensity_measures = [ims.IM.AI]
     psa_periods = np.asarray(config.get_value("psa_periods"))
     fas_frequencies = np.logspace(
         np.log10(config.get_value("common_frequency_start")),
