@@ -6,7 +6,7 @@ os.environ["NUMEXPR_NUM_THREADS"] = "1"
 
 # Set environment variables for Numba
 os.environ["NUMBA_MAX_THREADS"] = "1"
-# os.environ['NUMBA_NUM_THREADS'] = "1"
+os.environ["NUMBA_NUM_THREADS"] = "1"
 
 # Set the number of threads for OpenBLAS
 # Needed for matrix multiplication in NumPy during FAS
