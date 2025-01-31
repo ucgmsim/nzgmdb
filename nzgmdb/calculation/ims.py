@@ -124,6 +124,9 @@ def compute_ims_for_all_processed_records(
     )
     ko_bandwith = config.get_value("ko_bandwidth")
 
+    # Set the cores to 1
+    ims.set_cores(1)
+
     # Fetch results
     with mp.Pool(n_procs) as p:
         skipped_records = p.map(
