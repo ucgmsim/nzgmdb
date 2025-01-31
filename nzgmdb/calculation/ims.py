@@ -5,7 +5,7 @@ from pathlib import Path
 import numpy as np
 import pandas as pd
 
-from IM import im_calculation, waveform_reading, ims
+from IM import im_calculation, ims, waveform_reading
 from nzgmdb.management import config as cfg
 from nzgmdb.management import file_structure
 
