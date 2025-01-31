@@ -14,6 +14,6 @@ h5py
 empirical @ git+https://github.com/ucgmsim/Empirical_Engine.git
 openquake-engine @ git+https://github.com/gem/oq-engine.git
 qcore @ git+https://github.com/ucgmsim/qcore.git
-IM @ git+https://github.com/ucgmsim/IM_calculation.git
+IM_calculation @ git+https://github.com/ucgmsim/IM_calculation.git
 Velocity_Model @ git+https://github.com/ucgmsim/Velocity-Model.git
 source-modelling @ git+https://github.com/ucgmsim/source_modelling.git
