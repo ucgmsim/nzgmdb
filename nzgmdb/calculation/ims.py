@@ -10,6 +10,17 @@ from IM import im_calculation, waveform_reading, ims
 from nzgmdb.management import config as cfg
 from nzgmdb.management import file_structure
 
+# Set environment variables for NumExpr
+os.environ['NUMEXPR_NUM_THREADS'] = "1"
+
+# Set environment variables for Numba
+os.environ['NUMBA_MAX_THREADS'] = "1"
+# os.environ['NUMBA_NUM_THREADS'] = "1"
+
+# Set the number of threads for OpenBLAS
+# Needed for matrix multiplication in NumPy during FAS
+os.environ["OPENBLAS_NUM_THREADS"] = "1"
+
 
 def calculate_im_for_record(
     ffp_000: Path,
@@ -125,7 +136,7 @@ def compute_ims_for_all_processed_records(
     ko_bandwith = config.get_value("ko_bandwidth")
 
     # Set the cores to 1
-    ims.set_single_core()
+    # ims.set_single_core()
 
     # Fetch results
     with mp.Pool(n_procs) as p:
