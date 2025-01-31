@@ -1,17 +1,4 @@
 import functools
-import os
-
-# Set environment variables for NumExpr
-os.environ["NUMEXPR_NUM_THREADS"] = "1"
-
-# Set environment variables for Numba
-os.environ["NUMBA_MAX_THREADS"] = "1"
-os.environ["NUMBA_NUM_THREADS"] = "1"
-
-# Set the number of threads for OpenBLAS
-# Needed for matrix multiplication in NumPy during FAS
-os.environ["OPENBLAS_NUM_THREADS"] = "1"
-
 import multiprocessing as mp
 from pathlib import Path
 
@@ -135,9 +122,6 @@ def compute_ims_for_all_processed_records(
         num=config.get_value("common_frequency_num"),
     )
     ko_bandwith = config.get_value("ko_bandwidth")
-
-    # Set the cores to 1
-    # ims.set_single_core()
 
     # Fetch results
     with mp.Pool(n_procs) as p:
