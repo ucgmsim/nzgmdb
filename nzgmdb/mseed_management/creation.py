@@ -8,7 +8,6 @@ from pathlib import Path
 import mseedlib
 import numpy as np
 import pandas as pd
-
 from obspy import Stream
 from obspy.clients.fdsn import Client as FDSN_Client
 from obspy.clients.fdsn.header import FDSNNoDataException

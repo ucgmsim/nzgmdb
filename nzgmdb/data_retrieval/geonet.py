@@ -332,7 +332,7 @@ def fetch_sta_mag_line(
                 continue
         except TypeError:
             stats = mseed[0].stats
-            clipped_records.append(
+            skipped_records.append(
                 [
                     f"{event_id}_{stats.station}_{stats.location}_{stats.channel}",
                     "TypeError when checking for all 0's",
@@ -345,13 +345,12 @@ def fetch_sta_mag_line(
         # Check if the record should be dropped
         if clip > threshold:
             stats = mseed[0].stats
-            skipped_records.append(
+            clipped_records.append(
                 [
                     f"{event_id}_{stats.station}_{stats.location}_{stats.channel}",
                     "Clipped",
                 ]
             )
-            continue
 
         # Create the directory structure for the given event
         year = event_cat.origins[0].time.year
