@@ -24,35 +24,6 @@ from nzgmdb.management import custom_errors, file_structure
 from nzgmdb.mseed_management import creation
 
 
-# def check_in_NZ_domain(lat: float, lon: float):
-#     """
-#     Check if the latitude and longitude are within the New Zealand domain
-#
-#     Parameters
-#     ----------
-#     lat : float
-#         The latitude to check
-#     lon : float
-#         The longitude to check
-#
-#     Returns
-#     -------
-#     bool
-#         True if the latitude and longitude are within the New Zealand domain, False otherwise
-#     """
-#     coastline_path = resources.files(data) / "Paths" / "coastline" / "NZ.gmt"
-#
-#     gpd_df = gpd.read_file(coastline_path)
-#     island_polygons = [
-#         Polygon(
-#             coordinates.wgs_depth_to_nztm(
-#                 np.array(shapely.geometry.mapping(island)["coordinates"])[:, ::-1]
-#             )
-#         )
-#         for island in gpd_df.geometry
-#     ]
-
-
 def get_max_magnitude(magnitudes: list[Magnitude], mag_type: str):
     """
     Helper function to get the maximum magnitude of a certain type
@@ -499,12 +470,6 @@ def fetch_event_data(
             for station in network:
                 # Check if the station is in the only_sites list if only_sites is defined
                 if only_sites is None or station.code in only_sites:
-                    # Check the station is outside the NZ domain
-                    # if not check_in_NZ_domain(station.latitude, station.longitude):
-                    #     skipped_records.append(
-                    #         [f"{event_id}_{station.code}", "Outside NZ Domain"]
-                    #     )
-                    #     continue
                     # Get the station magnitude lines
                     sta_mag_line, new_skipped_records, new_clipped_records = (
                         fetch_sta_mag_line(
@@ -888,14 +853,16 @@ def parse_geonet_information(
 
     event_df = pd.concat(event_dfs, ignore_index=True)
     sta_mag_df = pd.concat(sta_mag_dfs, ignore_index=True)
-    if skipped_records_dfs:
-        skipped_records_df = pd.concat(skipped_records_dfs, ignore_index=True)
-    else:
-        skipped_records_df = pd.DataFrame()
-    if clipped_records_dfs:
-        clipped_records_df = pd.concat(clipped_records_dfs, ignore_index=True)
-    else:
-        clipped_records_df = pd.DataFrame()
+    skipped_records_df = (
+        pd.concat(skipped_records_dfs, ignore_index=True)
+        if skipped_records_dfs
+        else pd.DataFrame()
+    )
+    clipped_records_df = (
+        pd.concat(clipped_records_dfs, ignore_index=True)
+        if clipped_records_dfs
+        else pd.DataFrame()
+    )
 
     # Save the dataframes
     event_df.to_csv(

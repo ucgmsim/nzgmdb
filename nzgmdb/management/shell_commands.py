@@ -29,7 +29,6 @@ def run_command(
         # Create the command to source conda.sh, activate the environment, and execute the full command
         command = f"source {env_sh} && {env_activate_command} && {command}"
         env = os.environ.copy()
-        # env["LD_LIBRARY_PATH"] = ":/home/joel/anaconda3/lib"
         try:
             subprocess.check_call(
                 command,

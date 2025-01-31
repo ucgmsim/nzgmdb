@@ -278,5 +278,4 @@ if __name__ == "__main__":
         help="Output directory for skipped records and phase arrival information.",
     )
     args = parser.parse_args()
-    # Set the environment variable
     run_phasenet(args.mseed_files_ffp, args.output_dir)
