@@ -1,5 +1,6 @@
 import datetime
 import io
+import os
 import shutil
 import time
 from pathlib import Path
@@ -18,6 +19,38 @@ app = typer.Typer()
 SEISMIC_NOW_URL = (
     "https://quakecoresoft.canterbury.ac.nz/seismicnow/api/earthquakes/add"
 )
+WEBHOOK_URL = os.getenv("SLACK_WEBHOOK_URL")
+
+
+def send_message_to_slack(message: str):
+    """
+    Send a message to a slack channel
+
+    Parameters
+    ----------
+    message : str
+        The message to send
+
+    Raises
+    ------
+    ValueError
+        If the message fails to send
+        Or if the webhook URL is not provided
+    """
+    if not WEBHOOK_URL:
+        raise ValueError(
+            "No slack webhook URL provided from the environment var SLACK_WEBHOOK_URL"
+        )
+
+    slack_data = {"text": message}
+    response = requests.post(
+        WEBHOOK_URL,
+        json=slack_data,
+        headers={"Content-Type": "application/json"},
+    )
+
+    if response.status_code != 200:
+        raise ValueError("Failed to send message to slack")
 
 
 def download_earthquake_data(
@@ -195,9 +228,13 @@ def run_event(  # noqa: D103
         # Check the response status
         if response.status_code == 200:
             print("Event added successfully")
+            # Add a new message to slack
+            send_message_to_slack(f"Event {event_id} added to SeismicNow")
         else:
             print(f"Failed to add event. Status code: {response.status_code}")
             print(f"Response: {response.text}")
+            # Add a new message to slack
+            send_message_to_slack(f"Failed to add event {event_id} to SeismicNow")
             return False
     return True
 
