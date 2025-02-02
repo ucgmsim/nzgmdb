@@ -17,6 +17,9 @@ locations_max_elev: 5
 ll_num: 4326
 nztm_num: 2193
 points_per_km: 10
+channel_codes:
+  - HN?
+  - BN?
 # Mseed Variables
 vs30: 500
 min_time_difference: 15
