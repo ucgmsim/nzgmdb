@@ -11,7 +11,7 @@ import requests
 import typer
 
 from nzgmdb.management import config as cfg
-from nzgmdb.management import custom_errors
+from nzgmdb.management import custom_errors, file_structure
 from nzgmdb.scripts import run_nzgmdb
 
 app = typer.Typer()
@@ -228,13 +228,24 @@ def run_event(  # noqa: D103
         # Check the response status
         if response.status_code == 200:
             print("Event added successfully")
+            # Get the Magnitude information
+            source_ffp = (
+                file_structure.get_flatfile_dir(event_dir)
+                / file_structure.FlatfileNames.EARTHQUAKE_SOURCE_TABLE
+            )
+            source_table = pd.read_csv(source_ffp, dtype={"evid": str})
+            magnitude = source_table["mag"].values[0]
             # Add a new message to slack
-            send_message_to_slack(f"Event {event_id} added to SeismicNow")
+            send_message_to_slack(
+                f"Event {event_id} added to SeismicNow: Magnitude {magnitude}"
+            )
         else:
             print(f"Failed to add event. Status code: {response.status_code}")
             print(f"Response: {response.text}")
             # Add a new message to slack
-            send_message_to_slack(f"Failed to add event {event_id} to SeismicNow")
+            send_message_to_slack(
+                f"Failed to add event {event_id} to SeismicNow, SW team investigate"
+            )
             return False
     return True
 
