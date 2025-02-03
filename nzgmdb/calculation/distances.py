@@ -566,8 +566,8 @@ def compute_distances_for_event(
             }
         ]
 
-        # Divide the srf depth points by 1000 to convert to km
-        srf_points[:, 2] /= 1000
+    # Divide the srf depth points by 1000 to convert to km
+    srf_points[:, 2] /= 1000
 
     # Calculate the distances
     rrups, rjbs, rrup_points = src_site_dist.calc_rrup_rjb(
