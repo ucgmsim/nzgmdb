@@ -277,23 +277,6 @@ def run_event(  # noqa: D103
         shutil.rmtree(event_dir)
         return False
 
-    # Get the Magnitude information
-    source_ffp = (
-        file_structure.get_flatfile_dir(event_dir)
-        / file_structure.FlatfileNames.EARTHQUAKE_SOURCE_TABLE
-    )
-    source_table = pd.read_csv(source_ffp, dtype={"evid": str})
-    magnitude = source_table["mag"].values[0]
-    latitude = source_table["lat"].values[0]
-    longitude = source_table["lon"].values[0]
-    depth = source_table["depth"].values[0]
-    # Add a new message to slack
-    send_message_to_slack(
-        f"Event ID: {event_id} added to SeismicNow: Mag: {magnitude:.1f}; Depth: {depth:.1f} km; Lat: {latitude:.2f}; Lon: {longitude:.2f}",
-        latitude,
-        longitude,
-        event_dir,
-    )
 
     if add_seismic_now:
         # Define the URL for the endpoint
@@ -305,6 +288,23 @@ def run_event(  # noqa: D103
         # Check the response status
         if response.status_code == 200:
             print("Event added successfully")
+            # Get the Magnitude information
+            source_ffp = (
+                    file_structure.get_flatfile_dir(event_dir)
+                    / file_structure.FlatfileNames.EARTHQUAKE_SOURCE_TABLE
+            )
+            source_table = pd.read_csv(source_ffp, dtype={"evid": str})
+            magnitude = source_table["mag"].values[0]
+            latitude = source_table["lat"].values[0]
+            longitude = source_table["lon"].values[0]
+            depth = source_table["depth"].values[0]
+            # Add a new message to slack
+            send_message_to_slack(
+                f"Event ID: {event_id} added to SeismicNow: Mag: {magnitude:.1f}; Depth: {depth:.1f} km; Lat: {latitude:.2f}; Lon: {longitude:.2f}",
+                # latitude,
+                # longitude,
+                # event_dir,
+            )
 
         else:
             print(f"Failed to add event. Status code: {response.status_code}")
