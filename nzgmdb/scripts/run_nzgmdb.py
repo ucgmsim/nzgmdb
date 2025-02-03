@@ -13,7 +13,7 @@ from nzgmdb.data_processing import merge_flatfiles, process_observed, quality_db
 from nzgmdb.data_retrieval import geonet, sites, tect_domain
 from nzgmdb.management import file_structure
 from nzgmdb.phase_arrival import gen_phase_arrival_table
-from nzgmdb.scripts import run_gmc, upload_to_dropox
+from nzgmdb.scripts import run_gmc, upload_to_dropbox
 
 app = typer.Typer()
 
@@ -761,7 +761,7 @@ def run_full_nzgmdb(  # noqa: D103
     # Upload to dropbox
     if upload:
         print("Uploading to Dropbox")
-        upload_to_dropox.upload_to_dropbox(main_dir, n_procs=n_procs)
+        upload_to_dropbox.upload_to_dropbox(main_dir, n_procs=n_procs)
 
 
 if __name__ == "__main__":
