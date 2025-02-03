@@ -277,7 +277,6 @@ def run_event(  # noqa: D103
         shutil.rmtree(event_dir)
         return False
 
-
     if add_seismic_now:
         # Define the URL for the endpoint
         url = f"{SEISMIC_NOW_URL}?earthquake_id={event_id}"
@@ -290,8 +289,8 @@ def run_event(  # noqa: D103
             print("Event added successfully")
             # Get the Magnitude information
             source_ffp = (
-                    file_structure.get_flatfile_dir(event_dir)
-                    / file_structure.FlatfileNames.EARTHQUAKE_SOURCE_TABLE
+                file_structure.get_flatfile_dir(event_dir)
+                / file_structure.FlatfileNames.EARTHQUAKE_SOURCE_TABLE
             )
             source_table = pd.read_csv(source_ffp, dtype={"evid": str})
             magnitude = source_table["mag"].values[0]
