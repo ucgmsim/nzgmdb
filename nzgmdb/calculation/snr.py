@@ -30,10 +30,8 @@ def compute_snr_for_single_mseed(
         Phase arrival table
     output_dir : Path
         Path to the output directory
-    apply_smoothing : bool, optional
-        Whether to apply smoothing to the SNR calculation, by default True
-    ko_matrix_path : Path, optional
-        Path to the ko matrix, by default None
+    ko_bandwidth : int, optional
+        Bandwidth for the Ko matrix, by default 40
     common_frequency_vector : np.ndarray, optional
         Common frequency vector to extract for SNR and FAS, by default None
 
