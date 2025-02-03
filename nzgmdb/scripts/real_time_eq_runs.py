@@ -6,9 +6,11 @@ import time
 from pathlib import Path
 from typing import Annotated
 
+import folium
 import pandas as pd
 import requests
 import typer
+from PIL import Image
 
 from nzgmdb.management import config as cfg
 from nzgmdb.management import custom_errors, file_structure
@@ -22,7 +24,46 @@ SEISMIC_NOW_URL = (
 WEBHOOK_URL = os.getenv("SLACK_WEBHOOK_URL")
 
 
-def send_message_to_slack(message: str):
+def generate_image(lat: float, lon: float, output_ffp: Path):
+    """
+    Generate an image of the event location
+
+    Parameters
+    ----------
+    lat : float
+        The latitude of the event
+    lon : float
+        The longitude of the event
+    output_ffp : Path
+        The full file path to save the image
+    """
+    # New Zealand bounding box (Adjusted to reduce ocean)
+    nz_bounds = [[-47.5, 166.5], [-34.0, 178.5]]  # Southwest & Northeast corners
+    # Generate a high-resolution map
+    m = folium.Map(location=[-41, 172], zoom_start=5, tiles="CartoDB positron")
+    m.fit_bounds(nz_bounds)
+    # Add a semi-transparent circle instead of a pin
+    folium.CircleMarker(
+        location=[lat, lon],
+        radius=7,
+        color="red",
+        fill=True,
+        fill_color="red",
+        fill_opacity=0.5,  # 50% transparent
+    ).add_to(m)
+    # Convert map to an image
+    img_data = m._to_png(6)  # High DPI for better clarity
+    img = Image.open(io.BytesIO(img_data))
+    # Define cropping box (left, upper, right, lower) - Adjust as needed
+    crop_box = (600, 225, 900, 625)  # Cuts off extra ocean & keeps NZ full-size
+    img_cropped = img.crop(crop_box)
+    # Save final cropped map
+    img_cropped.save(output_ffp)
+
+
+def send_message_to_slack(
+    message: str, lat: float = None, lon: float = None, event_dir: Path = None
+):
     """
     Send a message to a slack channel
 
@@ -30,6 +71,12 @@ def send_message_to_slack(message: str):
     ----------
     message : str
         The message to send
+    lat : float
+        The latitude of the event
+    lon : float
+        The longitude of the event
+    event_dir : Path
+        The directory for the event
 
     Raises
     ------
@@ -41,13 +88,25 @@ def send_message_to_slack(message: str):
         raise ValueError(
             "No slack webhook URL provided from the environment var SLACK_WEBHOOK_URL"
         )
+    if lat is None or lon is None:
+        response = requests.post(
+            WEBHOOK_URL,
+            json={"text": message},
+        )
+    else:
+        image_path = event_dir / "event_location.png"
+        generate_image(lat, lon, image_path)
 
-    slack_data = {"text": message}
-    response = requests.post(
-        WEBHOOK_URL,
-        json=slack_data,
-        headers={"Content-Type": "application/json"},
-    )
+        with open(image_path, "rb") as file:
+            response = requests.post(
+                WEBHOOK_URL,
+                files={"file": file},
+                data={
+                    "filename": image_path.name,
+                    "title": "New Earthquake Event",
+                    "initial_comment": message,
+                },
+            )
 
     if response.status_code != 200:
         raise ValueError("Failed to send message to slack")
@@ -235,9 +294,12 @@ def run_event(  # noqa: D103
             )
             source_table = pd.read_csv(source_ffp, dtype={"evid": str})
             magnitude = source_table["mag"].values[0]
+            latitude = source_table["lat"].values[0]
+            longitude = source_table["lon"].values[0]
+            depth = source_table["depth"].values[0]
             # Add a new message to slack
             send_message_to_slack(
-                f"Event {event_id} added to SeismicNow: Magnitude {magnitude}"
+                f"Event ID: {event_id} added to SeismicNow: Mag: {magnitude:.1f}; Depth: {depth} km; Lat: {latitude:.2f}; Lon: {longitude:.2f}"
             )
         else:
             print(f"Failed to add event. Status code: {response.status_code}")

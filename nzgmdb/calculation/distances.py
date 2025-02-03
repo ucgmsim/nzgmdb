@@ -787,6 +787,9 @@ def calc_distances(main_dir: Path, n_procs: int = 1):
         dtype={"evid": str},
     )
 
+    # Filter the event_df
+    event_df = event_df[event_df["evid"] == "3468575"]
+
     # Get the focal domain
     domain_focal_df = pd.read_csv(
         data_dir / "focal_mech_tectonic_domain_v1.csv", low_memory=False
@@ -827,8 +830,12 @@ def calc_distances(main_dir: Path, n_procs: int = 1):
         srf_files[srf_file.stem] = srf_file
 
     # Get the IM data
+    # im_df = pd.read_csv(
+    #     flatfile_dir / file_structure.PreFlatfileNames.GROUND_MOTION_IM_CATALOGUE,
+    #     dtype={"evid": str},
+    # )
     im_df = pd.read_csv(
-        flatfile_dir / file_structure.PreFlatfileNames.GROUND_MOTION_IM_CATALOGUE,
+        flatfile_dir / file_structure.FlatfileNames.GROUND_MOTION_IM_ROTD0_FLAT,
         dtype={"evid": str},
     )
 

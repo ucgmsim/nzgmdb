@@ -61,6 +61,9 @@ def calculate_im_for_record(
     # Filter the fas_frequencies to be less than or equal to the nyquist frequency
     fas_frequencies = fas_frequencies[fas_frequencies <= nyquist_feq]
 
+    # Solves issue with multiprocessing GNU OpenMP fork
+    mp.set_start_method("spawn")
+
     # Calculate the IMs
     with warnings.catch_warnings():
         warnings.simplefilter("ignore", RuntimeWarning)
