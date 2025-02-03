@@ -294,19 +294,23 @@ def get_nodal_plane_info(
         config = cfg.Config()
         points_per_km = config.get_value("points_per_km")
 
-        srf_points = []
-        for plane in srf_model.planes:
-            corner_0, corner_1, corner_2, _ = plane.corners
-            # Utilise grid functions from qcore to get the mesh grid
-            plane_points = grid.coordinate_meshgrid(
-                corner_0, corner_1, corner_2, 1000 / points_per_km
-            )
-            # Reshape to (n, 3)
-            plane_points = plane_points.reshape(-1, 3)
-            srf_points.append(plane_points)
-        srf_points = np.vstack(srf_points)
+        # srf_points = []
+        # for plane in srf_model.planes:
+        #     corner_0, corner_1, corner_2, _ = plane.corners
+        #     # Utilise grid functions from qcore to get the mesh grid
+        #     plane_points = grid.coordinate_meshgrid(
+        #         corner_0, corner_1, corner_2, 1000 / points_per_km
+        #     )
+        #     # Reshape to (n, 3)
+        #     plane_points = plane_points.reshape(-1, 3)
+        #     srf_points.append(plane_points)
+        # srf_points = np.vstack(srf_points)
         # Swap the lat and lon for the srf points
-        nodal_plane_info["srf_points"] = srf_points[:, [1, 0, 2]]
+        nodal_plane_info["srf_points"] = srf_model.points.loc[
+            :, ["lat", "lon", "dep"]
+        ].to_numpy()
+        # Divde the srf depth points by 1000 to convert to km
+        nodal_plane_info["srf_points"][:, 2] *= 1000
 
         # Generate the srf header
         nodal_plane_info["srf_header"] = (
@@ -788,7 +792,7 @@ def calc_distances(main_dir: Path, n_procs: int = 1):
     )
 
     # Filter the event_df
-    event_df = event_df[event_df["evid"] == "3468575"]
+    # event_df = event_df[event_df["evid"].isin(["3468575", "3366146"])]
 
     # Get the focal domain
     domain_focal_df = pd.read_csv(
@@ -830,14 +834,14 @@ def calc_distances(main_dir: Path, n_procs: int = 1):
         srf_files[srf_file.stem] = srf_file
 
     # Get the IM data
-    # im_df = pd.read_csv(
-    #     flatfile_dir / file_structure.PreFlatfileNames.GROUND_MOTION_IM_CATALOGUE,
-    #     dtype={"evid": str},
-    # )
     im_df = pd.read_csv(
-        flatfile_dir / file_structure.FlatfileNames.GROUND_MOTION_IM_ROTD0_FLAT,
+        flatfile_dir / file_structure.PreFlatfileNames.GROUND_MOTION_IM_CATALOGUE,
         dtype={"evid": str},
     )
+    # im_df = pd.read_csv(
+    #     flatfile_dir / file_structure.FlatfileNames.GROUND_MOTION_IM_ROTD0_FLAT,
+    #     dtype={"evid": str},
+    # )
 
     # Get the station information
     client_NZ = FDSN_Client("GEONET")
@@ -891,6 +895,7 @@ def calc_distances(main_dir: Path, n_procs: int = 1):
     propagation_data.to_csv(
         flatfile_dir / file_structure.PreFlatfileNames.PROPAGATION_TABLE, index=False
     )
+    # propagation_data.to_csv(flatfile_dir / "test_rrup.csv", index=False)
     event_df.to_csv(
         flatfile_dir
         / file_structure.PreFlatfileNames.EARTHQUAKE_SOURCE_TABLE_DISTANCES,
