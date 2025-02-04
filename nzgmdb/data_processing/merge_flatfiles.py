@@ -152,13 +152,15 @@ def merge_flatfiles(main_dir: Path):
         dtype={"evid": str},
     )
     sta_mag_df = pd.read_csv(
-        flatfile_dir / file_structure.PreFlatfileNames.STATION_MAGNITUDE_TABLE_GEONET
+        flatfile_dir / file_structure.PreFlatfileNames.STATION_MAGNITUDE_TABLE_GEONET,
+        dtype={"evid": str},
     )
     phase_table_df = pd.read_csv(
         flatfile_dir / file_structure.PreFlatfileNames.PHASE_ARRIVAL_TABLE
     )
     prop_df = pd.read_csv(
-        flatfile_dir / file_structure.PreFlatfileNames.PROPAGATION_TABLE
+        flatfile_dir / file_structure.PreFlatfileNames.PROPAGATION_TABLE,
+        dtype={"evid": str},
     )
     im_df = pd.read_csv(
         flatfile_dir / file_structure.PreFlatfileNames.GROUND_MOTION_IM_CATALOGUE,
