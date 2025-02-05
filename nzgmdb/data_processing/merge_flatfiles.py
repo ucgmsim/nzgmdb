@@ -148,7 +148,7 @@ def merge_flatfiles(main_dir: Path):
     # Load the files
     event_df = pd.read_csv(
         flatfile_dir
-        / file_structure.PreFlatfileNames.EARTHQUAKE_SOURCE_TABLE_DISTANCES,
+        / file_structure.PreFlatfileNames.EARTHQUAKE_SOURCE_TABLE_AFTERSHOCKS,
         dtype={"evid": str},
     )
     sta_mag_df = pd.read_csv(
@@ -247,6 +247,14 @@ def merge_flatfiles(main_dir: Path):
                 "f_type",
                 "z_tor",
                 "z_bor",
+                "aftershock_flag_crjb0",
+                "cluster_flag_crjb0",
+                "aftershock_flag_crjb2",
+                "cluster_flag_crjb2",
+                "aftershock_flag_crjb5",
+                "cluster_flag_crjb5",
+                "aftershock_flag_crjb10",
+                "cluster_flag_crjb10",
             ]
         ],
         on="evid",
@@ -451,6 +459,14 @@ def merge_flatfiles(main_dir: Path):
             "multi_Z",
             "fmin_max",
             "HPF",
+            "aftershock_flag_crjb0",
+            "cluster_flag_crjb0",
+            "aftershock_flag_crjb2",
+            "cluster_flag_crjb2",
+            "aftershock_flag_crjb5",
+            "cluster_flag_crjb5",
+            "aftershock_flag_crjb10",
+            "cluster_flag_crjb10",
         ]
         + psa_columns
         + fas_columns

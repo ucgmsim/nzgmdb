@@ -8,7 +8,7 @@ from typing import Annotated
 
 import typer
 
-from nzgmdb.calculation import distances, fmax, ims, snr
+from nzgmdb.calculation import distances, fmax, ims, snr, aftershocks
 from nzgmdb.data_processing import merge_flatfiles, process_observed, quality_db
 from nzgmdb.data_retrieval import geonet, sites, tect_domain
 from nzgmdb.management import file_structure
@@ -383,6 +383,20 @@ def calculate_distances(  # noqa: D103
     distances.calc_distances(main_dir, n_procs)
 
 
+@app.command(help="Calculate the aftershock flags for the earthquake source table")
+def calculate_aftershocks(  # noqa: D103
+    main_dir: Annotated[
+        Path,
+        typer.Argument(
+            help="The main directory of the NZGMDB results (Highest level directory)",
+            exists=True,
+            file_okay=False,
+        ),
+    ],
+):
+    aftershocks.merge_aftershocks(main_dir)
+
+
 @app.command(
     help="Merge IM results together into one flatfile. As well as perform a filter for Ds595"
 )
@@ -743,6 +757,17 @@ def run_full_nzgmdb(  # noqa: D103
     ):
         print("Calculating distances")
         distances.calc_distances(main_dir, n_procs)
+
+    # Calculate aftershocks
+    if not (
+        checkpoint
+        and (
+            flatfile_dir
+            / file_structure.PreFlatfileNames.EARTHQUAKE_SOURCE_TABLE_AFTERSHOCKS
+        ).exists()
+    ):
+        print("Calculating aftershocks")
+        aftershocks.merge_aftershocks(main_dir)
 
     # Merge flat files
     if not (

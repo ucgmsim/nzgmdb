@@ -17,11 +17,12 @@ class PreFlatfileNames(StrEnum):
     STATION_MAGNITUDE_TABLE_GEONET = "station_magnitude_table_geonet.csv"
     EARTHQUAKE_SOURCE_TABLE_TECTONIC = "earthquake_source_table_tectonic.csv"
     EARTHQUAKE_SOURCE_TABLE_DISTANCES = "earthquake_source_table_distances.csv"
+    EARTHQUAKE_SOURCE_TABLE_AFTERSHOCKS = "earthquake_source_table_aftershocks.csv"
     PHASE_ARRIVAL_TABLE = "phase_arrival_table_all.csv"
     SITE_TABLE = "site_table_all.csv"
     PROPAGATION_TABLE = "propagation_path_table_all.csv"
     GROUND_MOTION_IM_CATALOGUE = "ground_motion_im_catalogue.csv"
-    PROB_SERIES = "prob_series.h5"
+    # PROB_SERIES = "prob_series.h5"
 
 
 class FlatfileNames(StrEnum):
