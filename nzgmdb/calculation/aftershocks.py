@@ -6,7 +6,7 @@ import pandas as pd
 from shapely import Polygon
 
 from abwd_declust.abwd_declust_v2_1 import abwd_crjb
-from nzgmdb.management import file_structure
+from nzgmdb.management import file_structure, config as cfg
 from source_modelling import srf
 
 
@@ -40,6 +40,7 @@ def merge_aftershocks(main_dir: Path):
     rupture_area_poly = []
     for _, row in catalogue_pd.iterrows():
         if row["evid"] in srf_evids:
+            # Generate the convex hull for the SRF
             srf_file = srf_dir / f"{row['evid']}.srf"
             srf_model = srf.read_srf(srf_file)
             srf_points = srf_model.points.loc[:, ["lon", "lat", "dep"]].to_numpy()
@@ -74,9 +75,9 @@ def merge_aftershocks(main_dir: Path):
     # Initialize an empty dictionary to store the results
     results_dict = {}
 
-    # Define the rjb_cutoff values
-    # rjb_cutoffs = [0, 2, 5, 10]
-    rjb_cutoffs = [1]
+    # Obtain the RJB cutoffs
+    config = cfg.Config()
+    rjb_cutoffs = config.get_value("rjb_cutoffs")
 
     # Iterate over the rjb_cutoff values
     for rjb_cutoff in rjb_cutoffs:

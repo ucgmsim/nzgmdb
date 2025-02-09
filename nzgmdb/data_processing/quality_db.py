@@ -626,9 +626,9 @@ def apply_all_filters(
     )
 
     # Filter by clipped records
-    # catalog, skipped_records_clipped = apply_clipNet_filter(
-    #     catalog, clipped_records_ffp, bypass_records
-    # )
+    catalog, skipped_records_clipped = apply_clipNet_filter(
+        catalog, clipped_records_ffp, bypass_records
+    )
 
     # Filter by missing station information
     catalog, skipped_records_missing_sta = filter_missing_sta_info(
