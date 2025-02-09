@@ -6,7 +6,8 @@ import pandas as pd
 from shapely import Polygon
 
 from abwd_declust.abwd_declust_v2_1 import abwd_crjb
-from nzgmdb.management import file_structure, config as cfg
+from nzgmdb.management import config as cfg
+from nzgmdb.management import file_structure
 from source_modelling import srf
 
 
