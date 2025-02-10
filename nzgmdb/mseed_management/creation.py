@@ -1,4 +1,6 @@
+import http
 import http.client
+import time
 import warnings
 from collections.abc import Iterable
 from pathlib import Path
@@ -8,7 +10,10 @@ import numpy as np
 import pandas as pd
 from obspy import Stream
 from obspy.clients.fdsn import Client as FDSN_Client
-from obspy.clients.fdsn.header import FDSNNoDataException
+from obspy.clients.fdsn.header import (
+    FDSNNoDataException,
+    FDSNServiceUnavailableException,
+)
 from obspy.core.event import Origin
 from obspy.geodetics import kilometers2degrees
 from obspy.io.mseed import InternalMSEEDError, ObsPyMSEEDFilesizeTooSmallError
@@ -108,7 +113,6 @@ def get_waveforms(
         else ds * ds_multiplier
     )
 
-    channel_codes = ",".join(config.get_value("channel_codes"))
     # Get the waveforms with multiple retries when IncompleteReadError occurs
     max_retries = 3
     for attempt in range(max_retries):
@@ -119,7 +123,7 @@ def get_waveforms(
                     net,
                     sta,
                     "*",
-                    channel_codes,
+                    "*",
                     start_time,
                     end_time,
                     attach_response=True,
@@ -134,8 +138,14 @@ def get_waveforms(
                 continue  # try again
             else:
                 return None
-        except Exception as e:  # noqa: BLE001
+        except FDSNServiceUnavailableException:
             print(f"Error getting waveforms for {net}.{sta}")
+            print("Service temporarily unavailable")
+            print("HTTP Status code: 503")
+            print("Retrying in 2 minutes...")
+            time.sleep(120)  # Wait for 2 minutes before retrying
+        except Exception as e:  # noqa: BLE001
+            print(f"Unexpected error getting waveforms for {net}.{sta}")
             print(e)
             return None
     return st

@@ -50,7 +50,7 @@ ignore = [
 convention = "numpy"
 
 [tool.ruff.lint.isort]
-known-first-party = ["qcore", "empirical", "IM_calculation", "Velocity_Model", "source_modelling"]
+known-first-party = ["qcore", "empirical", "IM", "Velocity_Model", "source_modelling"]
 
 [tool.ruff.lint.per-file-ignores]
 # Ignore no docstring in __init__.py

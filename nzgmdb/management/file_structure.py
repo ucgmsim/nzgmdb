@@ -37,16 +37,14 @@ class FlatfileNames(StrEnum):
     GMC_PREDICTIONS = "gmc_predictions.csv"
     FMAX = "fmax.csv"
     SNR_METADATA = "snr_metadata.csv"
-    GROUND_MOTION_IM_000 = "ground_motion_im_table_000.csv"
     GROUND_MOTION_IM_000_FLAT = "ground_motion_im_table_000_flat.csv"
-    GROUND_MOTION_IM_090 = "ground_motion_im_table_090.csv"
     GROUND_MOTION_IM_090_FLAT = "ground_motion_im_table_090_flat.csv"
-    GROUND_MOTION_IM_VER = "ground_motion_im_table_ver.csv"
     GROUND_MOTION_IM_VER_FLAT = "ground_motion_im_table_ver_flat.csv"
-    GROUND_MOTION_IM_ROTD50 = "ground_motion_im_table_rotd50.csv"
+    GROUND_MOTION_IM_GEOM_FLAT = "ground_motion_im_table_geom_flat.csv"
+    GROUND_MOTION_IM_ROTD0_FLAT = "ground_motion_im_table_rotd0_flat.csv"
     GROUND_MOTION_IM_ROTD50_FLAT = "ground_motion_im_table_rotd50_flat.csv"
-    GROUND_MOTION_IM_ROTD100 = "ground_motion_im_table_rotd100.csv"
     GROUND_MOTION_IM_ROTD100_FLAT = "ground_motion_im_table_rotd100_flat.csv"
+    GROUND_MOTION_IM_EAS_FLAT = "ground_motion_im_table_eas_flat.csv"
 
 
 class SkippedRecordFilenames(StrEnum):
@@ -57,7 +55,6 @@ class SkippedRecordFilenames(StrEnum):
     GEONET_SKIPPED_RECORDS = "geonet_skipped_records.csv"
     CLIPPED_RECORDS = "clipped_records.csv"
     IM_CALC_SKIPPED_RECORDS = "im_calc_skipped_records.csv"
-    IM_MERGE_SKIPPED_RECORDS = "im_merge_skipped_records.csv"
     MISSING_SITES = "missing_sites.csv"
     PROCESSING_SKIPPED_RECORDS = "processing_skipped_records.csv"
     PHASE_ARRIVAL_SKIPPED_RECORDS = "phase_arrival_skipped_records.csv"

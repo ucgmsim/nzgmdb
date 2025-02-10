@@ -303,7 +303,7 @@ def fetch_sta_mag_line(
     # Check that data was found
     if st is None:
         skipped_records.append([f"{event_id}_{station.code}", "No Waveform Data"])
-        return sta_mag_line, skipped_records
+        return sta_mag_line, skipped_records, []
 
     # Get the unique channels (Using first 2 keys) and locations
     unique_channels = set([(tr.stats.channel[:2], tr.stats.location) for tr in st])
@@ -319,19 +319,28 @@ def fetch_sta_mag_line(
     ]
 
     for mseed in mseeds:
-        # Check the data is not all 0's
-        if all([np.allclose(tr.data, 0) for tr in mseed]):
+        try:
+            # Check the data is not all 0's
+            if all([np.allclose(tr.data, 0) for tr in mseed]):
+                stats = mseed[0].stats
+                skipped_records.append(
+                    [
+                        f"{event_id}_{stats.station}_{stats.location}_{stats.channel}",
+                        "All 0's",
+                    ]
+                )
+                continue
+        except TypeError:
             stats = mseed[0].stats
             skipped_records.append(
                 [
                     f"{event_id}_{stats.station}_{stats.location}_{stats.channel}",
-                    "All 0's",
+                    "TypeError when checking for all 0's",
                 ]
             )
-            continue
 
         # Calculate clip to determine if the record should be dropped
-        clip = filtering.get_clip_probability(pref_mag, r_hyp, st)
+        clip = filtering.get_clip_probability(pref_mag, r_hyp, mseed)
 
         # Check if the record should be dropped
         if clip > threshold:
@@ -843,8 +852,16 @@ def parse_geonet_information(
 
     event_df = pd.concat(event_dfs, ignore_index=True)
     sta_mag_df = pd.concat(sta_mag_dfs, ignore_index=True)
-    skipped_records_df = pd.concat(skipped_records_dfs, ignore_index=True)
-    clipped_records_df = pd.concat(clipped_records_dfs, ignore_index=True)
+    skipped_records_df = (
+        pd.concat(skipped_records_dfs, ignore_index=True)
+        if skipped_records_dfs
+        else pd.DataFrame()
+    )
+    clipped_records_df = (
+        pd.concat(clipped_records_dfs, ignore_index=True)
+        if clipped_records_dfs
+        else pd.DataFrame()
+    )
 
     # Save the dataframes
     event_df.to_csv(

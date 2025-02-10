@@ -33,15 +33,13 @@ def filter_flatfiles_on_catalouge(
         FlatfileNames.PROPAGATION_TABLE,
         FlatfileNames.GMC_PREDICTIONS,
         FlatfileNames.SNR_METADATA,
-        FlatfileNames.GROUND_MOTION_IM_000,
-        FlatfileNames.GROUND_MOTION_IM_090,
-        FlatfileNames.GROUND_MOTION_IM_VER,
-        FlatfileNames.GROUND_MOTION_IM_ROTD100,
-        FlatfileNames.GROUND_MOTION_IM_ROTD50,
         FlatfileNames.GROUND_MOTION_IM_000_FLAT,
         FlatfileNames.GROUND_MOTION_IM_090_FLAT,
         FlatfileNames.GROUND_MOTION_IM_VER_FLAT,
+        FlatfileNames.GROUND_MOTION_IM_ROTD0_FLAT,
         FlatfileNames.GROUND_MOTION_IM_ROTD100_FLAT,
+        FlatfileNames.GROUND_MOTION_IM_GEOM_FLAT,
+        FlatfileNames.GROUND_MOTION_IM_EAS_FLAT,
     ]
 
     for file in file_to_filter:
@@ -50,10 +48,9 @@ def filter_flatfiles_on_catalouge(
         if file == FlatfileNames.EARTHQUAKE_SOURCE_TABLE:
             # filter by evid
             df_filtered = df[df["evid"].isin(rotd50_flat["evid"])]
-        elif file in [
-            FlatfileNames.STATION_MAGNITUDE_TABLE,
-            FlatfileNames.PHASE_ARRIVAL_TABLE,
-        ]:
+        elif file == FlatfileNames.STATION_MAGNITUDE_TABLE:
+            # Ensure loc is str
+            df["loc"] = df["loc"].astype(str)
             # Make the record_id column
             df["record_id"] = (
                 df["evid"]
@@ -490,6 +487,9 @@ def filter_duplicate_channels(catalog: pd.DataFrame, bypass_records: np.ndarray 
     pd.DataFrame
         The skipped records
     """
+    # Remove all channels that are not HN or BN
+    catalog = catalog[catalog["chan"].isin(["HN", "BN"])]
+
     # Find same evid_sta combos by combining evid and sta columns
     catalog["evid_sta"] = catalog["evid"].astype(str) + "_" + catalog["sta"]
 

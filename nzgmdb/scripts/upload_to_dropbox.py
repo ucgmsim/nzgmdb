@@ -91,6 +91,7 @@ def main(
     """
     output_dir = input_dir / "zips"
     output_dir.mkdir(parents=True, exist_ok=True)
+    dropbox_version_dir = f"{DROPBOX_PATH}/{version}"
 
     if version is None:
         version = input_dir.name
@@ -131,9 +132,23 @@ def main(
     flatfiles = [flatfiles_dir / file for file in file_structure.FlatfileNames]
     flatfiles_zip = zip_files(flatfiles, output_dir, f"flatfiles_{version}")
 
+    # Check if there is a quality_db directory and zip it
+    quality_db_dir = input_dir / "quality_db"
+    if quality_db_dir.exists():
+        quality_db_files = list(quality_db_dir.rglob("*.csv"))
+        quality_db_zip = zip_files(
+            quality_db_files, output_dir, f"quality_flatfiles_{version}"
+        )
+
+        # Upload quality_db zip to Dropbox
+        upload_zip_to_dropbox(quality_db_zip, dropbox_version_dir)
+
     # 3) Zip skipped_{ver}.zip
     skipped_files = [
-        flatfiles_dir / file for file in file_structure.SkippedRecordFilenames
+        flatfiles_dir / file
+        for file in file_structure.SkippedRecordFilenames
+        if quality_db_dir.exists()
+        or file != file_structure.SkippedRecordFilenames.QUALITY_SKIPPED_RECORDS
     ]
     skipped_zip = zip_files(skipped_files, output_dir, f"skipped_{version}")
 
@@ -144,17 +159,6 @@ def main(
     # 5) Zip snr_fas_{ver}.zip
     snr_files = list(snr_fas_dir.rglob("*.csv"))
     snr_fas_zip = zip_files(snr_files, output_dir, f"snr_fas_{version}")
-
-    dropbox_version_dir = f"{DROPBOX_PATH}/{version}"
-
-    # Check if there is a quality_db directory and zip it
-    quality_db_dir = input_dir / "quality_db"
-    if quality_db_dir.exists():
-        quality_db_files = list(quality_db_dir.rglob("*.csv"))
-        quality_db_zip = zip_files(quality_db_files, output_dir, f"quality_flatfiles_{version}")
-
-        # Upload quality_db zip to Dropbox
-        upload_zip_to_dropbox(quality_db_zip, dropbox_version_dir)
 
     # Upload everything to Dropbox
     dropbox_waveforms_path = f"{dropbox_version_dir}/waveforms"

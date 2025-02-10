@@ -235,7 +235,7 @@ def high_and_low_cut_processing(
     lowcut = config.get_value("low_cut_default") if fmin is None else fmin / 1.25
 
     # Check if the lowcut is greater than the highcut
-    if lowcut > highcut:
+    if lowcut >= highcut:
         raise custom_errors.LowcutHighcutError(
             f"Lowcut frequency {lowcut} is greater than the highcut frequency {highcut}"
         )

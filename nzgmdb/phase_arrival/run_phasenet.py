@@ -30,7 +30,7 @@ def run_phase_net(
     return_prob_series : bool, optional
         Whether to return the probability series, by default False
     """
-    import phase_net as ph
+    import phase_net as ph  # noqa: DEP001
 
     # Only supports a single record
     assert input_data.shape[0] == 1
@@ -120,6 +120,15 @@ def process_mseed(mseed_file: Path, h5_ffp: Path):
             trace.stats.starttime = start_time
             trace.stats.sampling_rate = sampling_rate
             mseed.append(trace)
+
+    if len(mseed) != 3:
+        skipped_record = pd.DataFrame(
+            {
+                "record_id": [mseed_file.stem],
+                "reason": ["File did not contain 3 components"],
+            }
+        )
+        return None, skipped_record
 
     # Small Processing
     mseed.detrend("demean")
