@@ -1,0 +1,35 @@
+name: Numpydoc Lint
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+    branches:
+      - main
+
+jobs:
+  numpydoc-lint:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - uses: awalsh128/cache-apt-pkgs-action@latest
+        with:
+          packages: fd-find
+          version: 1.0
+
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.12'  # Adjust version as needed
+
+      - name: Install dependencies
+        run: |
+          pip install numpydoc
+          sudo apt-get install
+      - name: Run Numpydoc Lint
+        run: |
+          fdfind . nzgmdb/ -E "__init__.py" -E ccldpy.py --extension py -x numpydoc lint
