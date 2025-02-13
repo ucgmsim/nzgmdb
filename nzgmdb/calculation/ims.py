@@ -1,5 +1,6 @@
 import functools
 import multiprocessing as mp
+import warnings
 from pathlib import Path
 
 import numpy as np
@@ -61,15 +62,17 @@ def calculate_im_for_record(
     fas_frequencies = fas_frequencies[fas_frequencies <= nyquist_feq]
 
     # Calculate the IMs
-    im_result_df = im_calculation.calculate_ims(
-        waveform,
-        dt,
-        intensity_measures,
-        psa_periods,
-        fas_frequencies,
-        cores=1,
-        ko_bandwidth=ko_bandwith,
-    )
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore", RuntimeWarning)
+        im_result_df = im_calculation.calculate_ims(
+            waveform,
+            dt,
+            intensity_measures,
+            psa_periods,
+            fas_frequencies,
+            cores=1,
+            ko_bandwidth=ko_bandwith,
+        )
 
     # Set a column for the record_id and then component and set at the front
     im_result_df = im_result_df.reset_index()

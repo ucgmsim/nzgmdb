@@ -112,6 +112,7 @@ def get_waveforms(
         if stime_est + ds * ds_multiplier - ptime_est < min_time_difference
         else ds * ds_multiplier
     )
+    channel_codes = ",".join(config.get_value("channel_codes"))
 
     # Get the waveforms with multiple retries when IncompleteReadError occurs
     max_retries = 3
@@ -123,7 +124,7 @@ def get_waveforms(
                     net,
                     sta,
                     "*",
-                    "*",
+                    channel_codes,
                     start_time,
                     end_time,
                     attach_response=True,

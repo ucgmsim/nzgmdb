@@ -1,5 +1,6 @@
 import datetime
 import io
+import os
 import shutil
 import time
 from pathlib import Path
@@ -10,7 +11,7 @@ import requests
 import typer
 
 from nzgmdb.management import config as cfg
-from nzgmdb.management import custom_errors
+from nzgmdb.management import custom_errors, file_structure
 from nzgmdb.scripts import run_nzgmdb
 
 app = typer.Typer()
@@ -18,6 +19,38 @@ app = typer.Typer()
 SEISMIC_NOW_URL = (
     "https://quakecoresoft.canterbury.ac.nz/seismicnow/api/earthquakes/add"
 )
+WEBHOOK_URL = os.getenv("SLACK_WEBHOOK_URL")
+
+
+def send_message_to_slack(
+    message: str
+):
+    """
+    Send a message to a slack channel
+
+    Parameters
+    ----------
+    message : str
+        The message to send
+
+    Raises
+    ------
+    ValueError
+        If the message fails to send
+        Or if the webhook URL is not provided
+    """
+    if not WEBHOOK_URL:
+        raise ValueError(
+            "No slack webhook URL provided from the environment var SLACK_WEBHOOK_URL"
+        )
+
+    response = requests.post(
+        WEBHOOK_URL,
+        json={"text": message},
+    )
+
+    if response.status_code != 200:
+        raise ValueError("Failed to send message to slack")
 
 
 def download_earthquake_data(
@@ -195,9 +228,28 @@ def run_event(  # noqa: D103
         # Check the response status
         if response.status_code == 200:
             print("Event added successfully")
+            # Get the Magnitude information
+            source_ffp = (
+                file_structure.get_flatfile_dir(event_dir)
+                / file_structure.FlatfileNames.EARTHQUAKE_SOURCE_TABLE
+            )
+            source_table = pd.read_csv(source_ffp, dtype={"evid": str})
+            magnitude = source_table["mag"].values[0]
+            latitude = source_table["lat"].values[0]
+            longitude = source_table["lon"].values[0]
+            depth = source_table["depth"].values[0]
+            # Add a new message to slack
+            send_message_to_slack(
+                f"Event ID: {event_id} added to SeismicNow: Mag: {magnitude:.1f}; Depth: {depth:.1f} km; Lat: {latitude:.2f}; Lon: {longitude:.2f}",
+            )
+
         else:
             print(f"Failed to add event. Status code: {response.status_code}")
             print(f"Response: {response.text}")
+            # Add a new message to slack
+            send_message_to_slack(
+                f"Failed to add event {event_id} to SeismicNow, SW team investigate"
+            )
             return False
     return True
 

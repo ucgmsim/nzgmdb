@@ -1,5 +1,6 @@
 import functools
 import multiprocessing as mp
+import warnings
 from pathlib import Path
 
 import numpy as np
@@ -116,21 +117,23 @@ def compute_snr_for_single_mseed(
         return None, skipped_record
 
     try:
-        (
-            snr,
-            fas_signal,
-            fas_noise,
-            Ds,
-            Dn,
-        ) = snr_calculation.calculate_snr(
-            waveform,
-            stats.delta,
-            tp,
-            frequencies=common_frequency_vector,
-            cores=1,
-            ko_bandwidth=ko_bandwidth,
-            apply_taper=False,
-        )
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore", RuntimeWarning)
+            (
+                snr,
+                fas_signal,
+                fas_noise,
+                Ds,
+                Dn,
+            ) = snr_calculation.calculate_snr(
+                waveform,
+                stats.delta,
+                tp,
+                frequencies=common_frequency_vector,
+                cores=1,
+                ko_bandwidth=ko_bandwidth,
+                apply_taper=False,
+            )
     except FileNotFoundError:
         skipped_record_dict = {
             "record_id": mseed_file.stem,
