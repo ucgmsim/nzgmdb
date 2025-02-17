@@ -105,6 +105,8 @@ def generate_phase_arrival_table(
     mseed_files = list(main_dir.rglob("*.mseed"))
 
     # Split them into even batches based on number of mseeds and n_procs
+    # Ensure n_procs gets reduced if it is greater than the number of mseed files
+    n_procs = min(n_procs, len(mseed_files))
     mseed_batches = np.array_split(mseed_files, n_procs)
 
     batches = [
