@@ -592,6 +592,14 @@ def run_full_nzgmdb(  # noqa: D103
             help="If True, the function will create a quality database",
         ),
     ] = False,
+    bypass_records_ffp: Annotated[
+        Path,
+        typer.Option(
+            help="The full file path to the bypass records file",
+            exists=True,
+            dir_okay=False,
+        ),
+    ] = None,
 ):
     main_dir.mkdir(parents=True, exist_ok=True)
 
@@ -756,7 +764,7 @@ def run_full_nzgmdb(  # noqa: D103
 
     if create_quality_db:
         print("Creating quality database")
-        quality_db.create_quality_db(main_dir)
+        quality_db.create_quality_db(main_dir, bypass_records_ffp)
 
     # Upload to dropbox
     if upload:
