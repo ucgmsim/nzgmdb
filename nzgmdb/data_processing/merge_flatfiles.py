@@ -285,7 +285,7 @@ def merge_flatfiles(main_dir: Path):
         columns={"lat": "sta_lat", "lon": "sta_lon", "elev": "sta_elev"}
     )
 
-    # Find where the sta_lon is nan and replace with the inventory lat, lon and elev
+    # Find the station location information with the inventory lat, lon and elev
     config = cfg.Config()
     channel_codes = ",".join(config.get_value("channel_codes"))
     client_NZ = FDSN_Client("GEONET")
@@ -304,7 +304,7 @@ def merge_flatfiles(main_dir: Path):
     station_df = pd.DataFrame(
         station_info, columns=["sta", "sta_lat", "sta_lon", "sta_elev"]
     )
-    # Only include stations in the missing_sites list
+    # Only include stations in the missing_sites dictionary
     station_df = station_df[station_df["sta"].isin(missing_sites)]
 
     # Merge the station information into the gm_im_df_flat
