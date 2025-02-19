@@ -1,6 +1,7 @@
 from pathlib import Path
 
 import pandas as pd
+from obspy.clients.fdsn import Client as FDSN_Client
 
 from nzgmdb.management import config as cfg
 from nzgmdb.management import file_structure
@@ -282,6 +283,51 @@ def merge_flatfiles(main_dir: Path):
     )
     gm_im_df_flat = gm_im_df_flat.rename(
         columns={"lat": "sta_lat", "lon": "sta_lon", "elev": "sta_elev"}
+    )
+
+    # Find the station location information with the inventory lat, lon and elev
+    config = cfg.Config()
+    channel_codes = ",".join(config.get_value("channel_codes"))
+    client_NZ = FDSN_Client("GEONET")
+    inventory = client_NZ.get_stations(channel=channel_codes, level="response")
+    station_info = [
+        [
+            station.code,
+            station.latitude,
+            station.longitude,
+            station.elevation,
+        ]
+        for network in inventory
+        for station in network
+    ]
+    station_df = pd.DataFrame(
+        station_info, columns=["sta", "sta_lat", "sta_lon", "sta_elev"]
+    )
+    # Only include stations in the missing_sites dictionary
+    station_df = station_df[station_df["sta"].isin(missing_sites)]
+
+    # Merge the station information into the gm_im_df_flat
+    gm_im_df_flat = gm_im_df_flat.merge(
+        station_df[["sta", "sta_lat", "sta_lon", "sta_elev"]],
+        on="sta",
+        how="left",
+        suffixes=("", "_new"),
+    )
+
+    # Find where sta_lat is nan and replace with the inventorys lat, lon and elev
+    gm_im_df_flat["sta_lat"] = gm_im_df_flat["sta_lat"].fillna(
+        gm_im_df_flat["sta_lat_new"]
+    )
+    gm_im_df_flat["sta_lon"] = gm_im_df_flat["sta_lon"].fillna(
+        gm_im_df_flat["sta_lon_new"]
+    )
+    gm_im_df_flat["sta_elev"] = gm_im_df_flat["sta_elev"].fillna(
+        gm_im_df_flat["sta_elev_new"]
+    )
+
+    # Drop the new columns
+    gm_im_df_flat = gm_im_df_flat.drop(
+        columns=["sta_lat_new", "sta_lon_new", "sta_elev_new"]
     )
 
     # Merge in the location codes extra depth information where the station and location line up
