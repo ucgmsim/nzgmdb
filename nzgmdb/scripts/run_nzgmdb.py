@@ -62,6 +62,14 @@ def fetch_geonet_data(  # noqa: D103
             callback=lambda x: [] if x is None else x[0].split(","),
         ),
     ] = None,
+    only_record_ids_ffp: Annotated[
+        Path,
+        typer.Option(
+            help="The full file path to the a set of record_ids to only run for.",
+            exists=True,
+            dir_okay=False,
+        ),
+    ] = None,
     real_time: Annotated[
         bool,
         typer.Option(
@@ -77,6 +85,7 @@ def fetch_geonet_data(  # noqa: D103
         batch_size,
         only_event_ids,
         only_sites,
+        only_record_ids_ffp,
         real_time,
     )
 
@@ -201,6 +210,15 @@ def calculate_snr(  # noqa: D103
             help="The batch size for the SNR calculation for how many mseeds to process at a time",
         ),
     ] = 5000,
+    bypass_records_ffp: Annotated[
+        Path,
+        typer.Option(
+            help="The full file path to the bypass records file for custom p_wave_ix values",
+            readable=True,
+            exists=True,
+            dir_okay=False,
+        ),
+    ] = None,
 ):
     # Define the default paths if not provided
     if phase_table_path is None:
@@ -219,6 +237,7 @@ def calculate_snr(  # noqa: D103
         snr_fas_output_dir,
         n_procs,
         batch_size=batch_size,
+        bypass_records_ffp=bypass_records_ffp,
     )
 
 
@@ -258,6 +277,15 @@ def calc_fmax(  # noqa: D103
         ),
     ] = None,
     n_procs: Annotated[int, typer.Option(help="Number of processes to use")] = 1,
+    bypass_records_ffp: Annotated[
+        Path,
+        typer.Option(
+            help="The full file path to the bypass records file for custom fmax values",
+            readable=True,
+            exists=True,
+            dir_okay=False,
+        ),
+    ] = None,
 ):
     if meta_output_dir is None:
         meta_output_dir = file_structure.get_flatfile_dir(main_dir)
@@ -266,7 +294,9 @@ def calc_fmax(  # noqa: D103
     if snr_fas_output_dir is None:
         snr_fas_output_dir = file_structure.get_snr_fas_dir(main_dir)
 
-    fmax.run_full_fmax_calc(meta_output_dir, waveform_dir, snr_fas_output_dir, n_procs)
+    fmax.run_full_fmax_calc(
+        meta_output_dir, waveform_dir, snr_fas_output_dir, n_procs, bypass_records_ffp
+    )
 
 
 @app.command(
@@ -298,6 +328,15 @@ def process_records(  # noqa: D103
             exists=True,
         ),
     ] = None,
+    bypass_records_ffp: Annotated[
+        Path,
+        typer.Option(
+            help="The full file path to the bypass records file",
+            readable=True,
+            exists=True,
+            dir_okay=False,
+        ),
+    ] = None,
     n_procs: Annotated[int, typer.Option(help="The number of processes to use")] = 1,
 ):
     if gmc_ffp is None:
@@ -311,7 +350,9 @@ def process_records(  # noqa: D103
             / file_structure.FlatfileNames.FMAX
         )
 
-    process_observed.process_mseeds_to_txt(main_dir, gmc_ffp, fmax_ffp, n_procs)
+    process_observed.process_mseeds_to_txt(
+        main_dir, gmc_ffp, fmax_ffp, bypass_records_ffp, n_procs
+    )
 
 
 @app.command(help="Run IM Calculation on processed waveform files")
@@ -433,8 +474,17 @@ def merge_flat_files(  # noqa: D103
             file_okay=False,
         ),
     ],
+    bypass_records_ffp: Annotated[
+        Path,
+        typer.Option(
+            help="The full file path to the bypass records file",
+            readable=True,
+            exists=True,
+            dir_okay=False,
+        ),
+    ] = None,
 ):
-    merge_flatfiles.merge_flatfiles(main_dir)
+    merge_flatfiles.merge_flatfiles(main_dir, bypass_records_ffp)
 
 
 @app.command(
@@ -528,12 +578,6 @@ def run_full_nzgmdb(  # noqa: D103
         ),
     ] = 1,
     n_procs: Annotated[int, typer.Option(help="The number of processes to use")] = 1,
-    no_smoothing: Annotated[
-        bool,
-        typer.Option(
-            help="Enable to disable smoothing to the SNR calculation", is_flag=True
-        ),
-    ] = False,
     ko_matrix_path: Annotated[
         Path,
         typer.Option(
@@ -560,6 +604,14 @@ def run_full_nzgmdb(  # noqa: D103
         typer.Option(
             help="A list of site names to filter the earthquake data, separated by commas",
             callback=lambda x: [] if x is None else x[0].split(","),
+        ),
+    ] = None,
+    only_record_ids_ffp: Annotated[
+        Path,
+        typer.Option(
+            help="The full file path to the a set of record_ids to only run for.",
+            exists=True,
+            dir_okay=False,
         ),
     ] = None,
     geonet_batch_size: Annotated[
@@ -630,6 +682,7 @@ def run_full_nzgmdb(  # noqa: D103
             geonet_batch_size,
             only_event_ids,
             only_sites,
+            only_record_ids_ffp,
             real_time,
         )
 
@@ -670,6 +723,7 @@ def run_full_nzgmdb(  # noqa: D103
             conda_sh,
             gmc_activate,
             n_procs,
+            bypass_records_ffp,
         )
 
     # Generate SNR
@@ -689,13 +743,21 @@ def run_full_nzgmdb(  # noqa: D103
             snr_fas_output_dir,
             n_procs,
             batch_size=snr_batch_size,
+            bypass_records_ffp=bypass_records_ffp,
         )
 
     # Calculate Fmax
     if not (checkpoint and (flatfile_dir / file_structure.FlatfileNames.FMAX).exists()):
         print("Calculating Fmax")
         waveform_dir = file_structure.get_waveform_dir(main_dir)
-        calc_fmax(main_dir, flatfile_dir, waveform_dir, snr_fas_output_dir, n_procs)
+        calc_fmax(
+            main_dir,
+            flatfile_dir,
+            waveform_dir,
+            snr_fas_output_dir,
+            n_procs,
+            bypass_records_ffp,
+        )
 
     # Run GMC
     if not (
@@ -711,6 +773,7 @@ def run_full_nzgmdb(  # noqa: D103
             gmc_activate,
             gmc_predict_activate,
             gmc_procs,
+            bypass_records_ffp=bypass_records_ffp,
         )
 
     # Run filtering and processing of mseeds
@@ -724,7 +787,7 @@ def run_full_nzgmdb(  # noqa: D103
         ).exists()
     ):
         print("Processing records")
-        process_records(main_dir, gmc_ffp, fmax_ffp, n_procs)
+        process_records(main_dir, gmc_ffp, fmax_ffp, bypass_records_ffp, n_procs)
 
     # Run IM calculation
     im_dir = file_structure.get_im_dir(main_dir)
@@ -760,7 +823,7 @@ def run_full_nzgmdb(  # noqa: D103
         ).exists()
     ):
         print("Merging flat files")
-        merge_flat_files(main_dir)
+        merge_flat_files(main_dir, bypass_records_ffp)
 
     if create_quality_db:
         print("Creating quality database")
@@ -770,6 +833,36 @@ def run_full_nzgmdb(  # noqa: D103
     if upload:
         print("Uploading to Dropbox")
         upload_to_dropbox.upload_to_dropbox(main_dir, n_procs=n_procs)
+
+
+@app.command(
+    help="Merge 2 databases together and allow 1 to overwrite the other if duplicates found"
+)
+def merge_databases(  # noqa: D103
+    flatfile_db_dir: Annotated[
+        Path,
+        typer.Argument(
+            help="The flatfile directory of the NZGMDB results (Where the flatifles are located)",
+            exists=True,
+            file_okay=False,
+        ),
+    ],
+    to_merge_db_dir: Annotated[
+        Path,
+        typer.Argument(
+            help="The flatifle directory of the NZGMDB results to replace and add to the main DB",
+            exists=True,
+            file_okay=False,
+        ),
+    ],
+    output_ffp: Annotated[
+        Path,
+        typer.Argument(
+            help="The full file path to place the output flatfiles for the merged DB",
+        ),
+    ],
+):
+    merge_flatfiles.merge_dbs(flatfile_db_dir, to_merge_db_dir, output_ffp)
 
 
 if __name__ == "__main__":

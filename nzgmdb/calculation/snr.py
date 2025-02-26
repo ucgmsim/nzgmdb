@@ -195,6 +195,7 @@ def compute_snr_for_mseed_data(
     n_procs: int = 1,
     common_frequency_vector: np.ndarray = None,
     batch_size: int = 5000,
+    bypass_records_ffp: Path = None,
 ):
     """
     Compute the SNR for the data in the data_dir
@@ -220,6 +221,8 @@ def compute_snr_for_mseed_data(
         Uses a default frequency vector if not specified defined in the configuration file
     batch_size : int, optional
         Number of mseed files to process in a single batch, by default 5000
+    bypass_records_ffp : Path, optional
+        The full file path to the bypass records file, which includes a custom p_wave_ix
     """
     # Create the output directories
     meta_output_dir.mkdir(parents=True, exist_ok=True)
@@ -255,6 +258,22 @@ def compute_snr_for_mseed_data(
 
     # Load the phase arrival table
     phase_table = pd.read_csv(phase_table_path)
+
+    # Load the bypass records if provided
+    if bypass_records_ffp is not None:
+        bypass_records = pd.read_csv(bypass_records_ffp)
+        # remove any records that have a nan p_wave_ix
+        bypass_records = bypass_records.dropna(subset=["p_wave_ix"])
+        # Identify records in bypass_records that are not in phase_table
+        new_records = bypass_records[
+            ~bypass_records["record_id"].isin(phase_table["record_id"])
+        ]
+        # Add these new records to phase_table
+        phase_table = pd.concat(
+            [phase_table, new_records[["record_id", "p_wave_ix"]]], ignore_index=True
+        )
+        # Ensure the type of p_wave_ix is int
+        phase_table["p_wave_ix"] = phase_table["p_wave_ix"].astype(int)
 
     for index, batch in enumerate(mseed_batches):
         if index not in processed_suffixes:

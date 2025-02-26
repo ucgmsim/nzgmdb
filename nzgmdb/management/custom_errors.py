@@ -39,6 +39,12 @@ class LowcutHighcutError(Exception):
     pass
 
 
+class DigitalFilterError(Exception):
+    """Exception raised when the digital filter fails."""
+
+    pass
+
+
 class ComponentSelectionError(Exception):
     """Exception raised when the component selection is invalid."""
 
