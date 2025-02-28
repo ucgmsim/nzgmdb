@@ -2,8 +2,8 @@ import functools
 import multiprocessing
 from pathlib import Path
 
-import pandas as pd
 import numpy as np
+import pandas as pd
 
 import qcore.timeseries as ts
 from nzgmdb.data_processing import waveform_manipulation
