@@ -402,6 +402,13 @@ def apply_clipNet_filter(
         The file path to the clipped records (created during the GeoNet processing)
     bypass_records : np.ndarray, optional
         The records to bypass the quality
+
+    Returns
+    -------
+    pd.DataFrame
+        The filtered catalog
+    pd.DataFrame
+        The skipped records
     """
     # Read the clipped records
     clipped_records = pd.read_csv(clipped_records_ffp)
@@ -533,15 +540,15 @@ def apply_all_filters(
         The catalog dataframe to filter
     clipped_records_ffp : Path
         The file path to the clipped records (created during the GeoNet processing)
-    bypass_records : np.ndarray, optional
+    bypass_records : np.ndarray
         The records to bypass the quality checks
-    score_min: float, optional
+    score_min: float
         The minimum score value to filter on
-    multi_max: float, optional
+    multi_max: float
         The maximum multi_mean value to filter on
-    fmax_min: float, optional
+    fmax_min: float
         The minimum fmax value to filter on
-    fmin_max: float, optional
+    fmin_max: float
         The maximum fmin value to filter on
 
     Returns

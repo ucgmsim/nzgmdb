@@ -29,6 +29,13 @@ def run_phase_net(
         The time vector of the input data, by default None
     return_prob_series : bool, optional
         Whether to return the probability series, by default False
+
+    Returns
+    -------
+    int: p_wave_ix
+        The p-wave index
+    int: s_wave_ix
+        The s-wave index
     """
     import phase_net as ph  # noqa: DEP001
 

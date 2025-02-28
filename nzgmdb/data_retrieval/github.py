@@ -9,7 +9,7 @@ def fetch_github_directory_contents(
     """
     Fetch the contents of a GitHub directory using the GitHub API.
 
-    Parameters:
+    Parameters
     ----------
     owner : str
         The owner of the GitHub repository.
@@ -18,10 +18,10 @@ def fetch_github_directory_contents(
     path : str
         The path to the directory in the repository.
 
-    Returns:
+    Returns
     -------
-    json_response: list[dict[str, str]]
-        The json response of the directory contents.
+    list[dict[str, str]]
+        The JSON response containing the directory contents.
     """
     config = cfg.Config()
     github_api = config.get_value("github_api")
@@ -39,7 +39,7 @@ def get_csv_file_urls(
     """
     Recursively collect CSV file URLs from the directory contents.
 
-    Parameters:
+    Parameters
     ----------
     contents : list[dict[str, str]]
         The list of directory contents.
@@ -50,9 +50,9 @@ def get_csv_file_urls(
     base_url : str
         The base URL for the raw GitHub content.
 
-    Returns:
+    Returns
     -------
-    csv_urls: list[str]
+    list[str]
         The list of URLs for the CSV files.
     """
     config = cfg.Config()
