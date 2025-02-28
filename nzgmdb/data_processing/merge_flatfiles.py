@@ -664,9 +664,75 @@ def merge_dbs(
     """
     # For each file in the flatfiles, merge the to_merge_db_dir into the main_db_dir
     for flatfile_name in file_structure.FlatfileNames:
-        main_df = pd.read_csv(flatfile_db_dir / flatfile_name)
-        to_merge_df = pd.read_csv(
-            to_merge_db_dir / flatfile_name,
-        )
+        main_df = pd.read_csv(flatfile_db_dir / flatfile_name, dtype={"evid": str})
+        to_merge_df = pd.read_csv(to_merge_db_dir / flatfile_name, dtype={"evid": str})
 
-        print(f"Main {flatfile_name}: {main_df.shape}")
+        if flatfile_name == file_structure.FlatfileNames.EARTHQUAKE_SOURCE_TABLE:
+            # Merge based on evid, replace values if they exist and append new ones
+            main_df = pd.concat([main_df, to_merge_df]).drop_duplicates(
+                subset=["evid"], keep="last"
+            )
+            # Re-sort based on evid
+            main_df = main_df.sort_values("datetime")
+        elif flatfile_name == file_structure.FlatfileNames.STATION_MAGNITUDE_TABLE:
+            # Make the unique record_id col with the columns evid_sta_chan_loc
+            main_df["record_id"] = (
+                main_df["evid"]
+                + "_"
+                + main_df["sta"]
+                + "_"
+                + main_df["chan"]
+                + "_"
+                + main_df["loc"].astype(str)
+            )
+            to_merge_df["record_id"] = (
+                to_merge_df["evid"]
+                + "_"
+                + to_merge_df["sta"]
+                + "_"
+                + to_merge_df["chan"]
+                + "_"
+                + to_merge_df["loc"].astype(str)
+            )
+            # Merge on record_id, replace values if they exist and append new ones
+            main_df = pd.concat([main_df, to_merge_df]).drop_duplicates(
+                subset=["record_id"], keep="last"
+            )
+            # Re-sort based on record_id
+            main_df = main_df.sort_values("record_id")
+            # Remove the record_id column
+            main_df = main_df.drop(columns=["record_id"])
+        elif flatfile_name == file_structure.FlatfileNames.SITE_TABLE:
+            # Merge based on sta, replace values if they exist and append new ones
+            main_df = pd.concat([main_df, to_merge_df]).drop_duplicates(
+                subset=["sta"], keep="last"
+            )
+            # Re-sort based on sta
+            main_df = main_df.sort_values("sta")
+        elif flatfile_name == file_structure.FlatfileNames.PROPAGATION_TABLE:
+            # Merge based on evid_sta, replace values if they exist and append new ones
+            main_df["evid_sta"] = main_df["evid"] + "_" + main_df["sta"].astype(str)
+            to_merge_df["evid_sta"] = (
+                to_merge_df["evid"] + "_" + to_merge_df["sta"].astype(str)
+            )
+            main_df = pd.concat([main_df, to_merge_df]).drop_duplicates(
+                subset=["evid_sta"], keep="last"
+            )
+            # Re-sort based on evid_sta
+            main_df = main_df.sort_values("evid_sta")
+            # Remove the record_id column
+            main_df = main_df.drop(columns=["evid_sta"])
+        else:
+            # Merge on record_id, replace values if they exist and append new ones
+            main_df = pd.concat([main_df, to_merge_df]).drop_duplicates(
+                subset=["record_id"], keep="last"
+            )
+            # If the name of the file contains "flat" sort by datetime ,sta
+            if "flat" in flatfile_name:
+                main_df = main_df.sort_values(["datetime", "sta"])
+            else:
+                # Re-sort based on record_id
+                main_df = main_df.sort_values("record_id")
+
+        # Save the merged database
+        main_df.to_csv(output_dir / flatfile_name, index=False)
