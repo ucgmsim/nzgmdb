@@ -1,4 +1,9 @@
+"""
+Module to manage the configuration file for constants and configuration settings for an NZGMDB run.
+"""
+
 import yaml
+
 from nzgmdb.management import file_structure
 
 
