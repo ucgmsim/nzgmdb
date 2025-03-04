@@ -1,3 +1,7 @@
+"""
+This module contains the functions to merge different flatfiles together to create the final flatfiles
+"""
+
 from pathlib import Path
 
 import pandas as pd

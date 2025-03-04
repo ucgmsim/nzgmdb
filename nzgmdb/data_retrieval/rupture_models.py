@@ -1,3 +1,7 @@
+"""
+This module contains functions for fetching and processing rupture models from the GeoNet GitHub repository.
+"""
+
 import numpy as np
 import pandas as pd
 
@@ -6,35 +10,26 @@ from nzgmdb.management import config as cfg
 from qcore import geo
 
 
-def get_seismic_data_from_url(
-    url: str,
-) -> dict:
+def get_seismic_data_from_url(url: str) -> dict:
     """
     Fetch and process the seismic data from a URL.
 
-    Parameters:
+    Parameters
     ----------
     url : str
-        The URL of the seismic data.
+        The URL from which the seismic data is retrieved.
 
-    Returns:
+    Returns
     -------
     dict
         A dictionary containing the following keys:
-        'ztor' : float
-            The top depth of the rupture model.
-        'dbottom' : float
-            The bottom depth of the rupture model.
-        'strike' : float
-            The strike angle of the rupture model.
-        'dip' : float
-            The dip angle of the rupture model.
-        'rake' : float
-            The rake angle of the rupture model.
-        'length' : float
-            The total length of the rupture model.
-        'width' : float
-            The average width of the rupture model.
+        - 'ztor' (float): The top depth of the rupture model.
+        - 'dbottom' (float): The bottom depth of the rupture model.
+        - 'strike' (float): The strike angle of the rupture model.
+        - 'dip' (float): The dip angle of the rupture model.
+        - 'rake' (float): The rake angle of the rupture model.
+        - 'length' (float): The total length of the rupture model.
+        - 'width' (float): The average width of the rupture model.
     """
     # Get the dataframe
     df = pd.read_csv(url)
@@ -97,10 +92,10 @@ def get_rupture_models() -> dict[str, str]:
     """
     Fetch and process the rupture models from the GeoNet GitHub repository.
 
-    Returns:
+    Returns
     -------
-    event_urls: dict[str, str]
-        The dictionary of event IDs and their corresponding CSV file URLs.
+    dict[str, str]
+        A dictionary where the keys are event IDs and the values are the corresponding CSV file URLs.
     """
     # Define the GitHub repository details
     config = cfg.Config()

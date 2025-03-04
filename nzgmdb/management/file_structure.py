@@ -64,156 +64,196 @@ class SkippedRecordFilenames(StrEnum):
     QUALITY_SKIPPED_RECORDS = "quality_skipped_records.csv"
 
 
-def get_mseed_dir(main_dir: Path, year: int, event_id: str):
+def get_mseed_dir(main_dir: Path, year: int, event_id: str) -> Path:
     """
-    Get the directory to save the mseed files
+    Get the directory to save the mseed files.
 
     Parameters
     ----------
     main_dir : Path
-        The main directory of the NZGMDB results (Highest level directory)
+        The main directory of the NZGMDB results (Highest level directory).
     year : int
-        The year of the event
+        The year of the event.
     event_id : str
-        The event id
-    """
-    mseed_dir = main_dir / "waveforms" / f"{year}" / event_id / "mseed"
-    return mseed_dir
-
-
-def get_mseed_dir_from_snrfas(snrfas_file: Path):
-    """
-    Get the mseed directory of the current snr_fas record file
-    (Uses the snr_fas structure to get the year and event id / main_dir)
-
-    Parameters
-    ----------
-    snrfas_file : Path
-        The snr_fas file
-    """
-    main_dir = snrfas_file.parent.parent.parent.parent
-    year = int(snrfas_file.parent.parent.name)
-    event_id = snrfas_file.parent.name
-    mseed_dir = get_mseed_dir(main_dir, year, event_id)
-    return mseed_dir
-
-
-def get_processed_dir(main_dir: Path, year: int, event_id: str):
-    """
-    Get the directory to the processed waveform files
-    given the year and event id
-
-    Parameters
-    ----------
-    main_dir : Path
-        The main directory of the NZGMDB results (Highest level directory)
-    year : int
-        The year of the event
-    event_id : str
-        The event id
-    """
-    processed_dir = main_dir / "waveforms" / f"{year}" / event_id / "processed"
-    return processed_dir
-
-
-def get_flatfile_dir(main_dir: Path):
-    """
-    Get the directory to the flatfiles
-
-    Parameters
-    ----------
-    main_dir : Path
-        The main directory of the NZGMDB results (Highest level directory)
-    """
-    flatfile_dir = main_dir / "flatfiles"
-    return flatfile_dir
-
-
-def get_event_id_from_mseed(mseed_file: Path):
-    """
-    Get the event id from the mseed file
-
-    Parameters
-    ----------
-    mseed_file : Path
-        The mseed file
-    """
-    event_id = mseed_file.parent.parent.name
-    return event_id
-
-
-def get_data_dir():
-    """
-    Get the directory to the data files
-    """
-    return Path(__file__).parent.parent / "data"
-
-
-def get_snr_fas_dir(main_dir: Path):
-    """
-    Get the directory to save the SNR and FAS results
-
-    Parameters
-    ----------
-    main_dir : Path
-        The main directory of the NZGMDB results (Highest level directory)
-    """
-    snr_fas_dir = main_dir / "snr_fas"
-    return snr_fas_dir
-
-
-def get_waveform_dir(main_dir: Path):
-    """
-    Get the directory to where the waveforms are stored,
-    both mseed and processed files
-
-    Parameters
-    ----------
-    main_dir : Path
-        The main directory of the NZGMDB results (Highest level directory)
-    """
-    waveform_dir = main_dir / "waveforms"
-    return waveform_dir
-
-
-def get_im_dir(main_dir: Path):
-    """
-    Get the directory to save the IM results
-
-    Parameters
-    ----------
-    main_dir : Path
-        The main directory of the NZGMDB results (Highest level directory)
-    """
-    im_dir = main_dir / "IM"
-    return im_dir
-
-
-def get_processed_dir_from_mseed(mseed_file: Path):
-    """
-    Get the directory to save the processed files
-
-    Parameters
-    ----------
-    mseed_file : Path
-        The mseed file
+        The event ID.
 
     Returns
     -------
     Path
-        The directory to save the processed files
+        The directory where the mseed files are stored.
     """
-    return mseed_file.parent.parent / "processed"
+    return main_dir / "waveforms" / f"{year}" / event_id / "mseed"
 
 
-def get_gmc_dir(main_dir: Path):
+def get_mseed_dir_from_snrfas(snrfas_file: Path) -> Path:
     """
-    Get the directory to save the GMC results
+    Get the mseed directory from an SNR/FAS file.
+
+    Uses the snr_fas structure to determine the year and event ID.
+
+    Parameters
+    ----------
+    snrfas_file : Path
+        The snr_fas file.
+
+    Returns
+    -------
+    Path
+        The directory where the mseed files are stored.
+    """
+    main_dir = snrfas_file.parent.parent.parent.parent
+    year = int(snrfas_file.parent.parent.name)
+    event_id = snrfas_file.parent.name
+    return get_mseed_dir(main_dir, year, event_id)
+
+
+def get_processed_dir(main_dir: Path, year: int, event_id: str) -> Path:
+    """
+    Get the directory for processed waveform files.
 
     Parameters
     ----------
     main_dir : Path
-        The main directory of the NZGMDB results (Highest level directory)
+        The main directory of the NZGMDB results.
+    year : int
+        The year of the event.
+    event_id : str
+        The event ID.
+
+    Returns
+    -------
+    Path
+        The directory where processed waveforms are stored.
     """
-    gmc_dir = main_dir / "gmc"
-    return gmc_dir
+    return main_dir / "waveforms" / f"{year}" / event_id / "processed"
+
+
+def get_flatfile_dir(main_dir: Path) -> Path:
+    """
+    Get the directory for flatfiles.
+
+    Parameters
+    ----------
+    main_dir : Path
+        The main directory of the NZGMDB results.
+
+    Returns
+    -------
+    Path
+        The directory where flatfiles are stored.
+    """
+    return main_dir / "flatfiles"
+
+
+def get_event_id_from_mseed(mseed_file: Path) -> str:
+    """
+    Extract the event ID from an mseed file.
+
+    Parameters
+    ----------
+    mseed_file : Path
+        The mseed file.
+
+    Returns
+    -------
+    str
+        The event ID extracted from the file path.
+    """
+    return mseed_file.parent.parent.name
+
+
+def get_data_dir() -> Path:
+    """
+    Get the directory where data files are stored.
+
+    Returns
+    -------
+    Path
+        The directory containing the data files.
+    """
+    return Path(__file__).parent.parent / "data"
+
+
+def get_snr_fas_dir(main_dir: Path) -> Path:
+    """
+    Get the directory for storing SNR and FAS results.
+
+    Parameters
+    ----------
+    main_dir : Path
+        The main directory of the NZGMDB results.
+
+    Returns
+    -------
+    Path
+        The directory where SNR and FAS results are stored.
+    """
+    return main_dir / "snr_fas"
+
+
+def get_waveform_dir(main_dir: Path) -> Path:
+    """
+    Get the directory where waveforms (mseed and processed) are stored.
+
+    Parameters
+    ----------
+    main_dir : Path
+        The main directory of the NZGMDB results.
+
+    Returns
+    -------
+    Path
+        The directory containing waveform files.
+    """
+    return main_dir / "waveforms"
+
+
+def get_im_dir(main_dir: Path) -> Path:
+    """
+    Get the directory for storing IM results.
+
+    Parameters
+    ----------
+    main_dir : Path
+        The main directory of the NZGMDB results.
+
+    Returns
+    -------
+    Path
+        The directory where IM results are stored.
+    """
+    return main_dir / "IM"
+
+
+def get_processed_dir_from_mseed(mseed_file: Path) -> Path:
+    """
+    Get the directory for storing processed waveform files from an mseed file.
+
+    Parameters
+    ----------
+    mseed_file : Path
+        The mseed file.
+
+    Returns
+    -------
+    Path
+        The directory where processed files are stored.
+    """
+    return mseed_file.parent.parent / "processed"
+
+
+def get_gmc_dir(main_dir: Path) -> Path:
+    """
+    Get the directory for storing GMC results.
+
+    Parameters
+    ----------
+    main_dir : Path
+        The main directory of the NZGMDB results.
+
+    Returns
+    -------
+    Path
+        The directory where GMC results are stored.
+    """
+    return main_dir / "gmc"

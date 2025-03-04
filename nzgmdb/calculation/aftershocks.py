@@ -1,3 +1,7 @@
+"""
+Contains functions to calculate the aftershock flags and cluster flags for the earthquake source table.
+"""
+
 from pathlib import Path
 
 import alphashape

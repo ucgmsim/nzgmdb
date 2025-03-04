@@ -1,3 +1,7 @@
+"""
+This module contains functions to process observed data from mseed files and turn them into ascii files
+"""
+
 import functools
 import multiprocessing
 from pathlib import Path

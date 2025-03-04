@@ -1,3 +1,7 @@
+"""
+Script to upload the NZGMDB results to Dropbox.
+"""
+
 import multiprocessing as mp
 import subprocess
 import zipfile

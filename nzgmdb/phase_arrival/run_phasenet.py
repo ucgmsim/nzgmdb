@@ -1,3 +1,7 @@
+"""
+Script to run PhaseNet on mseed files, predict p and s waves as well as save the probability series to an HDF5 file.
+"""
+
 import argparse
 from pathlib import Path
 

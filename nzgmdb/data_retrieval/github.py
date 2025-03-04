@@ -1,3 +1,7 @@
+"""
+This module contains functions for fetching data from GitHub repositories.
+"""
+
 import requests
 
 from nzgmdb.management import config as cfg
@@ -47,8 +51,6 @@ def get_csv_file_urls(
         The owner of the GitHub repository.
     repo : str
         The name of the GitHub repository.
-    base_url : str
-        The base URL for the raw GitHub content.
 
     Returns
     -------

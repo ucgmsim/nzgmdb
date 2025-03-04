@@ -1,3 +1,7 @@
+"""
+This module contains the functions for determining the clip probability of a given mseed file
+"""
+
 import numpy as np
 from gmprocess.waveform_processing.clipping.clipping_ann import clipNet
 from gmprocess.waveform_processing.clipping.histogram import Histogram

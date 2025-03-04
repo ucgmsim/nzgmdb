@@ -1,3 +1,7 @@
+"""
+Script to run the NZGMDB pipeline for a specific event in near-real-time mode.
+"""
+
 import datetime
 import io
 import os

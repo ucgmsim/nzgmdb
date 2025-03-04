@@ -1,3 +1,7 @@
+"""
+This module contains functions for the initial pre-processing of waveform data and full waveform processing
+"""
+
 import numpy as np
 from obspy.clients.fdsn import Client as FDSN_Client
 from obspy.clients.fdsn.header import FDSNNoDataException
