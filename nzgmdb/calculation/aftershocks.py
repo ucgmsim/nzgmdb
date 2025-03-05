@@ -352,6 +352,7 @@ from datetime import datetime as dt
 from shapely.geometry import MultiPoint, Point
 from itertools import compress
 
+
 def abwd_crjb(catalogue_pd, rupture_area_poly, rjb_cutoff, window_method, fs_time_prop):
     """
     Identifies earthquake clusters using spatial and temporal windows.
@@ -393,6 +394,7 @@ def abwd_crjb(catalogue_pd, rupture_area_poly, rjb_cutoff, window_method, fs_tim
         numpy.ndarray
             Array of decimal year representations.
         """
+
         def to_year_fraction(date):
             def since_epoch(date):
                 return time.mktime(date.timetuple())
@@ -409,7 +411,9 @@ def abwd_crjb(catalogue_pd, rupture_area_poly, rjb_cutoff, window_method, fs_tim
         time_pd = pd.to_datetime(catalogue_pd["datetime"], format="ISO8601")
         return np.array([to_year_fraction(date) for date in time_pd])
 
-    def haversine_distance(lon1, lat1, lon2, lat2, radians=False, earth_radius=6371.227):
+    def haversine_distance(
+        lon1, lat1, lon2, lat2, radians=False, earth_radius=6371.227
+    ):
         """
         Calculates great-circle distance using the haversine formula.
 
@@ -431,13 +435,16 @@ def abwd_crjb(catalogue_pd, rupture_area_poly, rjb_cutoff, window_method, fs_tim
         """
         if not radians:
             conversion_factor = np.pi / 180.0
-            lon1, lat1, lon2, lat2 = (
-                conversion_factor * np.array([lon1, lat1, lon2, lat2])
+            lon1, lat1, lon2, lat2 = conversion_factor * np.array(
+                [lon1, lat1, lon2, lat2]
             )
 
         dlat = lat1 - lat2
         dlon = lon1 - lon2
-        a = np.sin(dlat / 2.0) ** 2 + np.cos(lat1) * np.cos(lat2) * np.sin(dlon / 2.0) ** 2
+        a = (
+            np.sin(dlat / 2.0) ** 2
+            + np.cos(lat1) * np.cos(lat2) * np.sin(dlon / 2.0) ** 2
+        )
         return 2.0 * earth_radius * np.arctan2(np.sqrt(a), np.sqrt(1 - a))
 
     def rupture_centroids(rupture_polygons):
@@ -479,10 +486,12 @@ def abwd_crjb(catalogue_pd, rupture_area_poly, rjb_cutoff, window_method, fs_tim
 
             distances = np.cumsum(np.r_[0, np.linalg.norm(np.diff(xy, axis=0), axis=1)])
             sampled_distances = np.linspace(0, distances.max(), num_points)
-            interpolated_xy = np.column_stack([
-                np.interp(sampled_distances, distances, xy[:, 0]),
-                np.interp(sampled_distances, distances, xy[:, 1])
-            ])
+            interpolated_xy = np.column_stack(
+                [
+                    np.interp(sampled_distances, distances, xy[:, 0]),
+                    np.interp(sampled_distances, distances, xy[:, 1]),
+                ]
+            )
 
             resampled_points.append(MultiPoint(interpolated_xy))
 
@@ -532,13 +541,19 @@ def abwd_crjb(catalogue_pd, rupture_area_poly, rjb_cutoff, window_method, fs_tim
 
     # Define time and space windows based on method
     if window_method == "GardnerKnopoff":
-        sw_time = np.exp(-3.95 + np.sqrt(0.62 + 17.32 * catalogue_pd.mag)) / DAYS_IN_YEAR
+        sw_time = (
+            np.exp(-3.95 + np.sqrt(0.62 + 17.32 * catalogue_pd.mag)) / DAYS_IN_YEAR
+        )
     elif window_method == "Gruenthal":
-        sw_time = np.exp(-3.95 + np.sqrt(0.62 + 17.32 * catalogue_pd.mag)) / DAYS_IN_YEAR
+        sw_time = (
+            np.exp(-3.95 + np.sqrt(0.62 + 17.32 * catalogue_pd.mag)) / DAYS_IN_YEAR
+        )
     elif window_method == "Urhammer":
         sw_time = np.exp(-2.87 + 1.235 * catalogue_pd.mag) / DAYS_IN_YEAR
     else:
-        sw_time = np.exp(-3.95 + np.sqrt(0.62 + 17.32 * catalogue_pd.mag)) / DAYS_IN_YEAR
+        sw_time = (
+            np.exp(-3.95 + np.sqrt(0.62 + 17.32 * catalogue_pd.mag)) / DAYS_IN_YEAR
+        )
 
     sw_space = np.full(neq, rjb_cutoff)
 
@@ -560,10 +575,16 @@ def abwd_crjb(catalogue_pd, rupture_area_poly, rjb_cutoff, window_method, fs_tim
     for i in range(neq - 1):
         if cluster_labels[i] == 0:
             dt = decimal_years - decimal_years[i]
-            valid = (cluster_labels == 0) & (-sw_time[i] * fs_time_prop <= dt) & (dt <= sw_time[i])
+            valid = (
+                (cluster_labels == 0)
+                & (-sw_time[i] * fs_time_prop <= dt)
+                & (dt <= sw_time[i])
+            )
 
             aftershock_centroids = list(compress(sorted_centroids, valid))
-            crjb_distances = calculate_crjb(sorted_polygons[i], sorted_boundaries[i], aftershock_centroids)
+            crjb_distances = calculate_crjb(
+                sorted_polygons[i], sorted_boundaries[i], aftershock_centroids
+            )
             valid[valid] = crjb_distances <= sw_space[i]
 
             if valid.any():
