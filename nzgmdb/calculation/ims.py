@@ -1,7 +1,5 @@
 import functools
 import multiprocessing as mp
-mp.set_start_method("spawn")
-
 import warnings
 from pathlib import Path
 
