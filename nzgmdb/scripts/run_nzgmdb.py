@@ -728,6 +728,7 @@ def run_full_nzgmdb(  # noqa: D103
 
     # Run IM calculation
     im_dir = file_structure.get_im_dir(main_dir)
+    im_dir.mkdir(parents=True, exist_ok=True)
     print("Calculating IMs")
     # Run IM Calc with a sub-command to manage single core issues
     im_calc_command = f"python {__file__} run-im-calculation {main_dir} --output-dir {im_dir} --n-procs {n_procs} --checkpoint {checkpoint}"
