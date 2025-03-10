@@ -11,7 +11,7 @@ import typer
 from nzgmdb.calculation import distances, fmax, ims, snr
 from nzgmdb.data_processing import merge_flatfiles, process_observed, quality_db
 from nzgmdb.data_retrieval import geonet, sites, tect_domain
-from nzgmdb.management import file_structure
+from nzgmdb.management import file_structure, shell_commands
 from nzgmdb.phase_arrival import gen_phase_arrival_table
 from nzgmdb.scripts import run_gmc, upload_to_dropbox
 
@@ -729,7 +729,14 @@ def run_full_nzgmdb(  # noqa: D103
     # Run IM calculation
     im_dir = file_structure.get_im_dir(main_dir)
     print("Calculating IMs")
-    run_im_calculation(main_dir, im_dir, n_procs, checkpoint)
+    # Run IM Calc with a sub-command to manage single core issues
+    im_calc_command = f"python {__file__} run-im-calculation {main_dir} --output-dir {im_dir} --n-procs {n_procs} --checkpoint {checkpoint}"
+    env_activate_command = "conda activate NZGMDB_3_11"
+    log_file_ffp = im_dir / "run_im_calculation.log"
+    shell_commands.run_command(
+        im_calc_command, conda_sh, env_activate_command, log_file_ffp
+    )
+    # run_im_calculation(main_dir, im_dir, n_procs, checkpoint)
 
     # Merge IM results
     if not (
