@@ -1,9 +1,6 @@
 """
 File that contains the function scripts that can be called to run the NZGMDB pipeline.
 """
-import multiprocessing as mp
-
-mp.set_start_method("spawn")
 
 from datetime import datetime
 from pathlib import Path
