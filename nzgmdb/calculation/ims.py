@@ -10,6 +10,7 @@ from IM import im_calculation, ims, waveform_reading
 from nzgmdb.management import config as cfg
 from nzgmdb.management import file_structure
 
+mp.set_start_method('spawn')
 
 def calculate_im_for_record(
     ffp_000: Path,
