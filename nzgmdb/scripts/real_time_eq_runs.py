@@ -1,7 +1,3 @@
-import multiprocessing as mp
-
-mp.set_start_method("spawn")
-
 import datetime
 import io
 import os
@@ -26,9 +22,7 @@ SEISMIC_NOW_URL = (
 WEBHOOK_URL = os.getenv("SLACK_WEBHOOK_URL")
 
 
-def send_message_to_slack(
-    message: str
-):
+def send_message_to_slack(message: str):
     """
     Send a message to a slack channel
 
