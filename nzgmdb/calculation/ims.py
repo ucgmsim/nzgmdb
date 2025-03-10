@@ -42,8 +42,6 @@ def calculate_im_for_record(
     ffp_ver = ffp_000.parent / f"{ffp_000.stem}.ver"
     record_id = ffp_000.stem
 
-    print(f"Reading for {record_id}")
-
     try:
         dt, waveform = waveform_reading.read_ascii(ffp_000, ffp_090, ffp_ver)
     except FileNotFoundError:
