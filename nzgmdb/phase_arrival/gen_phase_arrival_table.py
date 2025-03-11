@@ -77,6 +77,7 @@ def generate_phase_arrival_table(
     conda_sh: Path,
     env_activate_command: str,
     n_procs: int,
+    bypass_records_ffp: Path = None,
 ):
     """
     Generate the phase arrival table utilizing phaseNet
@@ -96,6 +97,8 @@ def generate_phase_arrival_table(
         The command to activate the environment for running PhaseNet.
     n_procs : int
         The number of processes to use
+    bypass_records_ffp : Path
+        The full file path to the bypass records file, which includes a custom p_wave_ix
     """
     # Get the Phase_arrival directory
     phase_dir = main_dir / "phase_arrival"
@@ -167,6 +170,25 @@ def generate_phase_arrival_table(
     # Concatenate the results
     phase_df = pd.concat(phase_results)
     skipped_df = pd.concat(skipped_records_results)
+
+    # If the bypass file exists, replace p_wave_ix values with ones that exist in the bypass file
+    if bypass_records_ffp is not None:
+        bypass_df = pd.read_csv(bypass_records_ffp)
+        phase_df = pd.merge(
+            phase_df,
+            bypass_df[["record_id", "p_wave_ix"]],
+            how="left",
+            on="record_id",
+            suffixes=("", "_bypass"),
+        )
+        # Replace the suffixes with the original column name if the bypass column is not null
+        phase_df["p_wave_ix"] = phase_df["p_wave_ix_bypass"].combine_first(
+            phase_df["p_wave_ix"]
+        )
+        phase_df = phase_df.drop(columns=["p_wave_ix_bypass"])
+        # Ensure the p_wave_ix and s_wave_ix column is an int
+        phase_df["p_wave_ix"] = phase_df["p_wave_ix"].astype(int)
+        phase_df["s_wave_ix"] = phase_df["s_wave_ix"].astype(int)
 
     # Save the phase arrival table
     output_dir.mkdir(parents=True, exist_ok=True)
