@@ -1,14 +1,13 @@
 from itertools import compress
 from pathlib import Path
 
-import alphashape
 import numpy as np
 import pandas as pd
-from shapely import MultiPoint, Polygon
+from shapely import MultiPoint, Point, Polygon
 
-from abwd_declust.abwd_declust_v2_1 import abwd_crjb
 from nzgmdb.management import config as cfg
 from nzgmdb.management import file_structure
+from qcore import geo
 from source_modelling import srf
 
 
@@ -48,12 +47,7 @@ def merge_aftershocks(main_dir: Path):
             srf_points = srf_model.points.loc[:, ["lon", "lat", "dep"]].to_numpy()
             # Apply % 360 to manage the longitude negative values
             srf_points[:, 0] = srf_points[:, 0] % 360
-            nodal_plane_vertices = np.transpose(
-                np.array([srf_points[:, 0], srf_points[:, 1]])
-            )
-            alphashape2 = alphashape.alphashape(nodal_plane_vertices, 0.0)
-            hull_x, hull_y = alphashape2.exterior.xy
-            rupture_area_poly.append(Polygon(zip(hull_x, hull_y)))
+            rupture_area_poly.append(MultiPoint(srf_points[:, :2]).convex_hull)
         else:
             lon_values = [
                 row["corner_0_lon"],
@@ -89,7 +83,6 @@ def merge_aftershocks(main_dir: Path):
             rupture_area_poly,
             rjb_cutoff=rjb_cutoff,
             window_method="GardnerKnopoff",
-            fs_time_prop=0,
         )
 
         # Store the results in the dictionary
@@ -109,12 +102,117 @@ def merge_aftershocks(main_dir: Path):
     )
 
 
-import time
+def decimal_year(catalogue_pd: pd.DataFrame):
+    """
+    Converts earthquake datetime into decimal years.
 
-from shapely.geometry import MultiPoint, Point
+    Parameters
+    ----------
+    catalogue_pd : pandas.DataFrame
+        Dataframe containing a 'datetime' column.
+
+    Returns
+    -------
+    numpy.ndarray
+        Array of decimal years.
+    """
+    time_pd = pd.to_datetime(catalogue_pd["datetime"]).dt.tz_localize(None)
+
+    year = time_pd.dt.year
+    start_of_year = pd.to_datetime(year.astype(str) + "-01-01")
+    start_of_next_year = pd.to_datetime((year + 1).astype(str) + "-01-01")
+
+    elapsed = (time_pd - start_of_year).dt.total_seconds()
+    duration = (start_of_next_year - start_of_year).dt.total_seconds()
+
+    return np.array(year + elapsed / duration)
 
 
-def abwd_crjb(catalogue_pd, rupture_area_poly, rjb_cutoff, window_method, fs_time_prop):
+def resample_polygon_1km(rupture_polygons: list):
+    """
+    Resamples polygon boundaries at approximately 1 km resolution.
+
+    Parameters
+    ----------
+    rupture_polygons : list
+        List of shapely.geometry.Polygon objects.
+
+    Returns
+    -------
+    list
+        List of shapely.geometry.MultiPoint objects containing resampled boundary points.
+    """
+    resampled_points = []
+
+    for poly in rupture_polygons:
+        x, y = poly.exterior.xy
+        xy = np.column_stack([x, y])
+        num_points = int(poly.length * 111.2) + 8
+
+        distances = np.cumsum(np.r_[0, np.linalg.norm(np.diff(xy, axis=0), axis=1)])
+        sampled_distances = np.linspace(0, distances.max(), num_points)
+        interpolated_xy = np.column_stack(
+            [
+                np.interp(sampled_distances, distances, xy[:, 0]),
+                np.interp(sampled_distances, distances, xy[:, 1]),
+            ]
+        )
+
+        resampled_points.append(MultiPoint(interpolated_xy))
+
+    return resampled_points
+
+
+def calculate_crjb(
+    rupture_poly: Polygon, boundary_points: MultiPoint, centroids: np.ndarray
+):
+    """
+    Calculates closest Rupture-to-Just Beyond (CRJB) distance for given earthquake centroids.
+
+    Parameters
+    ----------
+    rupture_poly : shapely.geometry.Polygon
+        Polygon representing the rupture area.
+    boundary_points : shapely.geometry.MultiPoint
+        Set of resampled boundary points of the rupture.
+    centroids : np.ndarray
+        Array of centroid coordinates.
+
+    Returns
+    -------
+    numpy.ndarray
+        Array of min CRJB distances.
+    """
+    # Gather the points of the boundary
+    points = np.array([(p.x, p.y) for p in boundary_points.geoms])
+
+    # Calculate the distances from the boundary points to all the centroids
+    distances = geo.get_distances(points, centroids[:, 0], centroids[:, 1])
+
+    # Get the minimum distance for each centroid
+    if distances.ndim > 1:
+        crib_distances_min = np.min(distances, axis=1)
+    else:
+        crib_distances_min = np.min(distances)
+
+    # Extra check over the rupture polygon to set the CRJB distance to 0
+    # if the centroid is inside the rupture
+    for i, centroid in enumerate(centroids):
+        if rupture_poly.contains(Point(centroid)):
+            if isinstance(crib_distances_min, np.ndarray):
+                crib_distances_min[i] = 0.0
+            else:
+                crib_distances_min = 0.0
+
+    return crib_distances_min
+
+
+def abwd_crjb(
+    catalogue_pd: pd.DataFrame,
+    rupture_area_poly: list,
+    rjb_cutoff: float,
+    window_method: str,
+):
     """
     Identifies earthquake clusters using spatial and temporal windows.
 
@@ -129,228 +227,81 @@ def abwd_crjb(catalogue_pd, rupture_area_poly, rjb_cutoff, window_method, fs_tim
     window_method : str
         Method to define the temporal and spatial clustering windows.
         Options: "GardnerKnopoff", "Gruenthal", "Urhammer".
-    fs_time_prop : float
-        Fore-shock time proportion for temporal window.
 
     Returns
     -------
-    flagvector : numpy.ndarray
+    numpy.ndarray
         Vector indicating whether each event is a mainshock (0),
-        an aftershock (1), or a foreshock (-1).
-    vcl : numpy.ndarray
-        Cluster labels for each earthquake (0 means no cluster).
+        an aftershock (1)
+    numpy.ndarray
+        Cluster labels for each earthquake and it's set of aftershocks.
     """
-
-    def decimal_year(catalogue_pd):
-        """
-        Converts earthquake datetime into decimal years.
-
-        Parameters
-        ----------
-        catalogue_pd : pandas.DataFrame
-            Dataframe containing a 'datetime' column.
-
-        Returns
-        -------
-        numpy.ndarray
-            Array of decimal year representations.
-        """
-
-        def to_year_fraction(date):
-            def since_epoch(date):
-                return time.mktime(date.timetuple())
-
-            year = date.year
-            start_of_year = dt(year=year, month=1, day=1)
-            start_of_next_year = dt(year=year + 1, month=1, day=1)
-
-            elapsed = since_epoch(date) - since_epoch(start_of_year)
-            duration = since_epoch(start_of_next_year) - since_epoch(start_of_year)
-
-            return year + elapsed / duration
-
-        time_pd = pd.to_datetime(catalogue_pd["datetime"], format="ISO8601")
-        return np.array([to_year_fraction(date) for date in time_pd])
-
-    def haversine_distance(
-        lon1, lat1, lon2, lat2, radians=False, earth_radius=6371.227
-    ):
-        """
-        Calculates great-circle distance using the haversine formula.
-
-        Parameters
-        ----------
-        lon1, lat1 : numpy.ndarray
-            Arrays of longitudes and latitudes for the first set of points.
-        lon2, lat2 : float
-            Longitude and latitude of the second point.
-        radians : bool, optional
-            If True, inputs are in radians. Default is False.
-        earth_radius : float, optional
-            Radius of the Earth in km. Default is 6371.227 km.
-
-        Returns
-        -------
-        numpy.ndarray
-            Array of distances in km.
-        """
-        if not radians:
-            conversion_factor = np.pi / 180.0
-            lon1, lat1, lon2, lat2 = conversion_factor * np.array(
-                [lon1, lat1, lon2, lat2]
-            )
-
-        dlat = lat1 - lat2
-        dlon = lon1 - lon2
-        a = (
-            np.sin(dlat / 2.0) ** 2
-            + np.cos(lat1) * np.cos(lat2) * np.sin(dlon / 2.0) ** 2
-        )
-        return 2.0 * earth_radius * np.arctan2(np.sqrt(a), np.sqrt(1 - a))
-
-    def rupture_centroids(rupture_polygons):
-        """
-        Computes centroid coordinates for each rupture polygon.
-
-        Parameters
-        ----------
-        rupture_polygons : list
-            List of shapely.geometry.Polygon objects.
-
-        Returns
-        -------
-        list of [float, float]
-            List of centroid coordinates (longitude, latitude).
-        """
-        return [[poly.centroid.x, poly.centroid.y] for poly in rupture_polygons]
-
-    def resample_polygon_1km(rupture_polygons):
-        """
-        Resamples polygon boundaries at approximately 1 km resolution.
-
-        Parameters
-        ----------
-        rupture_polygons : list
-            List of shapely.geometry.Polygon objects.
-
-        Returns
-        -------
-        list
-            List of shapely.geometry.MultiPoint objects containing resampled boundary points.
-        """
-        resampled_points = []
-
-        for poly in rupture_polygons:
-            x, y = poly.exterior.xy
-            xy = np.column_stack([x, y])
-            num_points = int(poly.length * 111.2) + 8
-
-            distances = np.cumsum(np.r_[0, np.linalg.norm(np.diff(xy, axis=0), axis=1)])
-            sampled_distances = np.linspace(0, distances.max(), num_points)
-            interpolated_xy = np.column_stack(
-                [
-                    np.interp(sampled_distances, distances, xy[:, 0]),
-                    np.interp(sampled_distances, distances, xy[:, 1]),
-                ]
-            )
-
-            resampled_points.append(MultiPoint(interpolated_xy))
-
-        return resampled_points
-
-    def calculate_crjb(rupture_poly, boundary_points, centroids):
-        """
-        Calculates closest Rupture-to-Just Beyond (CRJB) distance for given earthquake centroids.
-
-        Parameters
-        ----------
-        rupture_poly : shapely.geometry.Polygon
-            Polygon representing the rupture area.
-        boundary_points : shapely.geometry.MultiPoint
-            Set of resampled boundary points of the rupture.
-        centroids : list
-            List of centroid coordinates.
-
-        Returns
-        -------
-        numpy.ndarray
-            Array of CRJB distances.
-        """
-        crjb_distances = []
-
-        for centroid in centroids:
-            if rupture_poly.contains(Point(centroid)):
-                crjb_distances.append(0.0)
-            else:
-                distances = [
-                    haversine_distance(centroid[0], centroid[1], p.x, p.y)
-                    for p in boundary_points.geoms
-                ]
-                crjb_distances.append(min(distances))
-
-        return np.array(crjb_distances)
-
     # Convert datetime to decimal years
     decimal_years = decimal_year(catalogue_pd)
 
     # Compute rupture centroids and resampled boundaries
-    centroids = rupture_centroids(rupture_area_poly)
+    centroids = [[poly.centroid.x, poly.centroid.y] for poly in rupture_area_poly]
     resampled_boundaries = resample_polygon_1km(rupture_area_poly)
 
     neq = len(catalogue_pd)
     DAYS_IN_YEAR = 364.75
 
-    # Define time and space windows based on method
-    if window_method == "GardnerKnopoff":
-        sw_time = (
-            np.exp(-3.95 + np.sqrt(0.62 + 17.32 * catalogue_pd.mag)) / DAYS_IN_YEAR
-        )
-    elif window_method == "Gruenthal":
+    # Define time window based on methods
+    if window_method == "Gruenthal":
         sw_time = (
             np.exp(-3.95 + np.sqrt(0.62 + 17.32 * catalogue_pd.mag)) / DAYS_IN_YEAR
         )
     elif window_method == "Urhammer":
         sw_time = np.exp(-2.87 + 1.235 * catalogue_pd.mag) / DAYS_IN_YEAR
     else:
+        # Default is GardnerKnopoff
         sw_time = (
             np.exp(-3.95 + np.sqrt(0.62 + 17.32 * catalogue_pd.mag)) / DAYS_IN_YEAR
         )
-
-    sw_space = np.full(neq, rjb_cutoff)
+    # Adjust the space window for M > 6.5
+    sw_time[catalogue_pd.mag >= 6.5] = (
+        np.power(10, 2.8 + 0.024 * catalogue_pd.mag[catalogue_pd.mag >= 6.5])
+        / DAYS_IN_YEAR
+    )
 
     eqid = np.arange(neq)
     cluster_labels = np.zeros(neq, dtype=int)
-    sorted_indices = np.argsort(catalogue_pd.mag)[::-1]
+    # Sort indices by magnitude in descending order
+    sorted_indices = np.argsort(catalogue_pd.mag, kind="heapsort")[::-1]
 
+    # Use indexing to sort arrays and lists
     decimal_years = decimal_years[sorted_indices]
     sw_time = sw_time[sorted_indices]
     eqid = eqid[sorted_indices]
-
-    sorted_polygons = [rupture_area_poly[i] for i in sorted_indices]
-    sorted_centroids = [centroids[i] for i in sorted_indices]
-    sorted_boundaries = [resampled_boundaries[i] for i in sorted_indices]
+    sorted_polygons = np.array(rupture_area_poly)[sorted_indices]
+    sorted_centroids = np.array(centroids)[sorted_indices]
+    sorted_boundaries = np.array(resampled_boundaries)[sorted_indices]
 
     flagvector = np.zeros(neq, dtype=int)
-    cluster_index = 0
+    cluster_index = 1
 
     for i in range(neq - 1):
         if cluster_labels[i] == 0:
+            # Find events that fit within the time window
             dt = decimal_years - decimal_years[i]
-            valid = (
-                (cluster_labels == 0)
-                & (-sw_time[i] * fs_time_prop <= dt)
-                & (dt <= sw_time[i])
-            )
+            valid = (cluster_labels == 0) & (dt >= 0) & (dt <= sw_time[i])
 
-            aftershock_centroids = list(compress(sorted_centroids, valid))
+            # calculate the CRJB distances for those events
+            aftershock_centroids = np.array(list(compress(sorted_centroids, valid)))
             crjb_distances = calculate_crjb(
                 sorted_polygons[i], sorted_boundaries[i], aftershock_centroids
             )
-            valid[valid] = crjb_distances <= sw_space[i]
 
+            # Only allow valid aftershocks for those within the RJB cutoff
+            valid[valid] = crjb_distances <= rjb_cutoff
+
+            # Set the mainshock and aftershock flags as well as the cluster labels
+            valid[i] = False
             if valid.any():
-                cluster_labels[valid] = cluster_index + 1
+                cluster_labels[valid] = cluster_index
+                cluster_labels[i] = cluster_index
                 flagvector[valid] = 1
                 cluster_index += 1
 
+    # Sort the results back to the original order
     return flagvector[np.argsort(eqid)], cluster_labels[np.argsort(eqid)]
