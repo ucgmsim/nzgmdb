@@ -209,6 +209,7 @@ def run_event(  # noqa: D103
             checkpoint=True,
             only_event_ids=[event_id],
             real_time=True,
+            snr_batch_size=n_procs,
         )
     except custom_errors.NoStationsError:
         print(f"Event {event_id} has no stations, skipping")
