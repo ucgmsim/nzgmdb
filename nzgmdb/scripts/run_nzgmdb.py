@@ -600,6 +600,12 @@ def run_full_nzgmdb(  # noqa: D103
             dir_okay=False,
         ),
     ] = None,
+    custom_rrup: Annotated[
+        float,
+        typer.Option(
+            help="Custom value for rrup to use for the distance calculation",
+        ),
+    ] = None,
 ):
     main_dir.mkdir(parents=True, exist_ok=True)
 
@@ -631,6 +637,7 @@ def run_full_nzgmdb(  # noqa: D103
             only_event_ids,
             only_sites,
             real_time,
+            custom_rrup,
         )
 
     # Merge the tectonic domains

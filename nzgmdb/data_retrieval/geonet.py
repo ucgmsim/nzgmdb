@@ -734,6 +734,7 @@ def parse_geonet_information(
     only_event_ids: list[str] = None,
     only_sites: list[str] = None,
     real_time: bool = False,
+    custom_rrup: float = None,
 ):
     """
     Read the geonet information and manage the fetching of more data to create the mseed files
@@ -756,6 +757,8 @@ def parse_geonet_information(
         Will only fetch the data for the sites in the list
     real_time : bool (optional)
         If the function is being used in real time use a different client, default is False
+    custom_rrup : float (optional)
+        If a custom rrup is to be used instead of the Mw_rrup file
     """
     if not only_event_ids:
         # Get the earthquake data
@@ -780,11 +783,31 @@ def parse_geonet_information(
     # Get the data_dir
     data_dir = file_structure.get_data_dir()
 
-    mw_rrup = np.loadtxt(data_dir / "Mw_rrup.txt")
-    mags = mw_rrup[:, 0]
-    rrups = mw_rrup[:, 1]
-    # Generate cubic interpolation for magnitude distance relationship
-    f_rrup = interp1d(mags, rrups, kind="cubic")
+    if custom_rrup:
+        # Create a custom rrup function
+        def f_rrup(magnitude: float):
+            """
+            Custom rrup function to return the custom rrup value
+
+            Parameters
+            ----------
+            magnitude : float
+                The magnitude to get the rrup for
+
+            Returns
+            -------
+            float
+                The custom rrup value always the same regardless of magnitude
+            """
+            return custom_rrup
+
+    else:
+        # Load the Mw_rrup file
+        mw_rrup = np.loadtxt(data_dir / "Mw_rrup.txt")
+        mags = mw_rrup[:, 0]
+        rrups = mw_rrup[:, 1]
+        # Generate cubic interpolation for magnitude distance relationship
+        f_rrup = interp1d(mags, rrups, kind="cubic")
 
     # Get the site table
     flatfile_dir = file_structure.get_flatfile_dir(main_dir)

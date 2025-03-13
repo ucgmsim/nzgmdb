@@ -210,6 +210,7 @@ def run_event(  # noqa: D103
             only_event_ids=[event_id],
             real_time=True,
             snr_batch_size=n_procs * 4,
+            custom_rrup=30,
         )
     except custom_errors.NoStationsError:
         print(f"Event {event_id} has no stations, skipping")
