@@ -170,8 +170,6 @@ def fetch_event_line(event_cat: Event, event_id: str):
 
 def get_stations_within_radius(
     event_cat: Event,
-    mags: np.ndarray,
-    rrups: np.ndarray,
     f_rrup: interp1d,
     inventory: Inventory,
 ):
@@ -182,10 +180,6 @@ def get_stations_within_radius(
     ----------
     event_cat : Event
         The event catalog to fetch the event data from
-    mags : np.ndarray
-        The magnitudes from the Mw_rrup file
-    rrups : np.ndarray
-        The rrups from the Mw_rrup file
     f_rrup : interp1d
         The cubic interpolation function for the magnitude distance relationship
     inventory : Inventory
@@ -202,12 +196,7 @@ def get_stations_within_radius(
     event_lon = preferred_origin.longitude
 
     # Get the max radius
-    if preferred_magnitude < mags.min():
-        rrup = np.array(rrups.min())
-    elif preferred_magnitude > mags.max():
-        rrup = np.array(rrups.max())
-    else:
-        rrup = f_rrup(preferred_magnitude)
+    rrup = f_rrup(preferred_magnitude)
     maxradius = obspy.geodetics.kilometers2degrees(rrup)
 
     inv_sub = inventory.select(
@@ -418,8 +407,6 @@ def fetch_event_data(
     client_NZ: FDSN_Client,
     inventory: Inventory,
     site_table: pd.DataFrame,
-    mags: np.ndarray,
-    rrups: np.ndarray,
     f_rrup: interp1d,
     only_sites: list[str] = None,
 ):
@@ -438,10 +425,6 @@ def fetch_event_data(
         The inventory of the stations from all networks to extract the stations from
     site_table : pd.DataFrame
         The site table to extract the vs30 value from
-    mags : np.ndarray
-        The magnitudes from the Mw_rrup file
-    rrups : np.ndarray
-        The rrups from the Mw_rrup file
     f_rrup : interp1d
         The cubic interpolation function for the magnitude distance relationship
     only_sites : list[str] (optional)
@@ -461,7 +444,7 @@ def fetch_event_data(
 
         # Get Networks / Stations within a certain radius of the event
         inv_sub_sta = get_stations_within_radius(
-            event_cat, mags, rrups, f_rrup, inventory
+            event_cat, f_rrup, inventory
         )
 
         # Loop through the Inventory Subset of Networks / Stations
@@ -499,8 +482,6 @@ def process_batch(
     client_NZ: FDSN_Client,
     inventory: Inventory,
     site_table: pd.DataFrame,
-    mags: np.ndarray,
-    rrups: np.ndarray,
     f_rrup: interp1d,
     n_procs: int = 1,
     only_sites: list[str] = None,
@@ -522,10 +503,6 @@ def process_batch(
         The inventory of the stations from all networks to extract the stations from
     site_table : pd.DataFrame
         The site table to extract the vs30 value from
-    mags : np.ndarray
-        The magnitudes from the Mw_rrup file
-    rrups : np.ndarray
-        The rrups from the Mw_rrup file
     f_rrup : interp1d
         The cubic interpolation function for the magnitude distance relationship
     n_procs : int (optional)
@@ -542,8 +519,6 @@ def process_batch(
                 client_NZ=client_NZ,
                 inventory=inventory,
                 site_table=site_table,
-                mags=mags,
-                rrups=rrups,
                 f_rrup=f_rrup,
                 only_sites=only_sites,
             ),
@@ -806,8 +781,28 @@ def parse_geonet_information(
         mw_rrup = np.loadtxt(data_dir / "Mw_rrup.txt")
         mags = mw_rrup[:, 0]
         rrups = mw_rrup[:, 1]
-        # Generate cubic interpolation for magnitude distance relationship
-        f_rrup = interp1d(mags, rrups, kind="cubic")
+
+        def f_rrup(magnitude: float):
+            """
+            Interpolation function to get the rrup for a certain magnitude,
+            but with extra check to limit the rrup to the min and max values
+
+            Parameters
+            ----------
+            magnitude : float
+                The magnitude to get the rrup for
+
+            Returns
+            -------
+            float
+                The rrup value for the given magnitude
+            """
+            if magnitude <= mags.min():
+                return rrups.min()
+            elif magnitude >= mags.max():
+                return rrups.max()
+            else:
+                return interp1d(mags, rrups, kind='cubic')(magnitude)
 
     # Get the site table
     flatfile_dir = file_structure.get_flatfile_dir(main_dir)
@@ -833,8 +828,6 @@ def parse_geonet_information(
                 client_NZ,
                 inventory,
                 site_table,
-                mags,
-                rrups,
                 f_rrup,
                 n_procs,
                 only_sites,

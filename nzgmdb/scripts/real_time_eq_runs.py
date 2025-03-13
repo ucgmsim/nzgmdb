@@ -195,6 +195,7 @@ def run_event(  # noqa: D103
     """
     try:
         import time
+
         start_time = time.time()
         # Run the rest of the pipeline
         run_nzgmdb.run_full_nzgmdb(
