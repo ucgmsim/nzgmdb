@@ -194,6 +194,8 @@ def run_event(  # noqa: D103
         True if the event was processed, False if the event was skipped
     """
     try:
+        import time
+        start_time = time.time()
         # Run the rest of the pipeline
         run_nzgmdb.run_full_nzgmdb(
             event_dir,
@@ -212,6 +214,7 @@ def run_event(  # noqa: D103
             snr_batch_size=n_procs * 4,
             custom_rrup=30,
         )
+        print(f"Event {event_id} processed in {time.time() - start_time:.2f} seconds")
     except custom_errors.NoStationsError:
         print(f"Event {event_id} has no stations, skipping")
         # Remove the event directory
