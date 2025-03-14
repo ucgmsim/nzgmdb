@@ -42,6 +42,41 @@ def get_max_magnitude(magnitudes: list[Magnitude], mag_type: str):
         return max(filtered_mags, key=lambda mag: mag.station_count)
     return None
 
+def create_custom_rrup_function(custom_rrup: float = None, data_dir: Path = None):
+    """
+    Create the appropriate rrup function based on whether a custom value is provided
+
+    Parameters
+    ----------
+    custom_rrup : float, optional
+        Fixed rrup value to use
+    data_dir : Path, optional
+        Path to data directory containing Mw_rrup.txt
+
+    Returns
+    -------
+    callable
+        Function that returns rrup value for given magnitude
+    """
+    if custom_rrup is not None:
+        def f_rrup(magnitude: float):
+            return custom_rrup
+    else:
+        # Load the Mw_rrup file
+        mw_rrup = np.loadtxt(data_dir / 'Mw_rrup.txt')
+        mags = mw_rrup[:, 0]
+        rrups = mw_rrup[:, 1]
+
+        def f_rrup(magnitude: float):
+            if magnitude <= mags.min():
+                return rrups.min()
+            elif magnitude >= mags.max():
+                return rrups.max()
+            else:
+                return interp1d(mags, rrups, kind='cubic')(magnitude)
+
+    return f_rrup
+
 
 def fetch_event_line(event_cat: Event, event_id: str):
     """
@@ -443,9 +478,7 @@ def fetch_event_data(
         clipped_records = []
 
         # Get Networks / Stations within a certain radius of the event
-        inv_sub_sta = get_stations_within_radius(
-            event_cat, f_rrup, inventory
-        )
+        inv_sub_sta = get_stations_within_radius(event_cat, f_rrup, inventory)
 
         # Loop through the Inventory Subset of Networks / Stations
         for network in inv_sub_sta:
@@ -758,51 +791,8 @@ def parse_geonet_information(
     # Get the data_dir
     data_dir = file_structure.get_data_dir()
 
-    if custom_rrup:
-        # Create a custom rrup function
-        def f_rrup(magnitude: float):
-            """
-            Custom rrup function to return the custom rrup value
-
-            Parameters
-            ----------
-            magnitude : float
-                The magnitude to get the rrup for
-
-            Returns
-            -------
-            float
-                The custom rrup value always the same regardless of magnitude
-            """
-            return custom_rrup
-
-    else:
-        # Load the Mw_rrup file
-        mw_rrup = np.loadtxt(data_dir / "Mw_rrup.txt")
-        mags = mw_rrup[:, 0]
-        rrups = mw_rrup[:, 1]
-
-        def f_rrup(magnitude: float):
-            """
-            Interpolation function to get the rrup for a certain magnitude,
-            but with extra check to limit the rrup to the min and max values
-
-            Parameters
-            ----------
-            magnitude : float
-                The magnitude to get the rrup for
-
-            Returns
-            -------
-            float
-                The rrup value for the given magnitude
-            """
-            if magnitude <= mags.min():
-                return rrups.min()
-            elif magnitude >= mags.max():
-                return rrups.max()
-            else:
-                return interp1d(mags, rrups, kind='cubic')(magnitude)
+    # Get the rrup function
+    f_rrup = create_custom_rrup_function(custom_rrup, data_dir)
 
     # Get the site table
     flatfile_dir = file_structure.get_flatfile_dir(main_dir)
