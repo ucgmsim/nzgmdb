@@ -7,6 +7,7 @@ import functools
 import io
 import multiprocessing as mp
 from pathlib import Path
+from typing import Union
 
 import numpy as np
 import obspy
@@ -41,41 +42,6 @@ def get_max_magnitude(magnitudes: list[Magnitude], mag_type: str):
     if filtered_mags:
         return max(filtered_mags, key=lambda mag: mag.station_count)
     return None
-
-def create_custom_rrup_function(custom_rrup: float = None, data_dir: Path = None):
-    """
-    Create the appropriate rrup function based on whether a custom value is provided
-
-    Parameters
-    ----------
-    custom_rrup : float, optional
-        Fixed rrup value to use
-    data_dir : Path, optional
-        Path to data directory containing Mw_rrup.txt
-
-    Returns
-    -------
-    callable
-        Function that returns rrup value for given magnitude
-    """
-    if custom_rrup is not None:
-        def f_rrup(magnitude: float):
-            return custom_rrup
-    else:
-        # Load the Mw_rrup file
-        mw_rrup = np.loadtxt(data_dir / 'Mw_rrup.txt')
-        mags = mw_rrup[:, 0]
-        rrups = mw_rrup[:, 1]
-
-        def f_rrup(magnitude: float):
-            if magnitude <= mags.min():
-                return rrups.min()
-            elif magnitude >= mags.max():
-                return rrups.max()
-            else:
-                return interp1d(mags, rrups, kind='cubic')(magnitude)
-
-    return f_rrup
 
 
 def fetch_event_line(event_cat: Event, event_id: str):
@@ -205,7 +171,7 @@ def fetch_event_line(event_cat: Event, event_id: str):
 
 def get_stations_within_radius(
     event_cat: Event,
-    f_rrup: interp1d,
+    mw_rrup_data: Union[float, interp1d],
     inventory: Inventory,
 ):
     """
@@ -215,8 +181,8 @@ def get_stations_within_radius(
     ----------
     event_cat : Event
         The event catalog to fetch the event data from
-    f_rrup : interp1d
-        The cubic interpolation function for the magnitude distance relationship
+    mw_rrup_data : Union[float, interp1d]
+        The Mw_rrup data to get the max radius from either a fixed value or an interpolation function
     inventory : Inventory
         The inventory of the stations from all networks to extract the stations from
 
@@ -231,7 +197,19 @@ def get_stations_within_radius(
     event_lon = preferred_origin.longitude
 
     # Get the max radius
-    rrup = f_rrup(preferred_magnitude)
+    if isinstance(mw_rrup_data, (int, float)):
+        rrup = mw_rrup_data
+    else:
+        mags = mw_rrup_data[:, 0]
+        rrups = mw_rrup_data[:, 1]
+
+        if preferred_magnitude <= mags.min():
+            rrup = rrups.min()
+        elif preferred_magnitude >= mags.max():
+            rrup = rrups.max()
+        else:
+            interpolator = interp1d(mags, rrups, kind="cubic")
+            rrup = float(interpolator(preferred_magnitude))
     maxradius = obspy.geodetics.kilometers2degrees(rrup)
 
     inv_sub = inventory.select(
@@ -442,7 +420,7 @@ def fetch_event_data(
     client_NZ: FDSN_Client,
     inventory: Inventory,
     site_table: pd.DataFrame,
-    f_rrup: interp1d,
+    mw_rrup_data: Union[float, interp1d],
     only_sites: list[str] = None,
 ):
     """
@@ -460,8 +438,8 @@ def fetch_event_data(
         The inventory of the stations from all networks to extract the stations from
     site_table : pd.DataFrame
         The site table to extract the vs30 value from
-    f_rrup : interp1d
-        The cubic interpolation function for the magnitude distance relationship
+    mw_rrup_data : Union[float, interp1d]
+        The Mw_rrup data to get the max radius from either a fixed value or an interpolation function
     only_sites : list[str] (optional)
         Will only fetch the data for the sites in the list
     """
@@ -478,7 +456,7 @@ def fetch_event_data(
         clipped_records = []
 
         # Get Networks / Stations within a certain radius of the event
-        inv_sub_sta = get_stations_within_radius(event_cat, f_rrup, inventory)
+        inv_sub_sta = get_stations_within_radius(event_cat, mw_rrup_data, inventory)
 
         # Loop through the Inventory Subset of Networks / Stations
         for network in inv_sub_sta:
@@ -515,7 +493,7 @@ def process_batch(
     client_NZ: FDSN_Client,
     inventory: Inventory,
     site_table: pd.DataFrame,
-    f_rrup: interp1d,
+    mw_rrup_data: Union[float, interp1d],
     n_procs: int = 1,
     only_sites: list[str] = None,
 ):
@@ -536,8 +514,8 @@ def process_batch(
         The inventory of the stations from all networks to extract the stations from
     site_table : pd.DataFrame
         The site table to extract the vs30 value from
-    f_rrup : interp1d
-        The cubic interpolation function for the magnitude distance relationship
+    mw_rrup_data : Union[float, interp1d]
+        The Mw_rrup data to get the max radius from either a fixed value or an interpolation function
     n_procs : int (optional)
         The number of processes to run
     only_sites : list[str] (optional)
@@ -552,7 +530,7 @@ def process_batch(
                 client_NZ=client_NZ,
                 inventory=inventory,
                 site_table=site_table,
-                f_rrup=f_rrup,
+                mw_rrup_data=mw_rrup_data,
                 only_sites=only_sites,
             ),
             batch_events,
@@ -792,7 +770,7 @@ def parse_geonet_information(
     data_dir = file_structure.get_data_dir()
 
     # Get the rrup function
-    f_rrup = create_custom_rrup_function(custom_rrup, data_dir)
+    mw_rrup_data = custom_rrup if custom_rrup else np.loadtxt(data_dir / "Mw_rrup.txt")
 
     # Get the site table
     flatfile_dir = file_structure.get_flatfile_dir(main_dir)
@@ -818,7 +796,7 @@ def parse_geonet_information(
                 client_NZ,
                 inventory,
                 site_table,
-                f_rrup,
+                mw_rrup_data,
                 n_procs,
                 only_sites,
             )
