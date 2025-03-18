@@ -802,7 +802,7 @@ def run_full_nzgmdb(  # noqa: D103
     print("Calculating IMs")
     # Run IM Calc with a sub-command to manage single core issues
     im_calc_command = f"python {__file__} run-im-calculation {main_dir} --output-dir {im_dir} --n-procs {n_procs} {'--checkpoint' if checkpoint else ''}"
-    env_activate_command = "conda activate NZGMDB_3_11"
+    env_activate_command = "conda activate nzgmdb_3_11"
     log_file_ffp = im_dir / "run_im_calculation.log"
     shell_commands.run_command(
         im_calc_command, conda_sh, env_activate_command, log_file_ffp
