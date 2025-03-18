@@ -305,8 +305,6 @@ def merge_flatfiles(main_dir: Path, bypass_records_ffp: Path = None):
     station_df = pd.DataFrame(
         station_info, columns=["sta", "sta_lat", "sta_lon", "sta_elev"]
     )
-    # Only include stations in the missing_sites dictionary
-    station_df = station_df[station_df["sta"].isin(missing_sites)]
 
     # Merge the station information into the gm_im_df_flat
     gm_im_df_flat = gm_im_df_flat.merge(

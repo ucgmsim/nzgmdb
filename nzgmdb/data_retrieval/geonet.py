@@ -61,6 +61,10 @@ def fetch_event_line(event_cat: Event, event_id: str):
     preferred_origin = event_cat.preferred_origin()
     preferred_magnitude = event_cat.preferred_magnitude()
 
+    # If the preferred origin is None, return None
+    if preferred_origin is None:
+        return None
+
     # Extract basic info from the catalog
     ev_datetime = preferred_origin.time
     ev_lat = preferred_origin.latitude
