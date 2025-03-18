@@ -174,7 +174,12 @@ def butter_bandpass_filter(
     y_sos : np.ndarray
         The digital filtered data ouptut
     """
-    sos = butter_bandpass(lowcut, highcut, fs, order)
+    try:
+        sos = butter_bandpass(lowcut, highcut, fs, order)
+    except ValueError:
+        raise custom_errors.DigitalFilterError(
+            f"Failed to create the butter bandpass filter for lowcut {lowcut} and highcut {highcut}"
+        )
     y_sos = signal.sosfilt(sos, data)
     return y_sos
 

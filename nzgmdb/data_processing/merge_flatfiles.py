@@ -85,8 +85,8 @@ def merge_im_data(
     # Rename fmax columns
     gm_final = gm_final.rename(
         columns={
-            "fmax_000": "fmax_mean_Y",
-            "fmax_090": "fmax_mean_X",
+            "fmax_000": "fmax_mean_X",
+            "fmax_090": "fmax_mean_Y",
             "fmax_ver": "fmax_mean_Z",
         }
     )
@@ -133,7 +133,7 @@ def merge_im_data(
     )
 
 
-def merge_flatfiles(main_dir: Path):
+def merge_flatfiles(main_dir: Path, bypass_records_ffp: Path = None):
     """
     Merge the flatfiles into the final flatfiles, separating the components
     and ensuring that the data contains only the unique events and sites that made it to the IM calculation
@@ -142,6 +142,8 @@ def merge_flatfiles(main_dir: Path):
     ----------
     main_dir : Path
         The main directory of the NZGMDB results (Highest level directory)
+    bypass_records_ffp : Path
+        The full file path to the bypass records file, which includes a custom fmin, fmax, and p_wave_ix
     """
     # Get the flatfile directory
     flatfile_dir = file_structure.get_flatfile_dir(main_dir)
@@ -406,6 +408,59 @@ def merge_flatfiles(main_dir: Path):
         how="left",
     )
 
+    # Merge in the bypass information
+    if bypass_records_ffp is not None:
+        bypass_df = pd.read_csv(bypass_records_ffp)
+        gm_im_df_flat = gm_im_df_flat.merge(
+            bypass_df[
+                [
+                    "record_id",
+                    "fmax_000",
+                    "fmax_090",
+                    "fmax_ver",
+                    "fmin_000",
+                    "fmin_090",
+                    "fmin_ver",
+                ]
+            ],
+            on="record_id",
+            how="left",
+            suffixes=("", "_bypass"),
+        )
+        for bypass_col, col in [
+            ("fmin_000", "fmin_X"),
+            ("fmin_090", "fmin_Y"),
+            ("fmin_ver", "fmin_Z"),
+            ("fmax_000", "fmax_X"),
+            ("fmax_090", "fmax_Y"),
+            ("fmax_ver", "fmax_Z"),
+        ]:
+            gm_im_df_flat[col] = gm_im_df_flat[col].fillna(gm_im_df_flat[bypass_col])
+        gm_im_df_flat = gm_im_df_flat.drop(
+            columns=[
+                "fmax_000",
+                "fmax_090",
+                "fmax_ver",
+                "fmin_000",
+                "fmin_090",
+                "fmin_ver",
+            ]
+        )
+
+        # Add any extra p_wave_ix values to the phase_table_df
+        new_records = bypass_df[
+            ~bypass_df["record_id"].isin(phase_table_df["record_id"])
+        ]
+        # remove p_wave_ix of nan
+        new_records = new_records.dropna(subset=["p_wave_ix"])
+        new_records = new_records[["record_id", "p_wave_ix"]]
+        phase_table_df = pd.concat([phase_table_df, new_records])
+
+    # Add in the default fmin values if they are nan
+    default_fmin = config.get_value("low_cut_default")
+    for col in ["fmin_X", "fmin_Y", "fmin_Z"]:
+        gm_im_df_flat[col] = gm_im_df_flat[col].fillna(default_fmin)
+
     # Add in colunms for fmin_max and fmin_highpass
     gm_im_df_flat["fmin_max"] = gm_im_df_flat[["fmin_X", "fmin_Y", "fmin_Z"]].apply(
         max, axis=1
@@ -586,3 +641,97 @@ def merge_flatfiles(main_dir: Path):
         flatfile_dir / file_structure.FlatfileNames.GROUND_MOTION_IM_EAS_FLAT,
         index=False,
     )
+
+
+def merge_dbs(
+    flatfile_db_dir: Path,
+    to_merge_db_dir: Path,
+    output_dir: Path,
+):
+    """
+    Merge the databases into a single database, where all the results from the to_merge_db_dir
+    are adding or replacing the flatfile_db_dir results. The output is saved to the output_dir
+
+    Parameters
+    ----------
+    flatfile_db_dir : Path
+        The main database directory
+    to_merge_db_dir : Path
+        The directory of the database to merge into the main database
+    output_dir : Path
+        The directory to save the merged database
+    """
+    # For each file in the flatfiles, merge the to_merge_db_dir into the main_db_dir
+    for flatfile_name in file_structure.FlatfileNames:
+        main_df = pd.read_csv(flatfile_db_dir / flatfile_name, dtype={"evid": str})
+        to_merge_df = pd.read_csv(to_merge_db_dir / flatfile_name, dtype={"evid": str})
+
+        if flatfile_name == file_structure.FlatfileNames.EARTHQUAKE_SOURCE_TABLE:
+            # Merge based on evid, replace values if they exist and append new ones
+            main_df = pd.concat([main_df, to_merge_df]).drop_duplicates(
+                subset=["evid"], keep="last"
+            )
+            # Re-sort based on evid
+            main_df = main_df.sort_values("datetime")
+        elif flatfile_name == file_structure.FlatfileNames.STATION_MAGNITUDE_TABLE:
+            # Make the unique record_id col with the columns evid_sta_chan_loc
+            main_df["record_id"] = (
+                main_df["evid"]
+                + "_"
+                + main_df["sta"]
+                + "_"
+                + main_df["chan"]
+                + "_"
+                + main_df["loc"].astype(str)
+            )
+            to_merge_df["record_id"] = (
+                to_merge_df["evid"]
+                + "_"
+                + to_merge_df["sta"]
+                + "_"
+                + to_merge_df["chan"]
+                + "_"
+                + to_merge_df["loc"].astype(str)
+            )
+            # Merge on record_id, replace values if they exist and append new ones
+            main_df = pd.concat([main_df, to_merge_df]).drop_duplicates(
+                subset=["record_id"], keep="last"
+            )
+            # Re-sort based on record_id
+            main_df = main_df.sort_values("record_id")
+            # Remove the record_id column
+            main_df = main_df.drop(columns=["record_id"])
+        elif flatfile_name == file_structure.FlatfileNames.SITE_TABLE:
+            # Merge based on sta, replace values if they exist and append new ones
+            main_df = pd.concat([main_df, to_merge_df]).drop_duplicates(
+                subset=["sta"], keep="last"
+            )
+            # Re-sort based on sta
+            main_df = main_df.sort_values("sta")
+        elif flatfile_name == file_structure.FlatfileNames.PROPAGATION_TABLE:
+            # Merge based on evid_sta, replace values if they exist and append new ones
+            main_df["evid_sta"] = main_df["evid"] + "_" + main_df["sta"].astype(str)
+            to_merge_df["evid_sta"] = (
+                to_merge_df["evid"] + "_" + to_merge_df["sta"].astype(str)
+            )
+            main_df = pd.concat([main_df, to_merge_df]).drop_duplicates(
+                subset=["evid_sta"], keep="last"
+            )
+            # Re-sort based on evid_sta
+            main_df = main_df.sort_values("evid_sta")
+            # Remove the record_id column
+            main_df = main_df.drop(columns=["evid_sta"])
+        else:
+            # Merge on record_id, replace values if they exist and append new ones
+            main_df = pd.concat([main_df, to_merge_df]).drop_duplicates(
+                subset=["record_id"], keep="last"
+            )
+            # If the name of the file contains "flat" sort by datetime ,sta
+            if "flat" in flatfile_name:
+                main_df = main_df.sort_values(["datetime", "sta"])
+            else:
+                # Re-sort based on record_id
+                main_df = main_df.sort_values("record_id")
+
+        # Save the merged database
+        main_df.to_csv(output_dir / flatfile_name, index=False)

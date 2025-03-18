@@ -172,6 +172,12 @@ def run_gmc_processing(  # noqa: D103
             file_okay=False,
         ),
     ] = None,
+    bypass_records_ffp: Annotated[
+        Path,
+        typer.Option(
+            help="The full file path to the bypass records file, which includes a custom fmin.",
+        ),
+    ] = None,
 ):
     # Obtain other paths
     gmc_dir = file_structure.get_gmc_dir(main_dir)
@@ -237,6 +243,37 @@ def run_gmc_processing(  # noqa: D103
                 f"Failed to find {predictions_output} for {gmc_subfolder}. Please check logs in this folder or try a re-run"
             )
     combined_df = pd.concat(dfs)
+
+    # Check if the bypass records file exists
+    if bypass_records_ffp is not None:
+        bypass_df = pd.read_csv(bypass_records_ffp)
+        # Merge in the bypass fmin values
+        combined_df = combined_df.merge(
+            bypass_df[["record_id", "fmin_000", "fmin_090", "fmin_ver"]],
+            left_on="record",
+            right_on="record_id",
+            how="left",
+            suffixes=("", "_bypass"),
+        )
+        # Replace the fmin values with the bypass values if they are not nan
+        mask_000 = combined_df["component"] == "X"
+        combined_df.loc[mask_000, "fmin_mean"] = combined_df.loc[
+            mask_000, "fmin_000"
+        ].fillna(combined_df.loc[mask_000, "fmin_mean"])
+        mask_090 = combined_df["component"] == "Y"
+        combined_df.loc[mask_090, "fmin_mean"] = combined_df.loc[
+            mask_090, "fmin_090"
+        ].fillna(combined_df.loc[mask_090, "fmin_mean"])
+        mask_ver = combined_df["component"] == "Z"
+        combined_df.loc[mask_ver, "fmin_mean"] = combined_df.loc[
+            mask_ver, "fmin_ver"
+        ].fillna(combined_df.loc[mask_ver, "fmin_mean"])
+
+        # Remove the fmin_000, fmin_090, fmin_ver, record_id_bypass columns
+        combined_df = combined_df.drop(
+            columns=["fmin_000", "fmin_090", "fmin_ver", "record_id_bypass"]
+        )
+
     combined_df.to_csv(final_predictions_output, index=False)
 
 

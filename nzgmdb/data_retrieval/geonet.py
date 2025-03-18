@@ -229,6 +229,7 @@ def fetch_sta_mag_line(
     pref_mag: float,
     pref_mag_type: str,
     site_table: pd.DataFrame,
+    only_record_ids: pd.DataFrame = None,
 ):
     """
     Fetch the station magnitude line from the geonet client to be added to the sta_mag_df
@@ -236,6 +237,10 @@ def fetch_sta_mag_line(
 
     Parameters
     ----------
+    station : Station
+        The station to fetch the data for
+    network : Network
+        The network of the station
     event_cat : Event
         The event catalog to fetch the data from
     event_id : str
@@ -244,22 +249,14 @@ def fetch_sta_mag_line(
         The main directory of the NZGMDB results (Highest level directory)
     client_NZ : FDSN_Client
         The geonet client to fetch the data from New Zealand
-    inventory : Inventory
-        The inventory of the stations from all networks to extract the stations from
     pref_mag : float
         The preferred magnitude
     pref_mag_type : str
         The preferred magnitude type
     site_table : pd.DataFrame
         The site table to extract the vs30 value from
-    mags : np.ndarray
-        The magnitudes from the Mw_rrup file
-    rrups : np.ndarray
-        The rrups from the Mw_rrup file
-    f_rrup : interp1d
-        The cubic interpolation function for the magnitude distance relationship
-    only_sites : list[str] (optional)
-        Will only fetch the data for the sites in the list
+    only_record_ids : pd.DataFrame (optional)
+        Will only fetch the data for the record ids in the df
     """
     sta_mag_line = []
     skipped_records = []
@@ -301,6 +298,7 @@ def fetch_sta_mag_line(
         r_hyp,
         r_epi,
         vs30,
+        only_record_ids,
     )
     # Check that data was found
     if st is None:
@@ -422,6 +420,7 @@ def fetch_event_data(
     site_table: pd.DataFrame,
     mw_rrup_data: Union[float, interp1d],
     only_sites: list[str] = None,
+    only_record_ids: pd.DataFrame = None,
 ):
     """
     Fetch the event data from the geonet client to form the event and magnitude dataframes
@@ -442,6 +441,8 @@ def fetch_event_data(
         The Mw_rrup data to get the max radius from either a fixed value or an interpolation function
     only_sites : list[str] (optional)
         Will only fetch the data for the sites in the list
+    only_record_ids : pd.DataFrame (optional)
+        Will only fetch the data for the record ids in the df, should all be a subset of the only_sites list
     """
     # Get the catalog information
     cat = client_NZ.get_events(eventid=event_id)
@@ -465,11 +466,32 @@ def fetch_event_data(
         #     )
         # )
 
+        # Filter the only_record_ids to only include the event_id
+        if only_record_ids is not None:
+            event_only_record_ids = only_record_ids[
+                only_record_ids["record_id"].str.contains(f"^{event_id}_")
+            ]
+            if event_only_record_ids.empty:
+                return [], [], [], []
+        else:
+            event_only_record_ids = None
+
         # Loop through the Inventory Subset of Networks / Stations
         for network in inv_sub_sta:
             for station in network:
                 # Check if the station is in the only_sites list if only_sites is defined
                 if only_sites is None or station.code in only_sites:
+                    # Filter the only_record_ids to only include the station code if it is defined
+                    if event_only_record_ids is not None:
+                        site_only_record_ids = event_only_record_ids[
+                            event_only_record_ids["record_id"].str.contains(
+                                f"_{station.code}_"
+                            )
+                        ]
+                        if site_only_record_ids.empty:
+                            continue
+                    else:
+                        site_only_record_ids = None
                     # Get the station magnitude lines
                     sta_mag_line, new_skipped_records, new_clipped_records = (
                         fetch_sta_mag_line(
@@ -482,6 +504,7 @@ def fetch_event_data(
                             event_line[7],
                             event_line[8],
                             site_table,
+                            site_only_record_ids,
                         )
                     )
                     sta_mag_lines.extend(sta_mag_line)
@@ -503,6 +526,7 @@ def process_batch(
     mw_rrup_data: Union[float, interp1d],
     n_procs: int = 1,
     only_sites: list[str] = None,
+    only_record_ids: pd.DataFrame = None,
 ):
     """
     Process a batch of events to fetch the event data and create the dataframes
@@ -527,6 +551,8 @@ def process_batch(
         The number of processes to run
     only_sites : list[str] (optional)
         Will only fetch the data for the sites in the list
+    only_record_ids : pd.DataFrame (optional)
+        Will only fetch the data for the record ids in the df, should all be a subset of the only_sites list
     """
     # Fetch results
     with mp.Pool(n_procs) as p:
@@ -539,6 +565,7 @@ def process_batch(
                 site_table=site_table,
                 mw_rrup_data=mw_rrup_data,
                 only_sites=only_sites,
+                only_record_ids=only_record_ids,
             ),
             batch_events,
         )
@@ -726,6 +753,7 @@ def parse_geonet_information(
     batch_size: int = 500,
     only_event_ids: list[str] = None,
     only_sites: list[str] = None,
+    only_record_ids_ffp: Path = None,
     real_time: bool = False,
     custom_rrup: float = None,
 ):
@@ -748,19 +776,34 @@ def parse_geonet_information(
         Will only fetch the data for the event ids in the list (Must be in the start and end date range)
     only_sites : list[str] (optional)
         Will only fetch the data for the sites in the list
+    only_record_ids_ffp : Path (optional)
+        Will only fetch the data for the record ids in the df, will override the only_sites, only_event_ids lists
     real_time : bool (optional)
         If the function is being used in real time use a different client, default is False
     custom_rrup : float (optional)
         If a custom rrup is to be used instead of the Mw_rrup file
     """
-    if not only_event_ids:
-        # Get the earthquake data
-        geonet = download_earthquake_data(start_date, end_date)
-
-        # Get all event ids
-        event_ids = geonet.publicid.unique().astype(str)
+    if only_record_ids_ffp:
+        # Read the only record ids file
+        only_record_ids = pd.read_csv(only_record_ids_ffp)
+        # extract the event ids from the record ids
+        event_ids = list(
+            {record_id.split("_")[0] for record_id in only_record_ids["record_id"]}
+        )
+        # extract the sites from the record ids to replace the only_sites list
+        only_sites = list(
+            {record_id.split("_")[1] for record_id in only_record_ids["record_id"]}
+        )
     else:
-        event_ids = only_event_ids
+        if not only_event_ids:
+            # Get the earthquake data
+            geonet = download_earthquake_data(start_date, end_date)
+
+            # Get all event ids
+            event_ids = geonet.publicid.unique().astype(str)
+        else:
+            event_ids = only_event_ids
+        only_record_ids = None
 
     # Set constants
     config = cfg.Config()
@@ -806,6 +849,7 @@ def parse_geonet_information(
                 mw_rrup_data,
                 n_procs,
                 only_sites,
+                only_record_ids,
             )
 
     # Combine all the event and sta_mag dataframes
