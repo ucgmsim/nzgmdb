@@ -458,6 +458,13 @@ def fetch_event_data(
         # Get Networks / Stations within a certain radius of the event
         inv_sub_sta = get_stations_within_radius(event_cat, mw_rrup_data, inventory)
 
+        # Order the stations by distance from the event
+        # inv_sub_sta.sort(
+        #     key=lambda station: station.distance(
+        #         event_cat.origins[0].latitude, event_cat.origins[0].longitude
+        #     )
+        # )
+
         # Loop through the Inventory Subset of Networks / Stations
         for network in inv_sub_sta:
             for station in network:
