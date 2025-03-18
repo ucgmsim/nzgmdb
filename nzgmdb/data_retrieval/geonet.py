@@ -63,6 +63,7 @@ def fetch_event_line(event_cat: Event, event_id: str):
 
     # If the preferred origin is None, return None
     if preferred_origin is None:
+        print(f"Event {event_id} has no preferred origin")
         return None
 
     # Extract basic info from the catalog
