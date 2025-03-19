@@ -584,10 +584,11 @@ def process_batch(
             finished_skipped_records,
             finished_clipped_records,
         ) = result
-        event_data.append(finished_event_data)
-        sta_mag_data.extend(finished_sta_mag_data)
-        skipped_records.extend(finished_skipped_records)
-        clipped_records.extend(finished_clipped_records)
+        if finished_event_data is not None:
+            event_data.append(finished_event_data)
+            sta_mag_data.extend(finished_sta_mag_data)
+            skipped_records.extend(finished_skipped_records)
+            clipped_records.extend(finished_clipped_records)
 
     # Create the output directory for the batch files
     flatfile_dir = file_structure.get_flatfile_dir(main_dir)
