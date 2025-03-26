@@ -151,7 +151,6 @@ def compute_ims_for_all_processed_records(
         np.log10(config.get_value("common_frequency_end")),
         num=config.get_value("common_frequency_num"),
     )
-    ko_bandwith = config.get_value("ko_bandwidth")
     ko_directory = Path("/mnt/mantle_data/joel_scratch/KO")
 
     # This is a fix for multiprocessing issues in IM calculation
