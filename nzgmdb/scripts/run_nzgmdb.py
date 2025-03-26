@@ -339,17 +339,6 @@ def process_records(  # noqa: D103
     ] = None,
     n_procs: Annotated[int, typer.Option(help="The number of processes to use")] = 1,
 ):
-    if gmc_ffp is None:
-        gmc_ffp = (
-            file_structure.get_flatfile_dir(main_dir)
-            / file_structure.FlatfileNames.GMC_PREDICTIONS
-        )
-    if fmax_ffp is None:
-        fmax_ffp = (
-            file_structure.get_flatfile_dir(main_dir)
-            / file_structure.FlatfileNames.FMAX
-        )
-
     process_observed.process_mseeds_to_txt(
         main_dir, gmc_ffp, fmax_ffp, bypass_records_ffp, n_procs
     )
@@ -444,20 +433,20 @@ def merge_im_results(  # noqa: D103
     ],
     gmc_ffp: Annotated[
         Path,
-        typer.Argument(
+        typer.Option(
             help="The full file path to the GMC predictions file",
             readable=True,
             exists=True,
         ),
-    ],
+    ] = None,
     fmax_ffp: Annotated[
         Path,
-        typer.Argument(
+        typer.Option(
             help="The full file path to the Fmax file",
             readable=True,
             exists=True,
         ),
-    ],
+    ] = None,
 ):
     merge_flatfiles.merge_im_data(im_dir, output_dir, gmc_ffp, fmax_ffp)
 
@@ -559,6 +548,12 @@ def run_full_nzgmdb(  # noqa: D103
             help="Path to activate your mamba conda.sh script.",
         ),
     ],
+    im_calc_activate: Annotated[
+        str,
+        typer.Argument(
+            help="Command to activate im_calculation environment.",
+        ),
+    ],
     gmc_activate: Annotated[
         str,
         typer.Argument(
@@ -652,12 +647,6 @@ def run_full_nzgmdb(  # noqa: D103
             dir_okay=False,
         ),
     ] = None,
-    custom_rrup: Annotated[
-        float,
-        typer.Option(
-            help="Custom value for rrup to use for the distance calculation",
-        ),
-    ] = None,
 ):
     main_dir.mkdir(parents=True, exist_ok=True)
 
@@ -690,7 +679,6 @@ def run_full_nzgmdb(  # noqa: D103
             only_sites,
             only_record_ids_ffp,
             real_time,
-            custom_rrup,
         )
 
     # Merge the tectonic domains
@@ -802,11 +790,8 @@ def run_full_nzgmdb(  # noqa: D103
     print("Calculating IMs")
     # Run IM Calc with a sub-command to manage single core issues
     im_calc_command = f"python {__file__} run-im-calculation {main_dir} --output-dir {im_dir} --n-procs {n_procs} {'--checkpoint' if checkpoint else ''}"
-    env_activate_command = "conda activate nzgmdb_3_11"
     log_file_ffp = im_dir / "run_im_calculation.log"
-    shell_commands.run_command(
-        im_calc_command, conda_sh, env_activate_command, log_file_ffp
-    )
+    shell_commands.run_command_with_current_env(im_calc_command, log_file_ffp)
     # run_im_calculation(main_dir, im_dir, n_procs, checkpoint)
 
     # Merge IM results

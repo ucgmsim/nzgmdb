@@ -7,7 +7,6 @@ import functools
 import io
 import multiprocessing as mp
 from pathlib import Path
-from typing import Union
 
 import numpy as np
 import obspy
@@ -23,6 +22,7 @@ from nzgmdb.data_processing import filtering
 from nzgmdb.management import config as cfg
 from nzgmdb.management import custom_errors, file_structure
 from nzgmdb.mseed_management import creation
+from qcore import geo
 
 
 def get_max_magnitude(magnitudes: list[Magnitude], mag_type: str):
@@ -176,8 +176,9 @@ def fetch_event_line(event_cat: Event, event_id: str):
 
 def get_stations_within_radius(
     event_cat: Event,
-    mw_rrup_data: Union[float, interp1d],
+    mw_rrup_data: interp1d,
     inventory: Inventory,
+    n_sites: int,
 ):
     """
     Get the stations within a certain radius of the event
@@ -186,8 +187,8 @@ def get_stations_within_radius(
     ----------
     event_cat : Event
         The event catalog to fetch the event data from
-    mw_rrup_data : Union[float, interp1d]
-        The Mw_rrup data to get the max radius from either a fixed value or an interpolation function
+    mw_rrup_data : interp1d
+        The Mw_rrup data to get the max radius from the interpolation function
     inventory : Inventory
         The inventory of the stations from all networks to extract the stations from
 
@@ -202,24 +203,37 @@ def get_stations_within_radius(
     event_lon = preferred_origin.longitude
 
     # Get the max radius
-    if isinstance(mw_rrup_data, (int, float)):
-        rrup = mw_rrup_data
-    else:
-        mags = mw_rrup_data[:, 0]
-        rrups = mw_rrup_data[:, 1]
+    mags = mw_rrup_data[:, 0]
+    rrups = mw_rrup_data[:, 1]
 
-        if preferred_magnitude <= mags.min():
-            rrup = rrups.min()
-        elif preferred_magnitude >= mags.max():
-            rrup = rrups.max()
-        else:
-            interpolator = interp1d(mags, rrups, kind="cubic")
-            rrup = float(interpolator(preferred_magnitude))
+    if preferred_magnitude <= mags.min():
+        rrup = rrups.min()
+    elif preferred_magnitude >= mags.max():
+        rrup = rrups.max()
+    else:
+        interpolator = interp1d(mags, rrups, kind="cubic")
+        rrup = float(interpolator(preferred_magnitude))
     maxradius = obspy.geodetics.kilometers2degrees(rrup)
 
     inv_sub = inventory.select(
         latitude=event_lat, longitude=event_lon, maxradius=maxradius
     )
+
+    # If a custom n_sites is defined, order the inv_sub_sta by the distance
+    # if n_sites is not None:
+    #     station_info = np.array(
+    #         [
+    #             ((net.code, sta.code), [sta.latitude, sta.longitude])
+    #             for net in inv_sub
+    #             for sta in net
+    #         ]
+    #     )
+    #     coords = np.asarray(station_info[:, 1, :], dtype=np.float64)
+    #     distances = geo.get_distances(coords, event_lon, event_lat)
+    #
+    #     sorted_indices = distances.argsort()
+    #     # Reorder station_info using these indices
+    #     sorted_station_info = station_info[sorted_indices]
 
     return inv_sub
 
@@ -423,7 +437,7 @@ def fetch_event_data(
     client_NZ: FDSN_Client,
     inventory: Inventory,
     site_table: pd.DataFrame,
-    mw_rrup_data: Union[float, interp1d],
+    mw_rrup_data: interp1d,
     only_sites: list[str] = None,
     only_record_ids: pd.DataFrame = None,
 ):
@@ -442,8 +456,8 @@ def fetch_event_data(
         The inventory of the stations from all networks to extract the stations from
     site_table : pd.DataFrame
         The site table to extract the vs30 value from
-    mw_rrup_data : Union[float, interp1d]
-        The Mw_rrup data to get the max radius from either a fixed value or an interpolation function
+    mw_rrup_data : interp1d
+        The Mw_rrup data to get the max radius from the interpolation function
     only_sites : list[str] (optional)
         Will only fetch the data for the sites in the list
     only_record_ids : pd.DataFrame (optional)
@@ -462,14 +476,10 @@ def fetch_event_data(
         clipped_records = []
 
         # Get Networks / Stations within a certain radius of the event
-        inv_sub_sta = get_stations_within_radius(event_cat, mw_rrup_data, inventory)
-
-        # Order the stations by distance from the event
-        # inv_sub_sta.sort(
-        #     key=lambda station: station.distance(
-        #         event_cat.origins[0].latitude, event_cat.origins[0].longitude
-        #     )
-        # )
+        n_sites = 20
+        inv_sub_sta = get_stations_within_radius(
+            event_cat, mw_rrup_data, inventory, n_sites
+        )
 
         # Filter the only_record_ids to only include the event_id
         if only_record_ids is not None:
@@ -528,7 +538,7 @@ def process_batch(
     client_NZ: FDSN_Client,
     inventory: Inventory,
     site_table: pd.DataFrame,
-    mw_rrup_data: Union[float, interp1d],
+    mw_rrup_data: interp1d,
     n_procs: int = 1,
     only_sites: list[str] = None,
     only_record_ids: pd.DataFrame = None,
@@ -550,8 +560,8 @@ def process_batch(
         The inventory of the stations from all networks to extract the stations from
     site_table : pd.DataFrame
         The site table to extract the vs30 value from
-    mw_rrup_data : Union[float, interp1d]
-        The Mw_rrup data to get the max radius from either a fixed value or an interpolation function
+    mw_rrup_data : interp1d
+        The Mw_rrup data to get the max radius from the interpolation function
     n_procs : int (optional)
         The number of processes to run
     only_sites : list[str] (optional)
@@ -761,7 +771,6 @@ def parse_geonet_information(
     only_sites: list[str] = None,
     only_record_ids_ffp: Path = None,
     real_time: bool = False,
-    custom_rrup: float = None,
 ):
     """
     Read the geonet information and manage the fetching of more data to create the mseed files
@@ -786,8 +795,6 @@ def parse_geonet_information(
         Will only fetch the data for the record ids in the df, will override the only_sites, only_event_ids lists
     real_time : bool (optional)
         If the function is being used in real time use a different client, default is False
-    custom_rrup : float (optional)
-        If a custom rrup is to be used instead of the Mw_rrup file
     """
     if only_record_ids_ffp:
         # Read the only record ids file
@@ -825,8 +832,8 @@ def parse_geonet_information(
     # Get the data_dir
     data_dir = file_structure.get_data_dir()
 
-    # Get the rrup function
-    mw_rrup_data = custom_rrup if custom_rrup else np.loadtxt(data_dir / "Mw_rrup.txt")
+    # Get the rrup data
+    mw_rrup_data = np.loadtxt(data_dir / "Mw_rrup.txt")
 
     # Get the site table
     flatfile_dir = file_structure.get_flatfile_dir(main_dir)

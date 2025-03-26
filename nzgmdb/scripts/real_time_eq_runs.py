@@ -11,7 +11,7 @@ import requests
 import typer
 
 from nzgmdb.management import config as cfg
-from nzgmdb.management import custom_errors, file_structure
+from nzgmdb.management import custom_errors, file_structure, shell_commands
 from nzgmdb.scripts import run_nzgmdb
 
 app = typer.Typer()
@@ -170,20 +170,6 @@ def run_event(  # noqa: D103
             is_flag=True,
         ),
     ] = False,
-    start_date: Annotated[
-        datetime.datetime,
-        typer.Option(
-            help="Start date for the event.",
-        ),
-    ] = datetime.datetime.utcnow()
-    - datetime.timedelta(days=8),
-    end_date: Annotated[
-        datetime.datetime,
-        typer.Option(
-            help="End date for the event.",
-        ),
-    ] = datetime.datetime.utcnow()
-    - datetime.timedelta(minutes=1),
 ):
     """
     Run the NZGMDB pipeline for a specific event in near-real-time mode.
@@ -197,24 +183,72 @@ def run_event(  # noqa: D103
         import time
 
         start_time = time.time()
-        # Run the rest of the pipeline
-        run_nzgmdb.run_full_nzgmdb(
+        # Run the pipeline
+        # run_nzgmdb.run_full_nzgmdb(
+        #     event_dir,
+        #     None,
+        #     None,
+        #     gm_classifier_dir,
+        #     conda_sh,
+        #     gmc_activate,
+        #     gmc_predict_activate,
+        #     gmc_procs,
+        #     n_procs,
+        #     ko_matrix_path=ko_matrix_path,
+        #     checkpoint=True,
+        #     only_event_ids=[event_id],
+        #     real_time=True,
+        #     snr_batch_size=n_procs * 4,
+        # )
+
+        # Execute custom pipeline
+        run_nzgmdb.generate_site_table_basin(event_dir)
+        print(f"Site table generated in {time.time() - start_time:.2f} seconds")
+        # Get geonet data
+        run_nzgmdb.fetch_geonet_data(
             event_dir,
-            start_date,
-            end_date,
-            gm_classifier_dir,
-            conda_sh,
-            gmc_activate,
-            gmc_predict_activate,
-            gmc_procs,
+            None,
+            None,
             n_procs,
-            ko_matrix_path=ko_matrix_path,
-            checkpoint=True,
             only_event_ids=[event_id],
             real_time=True,
-            snr_batch_size=n_procs * 4,
-            custom_rrup=30,
         )
+        print(f"Geonet data fetched in {time.time() - start_time:.2f} seconds")
+        # Tectonic types
+        flatfile_dir = file_structure.get_flatfile_dir(event_dir)
+        eq_source_ffp = (
+            flatfile_dir
+            / file_structure.PreFlatfileNames.EARTHQUAKE_SOURCE_TABLE_GEONET
+        )
+        eq_tect_domain_ffp = (
+            flatfile_dir
+            / file_structure.PreFlatfileNames.EARTHQUAKE_SOURCE_TABLE_TECTONIC
+        )
+        run_nzgmdb.merge_tect_domain(eq_source_ffp, eq_tect_domain_ffp, n_procs)
+        print(f"Tectonic types merged in {time.time() - start_time:.2f} seconds")
+        # Process the records
+        run_nzgmdb.process_records(event_dir, n_procs=n_procs)
+        print(f"Records processed in {time.time() - start_time:.2f} seconds")
+        # Run IM_calculation
+        im_dir = file_structure.get_im_dir(event_dir)
+        im_dir.mkdir(parents=True, exist_ok=True)
+        im_calc_start_time = time.time()
+        # run_nzgmdb.run_im_calculation(event_dir, n_procs=n_procs)
+        run_nzgmdb_ffp = __file__.replace("real_time_eq_runs.py", "run_nzgmdb.py")
+        im_calc_command = f"{run_nzgmdb_ffp} run-im-calculation {event_dir} --output-dir {im_dir} --n-procs {n_procs}"
+        log_file_ffp = im_dir / "run_im_calculation.log"
+        shell_commands.run_command_with_current_env(im_calc_command, log_file_ffp)
+        print(f"IM calculation run in {time.time() - im_calc_start_time:.2f} seconds")
+        # Merge results
+        run_nzgmdb.merge_im_results(im_dir, flatfile_dir, None, None)
+        print(f"IM results merged in {time.time() - start_time:.2f} seconds")
+        # Calculate distances
+        run_nzgmdb.distances.calc_distances(event_dir, n_procs)
+        print(f"Distances calculated in {time.time() - start_time:.2f} seconds")
+        # Merge the flatfiles
+        run_nzgmdb.merge_flat_files(event_dir)
+        print(f"Flatfiles merged in {time.time() - start_time:.2f} seconds")
+
         print(f"Event {event_id} processed in {time.time() - start_time:.2f} seconds")
     except custom_errors.NoStationsError:
         print(f"Event {event_id} has no stations, skipping")

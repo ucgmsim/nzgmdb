@@ -1,5 +1,10 @@
 import functools
 import multiprocessing as mp
+
+
+# if __name__ == "__main__":
+
+
 import warnings
 from pathlib import Path
 
@@ -9,6 +14,24 @@ import pandas as pd
 from IM import im_calculation, ims, waveform_reading
 from nzgmdb.management import config as cfg
 from nzgmdb.management import file_structure
+import cProfile
+import pstats
+import io
+
+
+def calculate_im_for_record_profiled(*args, **kwargs):
+    # profiler = cProfile.Profile()
+    # profiler.enable()
+
+    result = calculate_im_for_record(*args, **kwargs)  # Your original function
+
+    # profiler.disable()
+    # s = io.StringIO()
+    # stats = pstats.Stats(profiler, stream=s).sort_stats(pstats.SortKey.TIME)
+    # stats.print_stats(15)  # Print top 10 slowest functions
+    # print(s.getvalue())  # Print profiling results to stdout
+
+    return result
 
 
 def calculate_im_for_record(
@@ -17,7 +40,7 @@ def calculate_im_for_record(
     intensity_measures: list[ims.IM],
     psa_periods: np.ndarray,
     fas_frequencies: np.ndarray,
-    ko_bandwith: int = 40,
+    ko_directory: Path,
 ):
     """
     Calculate the IMs for a single record and save the results to a csv file
@@ -73,7 +96,7 @@ def calculate_im_for_record(
             psa_periods,
             fas_frequencies,
             cores=1,
-            ko_bandwidth=ko_bandwith,
+            ko_directory=ko_directory,
         )
 
     print(f"Saving IMs for {record_id}")
@@ -129,20 +152,51 @@ def compute_ims_for_all_processed_records(
         num=config.get_value("common_frequency_num"),
     )
     ko_bandwith = config.get_value("ko_bandwidth")
+    ko_directory = Path("/mnt/mantle_data/joel_scratch/KO")
 
-    # Fetch results
+    # This is a fix for multiprocessing issues in IM calculation
+    # mp.set_start_method("spawn", force=True)
+
+    # Modify multiprocessing call
     with mp.Pool(n_procs) as p:
         skipped_records = p.map(
             functools.partial(
-                calculate_im_for_record,
+                calculate_im_for_record_profiled,  # Use the profiled version
                 output_path=output_path,
                 intensity_measures=intensity_measures,
                 psa_periods=psa_periods,
                 fas_frequencies=fas_frequencies,
-                ko_bandwith=ko_bandwith,
+                ko_directory=ko_directory,
             ),
             comp_000_files,
         )
+
+    # Fetch results
+    # with mp.Pool(n_procs) as p:
+    #     skipped_records = p.map(
+    #         functools.partial(
+    #             calculate_im_for_record,
+    #             output_path=output_path,
+    #             intensity_measures=intensity_measures,
+    #             psa_periods=psa_periods,
+    #             fas_frequencies=fas_frequencies,
+    #             ko_bandwith=ko_bandwith,
+    #         ),
+    #         comp_000_files,
+    #     )
+
+    # Do above with for loop
+    # skipped_records = []
+    # for ffp_000 in comp_000_files:
+    #     skipped_record = calculate_im_for_record(
+    #         ffp_000,
+    #         output_path,
+    #         intensity_measures,
+    #         psa_periods,
+    #         fas_frequencies,
+    #         ko_bandwith,
+    #     )
+    #     skipped_records.append(skipped_record)
 
     print("Finished calculating IMs")
 
