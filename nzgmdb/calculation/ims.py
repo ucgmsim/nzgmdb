@@ -154,7 +154,7 @@ def compute_ims_for_all_processed_records(
     ko_directory = Path("/mnt/mantle_data/joel_scratch/KO")
 
     # This is a fix for multiprocessing issues in IM calculation
-    # mp.set_start_method("spawn", force=True)
+    mp.set_start_method("spawn", force=True)
 
     # Modify multiprocessing call
     with mp.Pool(n_procs) as p:

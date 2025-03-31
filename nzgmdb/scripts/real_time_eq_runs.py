@@ -14,6 +14,10 @@ from nzgmdb.management import config as cfg
 from nzgmdb.management import custom_errors, file_structure, shell_commands
 from nzgmdb.scripts import run_nzgmdb
 
+import threading
+import gc
+import ctypes
+
 app = typer.Typer()
 
 SEISMIC_NOW_URL = (
@@ -233,11 +237,11 @@ def run_event(  # noqa: D103
         im_dir = file_structure.get_im_dir(event_dir)
         im_dir.mkdir(parents=True, exist_ok=True)
         im_calc_start_time = time.time()
-        # run_nzgmdb.run_im_calculation(event_dir, n_procs=n_procs)
-        run_nzgmdb_ffp = __file__.replace("real_time_eq_runs.py", "run_nzgmdb.py")
-        im_calc_command = f"{run_nzgmdb_ffp} run-im-calculation {event_dir} --output-dir {im_dir} --n-procs {n_procs}"
-        log_file_ffp = im_dir / "run_im_calculation.log"
-        shell_commands.run_command_with_current_env(im_calc_command, log_file_ffp)
+        run_nzgmdb.run_im_calculation(event_dir, n_procs=n_procs)
+        # run_nzgmdb_ffp = __file__.replace("real_time_eq_runs.py", "run_nzgmdb.py")
+        # im_calc_command = f"{run_nzgmdb_ffp} run-im-calculation {event_dir} --output-dir {im_dir} --n-procs {n_procs}"
+        # log_file_ffp = im_dir / "run_im_calculation.log"
+        # shell_commands.run_command_with_current_env(im_calc_command, log_file_ffp)
         print(f"IM calculation run in {time.time() - im_calc_start_time:.2f} seconds")
         # Merge results
         run_nzgmdb.merge_im_results(im_dir, flatfile_dir, None, None)
