@@ -140,7 +140,7 @@ def get_waveforms(
                     net,
                     sta,
                     location,
-                    channel_codes,
+                    "*",
                     start_time,
                     end_time,
                     attach_response=True,
@@ -187,6 +187,9 @@ def split_stream_into_mseeds(st: Stream, unique_channels: Iterable):
     """
     mseeds = []
     for chan, loc in unique_channels:
+        # Only continue if HN or BN
+        if chan == "HN" or chan == "BN":
+            continue
         # Each unique channel and location pair is a new mseed file
         st_new = st.select(location=loc, channel=f"{chan}?")
 
