@@ -665,6 +665,6 @@ def create_quality_db(
     # Save the gm_df and skipped_records
     gm_df.to_csv(output_dir / FlatfileNames.GROUND_MOTION_IM_ROTD50_FLAT, index=False)
     skipped_records.to_csv(
-        output_dir / file_structure.SkippedRecordFilenames.QUALITY_SKIPPED_RECORDS,
+        flatfile_dir / file_structure.SkippedRecordFilenames.QUALITY_SKIPPED_RECORDS,
         index=False,
     )
