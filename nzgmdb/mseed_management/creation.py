@@ -10,7 +10,10 @@ import numpy as np
 import pandas as pd
 from obspy import Stream
 from obspy.clients.fdsn import Client as FDSN_Client
-from obspy.clients.fdsn.header import FDSNNoDataException
+from obspy.clients.fdsn.header import (
+    FDSNNoDataException,
+    FDSNServiceUnavailableException,
+)
 from obspy.core.event import Origin
 from obspy.geodetics import kilometers2degrees
 from obspy.io.mseed import InternalMSEEDError, ObsPyMSEEDFilesizeTooSmallError
@@ -29,6 +32,7 @@ def get_waveforms(
     rrup: float,
     r_epi: float,
     vs30: float = None,
+    only_record_ids: list[str] = None,
 ):
     """
     Get the waveforms for a given event and station
@@ -52,6 +56,8 @@ def get_waveforms(
         The epicentral distance to the event
     vs30 : float, optional
         The Vs30 value for the station, by default sets to config value
+    only_record_ids : list[str], optional
+        A list of record ids to get the waveforms for, by default None
 
     Returns
     -------
@@ -110,6 +116,19 @@ def get_waveforms(
         else ds * ds_multiplier
     )
     channel_codes = ",".join(config.get_value("channel_codes"))
+    location = "*"
+
+    # Check what channel codes and locations to use from only_record_ids if provided
+    if only_record_ids is not None:
+        # Check that we only have 1 record_id
+        assert (
+            len(only_record_ids) == 1
+        ), "Multiple record_ids for the same event_sta combo"
+        # Get the channel and location to use
+        channel_codes = (
+            only_record_ids["record_id"].str.split("_").str[-2].values[0] + "?"
+        )
+        location = only_record_ids["record_id"].str.split("_").str[-1].values[0]
 
     # Get the waveforms with multiple retries when IncompleteReadError occurs
     max_retries = 3
@@ -120,7 +139,7 @@ def get_waveforms(
                 st = client.get_waveforms(
                     net,
                     sta,
-                    "*",
+                    location,
                     channel_codes,
                     start_time,
                     end_time,
@@ -136,18 +155,16 @@ def get_waveforms(
                 continue  # try again
             else:
                 return None
+        except FDSNServiceUnavailableException:
+            print(f"Error getting waveforms for {net}.{sta}")
+            print("Service temporarily unavailable")
+            print("HTTP Status code: 503")
+            print("Retrying in 2 minutes...")
+            time.sleep(120)  # Wait for 2 minutes before retrying
         except Exception as e:  # noqa: BLE001
-            # Check if the exception is a 503 Service Unavailable
-            if hasattr(e, "code") and e.code == 503:
-                print(f"Error getting waveforms for {net}.{sta}")
-                print("Service temporarily unavailable")
-                print("HTTP Status code: 503")
-                print("Retrying in 2 minutes...")
-                time.sleep(120)  # Wait for 2 minutes before retrying
-            else:
-                print(f"Unexpected error getting waveforms for {net}.{sta}")
-                print(e)
-                return None
+            print(f"Unexpected error getting waveforms for {net}.{sta}")
+            print(e)
+            return None
     return st
 
 

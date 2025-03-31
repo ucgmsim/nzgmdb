@@ -52,6 +52,8 @@ def calculate_im_for_record(
         skipped_record = pd.DataFrame([skipped_record_dict])
         return skipped_record
 
+    print(f"Calculating IMs for {record_id}")
+
     # Get the event_id and create the output directory
     event_id = file_structure.get_event_id_from_mseed(ffp_000)
     event_output_path = output_path / event_id
@@ -73,6 +75,8 @@ def calculate_im_for_record(
             cores=1,
             ko_bandwidth=ko_bandwith,
         )
+
+    print(f"Saving IMs for {record_id}")
 
     # Set a column for the record_id and then component and set at the front
     im_result_df = im_result_df.reset_index()

@@ -88,6 +88,20 @@ def initial_preprocessing(
                 f"No inventory information found for station {station} with location {location}"
             )
 
+        # Add the response (Same for all channels)
+        # this is done so that the sensitivity can be removed otherwise it tries to find the exact same channel
+        # which can fail when including the inventory information
+        # response = next(cha.response for sta in inv.networks[0] for cha in sta.channels)
+        # for tr in mseed:
+        #     tr.stats.response = response
+
+        try:
+            mseed = mseed.remove_sensitivity(inventory=inv)
+        except ValueError:
+            raise custom_errors.SensitivityRemovalError(
+                f"Failed to remove sensitivity for station {station} with location {location}"
+            )
+
         # Rotate
         try:
             mseed.rotate("->ZNE", inventory=inv)
@@ -97,20 +111,6 @@ def initial_preprocessing(
             # Error for no matching channel metadata found
             raise custom_errors.RotationError(
                 f"Failed to rotate for station {station} with location {location}"
-            )
-
-        # Add the response (Same for all channels)
-        # this is done so that the sensitivity can be removed otherwise it tries to find the exact same channel
-        # which can fail when including the inventory information
-        response = next(cha.response for sta in inv.networks[0] for cha in sta.channels)
-        for tr in mseed:
-            tr.stats.response = response
-
-        try:
-            mseed = mseed.remove_sensitivity()
-        except ValueError:
-            raise custom_errors.SensitivityRemovalError(
-                f"Failed to remove sensitivity for station {station} with location {location}"
             )
 
         # Get constant gravity (g)
@@ -174,7 +174,12 @@ def butter_bandpass_filter(
     y_sos : np.ndarray
         The digital filtered data ouptut
     """
-    sos = butter_bandpass(lowcut, highcut, fs, order)
+    try:
+        sos = butter_bandpass(lowcut, highcut, fs, order)
+    except ValueError:
+        raise custom_errors.DigitalFilterError(
+            f"Failed to create the butter bandpass filter for lowcut {lowcut} and highcut {highcut}"
+        )
     y_sos = signal.sosfilt(sos, data)
     return y_sos
 
