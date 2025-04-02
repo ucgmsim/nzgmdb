@@ -1,5 +1,10 @@
 import functools
 import multiprocessing as mp
+
+
+# if __name__ == "__main__":
+
+
 import warnings
 from pathlib import Path
 
@@ -9,6 +14,24 @@ import pandas as pd
 from IM import im_calculation, ims, waveform_reading
 from nzgmdb.management import config as cfg
 from nzgmdb.management import file_structure
+import cProfile
+import pstats
+import io
+
+
+def calculate_im_for_record_profiled(*args, **kwargs):
+    # profiler = cProfile.Profile()
+    # profiler.enable()
+
+    result = calculate_im_for_record(*args, **kwargs)  # Your original function
+
+    # profiler.disable()
+    # s = io.StringIO()
+    # stats = pstats.Stats(profiler, stream=s).sort_stats(pstats.SortKey.TIME)
+    # stats.print_stats(15)  # Print top 10 slowest functions
+    # print(s.getvalue())  # Print profiling results to stdout
+
+    return result
 
 
 def calculate_im_for_record(
@@ -17,7 +40,7 @@ def calculate_im_for_record(
     intensity_measures: list[ims.IM],
     psa_periods: np.ndarray,
     fas_frequencies: np.ndarray,
-    ko_bandwith: int = 40,
+    ko_directory: Path,
 ):
     """
     Calculate the IMs for a single record and save the results to a csv file
@@ -73,7 +96,7 @@ def calculate_im_for_record(
             psa_periods,
             fas_frequencies,
             cores=1,
-            ko_bandwidth=ko_bandwith,
+            ko_directory=ko_directory,
         )
 
     print(f"Saving IMs for {record_id}")
@@ -90,8 +113,10 @@ def calculate_im_for_record(
 def compute_ims_for_all_processed_records(
     main_dir: Path,
     output_path: Path,
+    ko_directory: Path,
     n_procs: int = 1,
     checkpoint: bool = False,
+    intensity_measures: list[ims.IM] = None,
 ):
     """
     Compute the IMs for all processed records in the main directory
@@ -102,10 +127,14 @@ def compute_ims_for_all_processed_records(
         The main directory of the NZGMDB results (Highest level directory)
     output_path : Path
         The path to the output directory
+    ko_directory : Path
+        The path to the directory containing the Konno-Ohmachi smoothing files
     n_procs : int, optional
         The number of processes to use
     checkpoint : bool, optional
         If True, the function will check for already completed files and skip them
+    intensity_measures : list[ims.IM], optional
+        The list of intensity measures to calculate, by default None and will use the config file
     """
     # Get the waveform directory and all the 000 files
     waveform_dir = file_structure.get_waveform_dir(main_dir)
@@ -121,14 +150,20 @@ def compute_ims_for_all_processed_records(
 
     # Load the config and extract the IM options
     config = cfg.Config()
-    intensity_measures = [ims.IM[measure] for measure in config.get_value("ims")]
+    intensity_measures = (
+        [ims.IM[measure] for measure in config.get_value("ims")]
+        if intensity_measures is None
+        else intensity_measures
+    )
     psa_periods = np.asarray(config.get_value("psa_periods"))
     fas_frequencies = np.logspace(
         np.log10(config.get_value("common_frequency_start")),
         np.log10(config.get_value("common_frequency_end")),
         num=config.get_value("common_frequency_num"),
     )
-    ko_bandwith = config.get_value("ko_bandwidth")
+
+    # This is a fix for multiprocessing issues in IM calculation
+    mp.set_start_method("spawn", force=True)
 
     # Fetch results
     with mp.Pool(n_procs) as p:
@@ -139,10 +174,12 @@ def compute_ims_for_all_processed_records(
                 intensity_measures=intensity_measures,
                 psa_periods=psa_periods,
                 fas_frequencies=fas_frequencies,
-                ko_bandwith=ko_bandwith,
+                ko_directory=ko_directory,
             ),
             comp_000_files,
         )
+
+    mp.set_start_method("fork", force=True)
 
     print("Finished calculating IMs")
 

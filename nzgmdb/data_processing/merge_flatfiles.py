@@ -10,8 +10,8 @@ from nzgmdb.management import file_structure
 def merge_im_data(
     im_dir: Path,
     output_dir: Path,
-    gmc_ffp: Path,
-    fmax_ffp: Path,
+    gmc_ffp: Path = None,
+    fmax_ffp: Path = None,
 ):
     """
     Merge the IM data into a single flatfile. Also merges in the GMC and fmax data and
@@ -30,26 +30,40 @@ def merge_im_data(
         The file path to the fmax results
     """
     # Load the GMC file
-    gmc_results = pd.read_csv(gmc_ffp)
-
-    try:
-        # Load the fmax file
-        fmax_results = pd.read_csv(fmax_ffp)
-    except pd.errors.EmptyDataError:
-        fmax_results = pd.DataFrame(
-            columns=["record_id", "fmax_000", "fmax_090", "fmax_ver"]
+    if gmc_ffp is None:
+        new_df = pd.DataFrame(
+            columns=[
+                "record",
+                "score_mean_X",
+                "fmin_mean_X",
+                "multi_mean_X",
+                "score_mean_Y",
+                "fmin_mean_Y",
+                "multi_mean_Y",
+                "score_mean_Z",
+                "fmin_mean_Z",
+                "multi_mean_Z",
+            ]
         )
+    else:
+        gmc_results = pd.read_csv(gmc_ffp)
 
-    # Define the columns to be grouped
-    columns = ["score_mean", "fmin_mean", "multi_mean"]
+        # Define the columns to be grouped
+        columns = ["score_mean", "fmin_mean", "multi_mean"]
 
-    # Group by 'record' and 'component', then aggregate the columns
-    new_df = gmc_results.groupby(["record", "component"])[columns].mean().unstack()
+        # Group by 'record' and 'component', then aggregate the columns
+        new_df = gmc_results.groupby(["record", "component"])[columns].mean().unstack()
 
-    # Join the column names to score_mean_X etc.
-    new_df.columns = ["_".join(col) for col in new_df.columns]
+        # Join the column names to score_mean_X etc.
+        new_df.columns = ["_".join(col) for col in new_df.columns]
 
-    new_df = new_df.reset_index()
+        new_df = new_df.reset_index()
+
+    fmax_results = (
+        pd.DataFrame(columns=["record_id", "fmax_000", "fmax_090", "fmax_ver"])
+        if fmax_ffp is None or not fmax_ffp.stat().st_size
+        else pd.read_csv(fmax_ffp)
+    )
 
     # Find all the IM files
     im_files = im_dir.rglob("*IM.csv")
@@ -158,9 +172,12 @@ def merge_flatfiles(main_dir: Path, bypass_records_ffp: Path = None):
         flatfile_dir / file_structure.PreFlatfileNames.STATION_MAGNITUDE_TABLE_GEONET,
         dtype={"evid": str},
     )
-    phase_table_df = pd.read_csv(
-        flatfile_dir / file_structure.PreFlatfileNames.PHASE_ARRIVAL_TABLE
-    )
+    if (flatfile_dir / file_structure.PreFlatfileNames.PHASE_ARRIVAL_TABLE).exists():
+        phase_table_df = pd.read_csv(
+            flatfile_dir / file_structure.PreFlatfileNames.PHASE_ARRIVAL_TABLE
+        )
+    else:
+        phase_table_df = pd.DataFrame(columns=["record_id", "p_wave_ix", "s_wave_ix"])
     prop_df = pd.read_csv(
         flatfile_dir / file_structure.PreFlatfileNames.PROPAGATION_TABLE,
         dtype={"evid": str},

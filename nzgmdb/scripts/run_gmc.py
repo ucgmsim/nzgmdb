@@ -203,6 +203,9 @@ def run_gmc_processing(  # noqa: D103
     # Get all the mseed files
     mseed_files = list(waveform_dir.rglob("*.mseed"))
 
+    # Ensure that n_procs is equal too or less than the number of mseed files
+    n_procs = min(n_procs, len(mseed_files))
+
     # Split them into even batches based on number of mseeds and n_procs
     mseed_batches = np.array_split(mseed_files, n_procs)
 

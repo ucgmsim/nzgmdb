@@ -1,5 +1,6 @@
 import os
 import subprocess
+import sys
 from pathlib import Path
 
 
@@ -40,3 +41,35 @@ def run_command(
             )
         except subprocess.CalledProcessError:
             raise Exception(f"Command failed please check logs in {log_file_path}")
+
+
+def run_command_with_current_env(command: str, log_file_path: Path):
+    """
+    Run a shell command with the currently activated Python environment.
+
+    Parameters
+    ----------
+    command : str
+        The command to run.
+    log_file_path : Path
+        The path to the log file.
+
+    Raises
+    ------
+    Exception
+        If the command fails.
+    """
+    with open(log_file_path, "w") as log_file:
+        # Use the current environment
+        env = os.environ.copy()
+
+        # Run the command using sys.executable (which is already using the active environment)
+        try:
+            subprocess.check_call(
+                [sys.executable] + command.split(" "),
+                stdout=log_file,
+                stderr=log_file,
+                env=env,
+            )
+        except subprocess.CalledProcessError:
+            raise Exception(f"Command failed. Please check logs in {log_file_path}")

@@ -1,6 +1,36 @@
+from enum import Enum
+
 import yaml
 
 from nzgmdb.management import file_structure
+
+
+class MachineName(str, Enum):
+    """
+    Enum for the machine names.
+    """
+
+    LOCAL = "local"
+    MANTLE = "mantle"
+    HYPOCENTRE = "hypocentre"
+
+
+class WorkflowStep(str, Enum):
+    """
+    Enum for the workflow steps.
+    """
+
+    GEONET = "geonet"
+    TEC_DOMAIN = "tec_domain"
+    PHASE_TABLE = "phase_table"
+    SNR = "snr"
+    FMAX = "fmax"
+    GMC = "gmc"
+    PROCESS = "process"
+    IM = "im"
+    DISTANCES = "distances"
+    UPLOAD = "upload"
+    DEFAULT = "default"
 
 
 class Config:
@@ -10,6 +40,7 @@ class Config:
 
     _instance = None
     config_path = file_structure.get_data_dir() / "config.yaml"
+    machine_config_path = file_structure.get_data_dir() / "machine_config.yaml"
 
     def __new__(cls, *args, **kwargs):
         """
@@ -18,6 +49,7 @@ class Config:
         if cls._instance is None:
             cls._instance = super().__new__(cls, *args, **kwargs)
             cls._instance._config_data = cls._instance._load_config()
+            cls._instance._machine_config_data = cls._instance._load_machine_config()
         return cls._instance
 
     def _load_config(self):
@@ -31,6 +63,17 @@ class Config:
         except FileNotFoundError:
             print("Config file not found.")
             return {}
+
+    def _load_machine_config(self):
+        """
+        Load the machine config file.
+        """
+        try:
+            with open(self.machine_config_path, "r") as file:
+                machine_config_data = yaml.safe_load(file)
+            return machine_config_data
+        except FileNotFoundError:
+            print("Machine config file not found.")
 
     def get_value(self, key: str):
         """
@@ -46,3 +89,38 @@ class Config:
             return self._config_data[key]
         else:
             return KeyError(f"Error: Key '{key}' not found in {self.config_path}")
+
+    def get_n_procs(self, machine_name: MachineName, step: WorkflowStep):
+        """
+        Get the number of processes for a given machine and workflow step.
+
+        Parameters
+        ----------
+        machine_name : MachineName
+            The name of the machine.
+        step : WorkflowStep
+            The workflow step.
+
+        Returns
+        -------
+        int
+            The number of processes.
+
+        Raises
+        ------
+        KeyError
+            If the machine or workflow step is not found in the configuration.
+        """
+        machine_config = self._machine_config_data.get(machine_name.value)
+        if not machine_config:
+            raise KeyError(
+                f"Machine '{machine_name.value}' not found in the configuration."
+            )
+
+        n_procs = machine_config.get(step.value)
+        if n_procs is None:
+            raise KeyError(
+                f"Workflow step '{step.value}' not found for machine '{machine_name.value}' in the configuration."
+            )
+
+        return n_procs
