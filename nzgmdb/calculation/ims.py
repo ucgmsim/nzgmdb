@@ -113,8 +113,10 @@ def calculate_im_for_record(
 def compute_ims_for_all_processed_records(
     main_dir: Path,
     output_path: Path,
+    ko_directory: Path,
     n_procs: int = 1,
     checkpoint: bool = False,
+    intensity_measures: list[ims.IM] = None,
 ):
     """
     Compute the IMs for all processed records in the main directory
@@ -125,10 +127,14 @@ def compute_ims_for_all_processed_records(
         The main directory of the NZGMDB results (Highest level directory)
     output_path : Path
         The path to the output directory
+    ko_directory : Path
+        The path to the directory containing the Konno-Ohmachi smoothing files
     n_procs : int, optional
         The number of processes to use
     checkpoint : bool, optional
         If True, the function will check for already completed files and skip them
+    intensity_measures : list[ims.IM], optional
+        The list of intensity measures to calculate, by default None and will use the config file
     """
     # Get the waveform directory and all the 000 files
     waveform_dir = file_structure.get_waveform_dir(main_dir)
@@ -144,23 +150,26 @@ def compute_ims_for_all_processed_records(
 
     # Load the config and extract the IM options
     config = cfg.Config()
-    intensity_measures = [ims.IM[measure] for measure in config.get_value("ims")]
+    intensity_measures = (
+        [ims.IM[measure] for measure in config.get_value("ims")]
+        if intensity_measures is None
+        else intensity_measures
+    )
     psa_periods = np.asarray(config.get_value("psa_periods"))
     fas_frequencies = np.logspace(
         np.log10(config.get_value("common_frequency_start")),
         np.log10(config.get_value("common_frequency_end")),
         num=config.get_value("common_frequency_num"),
     )
-    ko_directory = Path("/mnt/mantle_data/joel_scratch/KO")
 
     # This is a fix for multiprocessing issues in IM calculation
     mp.set_start_method("spawn", force=True)
 
-    # Modify multiprocessing call
+    # Fetch results
     with mp.Pool(n_procs) as p:
         skipped_records = p.map(
             functools.partial(
-                calculate_im_for_record_profiled,  # Use the profiled version
+                calculate_im_for_record,
                 output_path=output_path,
                 intensity_measures=intensity_measures,
                 psa_periods=psa_periods,
@@ -170,32 +179,7 @@ def compute_ims_for_all_processed_records(
             comp_000_files,
         )
 
-    # Fetch results
-    # with mp.Pool(n_procs) as p:
-    #     skipped_records = p.map(
-    #         functools.partial(
-    #             calculate_im_for_record,
-    #             output_path=output_path,
-    #             intensity_measures=intensity_measures,
-    #             psa_periods=psa_periods,
-    #             fas_frequencies=fas_frequencies,
-    #             ko_bandwith=ko_bandwith,
-    #         ),
-    #         comp_000_files,
-    #     )
-
-    # Do above with for loop
-    # skipped_records = []
-    # for ffp_000 in comp_000_files:
-    #     skipped_record = calculate_im_for_record(
-    #         ffp_000,
-    #         output_path,
-    #         intensity_measures,
-    #         psa_periods,
-    #         fas_frequencies,
-    #         ko_bandwith,
-    #     )
-    #     skipped_records.append(skipped_record)
+    mp.set_start_method("fork", force=True)
 
     print("Finished calculating IMs")
 

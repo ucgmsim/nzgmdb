@@ -7,7 +7,7 @@ import numpy as np
 import pandas as pd
 from pandas.errors import EmptyDataError
 
-from IM import snr_calculation
+from IM import snr_calculation, im_calculation
 from nzgmdb.management import config as cfg
 from nzgmdb.management import custom_errors, file_structure
 from nzgmdb.mseed_management import reading
@@ -17,8 +17,8 @@ def compute_snr_for_single_mseed(
     mseed_file: Path,
     phase_table: pd.DataFrame,
     output_dir: Path,
-    ko_bandwidth: int = 40,
-    common_frequency_vector: np.ndarray = None,
+    ko_directory: Path,
+    common_frequency_vector: np.ndarray = im_calculation.DEFAULT_FREQUENCIES,
 ):
     """
     Compute the SNR for a single mseed file
@@ -31,8 +31,8 @@ def compute_snr_for_single_mseed(
         Phase arrival table
     output_dir : Path
         Path to the output directory
-    ko_bandwidth : int, optional
-        Bandwidth for the Ko matrix, by default 40
+    ko_directory : Path
+        Path to the directory containing the Ko matrices
     common_frequency_vector : np.ndarray, optional
         Common frequency vector to extract for SNR and FAS, by default None
 
@@ -131,7 +131,7 @@ def compute_snr_for_single_mseed(
                 tp,
                 frequencies=common_frequency_vector,
                 cores=1,
-                ko_bandwidth=ko_bandwidth,
+                ko_directory=ko_directory,
                 apply_taper=False,
             )
     except FileNotFoundError:
@@ -192,6 +192,7 @@ def compute_snr_for_mseed_data(
     phase_table_path: Path,
     meta_output_dir: Path,
     snr_fas_output_dir: Path,
+    ko_directory: Path,
     n_procs: int = 1,
     common_frequency_vector: np.ndarray = None,
     batch_size: int = 5000,
@@ -210,12 +211,10 @@ def compute_snr_for_mseed_data(
         Path to the output directory for the metadata and skipped records
     snr_fas_output_dir : Path
         Path to the output directory for the SNR and FAS data
+    ko_matrix_path : Path
+        Path to the ko matrix directory
     n_procs : int, optional
         Number of processes to use, by default 1
-    apply_smoothing : bool, optional
-        Whether to apply smoothing to the SNR calculation, by default True
-    ko_matrix_path : Path, optional
-        Path to the ko matrix, by default None
     common_frequency_vector : np.ndarray, optional
         Common frequency vector to use for all the waveforms, by default None
         Uses a default frequency vector if not specified defined in the configuration file
@@ -242,7 +241,6 @@ def compute_snr_for_mseed_data(
             np.log10(common_frequency_end),
             num=common_frequency_num,
         )
-    ko_bandwidth = config.get_value("ko_bandwidth")
 
     # Get all the mseed files
     mseed_files = [mseed_file for mseed_file in data_dir.rglob("*.mseed")]
@@ -285,7 +283,7 @@ def compute_snr_for_mseed_data(
                         compute_snr_for_single_mseed,
                         phase_table=phase_table,
                         output_dir=snr_fas_output_dir,
-                        ko_bandwidth=ko_bandwidth,
+                        ko_directory=ko_directory,
                         common_frequency_vector=common_frequency_vector,
                     ),
                     batch,

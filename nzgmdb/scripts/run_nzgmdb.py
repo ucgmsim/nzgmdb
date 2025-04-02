@@ -8,9 +8,11 @@ from typing import Annotated
 
 import typer
 
+from IM.ims import IM
 from nzgmdb.calculation import distances, fmax, ims, snr
 from nzgmdb.data_processing import merge_flatfiles, process_observed, quality_db
 from nzgmdb.data_retrieval import geonet, sites, tect_domain
+from nzgmdb.management import config as cfg
 from nzgmdb.management import file_structure, shell_commands
 from nzgmdb.phase_arrival import gen_phase_arrival_table
 from nzgmdb.scripts import run_gmc, upload_to_dropbox
@@ -76,6 +78,12 @@ def fetch_geonet_data(  # noqa: D103
             help="If True, the function will run in real time mode by using a different client",
         ),
     ] = False,
+    mp_sites: Annotated[
+        bool,
+        typer.Option(
+            help="If True, the function will use the multiprocessing over sites instead of events",
+        ),
+    ] = False,
 ):
     geonet.parse_geonet_information(
         main_dir,
@@ -87,6 +95,7 @@ def fetch_geonet_data(  # noqa: D103
         only_sites,
         only_record_ids_ffp,
         real_time,
+        mp_sites,
     )
 
 
@@ -181,6 +190,14 @@ def calculate_snr(  # noqa: D103
             file_okay=False,
         ),
     ],
+    ko_directory: Annotated[
+        Path,
+        typer.Argument(
+            help="The directory containing the Konno-Ohmachi smoothing files",
+            exists=True,
+            file_okay=False,
+        ),
+    ],
     phase_table_path: Annotated[
         Path,
         typer.Option(
@@ -235,6 +252,7 @@ def calculate_snr(  # noqa: D103
         phase_table_path,
         meta_output_dir,
         snr_fas_output_dir,
+        ko_directory,
         n_procs,
         batch_size=batch_size,
         bypass_records_ffp=bypass_records_ffp,
@@ -358,6 +376,14 @@ def run_im_calculation(  # noqa: D103
         Path,
         typer.Option(help="The directory to save the IM files", file_okay=False),
     ] = None,
+    ko_directory: Annotated[
+        Path,
+        typer.Option(
+            help="The directory containing the Konno-Ohmachi smoothing files",
+            exists=True,
+            file_okay=False,
+        ),
+    ] = None,
     n_procs: Annotated[int, typer.Option(help="The number of processes to use")] = 1,
     checkpoint: Annotated[
         bool,
@@ -366,10 +392,19 @@ def run_im_calculation(  # noqa: D103
             is_flag=True,
         ),
     ] = False,
+    intensity_measures: Annotated[
+        list[IM],
+        typer.Option(
+            help="The list of intensity measures to calculate",
+            callback=lambda x: [IM(i) for i in x[0].split(",")],
+        ),
+    ] = None,
 ):
     if output_dir is None:
         output_dir = file_structure.get_im_dir(main_dir)
-    ims.compute_ims_for_all_processed_records(main_dir, output_dir, n_procs, checkpoint)
+    ims.compute_ims_for_all_processed_records(
+        main_dir, output_dir, ko_directory, n_procs, checkpoint, intensity_measures
+    )
 
 
 @app.command(help="Generate the site table basin flatfile")
@@ -548,12 +583,6 @@ def run_full_nzgmdb(  # noqa: D103
             help="Path to activate your mamba conda.sh script.",
         ),
     ],
-    im_calc_activate: Annotated[
-        str,
-        typer.Argument(
-            help="Command to activate im_calculation environment.",
-        ),
-    ],
     gmc_activate: Annotated[
         str,
         typer.Argument(
@@ -647,8 +676,16 @@ def run_full_nzgmdb(  # noqa: D103
             dir_okay=False,
         ),
     ] = None,
+    machine: Annotated[
+        cfg.MachineName,
+        typer.Option(
+            help="The machine name to use for the number of processes",
+            case_sensitive=False,
+        ),
+    ] = None,
 ):
     main_dir.mkdir(parents=True, exist_ok=True)
+    config = cfg.Config()
 
     # Generate the site basin flatfile
     flatfile_dir = file_structure.get_flatfile_dir(main_dir)
@@ -669,11 +706,16 @@ def run_full_nzgmdb(  # noqa: D103
         ).exists()
     ):
         print("Fetching Geonet data")
+        geo_n_procs = (
+            n_procs
+            if machine is None
+            else config.get_n_procs(machine, cfg.WorkflowStep.GEONET)
+        )
         geonet.parse_geonet_information(
             main_dir,
             start_date,
             end_date,
-            n_procs,
+            geo_n_procs,
             geonet_batch_size,
             only_event_ids,
             only_sites,
@@ -698,7 +740,12 @@ def run_full_nzgmdb(  # noqa: D103
             flatfile_dir
             / file_structure.PreFlatfileNames.EARTHQUAKE_SOURCE_TABLE_TECTONIC
         )
-        tect_domain.add_tect_domain(eq_source_ffp, eq_tect_domain_ffp, n_procs)
+        tect_n_procs = (
+            n_procs
+            if machine is None
+            else config.get_n_procs(machine, cfg.WorkflowStep.TEC_DOMAIN)
+        )
+        tect_domain.add_tect_domain(eq_source_ffp, eq_tect_domain_ffp, tect_n_procs)
 
     # Generate the phase arrival table
     if not (
@@ -711,13 +758,18 @@ def run_full_nzgmdb(  # noqa: D103
         run_phasenet_script_ffp = (
             Path(__file__).parent.parent / "phase_arrival/run_phasenet.py"
         )
+        phase_n_procs = (
+            n_procs
+            if machine is None
+            else config.get_n_procs(machine, cfg.WorkflowStep.PHASE_TABLE)
+        )
         gen_phase_arrival_table.generate_phase_arrival_table(
             main_dir,
             flatfile_dir,
             run_phasenet_script_ffp,
             conda_sh,
             gmc_activate,
-            n_procs,
+            phase_n_procs,
             bypass_records_ffp,
         )
 
@@ -731,12 +783,18 @@ def run_full_nzgmdb(  # noqa: D103
         phase_table_path = (
             flatfile_dir / file_structure.PreFlatfileNames.PHASE_ARRIVAL_TABLE
         )
+        snr_n_procs = (
+            n_procs
+            if machine is None
+            else config.get_n_procs(machine, cfg.WorkflowStep.SNR)
+        )
         calculate_snr(
             main_dir,
+            ko_matrix_path,
             phase_table_path,
             flatfile_dir,
             snr_fas_output_dir,
-            n_procs,
+            snr_n_procs,
             batch_size=snr_batch_size,
             bypass_records_ffp=bypass_records_ffp,
         )
@@ -745,12 +803,17 @@ def run_full_nzgmdb(  # noqa: D103
     if not (checkpoint and (flatfile_dir / file_structure.FlatfileNames.FMAX).exists()):
         print("Calculating Fmax")
         waveform_dir = file_structure.get_waveform_dir(main_dir)
+        fmax_n_procs = (
+            n_procs
+            if machine is None
+            else config.get_n_procs(machine, cfg.WorkflowStep.FMAX)
+        )
         calc_fmax(
             main_dir,
             flatfile_dir,
             waveform_dir,
             snr_fas_output_dir,
-            n_procs,
+            fmax_n_procs,
             bypass_records_ffp,
         )
 
@@ -760,6 +823,11 @@ def run_full_nzgmdb(  # noqa: D103
         and (flatfile_dir / file_structure.FlatfileNames.GMC_PREDICTIONS).exists()
     ):
         print("Running GMC")
+        gmc_n_procs = (
+            gmc_procs
+            if machine is None
+            else config.get_n_procs(machine, cfg.WorkflowStep.GMC)
+        )
         run_gmc.run_gmc_processing(
             main_dir,
             gm_classifier_dir,
@@ -767,7 +835,7 @@ def run_full_nzgmdb(  # noqa: D103
             conda_sh,
             gmc_activate,
             gmc_predict_activate,
-            gmc_procs,
+            gmc_n_procs,
             bypass_records_ffp=bypass_records_ffp,
         )
 
@@ -782,17 +850,23 @@ def run_full_nzgmdb(  # noqa: D103
         ).exists()
     ):
         print("Processing records")
-        process_records(main_dir, gmc_ffp, fmax_ffp, bypass_records_ffp, n_procs)
+        process_n_procs = (
+            n_procs
+            if machine is None
+            else config.get_n_procs(machine, cfg.WorkflowStep.PROCESS)
+        )
+        process_records(
+            main_dir, gmc_ffp, fmax_ffp, bypass_records_ffp, process_n_procs
+        )
 
     # Run IM calculation
     im_dir = file_structure.get_im_dir(main_dir)
     im_dir.mkdir(parents=True, exist_ok=True)
     print("Calculating IMs")
-    # Run IM Calc with a sub-command to manage single core issues
-    im_calc_command = f"python {__file__} run-im-calculation {main_dir} --output-dir {im_dir} --n-procs {n_procs} {'--checkpoint' if checkpoint else ''}"
-    log_file_ffp = im_dir / "run_im_calculation.log"
-    shell_commands.run_command_with_current_env(im_calc_command, log_file_ffp)
-    # run_im_calculation(main_dir, im_dir, n_procs, checkpoint)
+    im_n_procs = (
+        n_procs if machine is None else config.get_n_procs(machine, cfg.WorkflowStep.IM)
+    )
+    run_im_calculation(main_dir, im_dir, ko_matrix_path, im_n_procs, checkpoint)
 
     # Merge IM results
     if not (
@@ -813,7 +887,12 @@ def run_full_nzgmdb(  # noqa: D103
         ).exists()
     ):
         print("Calculating distances")
-        distances.calc_distances(main_dir, n_procs)
+        dist_n_procs = (
+            n_procs
+            if machine is None
+            else config.get_n_procs(machine, cfg.WorkflowStep.DISTANCES)
+        )
+        distances.calc_distances(main_dir, dist_n_procs)
 
     # Merge flat files
     if not (
@@ -832,7 +911,12 @@ def run_full_nzgmdb(  # noqa: D103
     # Upload to dropbox
     if upload:
         print("Uploading to Dropbox")
-        upload_to_dropbox.upload_to_dropbox(main_dir, n_procs=n_procs)
+        up_n_procs = (
+            n_procs
+            if machine is None
+            else config.get_n_procs(machine, cfg.WorkflowStep.UPLOAD)
+        )
+        upload_to_dropbox.upload_to_dropbox(main_dir, n_procs=up_n_procs)
 
 
 @app.command(

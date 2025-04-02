@@ -2,32 +2,32 @@ local:
   geonet: 6
   tec_domain: 6
   phase_table: 6
-  snr: 2
+  snr: 3
   fmax: 6
   gmc: 2
   process: 6
-  im: 1
-  distances: 3
+  im: 6
+  distances: 6
   upload: 6
 mantle:
   geonet: 28
   tec_domain: 28
   phase_table: 28
-  snr: 4
+  snr: 8
   fmax: 28
   gmc: 3
   process: 28
-  im: 3
-  distances: 12
+  im: 20 # Only higher due to not running FAS on mantle for real time events
+  distances: 28
   upload: 28
 hypocentre:
   geonet: 44
   tec_domain: 44
   phase_table: 44
-  snr: 16
+  snr: 18
   fmax: 44
   gmc: 12
   process: 44
   im: 12
-  distances: 22
+  distances: 44
   upload: 44
