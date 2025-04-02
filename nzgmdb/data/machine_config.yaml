@@ -17,7 +17,7 @@ mantle:
   fmax: 28
   gmc: 3
   process: 28
-  im: 20 # Only higher due to not running FAS on mantle for real time events
+  im: 16 # Only higher due to not running FAS on mantle for real time events
   distances: 28
   upload: 28
 hypocentre:
