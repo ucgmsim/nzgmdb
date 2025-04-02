@@ -13,7 +13,7 @@ mantle:
   geonet: 28
   tec_domain: 28
   phase_table: 28
-  snr: 8
+  snr: 5
   fmax: 28
   gmc: 3
   process: 28
