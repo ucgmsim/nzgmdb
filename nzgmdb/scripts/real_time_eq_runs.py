@@ -14,7 +14,7 @@ import typer
 from IM import ims
 from nzgmdb.management import config as cfg
 from nzgmdb.management import custom_errors, file_structure
-from nzgmdb.scripts import run_nzgmdb, run_gmc
+from nzgmdb.scripts import run_gmc, run_nzgmdb
 
 app = typer.Typer()
 
@@ -242,12 +242,12 @@ def run_event(  # noqa: D103
     ],
     ko_matrix_path: Annotated[
         Path,
-        typer.Option(
+        typer.Argument(
             help="Path to the KO matrix directory.",
             exists=True,
             file_okay=False,
         ),
-    ] = None,
+    ],
     add_seismic_now: Annotated[
         bool,
         typer.Option(
@@ -273,7 +273,6 @@ def run_event(  # noqa: D103
     """
     try:
         config = cfg.Config()
-        start_time = time.time()
         # Execute custom pipeline
         run_nzgmdb.generate_site_table_basin(event_dir)
         # Get geonet data
@@ -286,7 +285,6 @@ def run_event(  # noqa: D103
             real_time=True,
             mp_sites=True,
         )
-        print(f"Geonet data fetched in {time.time() - start_time:.2f} seconds")
 
         if add_seismic_now:
             # Update with latest info
@@ -343,9 +341,6 @@ def run_event(  # noqa: D103
         # Merge the flatfiles
         run_nzgmdb.merge_flat_files(event_dir)
 
-        print(
-            f"Event {event_id} basic processed in {time.time() - start_time:.2f} seconds"
-        )
     except custom_errors.NoStationsError:
         print(f"Event {event_id} has no stations, skipping")
         # Remove the event directory
@@ -357,28 +352,29 @@ def run_event(  # noqa: D103
         url = f"{SEISMIC_NOW_URL}?earthquake_id={event_id}"
 
         # Send a POST request to the endpoint
-        # response = requests.post(url)
+        response = requests.post(url)
 
         # Check the response status
-        # if response.status_code == 200:
-        print("Event added successfully")
-        # Get updated values
-        mag, lat, lon, depth = update_eq_source_table(event_dir)
-        # Add a new message to slack
-        response = reply_to_message_on_slack(
-            message_ts,
-            f"Event ID: {event_id} added to SeismicNow (Basic Processing): Mag: {mag:.1f}; Depth: {depth:.1f} km; Lat: {lat:.2f}; Lon: {lon:.2f}",
-        )
-        message_ts = response["ts"]
+        if response.status_code == 200:
+            print("Event added successfully")
+            # Get updated values
+            mag, lat, lon, depth = update_eq_source_table(event_dir)
+            # Add a new message to slack
+            response = reply_to_message_on_slack(
+                message_ts,
+                f"Event ID: {event_id} added to SeismicNow (Basic Processing): Mag: {mag:.1f}; Depth: {depth:.1f} km; Lat: {lat:.2f}; Lon: {lon:.2f}",
+            )
+            message_ts = response["ts"]
 
-        # else:
-        #     print(f"Failed to add event. Status code: {response.status_code}")
-        #     print(f"Response: {response.text}")
-        #     # Add a new message to slack
-        #     send_message_to_slack(
-        #         f"Failed to add event {event_id} to SeismicNow, SW team investigate"
-        #     )
-        #     return False
+        else:
+            print(f"Failed to add event. Status code: {response.status_code}")
+            print(f"Response: {response.text}")
+            # Add a new message to slack
+            reply_to_message_on_slack(
+                message_ts,
+                f"Failed to add event {event_id} to SeismicNow, SW team investigate",
+            )
+            return False
 
     # Continue the rest of the pipeline
     run_phasenet_script_ffp = (
@@ -440,10 +436,6 @@ def run_event(  # noqa: D103
 
     run_nzgmdb.merge_flat_files(event_dir)
 
-    print(
-        f"Event {event_id} final processing in {time.time() - start_time:.2f} seconds"
-    )
-
     if add_seismic_now:
         # Get updated values
         mag, lat, lon, depth = update_eq_source_table(event_dir)
@@ -496,26 +488,14 @@ def poll_earthquake_data(  # noqa: D103
             help="Command to activate gmc_predict environment.",
         ),
     ],
-    n_procs: Annotated[
-        int,
-        typer.Option(
-            help="Number of processes to use in the pipeline.",
-        ),
-    ] = 1,
-    gmc_procs: Annotated[
-        int,
-        typer.Option(
-            help="Number of GMC processes to use.",
-        ),
-    ] = 1,
     ko_matrix_path: Annotated[
         Path,
-        typer.Option(
+        typer.Argument(
             help="Path to the KO matrix directory.",
             exists=True,
             file_okay=False,
         ),
-    ] = None,
+    ],
     add_seismic_now: Annotated[
         bool,
         typer.Option(
@@ -523,6 +503,13 @@ def poll_earthquake_data(  # noqa: D103
             is_flag=True,
         ),
     ] = False,
+    machine: Annotated[
+        cfg.MachineName,
+        typer.Option(
+            help="The machine name to use for the number of processes",
+            case_sensitive=False,
+        ),
+    ] = cfg.MachineName.LOCAL,
 ):
     init_start_date = None
     while True:
@@ -554,12 +541,9 @@ def poll_earthquake_data(  # noqa: D103
                     conda_sh,
                     gmc_activate,
                     gmc_predict_activate,
-                    n_procs,
-                    gmc_procs,
                     ko_matrix_path,
                     add_seismic_now,
-                    start_date,
-                    end_date,
+                    machine,
                 )
 
                 if not result:
