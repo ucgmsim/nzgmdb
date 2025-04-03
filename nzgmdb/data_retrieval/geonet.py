@@ -342,7 +342,17 @@ def fetch_sta_mag_line(
             )
 
         # Calculate clip to determine if the record should be dropped
-        clip = filtering.get_clip_probability(pref_mag, r_hyp, mseed)
+        try:
+            clip = filtering.get_clip_probability(pref_mag, r_hyp, mseed)
+        except:
+            stats = mseed[0].stats
+            skipped_records.append(
+                [
+                    f"{event_id}_{stats.station}_{stats.location}_{stats.channel}",
+                    "Clip calculation error",
+                ]
+            )
+            continue
 
         # Check if the record should be dropped
         if clip > threshold:
