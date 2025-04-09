@@ -390,11 +390,12 @@ def merge_flatfiles(main_dir: Path, bypass_records_ffp: Path = None):
     idx_min_loc_elev = grouped.apply(custom_idxmin)
 
     gm_im_df_flat["is_ground_level"] = False
-    # Set the flag to True for the rows with the smallest loc_elev value
-    record_ids = gm_im_df_flat.loc[idx_min_loc_elev.dropna(), "record_id"]
-    gm_im_df_flat.loc[
-        gm_im_df_flat["record_id"].isin(record_ids), "is_ground_level"
-    ] = True
+    if len(idx_min_loc_elev) > 0:
+        # Set the flag to True for the rows with the smallest loc_elev value
+        record_ids = gm_im_df_flat.loc[idx_min_loc_elev.dropna(), "record_id"]
+        gm_im_df_flat.loc[
+            gm_im_df_flat["record_id"].isin(record_ids), "is_ground_level"
+        ] = True
 
     # For Locations not found in the dataframe, set the loc_elev to 0 only if there is just 1 location
     # Also set the is_ground_level to True
