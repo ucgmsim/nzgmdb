@@ -46,7 +46,7 @@ def merge_aftershocks(main_dir: Path):
             srf_model = srf.read_srf(srf_file)
             srf_points = srf_model.points.loc[:, ["lon", "lat", "dep"]].to_numpy()
             # Apply % 360 to manage the longitude negative values
-            srf_points[:, 0] = srf_points[:, 0] % 360
+            srf_points[:, 0] %= 360
             rupture_area_poly.append(MultiPoint(srf_points[:, :2]).convex_hull)
         else:
             lon_values = [
@@ -73,21 +73,21 @@ def merge_aftershocks(main_dir: Path):
 
     # Obtain the RJB cutoffs
     config = cfg.Config()
-    rjb_cutoffs = config.get_value("rjb_cutoffs")
+    crjb_cutoffs = config.get_value("rjb_cutoffs")
 
     # Iterate over the rjb_cutoff values
-    for rjb_cutoff in rjb_cutoffs:
+    for crjb_cutoff in crjb_cutoffs:
         # Run the abwd_crjb function
         flagvector, vcl = abwd_crjb(
             catalogue_pd,
             rupture_area_poly,
-            rjb_cutoff=rjb_cutoff,
+            crjb_cutoff=crjb_cutoff,
             window_method="GardnerKnopoff",
         )
 
         # Store the results in the dictionary
-        results_dict[f"aftershock_flag_crjb{rjb_cutoff}"] = flagvector
-        results_dict[f"cluster_flag_crjb{rjb_cutoff}"] = vcl
+        results_dict[f"aftershock_flag_crjb{crjb_cutoff}"] = flagvector
+        results_dict[f"cluster_flag_crjb{crjb_cutoff}"] = vcl
 
     # Create a DataFrame from the dictionary
     results_df = pd.DataFrame(results_dict)
@@ -102,7 +102,7 @@ def merge_aftershocks(main_dir: Path):
     )
 
 
-def decimal_year(catalogue_pd: pd.DataFrame):
+def decimal_year(catalogue_pd: pd.DataFrame) -> np.ndarray:
     """
     Converts earthquake datetime into decimal years.
 
@@ -128,7 +128,7 @@ def decimal_year(catalogue_pd: pd.DataFrame):
     return np.array(year + elapsed / duration)
 
 
-def resample_polygon_1km(rupture_polygons: list):
+def resample_polygon_1km(rupture_polygons: list[Polygon]) -> list[MultiPoint]:
     """
     Resamples polygon boundaries at approximately 1 km resolution.
 
@@ -165,7 +165,7 @@ def resample_polygon_1km(rupture_polygons: list):
 
 def calculate_crjb(
     rupture_poly: Polygon, boundary_points: MultiPoint, centroids: np.ndarray
-):
+) -> np.ndarray:
     """
     Calculates closest Rupture-to-Just Beyond (CRJB) distance for given earthquake centroids.
 
@@ -210,9 +210,9 @@ def calculate_crjb(
 def abwd_crjb(
     catalogue_pd: pd.DataFrame,
     rupture_area_poly: list,
-    rjb_cutoff: float,
+    crjb_cutoff: float,
     window_method: str,
-):
+) -> tuple[np.ndarray, np.ndarray]:
     """
     Identifies earthquake clusters using spatial and temporal windows.
 
@@ -222,7 +222,7 @@ def abwd_crjb(
         Earthquake catalog with at least 'datetime' and 'mag' columns.
     rupture_area_poly : list
         List of rupture polygons (shapely.geometry.Polygon objects).
-    rjb_cutoff : float
+    crjb_cutoff : float
         Cutoff radius for spatial windowing in km.
     window_method : str
         Method to define the temporal and spatial clustering windows.
@@ -265,9 +265,9 @@ def abwd_crjb(
     )
 
     eqid = np.arange(neq)
-    cluster_labels = np.zeros(neq, dtype=int)
+    cluster_labels = np.zeros_like(neq)
     # Sort indices by magnitude in descending order
-    sorted_indices = np.argsort(catalogue_pd.mag, kind="heapsort")[::-1]
+    sorted_indices = np.argsort(catalogue_pd.mag, kind="stable")[::-1]
 
     # Use indexing to sort arrays and lists
     decimal_years = decimal_years[sorted_indices]
@@ -277,7 +277,7 @@ def abwd_crjb(
     sorted_centroids = np.array(centroids)[sorted_indices]
     sorted_boundaries = np.array(resampled_boundaries)[sorted_indices]
 
-    flagvector = np.zeros(neq, dtype=int)
+    flagvector = np.zeros_like(neq)
     cluster_index = 1
 
     for i in range(neq - 1):
@@ -292,8 +292,8 @@ def abwd_crjb(
                 sorted_polygons[i], sorted_boundaries[i], aftershock_centroids
             )
 
-            # Only allow valid aftershocks for those within the RJB cutoff
-            valid[valid] = crjb_distances <= rjb_cutoff
+            # Only allow valid aftershocks for those within the CRJB cutoff
+            valid[valid] = crjb_distances <= crjb_cutoff
 
             # Set the mainshock and aftershock flags as well as the cluster labels
             valid[i] = False
