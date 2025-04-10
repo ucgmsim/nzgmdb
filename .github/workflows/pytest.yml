@@ -7,13 +7,6 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-#      - name: Install newer GCC
-#        run: |
-#          sudo add-apt-repository ppa:ubuntu-toolchain-r/test
-#          sudo apt-get update
-#          sudo apt-get install gcc-13 g++-13
-#          sudo update-alternatives --install /usr/bin/gcc gcc /usr/bin/gcc-13 100
-#          sudo update-alternatives --install /usr/bin/g++ g++ /usr/bin/g++-13 100
       - name: Checkout code
         uses: actions/checkout@v4
 
@@ -21,8 +14,6 @@ jobs:
         uses: actions/setup-python@v5
         with:
           python-version: "3.x"
-#      - name: Install GMT
-#        run: sudo apt-get update && sudo apt-get install -y gmt libgmt-dev ghostscript
 
       - name: Define a cache dependency glob
         uses: astral-sh/setup-uv@v5
