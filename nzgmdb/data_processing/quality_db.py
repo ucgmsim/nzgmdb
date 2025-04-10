@@ -624,9 +624,7 @@ def apply_all_filters(
     catalog, skipped_records_fmin = filter_fmin(catalog, fmin_max, bypass_records)
 
     # Filter by missing station information
-    catalog, skipped_records_sta = filter_missing_sta_info(
-        catalog, bypass_records
-    )
+    catalog, skipped_records_sta = filter_missing_sta_info(catalog, bypass_records)
 
     # Filter by ground level locations
     catalog, skipped_records_ground = filter_ground_level_locations(
