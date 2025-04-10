@@ -426,47 +426,6 @@ def apply_clipNet_filter(
     return catalog, skipped_records
 
 
-def filter_missing_sta_info(catalog: pd.DataFrame, bypass_records: np.ndarray = None):
-    """
-    Filter the catalog based on the missing station information
-
-    Parameters
-    ----------
-    catalog : pd.DataFrame
-        The catalog dataframe to filter
-    bypass_records : np.ndarray, optional
-        The records to bypass the quality checks
-
-    Returns
-    -------
-    pd.DataFrame
-        The filtered catalog
-    pd.DataFrame
-        The skipped records
-    """
-    # Find records that are missing station information
-    missing_sta_filter = catalog[catalog["Vs30"].isna()]
-
-    # Remove the bypass records if they exist
-    if bypass_records is not None:
-        missing_sta_filter = missing_sta_filter[
-            ~missing_sta_filter["record_id"].isin(bypass_records)
-        ]
-
-    # Create the skipped_records dataframe from missing_sta_filter
-    skipped_records = pd.DataFrame(
-        {
-            "record_id": missing_sta_filter["record_id"],
-            "reason": "Missing station information",
-        }
-    )
-
-    # Filter out the missing_sta records out of the catalog
-    catalog = catalog[~catalog["record_id"].isin(missing_sta_filter["record_id"])]
-
-    return catalog, skipped_records
-
-
 def filter_duplicate_channels(catalog: pd.DataFrame, bypass_records: np.ndarray = None):
     """
     Filter the catalog based on the duplicate channels.
