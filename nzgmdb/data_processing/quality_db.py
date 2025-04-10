@@ -445,7 +445,7 @@ def filter_missing_sta_info(catalog: pd.DataFrame, bypass_records: np.ndarray = 
         The skipped records
     """
     # Find records that are missing station information
-    missing_sta_filter = catalog[catalog["sta_lat"].isna()]
+    missing_sta_filter = catalog[catalog["Vs30"].isna()]
 
     # Remove the bypass records if they exist
     if bypass_records is not None:

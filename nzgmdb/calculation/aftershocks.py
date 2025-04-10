@@ -248,14 +248,14 @@ def abwd_crjb(
     resampled_boundaries = resample_polygon_1km(rupture_area_poly)
 
     neq = len(catalogue_pd)
-    # Note, just a rough approximation is needed for the time window, also used in the GO 1974 method
+    # Note, just a rough approximation is needed for the time window, also used in the GardnerKnopoff method
     DAYS_IN_YEAR = 364.75
 
     # Define time window based on GardnerKnopoff
-    sw_time = np.exp(-3.95 + np.sqrt(0.62 + 17.32 * catalogue_pd.mag)) / DAYS_IN_YEAR
+    sw_time = np.power(10.0, 0.032 * catalogue_pd.mag + 2.7389) / DAYS_IN_YEAR
     # Adjust the space window for M > 6.5
-    sw_time[catalogue_pd.mag >= 6.5] = (
-        np.power(10, 2.8 + 0.024 * catalogue_pd.mag[catalogue_pd.mag >= 6.5])
+    sw_time[catalogue_pd.mag < 6.5] = (
+        np.power(10.0, 0.5409 * catalogue_pd.mag[catalogue_pd.mag < 6.5] - 0.547)
         / DAYS_IN_YEAR
     )
 
