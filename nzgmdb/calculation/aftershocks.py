@@ -253,6 +253,7 @@ def abwd_crjb(
 
     # Define time window based on GardnerKnopoff
     sw_time = np.power(10.0, 0.032 * catalogue_pd.mag + 2.7389) / DAYS_IN_YEAR
+
     # Adjust the space window for M > 6.5
     sw_time[catalogue_pd.mag < 6.5] = (
         np.power(10.0, 0.5409 * catalogue_pd.mag[catalogue_pd.mag < 6.5] - 0.547)
