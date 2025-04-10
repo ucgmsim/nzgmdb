@@ -566,8 +566,7 @@ def apply_all_filters(
     5) Filter by fmin
     6) Ensure we use ground level locations
     7) Filter out clipped records
-    8) Filter by missing station information
-    9) Select which channel to use for duplicate HN, BN for the same evid / sta
+    8) Select which channel to use for duplicate HN, BN for the same evid / sta
 
     Parameters
     ----------
@@ -630,11 +629,6 @@ def apply_all_filters(
         catalog, clipped_records_ffp, bypass_records
     )
 
-    # Filter by missing station information
-    catalog, skipped_records_missing_sta = filter_missing_sta_info(
-        catalog, bypass_records
-    )
-
     # Filter by duplicate channels
     catalog, skipped_records_duplicate = filter_duplicate_channels(
         catalog, bypass_records
@@ -669,8 +663,7 @@ def create_quality_db(
     5) Check against GMC predictions fmin
     6) Ensure we use ground level locations
     7) Filter out clipped records
-    8) Filter by missing station information
-    9) Select which channel to use for duplicate HN, BN for the same evid / sta
+    8) Select which channel to use for duplicate HN, BN for the same evid / sta
 
     Parameters
     ----------
