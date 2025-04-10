@@ -69,8 +69,7 @@ def test_abwd_crjb_with_mock_data():
     flagvector, cluster_labels = aftershocks.abwd_crjb(
         catalogue_pd,
         rupture_area_poly,
-        rjb_cutoff=10.0,
-        window_method="GardnerKnopoff",
+        crjb_cutoff=10.0,
     )
 
     # Assert types and shape
