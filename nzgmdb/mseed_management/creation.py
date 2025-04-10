@@ -140,7 +140,7 @@ def get_waveforms(
                     net,
                     sta,
                     location,
-                    "*",
+                    channel_codes,
                     start_time,
                     end_time,
                     attach_response=True,
@@ -187,9 +187,6 @@ def split_stream_into_mseeds(st: Stream, unique_channels: Iterable):
     """
     mseeds = []
     for chan, loc in unique_channels:
-        # Only continue if HN or BN
-        if chan == "HN" or chan == "BN":
-            continue
         # Each unique channel and location pair is a new mseed file
         st_new = st.select(location=loc, channel=f"{chan}?")
 
@@ -200,6 +197,26 @@ def split_stream_into_mseeds(st: Stream, unique_channels: Iterable):
                 # If they are different take the highest and resample with the others using interpolation
                 st_new = st_new.select(sampling_rate=max(samples))
                 st_new.merge(fill_value="interpolate")
+
+        # Check again if the length of the traces is higher than 3
+        if len(st_new) > 3:
+            # Get the longest traces start and end time
+            max_trace = max(
+                [
+                    (
+                        len(tr),
+                        tr.stats.starttime,
+                        tr.stats.endtime,
+                    )
+                    for tr in st_new
+                    if tr.stats.starttime != tr.stats.endtime
+                ],
+                key=lambda x: x[0],  # Compare based on the duration
+            )
+            _, max_starttime, max_endtime = max_trace
+
+            # Select the longest streams
+            st_new = st_new.trim(max_starttime, max_endtime)
 
         # Check the final length of the traces
         if len(st_new) != 3:

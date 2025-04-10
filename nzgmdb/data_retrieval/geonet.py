@@ -496,6 +496,13 @@ def fetch_event_data(
         else:
             event_only_record_ids = None
 
+        # Filter stations down to only HORC
+        filtered_stations = [
+            (network, station)
+            for network, station in filtered_stations
+            if station.code == "HORC"
+        ]
+
         if n_procs > 1:
             with mp.Pool(n_procs) as pool:
                 results = pool.starmap(

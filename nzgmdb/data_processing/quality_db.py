@@ -404,7 +404,10 @@ def apply_clipNet_filter(
         The records to bypass the quality
     """
     # Read the clipped records
-    clipped_records = pd.read_csv(clipped_records_ffp)
+    try:
+        clipped_records = pd.read_csv(clipped_records_ffp)
+    except pd.errors.EmptyDataError:
+        return catalog, pd.DataFrame(columns=["record_id", "reason"])
 
     # Remove the bypass records if they exist
     if bypass_records is not None:
