@@ -103,11 +103,11 @@ def merge_aftershocks(main_dir: Path):
     merged_df = catalogue_pd.merge(results_df, left_index=True, right_index=True)
 
     # Save the merged DataFrame
-    # merged_df.to_csv(
-    #     flatfile_dir
-    #     / file_structure.PreFlatfileNames.EARTHQUAKE_SOURCE_TABLE_AFTERSHOCKS,
-    #     index=False,
-    # )
+    merged_df.to_csv(
+        flatfile_dir
+        / file_structure.PreFlatfileNames.EARTHQUAKE_SOURCE_TABLE_AFTERSHOCKS,
+        index=False,
+    )
 
 
 def decimal_year(catalogue_pd: pd.DataFrame) -> np.ndarray:
