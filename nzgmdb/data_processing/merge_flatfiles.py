@@ -306,17 +306,16 @@ def merge_flatfiles(main_dir: Path, bypass_records_ffp: Path = None):
     channel_codes = ",".join(config.get_value("channel_codes"))
     client_NZ = FDSN_Client("GEONET")
     inventory = client_NZ.get_stations(channel=channel_codes, level="response")
-    station_info = []
-    for network in inventory:
-        for station in network:
-            station_info.append(
-                [
-                    station.code,
-                    station.latitude,
-                    station.longitude,
-                    station.elevation,
-                ]
-            )
+    station_info = [
+        [
+            station.code,
+            station.latitude,
+            station.longitude,
+            station.elevation,
+        ]
+        for network in inventory
+        for station in network
+    ]
     station_df = pd.DataFrame(
         station_info, columns=["sta", "sta_lat", "sta_lon", "sta_elev"]
     )

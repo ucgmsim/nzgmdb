@@ -100,7 +100,7 @@ mag_scale_slab_max: 7.8
 # CCLD
 crustal_depth: 50
 # Aftershocks
-rjb_cutoffs:
+crjb_cutoffs:
   - 0
   - 2
   - 5
