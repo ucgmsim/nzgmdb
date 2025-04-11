@@ -511,13 +511,17 @@ def poll_earthquake_data(  # noqa: D103
         ),
     ] = cfg.MachineName.LOCAL,
 ):
+    # Array to keep track of events that ran but resulted in no stations
+    # So that we don't re-run them
+    no_stations_events = []
+
     init_start_date = None
     while True:
         # Get the last 2 minutes worth of data and check if there are any new events
         end_date = datetime.datetime.utcnow() - datetime.timedelta(minutes=1)
         # If an event was just executed, ensures we capture any events that may have been missed during the execution
         start_date = (
-            end_date - datetime.timedelta(minutes=2)
+            end_date - datetime.timedelta(minutes=10)
             if init_start_date is None
             else init_start_date
         )
@@ -529,7 +533,7 @@ def poll_earthquake_data(  # noqa: D103
             for event_id in geonet_df["publicid"].values:
                 event_dir = main_dir / str(event_id)
                 # If the event exists skip
-                if event_dir.exists():
+                if event_dir.exists() or event_id in no_stations_events:
                     print(f"Event {event_id} already exists")
                     continue
                 event_dir.mkdir()
@@ -549,6 +553,8 @@ def poll_earthquake_data(  # noqa: D103
                 if not result:
                     # remove the event directory
                     shutil.rmtree(event_dir)
+                    # add the event to the no stations events
+                    no_stations_events.append(event_id)
                 init_start_date = end_date
 
         time.sleep(60)
