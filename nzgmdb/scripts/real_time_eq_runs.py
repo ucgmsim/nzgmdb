@@ -525,8 +525,15 @@ def poll_earthquake_data(  # noqa: D103
             if init_start_date is None
             else init_start_date
         )
-        geonet_df = download_earthquake_data(start_date, end_date, mag_filter=4.0)
         init_start_date = None
+
+        try:
+            geonet_df = download_earthquake_data(start_date, end_date, mag_filter=4.0)
+        except ValueError:
+            # Server down temporarily edge case
+            print("Could not get the earthquake data, waiting for 1 minute")
+            geonet_df = pd.DataFrame()
+            init_start_date = start_date
 
         if not geonet_df.empty:
             # Run every event
