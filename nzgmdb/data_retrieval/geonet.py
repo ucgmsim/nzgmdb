@@ -311,7 +311,12 @@ def fetch_sta_mag_line(
     unique_channels = set([(tr.stats.channel[:2], tr.stats.location) for tr in st])
 
     # Split the stream into mseeds
-    mseeds = creation.split_stream_into_mseeds(st, unique_channels)
+    mseeds, raised_issues = creation.split_stream_into_mseeds(
+        st, unique_channels, event_id
+    )
+
+    # Extend the raised_issues list with the skipped records
+    skipped_records.extend(raised_issues)
 
     # Get the station magnitudes
     station_magnitudes = [
@@ -327,7 +332,7 @@ def fetch_sta_mag_line(
                 stats = mseed[0].stats
                 skipped_records.append(
                     [
-                        f"{event_id}_{stats.station}_{stats.location}_{stats.channel}",
+                        f"{event_id}_{stats.station}_{stats.channel}_{stats.location}",
                         "All 0's",
                     ]
                 )
@@ -336,7 +341,7 @@ def fetch_sta_mag_line(
             stats = mseed[0].stats
             skipped_records.append(
                 [
-                    f"{event_id}_{stats.station}_{stats.location}_{stats.channel}",
+                    f"{event_id}_{stats.station}_{stats.channel}_{stats.location}",
                     "TypeError when checking for all 0's",
                 ]
             )
@@ -348,7 +353,7 @@ def fetch_sta_mag_line(
             stats = mseed[0].stats
             skipped_records.append(
                 [
-                    f"{event_id}_{stats.station}_{stats.location}_{stats.channel}",
+                    f"{event_id}_{stats.station}_{stats.channel}_{stats.location}",
                     "Clip calculation error",
                 ]
             )
@@ -359,7 +364,7 @@ def fetch_sta_mag_line(
             stats = mseed[0].stats
             clipped_records.append(
                 [
-                    f"{event_id}_{stats.station}_{stats.location}_{stats.channel}",
+                    f"{event_id}_{stats.station}_{stats.channel}_{stats.location}",
                     "Clipped",
                 ]
             )
@@ -495,13 +500,6 @@ def fetch_event_data(
             ]
         else:
             event_only_record_ids = None
-
-        # Filter stations down to only HORC
-        filtered_stations = [
-            (network, station)
-            for network, station in filtered_stations
-            if station.code == "HORC"
-        ]
 
         if n_procs > 1:
             with mp.Pool(n_procs) as pool:
