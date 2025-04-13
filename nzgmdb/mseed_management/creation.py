@@ -216,25 +216,30 @@ def split_stream_into_mseeds(st: Stream, unique_channels: Iterable, event_id: st
             # )
 
             # Get the longest traces start and end time
-            max_trace = max(
-                [
-                    (
-                        len(tr),
-                        tr.stats.starttime,
-                        tr.stats.endtime,
-                    )
-                    for tr in st_new
-                    if tr.stats.starttime != tr.stats.endtime
-                ],
-                key=lambda x: x[0],  # Compare based on the duration
-            )
-            _, max_starttime, max_endtime = max_trace
+            try:
+                max_trace = max(
+                    [
+                        (
+                            len(tr),
+                            tr.stats.starttime,
+                            tr.stats.endtime,
+                        )
+                        for tr in st_new
+                        if tr.stats.starttime != tr.stats.endtime
+                    ],
+                    key=lambda x: x[0],  # Compare based on the duration
+                )
 
-            # Select the longest streams
-            st_new = st_new.trim(max_starttime, max_endtime)
+                _, max_starttime, max_endtime = max_trace
 
-            # Add to the raised issues
-            raised_issues.append([record_id, "Split stream, multiple traces"])
+                # Select the longest streams
+                st_new = st_new.trim(max_starttime, max_endtime)
+
+                # Add to the raised issues
+                raised_issues.append([record_id, "Split stream, multiple traces"])
+            except:
+                raised_issues.append([record_id, "Unknown Issue, max arg empty sequence"])
+
 
         # Check the final length of the traces
         if len(st_new) != 3:
