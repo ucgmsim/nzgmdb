@@ -206,10 +206,13 @@ def split_stream_into_mseeds(st: Stream, unique_channels: Iterable, event_id: st
         # Check again if the length of the traces is higher than 3
         if len(st_new) > 3:
             # Save the stream image file
-            st_new.plot(
-                outfile=f"/mnt/hypo_data/jri83/nzgmdb/stream_test/st_plots/{record_id}.png",
-                show=False,
-            )
+            try:
+                st_new.plot(
+                    outfile=f"/mnt/hypo_data/jri83/nzgmdb/stream_test/st_plots/{record_id}.png",
+                    show=False,
+                )
+            except:
+                raised_issues.append([record_id, "Split stream, unable to save plot"])
             # st_new.plot(
             #     outfile=f"/home/joel/local/gmdb/testing_folder/3366146/st_plots/{record_id}.png",
             #     show=False,
@@ -238,8 +241,9 @@ def split_stream_into_mseeds(st: Stream, unique_channels: Iterable, event_id: st
                 # Add to the raised issues
                 raised_issues.append([record_id, "Split stream, multiple traces"])
             except:
-                raised_issues.append([record_id, "Unknown Issue, max arg empty sequence"])
-
+                raised_issues.append(
+                    [record_id, "Unknown Issue, max arg empty sequence"]
+                )
 
         # Check the final length of the traces
         if len(st_new) != 3:
