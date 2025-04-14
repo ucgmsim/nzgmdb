@@ -211,7 +211,10 @@ def split_stream_into_mseeds(st: Stream, unique_channels: Iterable, event_id: st
                 #     outfile=f"/mnt/hypo_data/jri83/nzgmdb/stream_test/st_plots/{record_id}.png",
                 #     show=False,
                 # )
-                write_stream_to_mseed(st_new, f"/mnt/hypo_data/jri83/nzgmdb/stream_test/st_plots/{record_id}.mseed")
+                write_stream_to_mseed(
+                    st_new,
+                    f"/mnt/hypo_data/jri83/nzgmdb/stream_test/st_plots/{record_id}.mseed",
+                )
             except:
                 raised_issues.append([record_id, "Split stream, unable to save plot"])
             # st_new.plot(
