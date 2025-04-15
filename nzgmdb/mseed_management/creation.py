@@ -109,7 +109,7 @@ def get_waveforms(
     # Find the start and end times for the mseed data
     min_time_difference = config.get_value("min_time_difference")
     ds_multiplier = config.get_value("ds_multiplier")
-    start_time = ptime_est - min_time_difference
+    start_time = ptime_est - min_time_difference * 12
     end_time = stime_est + (
         min_time_difference
         if stime_est + ds * ds_multiplier - ptime_est < min_time_difference
@@ -204,50 +204,50 @@ def split_stream_into_mseeds(st: Stream, unique_channels: Iterable, event_id: st
                 )
 
         # Check again if the length of the traces is higher than 3
-        if len(st_new) > 3:
-            # Save the stream image file
-            try:
-                # st_new.plot(
-                #     outfile=f"/mnt/hypo_data/jri83/nzgmdb/stream_test/st_plots/{record_id}.png",
-                #     show=False,
-                # )
-                write_stream_to_mseed(
-                    st_new,
-                    f"/mnt/hypo_data/jri83/nzgmdb/stream_test/st_plots/{record_id}.mseed",
-                )
-            except:
-                raised_issues.append([record_id, "Split stream, unable to save plot"])
-            # st_new.plot(
-            #     outfile=f"/home/joel/local/gmdb/testing_folder/3366146/st_plots/{record_id}.png",
-            #     show=False,
-            # )
+        # if len(st_new) > 3:
+        #     # Save the stream image file
+        #     try:
+        #         # st_new.plot(
+        #         #     outfile=f"/mnt/hypo_data/jri83/nzgmdb/stream_test/st_plots/{record_id}.png",
+        #         #     show=False,
+        #         # )
+        #         # write_stream_to_mseed(
+        #         #     st_new,
+        #         #     f"/mnt/hypo_data/jri83/nzgmdb/stream_test/st_plots/{record_id}.mseed",
+        #         # )
+        #     except:
+        #         raised_issues.append([record_id, "Split stream, unable to save plot"])
+        # st_new.plot(
+        #     outfile=f"/home/joel/local/gmdb/testing_folder/3366146/st_plots/{record_id}.png",
+        #     show=False,
+        # )
 
-            # Get the longest traces start and end time
-            try:
-                max_trace = max(
-                    [
-                        (
-                            len(tr),
-                            tr.stats.starttime,
-                            tr.stats.endtime,
-                        )
-                        for tr in st_new
-                        if tr.stats.starttime != tr.stats.endtime
-                    ],
-                    key=lambda x: x[0],  # Compare based on the duration
-                )
-
-                _, max_starttime, max_endtime = max_trace
-
-                # Select the longest streams
-                st_new = st_new.trim(max_starttime, max_endtime)
-
-                # Add to the raised issues
-                raised_issues.append([record_id, "Split stream, multiple traces"])
-            except:
-                raised_issues.append(
-                    [record_id, "Unknown Issue, max arg empty sequence"]
-                )
+        # Get the longest traces start and end time
+        # try:
+        #     max_trace = max(
+        #         [
+        #             (
+        #                 len(tr),
+        #                 tr.stats.starttime,
+        #                 tr.stats.endtime,
+        #             )
+        #             for tr in st_new
+        #             if tr.stats.starttime != tr.stats.endtime
+        #         ],
+        #         key=lambda x: x[0],  # Compare based on the duration
+        #     )
+        #
+        #     _, max_starttime, max_endtime = max_trace
+        #
+        #     # Select the longest streams
+        #     st_new = st_new.trim(max_starttime, max_endtime)
+        #
+        #     # Add to the raised issues
+        #     raised_issues.append([record_id, "Split stream, multiple traces"])
+        # except:
+        # raised_issues.append(
+        #     [record_id, "Unknown Issue, max arg empty sequence"]
+        # )
 
         # Check the final length of the traces
         if len(st_new) != 3:

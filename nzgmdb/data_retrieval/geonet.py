@@ -806,7 +806,7 @@ def parse_geonet_information(
     only_sites: list[str] = None,
     only_record_ids_ffp: Path = None,
     real_time: bool = False,
-    mp_sites: bool = False,
+    mp_sites: bool = True,
 ):
     """
     Read the geonet information and manage the fetching of more data to create the mseed files
