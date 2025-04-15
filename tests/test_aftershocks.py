@@ -38,13 +38,13 @@ def square_from_center(lat: float, lon: float, size: float = 2.0):
     geod = Geod(ellps="WGS84")
 
     # Top-left
-    lon1, lat1, _ = geod.fwd(lon, lat, 315, (2**0.5) * half_size * 1000)
+    lon1, lat1, _ = geod.fwd(lon, lat, 315, np.sqrt(2) * half_size * 1000)
     # Top-right
-    lon2, lat2, _ = geod.fwd(lon, lat, 45, (2**0.5) * half_size * 1000)
+    lon2, lat2, _ = geod.fwd(lon, lat, 45, np.sqrt(2) * half_size * 1000)
     # Bottom-right
-    lon3, lat3, _ = geod.fwd(lon, lat, 135, (2**0.5) * half_size * 1000)
+    lon3, lat3, _ = geod.fwd(lon, lat, 135, np.sqrt(2) * half_size * 1000)
     # Bottom-left
-    lon4, lat4, _ = geod.fwd(lon, lat, 225, (2**0.5) * half_size * 1000)
+    lon4, lat4, _ = geod.fwd(lon, lat, 225, np.sqrt(2) * half_size * 1000)
 
     return Polygon([(lon1, lat1), (lon2, lat2), (lon3, lat3), (lon4, lat4)])
 
