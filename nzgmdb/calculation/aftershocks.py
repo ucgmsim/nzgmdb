@@ -222,6 +222,7 @@ def abwd_crjb(
 ) -> tuple[np.ndarray, np.ndarray]:
     """
     Identifies earthquake clusters using spatial and temporal windows.
+    Following the Abrahamson & Woodell 2014 and 2018 Distance-Window with Closest Rupture-to-Just Beyond (CRJB).
 
     Parameters
     ----------
