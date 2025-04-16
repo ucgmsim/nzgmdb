@@ -151,17 +151,19 @@ def merge_flatfiles(main_dir: Path, bypass_records_ffp: Path = None):
     # Load the files
     event_df = pd.read_csv(
         flatfile_dir
-        / file_structure.PreFlatfileNames.EARTHQUAKE_SOURCE_TABLE_DISTANCES,
+        / file_structure.PreFlatfileNames.EARTHQUAKE_SOURCE_TABLE_AFTERSHOCKS,
         dtype={"evid": str},
     )
     sta_mag_df = pd.read_csv(
-        flatfile_dir / file_structure.PreFlatfileNames.STATION_MAGNITUDE_TABLE_GEONET
+        flatfile_dir / file_structure.PreFlatfileNames.STATION_MAGNITUDE_TABLE_GEONET,
+        dtype={"evid": str},
     )
     phase_table_df = pd.read_csv(
         flatfile_dir / file_structure.PreFlatfileNames.PHASE_ARRIVAL_TABLE
     )
     prop_df = pd.read_csv(
-        flatfile_dir / file_structure.PreFlatfileNames.PROPAGATION_TABLE
+        flatfile_dir / file_structure.PreFlatfileNames.PROPAGATION_TABLE,
+        dtype={"evid": str},
     )
     im_df = pd.read_csv(
         flatfile_dir / file_structure.PreFlatfileNames.GROUND_MOTION_IM_CATALOGUE,
@@ -248,6 +250,14 @@ def merge_flatfiles(main_dir: Path, bypass_records_ffp: Path = None):
                 "f_type",
                 "z_tor",
                 "z_bor",
+                "aftershock_flag_crjb0",
+                "cluster_flag_crjb0",
+                "aftershock_flag_crjb2",
+                "cluster_flag_crjb2",
+                "aftershock_flag_crjb5",
+                "cluster_flag_crjb5",
+                "aftershock_flag_crjb10",
+                "cluster_flag_crjb10",
             ]
         ],
         on="evid",
@@ -550,6 +560,14 @@ def merge_flatfiles(main_dir: Path, bypass_records_ffp: Path = None):
             "multi_Z",
             "fmin_max",
             "HPF",
+            "aftershock_flag_crjb0",
+            "cluster_flag_crjb0",
+            "aftershock_flag_crjb2",
+            "cluster_flag_crjb2",
+            "aftershock_flag_crjb5",
+            "cluster_flag_crjb5",
+            "aftershock_flag_crjb10",
+            "cluster_flag_crjb10",
         ]
         + psa_columns
         + fas_columns
