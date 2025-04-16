@@ -290,6 +290,15 @@ def fetch_sta_mag_line(
     ]
     vs30 = None if site_vs30_row.empty else site_vs30_row.values[0]
 
+    if only_record_ids is not None:
+        # Get the record id for the station
+        record_id = only_record_ids[
+            only_record_ids["record_id"].str.contains(f"_{station.code}_")
+        ]
+        if record_id.empty:
+            return sta_mag_line, skipped_records, []
+        only_record_ids = record_id
+
     # Get the waveforms
     st = creation.get_waveforms(
         preferred_origin,

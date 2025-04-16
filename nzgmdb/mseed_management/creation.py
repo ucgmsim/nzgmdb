@@ -32,7 +32,7 @@ def get_waveforms(
     rrup: float,
     r_epi: float,
     vs30: float = None,
-    only_record_ids: list[str] = None,
+    only_record_ids: pd.DataFrame = None,
 ):
     """
     Get the waveforms for a given event and station
@@ -56,8 +56,8 @@ def get_waveforms(
         The epicentral distance to the event
     vs30 : float, optional
         The Vs30 value for the station, by default sets to config value
-    only_record_ids : list[str], optional
-        A list of record ids to get the waveforms for, by default None
+    only_record_ids : pd.DataFrame, optional
+        A dataframe containing the record ids to use, by default None
 
     Returns
     -------
@@ -121,9 +121,9 @@ def get_waveforms(
     # Check what channel codes and locations to use from only_record_ids if provided
     if only_record_ids is not None:
         # Check that we only have 1 record_id
-        assert (
-            len(only_record_ids) == 1
-        ), "Multiple record_ids for the same event_sta combo"
+        # assert (
+        #     len(only_record_ids) == 1
+        # ), "Multiple record_ids for the same event_sta combo"
         # Get the channel and location to use
         channel_codes = (
             only_record_ids["record_id"].str.split("_").str[-2].values[0] + "?"
@@ -140,7 +140,7 @@ def get_waveforms(
                     net,
                     sta,
                     location,
-                    "*",
+                    channel_codes,
                     start_time,
                     end_time,
                     attach_response=True,
