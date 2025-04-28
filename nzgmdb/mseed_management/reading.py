@@ -104,7 +104,7 @@ def create_waveform_from_mseed(
 
     # Process the data if needed
     if pre_process:
-        mseed = waveform_manipulation.initial_preprocessing(mseed)
+        mseed, _ = waveform_manipulation.initial_preprocessing(mseed)
 
     # Stack the data
     try:

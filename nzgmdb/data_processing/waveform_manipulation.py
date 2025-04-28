@@ -70,6 +70,8 @@ def initial_preprocessing(
     station = mseed[0].stats.station
     location = mseed[0].stats.location
 
+    missing_sensitivity = False
+
     if station in no_response_stations:
         # Divide trace counts by 10^6 to convert to units g as there is no response for these stations
         for tr in mseed:
@@ -84,9 +86,13 @@ def initial_preprocessing(
                 level="response", network="NZ", station=station, location=location
             )
         except FDSNNoDataException:
-            raise custom_errors.InventoryNotFoundError(
-                f"No inventory information found for station {station} with location {location}"
-            )
+            # Divide trace counts by 10^6 to convert to units g
+            for tr in mseed:
+                tr.data = tr.data / 10**6
+            missing_sensitivity = True
+            # raise custom_errors.InventoryNotFoundError(
+            #     f"No inventory information found for station {station} with location {location}"
+            # )
 
         # Add the response (Same for all channels)
         # this is done so that the sensitivity can be removed otherwise it tries to find the exact same channel
@@ -94,24 +100,29 @@ def initial_preprocessing(
         # response = next(cha.response for sta in inv.networks[0] for cha in sta.channels)
         # for tr in mseed:
         #     tr.stats.response = response
+        if not missing_sensitivity:
+            try:
+                mseed = mseed.remove_sensitivity(inventory=inv)
+            except ValueError:
+                # Divide trace counts by 10^6 to convert to units g
+                for tr in mseed:
+                    tr.data = tr.data / 10**6
+                missing_sensitivity = True
+                # raise custom_errors.SensitivityRemovalError(
+                #     f"Failed to remove sensitivity for station {station} with location {location}"
+                # )
 
-        try:
-            mseed = mseed.remove_sensitivity(inventory=inv)
-        except ValueError:
-            raise custom_errors.SensitivityRemovalError(
-                f"Failed to remove sensitivity for station {station} with location {location}"
-            )
-
-        # Rotate
-        try:
-            mseed.rotate("->ZNE", inventory=inv)
-        except (
-            Exception  # noqa: BLE001
-        ):  # Due to obspy raising an Exception instead of a specific error
-            # Error for no matching channel metadata found
-            raise custom_errors.RotationError(
-                f"Failed to rotate for station {station} with location {location}"
-            )
+        if not missing_sensitivity:
+            # Rotate
+            try:
+                mseed.rotate("->ZNE", inventory=inv)
+            except (
+                Exception  # noqa: BLE001
+            ):  # Due to obspy raising an Exception instead of a specific error
+                # Error for no matching channel metadata found
+                raise custom_errors.RotationError(
+                    f"Failed to rotate for station {station} with location {location}"
+                )
 
         # Get constant gravity (g)
         g = config.get_value("g")
@@ -120,7 +131,7 @@ def initial_preprocessing(
         for tr in mseed:
             tr.data /= g
 
-    return mseed
+    return mseed, missing_sensitivity
 
 
 def butter_bandpass(lowcut: float, highcut: float, fs: float, order: int):
