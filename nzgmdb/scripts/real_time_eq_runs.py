@@ -432,6 +432,11 @@ def run_event(  # noqa: D103
         intensity_measures=intensity_measures,
     )
 
+    # Calculate distances
+    run_nzgmdb.distances.calc_distances(
+        event_dir, config.get_n_procs(machine, cfg.WorkflowStep.DISTANCES)
+    )
+
     run_nzgmdb.merge_im_results(im_dir, flatfile_dir, None, None)
 
     run_nzgmdb.merge_flat_files(event_dir)
