@@ -408,6 +408,11 @@ def run_event(
         intensity_measures=intensity_measures,
     )
 
+    # Calculate distances
+    run_nzgmdb.distances.calc_distances(
+        event_dir, config.get_n_procs(machine, cfg.WorkflowStep.DISTANCES)
+    )
+
     run_nzgmdb.merge_im_results(im_dir, flatfile_dir, None, None)
 
     run_nzgmdb.merge_flat_files(event_dir)
@@ -469,25 +474,36 @@ def poll_earthquake_data(
     bool
         True if polling and processing were successful, False otherwise.
     """
+    # Array to keep track of events that ran but resulted in no stations
+    # So that we don't re-run them
+    no_stations_events = []
+
     init_start_date = None
     while True:
         # Get the last 2 minutes worth of data and check if there are any new events
         end_date = datetime.datetime.utcnow() - datetime.timedelta(minutes=1)
         # If an event was just executed, ensures we capture any events that may have been missed during the execution
         start_date = (
-            end_date - datetime.timedelta(minutes=2)
+            end_date - datetime.timedelta(minutes=10)
             if init_start_date is None
             else init_start_date
         )
-        geonet_df = download_earthquake_data(start_date, end_date, mag_filter=4.0)
         init_start_date = None
+
+        try:
+            geonet_df = download_earthquake_data(start_date, end_date, mag_filter=4.0)
+        except ValueError:
+            # Server down temporarily edge case
+            print("Could not get the earthquake data, waiting for 1 minute")
+            geonet_df = pd.DataFrame()
+            init_start_date = start_date
 
         if not geonet_df.empty:
             # Run every event
             for event_id in geonet_df["publicid"].values:
                 event_dir = main_dir / str(event_id)
                 # If the event exists skip
-                if event_dir.exists():
+                if event_dir.exists() or event_id in no_stations_events:
                     print(f"Event {event_id} already exists")
                     continue
                 event_dir.mkdir()
@@ -507,6 +523,8 @@ def poll_earthquake_data(
                 if not result:
                     # remove the event directory
                     shutil.rmtree(event_dir)
+                    # add the event to the no stations events
+                    no_stations_events.append(event_id)
                 init_start_date = end_date
 
         time.sleep(60)
