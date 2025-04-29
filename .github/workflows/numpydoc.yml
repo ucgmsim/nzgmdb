@@ -23,7 +23,6 @@ jobs:
       - name: Install dependencies
         run: |
           pip install numpydoc
-          sudo apt-get install
       - name: Run Numpydoc Lint
         run: |
-          fdfind . nzgmdb/ -E "__init__.py" -E ccldpy.py --extension py -x numpydoc lint
+          fdfind . nzgmdb/ -E "__init__.py" -E ccldpy.py --extension py | xargs numpydoc lint

@@ -112,7 +112,9 @@ def run_event(
     gmc_predict_activate: Annotated[str, typer.Argument()],
     n_procs: Annotated[int, typer.Option()] = 1,
     gmc_procs: Annotated[int, typer.Option()] = 1,
-    ko_matrix_path: Annotated[Path, typer.Option(exists=True, file_okay=False)] = None,
+    ko_matrix_path: Annotated[
+        Path | None, typer.Option(exists=True, file_okay=False)
+    ] = None,
     add_seismic_now: Annotated[bool, typer.Option(is_flag=True)] = False,
     start_date: Annotated[
         datetime.datetime, typer.Option()
@@ -224,7 +226,9 @@ def poll_earthquake_data(
     gmc_predict_activate: Annotated[str, typer.Argument()],
     n_procs: Annotated[int, typer.Option()] = 1,
     gmc_procs: Annotated[int, typer.Option()] = 1,
-    ko_matrix_path: Annotated[Path, typer.Option(exists=True, file_okay=False)] = None,
+    ko_matrix_path: Annotated[
+        Path | None, typer.Option(exists=True, file_okay=False)
+    ] = None,
     add_seismic_now: Annotated[bool, typer.Option(is_flag=True)] = False,
 ):
     """

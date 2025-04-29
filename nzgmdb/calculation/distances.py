@@ -42,9 +42,10 @@ def calc_fnorm_slip(
 
     Returns
     -------
-    tuple of np.ndarray
-        - **fnorm** (`np.ndarray`): The normal vector of the fault.
-        - **slip** (`np.ndarray`): The slip vector of the fault.
+    fnorm : np.ndarray
+        The normal vector of the fault.
+    slip : np.ndarray
+        The slip vector of the fault.
     """
     phi = np.deg2rad(strike)
     delt = np.deg2rad(dip)

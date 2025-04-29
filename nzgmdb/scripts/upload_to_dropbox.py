@@ -57,7 +57,7 @@ def upload_zip_to_dropbox(local_file: Path, dropbox_path: str):
 
     Returns
     -------
-    Path, None
+    Path | None
         The local file if it failed to upload, otherwise None
     """
     print(f"Uploading {local_file} to {dropbox_path}")

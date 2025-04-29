@@ -7,6 +7,7 @@ import functools
 import io
 import multiprocessing as mp
 from pathlib import Path
+from typing import NamedTuple, Any
 
 import numpy as np
 import obspy
@@ -22,6 +23,17 @@ from nzgmdb.data_processing import filtering
 from nzgmdb.management import config as cfg
 from nzgmdb.management import custom_errors, file_structure
 from nzgmdb.mseed_management import creation
+
+
+class EventData(NamedTuple):
+    event_line: list[Any]
+    """The full event line with all metadata."""
+    station_magnitudes: list[Any]
+    """List of custom station magnitudes with metadata."""
+    skipped_records: list[str]
+    """List of records skipped during processing."""
+    clipped_records: list[str]
+    """List of clipped records."""
 
 
 def get_max_magnitude(magnitudes: list[Magnitude], mag_type: str):
@@ -469,14 +481,8 @@ def fetch_event_data(
 
     Returns
     -------
-    list
-        The event line to be added to the event_df
-    list
-        The station magnitude lines to be added to the sta_mag_df
-    list
-        The skipped records
-    list
-        The clipped records
+    EventData
+        The parsed event data.
     """
     # Get the catalog information
     cat = client_NZ.get_events(eventid=event_id)
@@ -542,7 +548,7 @@ def fetch_event_data(
     else:
         sta_mag_lines, skipped_records, clipped_records = None, None, None
 
-    return event_line, sta_mag_lines, skipped_records, clipped_records
+    return EventData(event_line, sta_mag_lines, skipped_records, clipped_records)
 
 
 def process_batch(

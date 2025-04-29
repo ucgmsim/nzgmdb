@@ -100,7 +100,7 @@ def run_full_fmax_calc(
 
 
 def assess_snr_and_get_fmax(
-        filename: Path, snr_fas_output_dir: Path
+    filename: Path, snr_fas_output_dir: Path
 ) -> tuple[Optional[pd.DataFrame], Optional[pd.DataFrame]]:
     """
     Assess the record's Signal-to-Noise Ratio (SNR) within the frequency interval specified in the config file
@@ -115,22 +115,10 @@ def assess_snr_and_get_fmax(
 
     Returns
     -------
-    Tuple[Optional[pd.DataFrame], Optional[pd.DataFrame]]
-        A tuple containing:
-
-        - **fmax_record** (`pd.DataFrame` or `None`):
-          - If the record is **not skipped**, this DataFrame contains:
-            - `record_id`
-            - `fmax_000`
-            - `fmax_090`
-            - `fmax_ver`
-          - If skipped, returns `None`.
-
-        - **skipped_record** (`pd.DataFrame` or `None`):
-          - If the record is **skipped**, this DataFrame contains:
-            - `record_id`
-            - `reason` (why it was skipped)
-          - If not skipped, returns `None`.
+    fmax_record: pd.DataFrame
+        DataFrame containing the fmax values, if the record is skipped the values are set to the Nyquist frequency.
+    skipped_record: pd.DataFrame | None
+        If the record is skipped, returns a DataFrame containing the reason for skipping, otherwise returns None.
     """
     config = cfg.Config()
     record_id = filename.stem

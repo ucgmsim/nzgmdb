@@ -41,7 +41,7 @@ def process_single_mseed(
 
     Returns
     -------
-    pd.DataFrame, None
+    pd.DataFrame | None
         Dataframe containing the skipped record name and reason why
         or None if the record was processed successfully
     """

@@ -2,12 +2,35 @@
 This module contains functions for fetching and processing rupture models from the GeoNet GitHub repository.
 """
 
+from typing import TypedDict
+
 import numpy as np
 import pandas as pd
 
 from nzgmdb.data_retrieval import github
 from nzgmdb.management import config as cfg
 from qcore import geo
+
+
+class RuptureModel(TypedDict):
+    """
+    A dictionary representing a rupture model.
+    """
+
+    ztor: float
+    """The top-depth of the rupture model."""
+    dbottom: float
+    """The bottom-depth of the rupture model."""
+    strike: float
+    """The strike angle of the rupture model."""
+    dip: float
+    """The dip angle of the rupture model."""
+    rake: float
+    """The dip angle of the rupture model."""
+    length: float
+    """The total length of the rupture model."""
+    width: float
+    """The average width of the rupture model."""
 
 
 def get_seismic_data_from_url(url: str) -> dict:
@@ -21,15 +44,8 @@ def get_seismic_data_from_url(url: str) -> dict:
 
     Returns
     -------
-    dict
-        A dictionary containing the following keys:
-        - 'ztor' (float): The top depth of the rupture model.
-        - 'dbottom' (float): The bottom depth of the rupture model.
-        - 'strike' (float): The strike angle of the rupture model.
-        - 'dip' (float): The dip angle of the rupture model.
-        - 'rake' (float): The rake angle of the rupture model.
-        - 'length' (float): The total length of the rupture model.
-        - 'width' (float): The average width of the rupture model.
+    RuptureModel
+        The rupture model read from `url`.
     """
     # Get the dataframe
     df = pd.read_csv(url)
@@ -66,7 +82,7 @@ def get_seismic_data_from_url(url: str) -> dict:
         widths.append(width)
 
     # Calculate the average width
-    width = np.mean(widths)
+    width = float(np.mean(widths))
 
     # Determine the strike, dip, and rake
     strike = df["STRIKE"].mean()
@@ -77,7 +93,8 @@ def get_seismic_data_from_url(url: str) -> dict:
     ztor = df["DEPTH"].min() / 1000
     dbottom = df["DEPTH"].max() / 1000
 
-    return {
+    # Create an instance of RuptureModel
+    rupture_model: RuptureModel = {
         "ztor": ztor,
         "dbottom": dbottom,
         "strike": strike,
@@ -86,6 +103,8 @@ def get_seismic_data_from_url(url: str) -> dict:
         "length": length,
         "width": width,
     }
+
+    return rupture_model
 
 
 def get_rupture_models() -> dict[str, str]:
