@@ -226,6 +226,7 @@ def abwd_crjb(
 ) -> tuple[np.ndarray, np.ndarray]:
     """
     Identifies earthquake clusters using spatial and temporal windows.
+    Following the Abrahamson & Woodell 2014 and 2018 Distance-Window with Closest Rupture-to-Just Beyond (CRJB).
 
     Parameters
     ----------
@@ -253,15 +254,15 @@ def abwd_crjb(
 
     neq = len(catalogue_pd)
     # Note, just a rough approximation is needed for the time window, also used in the GardnerKnopoff method
-    DAYS_IN_YEAR = 364.75
+    days_in_year = 364.75
 
     # Define time window based on GardnerKnopoff
-    sw_time = np.power(10.0, 0.032 * catalogue_pd.mag + 2.7389) / DAYS_IN_YEAR
+    sw_time = np.power(10.0, 0.032 * catalogue_pd.mag + 2.7389) / days_in_year
 
     # Adjust the space window for M > 6.5
     sw_time[catalogue_pd.mag < 6.5] = (
         np.power(10.0, 0.5409 * catalogue_pd.mag[catalogue_pd.mag < 6.5] - 0.547)
-        / DAYS_IN_YEAR
+        / days_in_year
     )
 
     eqid = np.arange(neq)
