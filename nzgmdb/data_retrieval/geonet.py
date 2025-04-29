@@ -7,7 +7,7 @@ import functools
 import io
 import multiprocessing as mp
 from pathlib import Path
-from typing import NamedTuple, Any
+from typing import Any, NamedTuple
 
 import numpy as np
 import obspy
@@ -26,6 +26,9 @@ from nzgmdb.mseed_management import creation
 
 
 class EventData(NamedTuple):
+    """
+    A named tuple to store each events data.
+    """
     event_line: list[Any]
     """The full event line with all metadata."""
     station_magnitudes: list[Any]
