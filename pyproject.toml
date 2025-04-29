@@ -9,7 +9,7 @@ authors = [
 ]
 description = "Package for executing the pipeline for the NZGMDB"
 readme = "README.md"
-requires-python = ">=3.9"
+requires-python = "==3.12.*"
 dynamic = ["version", "dependencies"]
 
 [tool.setuptools.dynamic]
@@ -60,3 +60,22 @@ known-first-party = ["qcore", "empirical", "IM", "Velocity_Model", "source_model
 
 [tool.ruff]
 exclude = ["CCLD"]
+
+[tool.numpydoc_validation]
+checks = [
+  "GL05",
+  "GL08",
+  "GL10",
+  "PR01",
+  "PR02",
+  "PR03",
+  "PR04",
+  "PR05",
+  "PR06",
+  "PR07",
+  "RT01",
+  "RT02",
+  "RT03",
+  "RT04",
+  "YD01",
+]

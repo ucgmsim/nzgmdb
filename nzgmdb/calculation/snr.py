@@ -1,3 +1,7 @@
+"""
+This module contains functions to calculate the SNR for a single mseed file.
+"""
+
 import functools
 import multiprocessing as mp
 import warnings

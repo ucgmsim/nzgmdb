@@ -7,6 +7,7 @@ import functools
 import io
 import multiprocessing as mp
 from pathlib import Path
+from typing import NamedTuple, Any
 
 import numpy as np
 import obspy
@@ -25,6 +26,17 @@ from nzgmdb.mseed_management import creation
 from qcore import geo
 
 
+class EventData(NamedTuple):
+    event_line: list[Any]
+    """The full event line with all metadata."""
+    station_magnitudes: list[Any]
+    """List of custom station magnitudes with metadata."""
+    skipped_records: list[str]
+    """List of records skipped during processing."""
+    clipped_records: list[str]
+    """List of clipped records."""
+
+
 def get_max_magnitude(magnitudes: list[Magnitude], mag_type: str):
     """
     Helper function to get the maximum magnitude of a certain type
@@ -35,6 +47,11 @@ def get_max_magnitude(magnitudes: list[Magnitude], mag_type: str):
         The list of magnitudes to search through
     mag_type : str
         The magnitude type to search for
+
+    Returns
+    -------
+    float, None
+        The maximum magnitude of the given type or None if not found
     """
     filtered_mags = [
         mag for mag in magnitudes if mag.magnitude_type.lower() == mag_type
@@ -54,6 +71,11 @@ def fetch_event_line(event_cat: Event, event_id: str):
         The event catalog to fetch the data from
     event_id : str
         The event id to add to the event line
+
+    Returns
+    -------
+    list
+        The event line to be added to the event_df
     """
     reloc = "no"  # Indicates if an earthquake has been relocated, default to 'no'.
 
@@ -193,7 +215,7 @@ def get_stations_within_radius(
 
     Returns
     -------
-    inv_sub : Inventory
+    Inventory
         The subset of the inventory with the stations within the radius
     """
     preferred_magnitude = event_cat.preferred_magnitude().mag
@@ -259,6 +281,15 @@ def fetch_sta_mag_line(
         The site table to extract the vs30 value from
     only_record_ids : pd.DataFrame (optional)
         Will only fetch the data for the record ids in the df
+
+    Returns
+    -------
+    list
+        The station magnitude line to be added to the sta_mag_df
+    list
+        The skipped records
+    list
+        The clipped records
     """
     sta_mag_line = []
     skipped_records = []
@@ -463,6 +494,11 @@ def fetch_event_data(
         Will only fetch the data for the record ids in the df, should all be a subset of the only_sites list
     n_procs : int (optional)
         The number of processes to run, to multiprocess over sites (when not using mp over events)
+
+    Returns
+    -------
+    EventData
+        The parsed event data.
     """
     # Get the catalog information
     cat = client_NZ.get_events(eventid=event_id)
@@ -543,7 +579,7 @@ def fetch_event_data(
     else:
         sta_mag_lines, skipped_records, clipped_records = None, None, None
 
-    return event_line, sta_mag_lines, skipped_records, clipped_records
+    return EventData(event_line, sta_mag_lines, skipped_records, clipped_records)
 
 
 def process_batch(
@@ -735,6 +771,11 @@ def download_earthquake_data(
         The start date for the data extraction from the earthquake data
     end_date : datetime
         The end date for the data extraction from the earthquake data
+
+    Returns
+    -------
+    pd.DataFrame
+        The dataframe with the earthquake data from the geonet website
     """
     # Define bbox for New Zealand
     config = cfg.Config()

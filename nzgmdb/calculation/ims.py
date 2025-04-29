@@ -1,3 +1,7 @@
+"""
+This module contains functions for calculating the Intensity Measures (IMs) for the NZGMDB records.
+"""
+
 import functools
 import multiprocessing as mp
 
@@ -59,6 +63,11 @@ def calculate_im_for_record(
         The frequencies for calculating the Fourier amplitude spectrum
     ko_bandwith : int, optional
         The bandwidth for the Konno-Ohmachi smoothing, by default 40
+
+    Returns
+    -------
+    pd.DataFrame
+        A DataFrame containing the record_id and the reason for skipping the record only if the record was skipped
     """
     # Get the 090 and ver components full file paths
     ffp_090 = ffp_000.parent / f"{ffp_000.stem}.090"

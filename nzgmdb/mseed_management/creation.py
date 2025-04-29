@@ -1,3 +1,7 @@
+"""
+This module contains functions for creating mseed files from the waveform data from the FDSN client
+"""
+
 import http
 import http.client
 import time
@@ -61,7 +65,7 @@ def get_waveforms(
 
     Returns
     -------
-    st : Union[Stream, None]
+    Union[Stream, None]
         The stream object containing the waveform data or None if no data is found
     """
     config = cfg.Config()
@@ -182,7 +186,7 @@ def split_stream_into_mseeds(st: Stream, unique_channels: Iterable, event_id: st
 
     Returns
     -------
-    mseeds : list
+    list
         A list of stream objects containing the waveform data for each mseed file created
     """
     mseeds = []

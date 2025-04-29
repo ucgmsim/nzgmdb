@@ -1,3 +1,8 @@
+"""
+Creates the site table for the NZGMDB. This module fetches the station information from the FDSN clients, and the
+Geonet metadata summary information.
+"""
+
 import fiona
 import numpy as np
 import pandas as pd

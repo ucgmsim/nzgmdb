@@ -1,3 +1,7 @@
+"""
+Script to run the GMC processing for the NZGMDB.
+"""
+
 import functools
 import multiprocessing
 from pathlib import Path
@@ -8,6 +12,7 @@ import pandas as pd
 import typer
 
 from nzgmdb.management import file_structure, shell_commands
+from qcore import cli
 
 app = typer.Typer()
 
@@ -107,19 +112,17 @@ def process_batch(
         print(f"Failed to process Batch {batch_num}: {str(e)}")
 
 
-@app.command()
-def run_gmc_processing(  # noqa: D103
+@cli.from_docstring(app)
+def run_gmc_processing(
     main_dir: Annotated[
         Path,
         typer.Argument(
-            help="Main directory for gmdb.",
             file_okay=False,
         ),
     ],
     gm_classifier_dir: Annotated[
         Path,
         typer.Argument(
-            help="Directory for gm_classifier.",
             exists=True,
             file_okay=False,
         ),
@@ -127,7 +130,6 @@ def run_gmc_processing(  # noqa: D103
     ko_matrices_dir: Annotated[
         Path,
         typer.Argument(
-            help="Directory for KO matrices.",
             exists=True,
             file_okay=False,
         ),
@@ -135,31 +137,26 @@ def run_gmc_processing(  # noqa: D103
     conda_sh: Annotated[
         Path,
         typer.Argument(
-            help="Path to activate your mamba conda.sh script.",
         ),
     ],
     gmc_activate: Annotated[
         str,
         typer.Argument(
-            help="Command to activate gmc environment for extracting features.",
         ),
     ],
     gmc_predict_activate: Annotated[
         str,
         typer.Argument(
-            help="Command to activate gmc_predict environment to run the predictions.",
         ),
     ],
     n_procs: Annotated[
         int,
         typer.Option(
-            help="Number of processes to use for multiprocessing.",
         ),
     ] = 1,
     waveform_dir: Annotated[
         Path,
         typer.Option(
-            help="Directory containing all waveform files.",
             exists=True,
             file_okay=False,
         ),
@@ -167,7 +164,6 @@ def run_gmc_processing(  # noqa: D103
     output_dir: Annotated[
         Path,
         typer.Option(
-            help="Output directory for the GMC predictions.",
             exists=True,
             file_okay=False,
         ),
@@ -175,10 +171,38 @@ def run_gmc_processing(  # noqa: D103
     bypass_records_ffp: Annotated[
         Path,
         typer.Option(
-            help="The full file path to the bypass records file, which includes a custom fmin.",
         ),
     ] = None,
 ):
+    """
+    Run GMC processing for the NZGMDB pipeline.
+
+    This function processes waveform data using the GMC classifier, applying KO matrices
+    and generating GMC predictions.
+
+    Parameters
+    ----------
+    main_dir : Path
+        The main directory for gmdb.
+    gm_classifier_dir : Path
+        Directory for gm_classifier.
+    ko_matrices_dir : Path
+        Directory for KO matrices.
+    conda_sh : Path
+        Path to activate your mamba conda.sh script.
+    gmc_activate : str
+        Command to activate the GMC environment for extracting features.
+    gmc_predict_activate : str
+        Command to activate the GMC predict environment to run predictions.
+    n_procs : int, optional
+        Number of processes to use for multiprocessing (default is 1).
+    waveform_dir : Path, optional
+        Directory containing all waveform files.
+    output_dir : Path, optional
+        Output directory for the GMC predictions.
+    bypass_records_ffp : Path, optional
+        The full file path to the bypass records file, which includes a custom fmin.
+    """
     # Obtain other paths
     gmc_dir = file_structure.get_gmc_dir(main_dir)
     gmc_dir.mkdir(exist_ok=True, parents=True)

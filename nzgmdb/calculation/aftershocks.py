@@ -1,8 +1,13 @@
+"""
+Contains functions to calculate the aftershock flags and cluster flags for the earthquake source table.
+"""
+
 from itertools import compress
 from pathlib import Path
 
 import numpy as np
 import pandas as pd
+from pyproj import Transformer
 from shapely import MultiPoint, Point, Polygon
 
 from nzgmdb.management import config as cfg
@@ -37,6 +42,11 @@ def merge_aftershocks(main_dir: Path):
     srf_dir = data_dir / "SrfSourceModels"
     srf_evids = [srf_file.stem for srf_file in srf_dir.glob("*.srf")]
 
+    config = cfg.Config()
+    ll_num = config.get_value("ll_num")
+    nztm_num = config.get_value("nztm_num")
+    nztm2wgs = Transformer.from_crs(nztm_num, ll_num)
+
     # Create all the rupture polygons
     rupture_area_poly = []
     for _, row in catalogue_pd.iterrows():
@@ -44,10 +54,13 @@ def merge_aftershocks(main_dir: Path):
             # Generate the convex hull for the SRF
             srf_file = srf_dir / f"{row['evid']}.srf"
             srf_model = srf.read_srf(srf_file)
-            srf_points = srf_model.points.loc[:, ["lon", "lat", "dep"]].to_numpy()
-            # Apply % 360 to manage the longitude negative values
-            srf_points[:, 0] = srf_points[:, 0] % 360
-            rupture_area_poly.append(MultiPoint(srf_points[:, :2]).convex_hull)
+            # Transform the srf_model geometry to WGS84
+            transformed_coords = [
+                nztm2wgs.transform(x, y)[::-1]
+                for x, y in srf_model.geometry.convex_hull.exterior.coords
+            ]
+            rupture_area_poly.append(Polygon(transformed_coords))
+
         else:
             lon_values = [
                 row["corner_0_lon"],
@@ -71,23 +84,22 @@ def merge_aftershocks(main_dir: Path):
     # Initialize an empty dictionary to store the results
     results_dict = {}
 
-    # Obtain the RJB cutoffs
+    # Obtain the CRJB cutoffs
     config = cfg.Config()
-    rjb_cutoffs = config.get_value("rjb_cutoffs")
+    crjb_cutoffs = config.get_value("crjb_cutoffs")
 
     # Iterate over the rjb_cutoff values
-    for rjb_cutoff in rjb_cutoffs:
+    for crjb_cutoff in crjb_cutoffs:
         # Run the abwd_crjb function
         flagvector, vcl = abwd_crjb(
             catalogue_pd,
             rupture_area_poly,
-            rjb_cutoff=rjb_cutoff,
-            window_method="GardnerKnopoff",
+            crjb_cutoff=crjb_cutoff,
         )
 
         # Store the results in the dictionary
-        results_dict[f"aftershock_flag_crjb{rjb_cutoff}"] = flagvector
-        results_dict[f"cluster_flag_crjb{rjb_cutoff}"] = vcl
+        results_dict[f"aftershock_flag_crjb{crjb_cutoff}"] = flagvector
+        results_dict[f"cluster_flag_crjb{crjb_cutoff}"] = vcl
 
     # Create a DataFrame from the dictionary
     results_df = pd.DataFrame(results_dict)
@@ -102,7 +114,7 @@ def merge_aftershocks(main_dir: Path):
     )
 
 
-def decimal_year(catalogue_pd: pd.DataFrame):
+def decimal_year(catalogue_pd: pd.DataFrame) -> np.ndarray:
     """
     Converts earthquake datetime into decimal years.
 
@@ -128,7 +140,7 @@ def decimal_year(catalogue_pd: pd.DataFrame):
     return np.array(year + elapsed / duration)
 
 
-def resample_polygon_1km(rupture_polygons: list):
+def resample_polygon_1km(rupture_polygons: list[Polygon]) -> list[MultiPoint]:
     """
     Resamples polygon boundaries at approximately 1 km resolution.
 
@@ -165,7 +177,7 @@ def resample_polygon_1km(rupture_polygons: list):
 
 def calculate_crjb(
     rupture_poly: Polygon, boundary_points: MultiPoint, centroids: np.ndarray
-):
+) -> np.ndarray:
     """
     Calculates closest Rupture-to-Just Beyond (CRJB) distance for given earthquake centroids.
 
@@ -210,11 +222,11 @@ def calculate_crjb(
 def abwd_crjb(
     catalogue_pd: pd.DataFrame,
     rupture_area_poly: list,
-    rjb_cutoff: float,
-    window_method: str,
-):
+    crjb_cutoff: float,
+) -> tuple[np.ndarray, np.ndarray]:
     """
     Identifies earthquake clusters using spatial and temporal windows.
+    Following the Abrahamson & Woodell 2014 and 2018 Distance-Window with Closest Rupture-to-Just Beyond (CRJB).
 
     Parameters
     ----------
@@ -222,11 +234,8 @@ def abwd_crjb(
         Earthquake catalog with at least 'datetime' and 'mag' columns.
     rupture_area_poly : list
         List of rupture polygons (shapely.geometry.Polygon objects).
-    rjb_cutoff : float
+    crjb_cutoff : float
         Cutoff radius for spatial windowing in km.
-    window_method : str
-        Method to define the temporal and spatial clustering windows.
-        Options: "GardnerKnopoff", "Gruenthal", "Urhammer".
 
     Returns
     -------
@@ -244,30 +253,22 @@ def abwd_crjb(
     resampled_boundaries = resample_polygon_1km(rupture_area_poly)
 
     neq = len(catalogue_pd)
-    DAYS_IN_YEAR = 364.75
+    # Note, just a rough approximation is needed for the time window, also used in the GardnerKnopoff method
+    days_in_year = 364.75
 
-    # Define time window based on methods
-    if window_method == "Gruenthal":
-        sw_time = (
-            np.exp(-3.95 + np.sqrt(0.62 + 17.32 * catalogue_pd.mag)) / DAYS_IN_YEAR
-        )
-    elif window_method == "Urhammer":
-        sw_time = np.exp(-2.87 + 1.235 * catalogue_pd.mag) / DAYS_IN_YEAR
-    else:
-        # Default is GardnerKnopoff
-        sw_time = (
-            np.exp(-3.95 + np.sqrt(0.62 + 17.32 * catalogue_pd.mag)) / DAYS_IN_YEAR
-        )
+    # Define time window based on GardnerKnopoff
+    sw_time = np.power(10.0, 0.032 * catalogue_pd.mag + 2.7389) / days_in_year
+
     # Adjust the space window for M > 6.5
-    sw_time[catalogue_pd.mag >= 6.5] = (
-        np.power(10, 2.8 + 0.024 * catalogue_pd.mag[catalogue_pd.mag >= 6.5])
-        / DAYS_IN_YEAR
+    sw_time[catalogue_pd.mag < 6.5] = (
+        np.power(10.0, 0.5409 * catalogue_pd.mag[catalogue_pd.mag < 6.5] - 0.547)
+        / days_in_year
     )
 
     eqid = np.arange(neq)
-    cluster_labels = np.zeros(neq, dtype=int)
+    cluster_labels = np.zeros(neq)
     # Sort indices by magnitude in descending order
-    sorted_indices = np.argsort(catalogue_pd.mag, kind="heapsort")[::-1]
+    sorted_indices = np.argsort(catalogue_pd.mag, kind="stable")[::-1]
 
     # Use indexing to sort arrays and lists
     decimal_years = decimal_years[sorted_indices]
@@ -277,7 +278,7 @@ def abwd_crjb(
     sorted_centroids = np.array(centroids)[sorted_indices]
     sorted_boundaries = np.array(resampled_boundaries)[sorted_indices]
 
-    flagvector = np.zeros(neq, dtype=int)
+    flagvector = np.zeros(neq)
     cluster_index = 1
 
     for i in range(neq - 1):
@@ -292,8 +293,8 @@ def abwd_crjb(
                 sorted_polygons[i], sorted_boundaries[i], aftershock_centroids
             )
 
-            # Only allow valid aftershocks for those within the RJB cutoff
-            valid[valid] = crjb_distances <= rjb_cutoff
+            # Only allow valid aftershocks for those within the CRJB cutoff
+            valid[valid] = crjb_distances <= crjb_cutoff
 
             # Set the mainshock and aftershock flags as well as the cluster labels
             valid[i] = False

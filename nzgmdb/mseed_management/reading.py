@@ -1,3 +1,7 @@
+"""
+Module for reading MiniSEED files and converting them to ObsPy Stream objects.
+"""
+
 from pathlib import Path
 
 import mseedlib

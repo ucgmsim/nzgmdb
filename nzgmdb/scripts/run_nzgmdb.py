@@ -16,68 +16,28 @@ from nzgmdb.management import config as cfg
 from nzgmdb.management import file_structure
 from nzgmdb.phase_arrival import gen_phase_arrival_table
 from nzgmdb.scripts import run_gmc, upload_to_dropbox
+from qcore import cli
 
 app = typer.Typer()
 
 
-@app.command(
-    help="Fetch earthquake data from Geonet and generates the earthquake source and station magnitude tables."
-)
-def fetch_geonet_data(  # noqa: D103
-    main_dir: Annotated[
-        Path,
-        typer.Argument(
-            help="The main directory of the NZGMDB results (Highest level directory)",
-            file_okay=False,
-        ),
-    ],
-    start_date: Annotated[
-        datetime,
-        typer.Argument(
-            help="The start date to filter the earthquake data",
-        ),
-    ],
-    end_date: Annotated[
-        datetime,
-        typer.Argument(
-            help="The end date to filter the earthquake data",
-        ),
-    ],
-    n_procs: Annotated[int, typer.Option(help="Number of processes to use")] = 1,
-    batch_size: Annotated[
-        int,
-        typer.Option(
-            help="The batch size for the Geonet data retrieval for how many events to process at a time",
-        ),
-    ] = 500,
+@cli.from_docstring(app)
+def fetch_geonet_data(
+    main_dir: Annotated[Path, typer.Argument(file_okay=False)],
+    start_date: Annotated[datetime, typer.Argument()],
+    end_date: Annotated[datetime, typer.Argument()],
+    n_procs: Annotated[int, typer.Option()] = 1,
+    batch_size: Annotated[int, typer.Option()] = 500,
     only_event_ids: Annotated[
-        list[str],
-        typer.Option(
-            help="A list of event ids to filter the earthquake data, separated by commas",
-            callback=lambda x: [] if x is None else x[0].split(","),
-        ),
+        list[str], typer.Option(callback=lambda x: [] if x is None else x[0].split(","))
     ] = None,
     only_sites: Annotated[
-        list[str],
-        typer.Option(
-            help="A list of site names to filter the earthquake data, separated by commas",
-            callback=lambda x: [] if x is None else x[0].split(","),
-        ),
+        list[str], typer.Option(callback=lambda x: [] if x is None else x[0].split(","))
     ] = None,
     only_record_ids_ffp: Annotated[
-        Path,
-        typer.Option(
-            help="The full file path to the a set of record_ids to only run for.",
-            exists=True,
-            dir_okay=False,
-        ),
+        Path, typer.Option(exists=True, dir_okay=False)
     ] = None,
-    real_time: Annotated[
-        bool,
-        typer.Option(
-            help="If True, the function will run in real time mode by using a different client",
-        ),
-    ] = False,
+    real_time: Annotated[bool, typer.Option()] = False,
     mp_sites: Annotated[
         bool,
         typer.Option(
@@ -85,6 +45,30 @@ def fetch_geonet_data(  # noqa: D103
         ),
     ] = False,
 ):
+    """
+    Fetch earthquake data from Geonet and generate the earthquake source and station magnitude tables.
+
+    Parameters
+    ----------
+    main_dir : Path
+        The main directory of the NZGMDB results (highest level directory).
+    start_date : datetime
+        The start date to filter the earthquake data.
+    end_date : datetime
+        The end date to filter the earthquake data.
+    n_procs : int, optional
+        Number of processes to use (default is 1).
+    batch_size : int, optional
+        The batch size for the Geonet data retrieval, specifying how many events to process at a time (default is 500).
+    only_event_ids : list[str], optional
+        A list of event IDs to filter the earthquake data, separated by commas (default is None).
+    only_sites : list[str], optional
+        A list of site names to filter the earthquake data, separated by commas (default is None).
+    only_record_ids_ffp : Path, optional
+        The full file path to a set of record IDs to only run for (default is None).
+    real_time : bool, optional
+        If True, the function will run in real-time mode by using a different client (default is False).
+    """
     geonet.parse_geonet_information(
         main_dir,
         start_date,
@@ -99,12 +83,11 @@ def fetch_geonet_data(  # noqa: D103
     )
 
 
-@app.command(help="Add tectonic domains to the earthquake source table")
-def merge_tect_domain(  # noqa: D103
+@cli.from_docstring(app)
+def merge_tect_domain(
     eq_source_ffp: Annotated[
         Path,
         typer.Argument(
-            help="The file path to the earthquake source table",
             readable=True,
             exists=True,
         ),
@@ -112,57 +95,77 @@ def merge_tect_domain(  # noqa: D103
     output_dir: Annotated[
         Path,
         typer.Argument(
-            help="The directory to save the earthquake source table with tectonic domains",
             file_okay=False,
         ),
     ],
-    n_procs: Annotated[int, typer.Option(help="Number of processes to use")] = 1,
+    n_procs: Annotated[int, typer.Option()] = 1,
 ):
+    """
+    Add tectonic domains to the earthquake source table.
+
+    Parameters
+    ----------
+    eq_source_ffp : Path
+        The file path to the earthquake source table.
+    output_dir : Path
+        The directory to save the earthquake source table with tectonic domains.
+    n_procs : int, optional
+        Number of processes to use (default is 1).
+    """
     tect_domain.add_tect_domain(eq_source_ffp, output_dir, n_procs)
 
 
-@app.command(
-    help="Generate the phase arrival table, taking mseed data and finding the phase arrivals using a p_wave picker. "
-    "Requires the mseed files to be generated."
-)
-def make_phase_arrival_table(  # noqa: D103
+@cli.from_docstring(app)
+def make_phase_arrival_table(
     main_dir: Annotated[
         Path,
         typer.Argument(
-            help="The main directory of the NZGMDB results (Highest level directory) "
-            "(glob is used to find all mseed files recursively)",
             exists=True,
             file_okay=False,
         ),
     ],
     output_dir: Annotated[
         Path,
-        typer.Argument(
-            help="The directory to save the phase arrival table", file_okay=False
-        ),
+        typer.Argument(file_okay=False),
     ],
     run_phasenet_script_ffp: Annotated[
         Path,
         typer.Argument(
-            help="The script full file path to run PhaseNet (In NZGMDB/phase_arrival).",
             exists=True,
             dir_okay=False,
         ),
     ],
     conda_sh: Annotated[
         Path,
-        typer.Argument(
-            help="Path to activate your mamba conda.sh script.",
-        ),
+        typer.Argument(),
     ],
     env_activate_command: Annotated[
         str,
-        typer.Argument(
-            help="The command to activate the environment for running PhaseNet.",
-        ),
+        typer.Argument(),
     ],
-    n_procs: Annotated[int, typer.Option(help="Number of processes to use")] = 1,
+    n_procs: Annotated[int, typer.Option()] = 1,
 ):
+    """
+    Generate the phase arrival table using mseed data and a P-wave picker.
+
+    This function requires the mseed files to be generated beforehand.
+
+    Parameters
+    ----------
+    main_dir : Path
+        The main directory of the NZGMDB results (Highest level directory).
+        Glob is used to find all mseed files recursively.
+    output_dir : Path
+        The directory to save the phase arrival table.
+    run_phasenet_script_ffp : Path
+        The script full file path to run PhaseNet (located in NZGMDB/phase_arrival).
+    conda_sh : Path
+        Path to activate your mamba conda.sh script.
+    env_activate_command : str
+        The command to activate the environment for running PhaseNet.
+    n_procs : int, optional
+        Number of processes to use (default is 1).
+    """
     gen_phase_arrival_table.generate_phase_arrival_table(
         main_dir,
         output_dir,
@@ -173,19 +176,11 @@ def make_phase_arrival_table(  # noqa: D103
     )
 
 
-@app.command(
-    help="Calculate the signal to noise ratio of the waveforms as well as FAS. "
-    "Requires the phase arrival table and mseed files to be generated. "
-    "Allows custom output directories for meta output directory, and SNR/FAS output. "
-    "If not provided, the default directories are used as if running the full NZGMDB pipeline."
-    "Note: Can't have the common frequency vector as an input due to typer limitations. "
-    "Instead change the configuration file."
-)
-def calculate_snr(  # noqa: D103
+@cli.from_docstring(app)
+def calculate_snr(
     main_dir: Annotated[
         Path,
         typer.Argument(
-            help="The main directory of the NZGMDB results (Highest level directory)",
             exists=True,
             file_okay=False,
         ),
@@ -201,7 +196,6 @@ def calculate_snr(  # noqa: D103
     phase_table_path: Annotated[
         Path,
         typer.Option(
-            help="Path to the phase arrival table",
             readable=True,
             exists=True,
         ),
@@ -209,35 +203,53 @@ def calculate_snr(  # noqa: D103
     meta_output_dir: Annotated[
         Path,
         typer.Option(
-            help="Path to the output directory for the metadata and skipped records",
             file_okay=False,
         ),
     ] = None,
     snr_fas_output_dir: Annotated[
         Path,
         typer.Option(
-            help="Path to the output directory for the SNR and FAS data",
             file_okay=False,
         ),
     ] = None,
-    n_procs: Annotated[int, typer.Option(help="Number of processes to use")] = 1,
+    n_procs: Annotated[int, typer.Option()] = 1,
     batch_size: Annotated[
         int,
-        typer.Option(
-            help="The batch size for the SNR calculation for how many mseeds to process at a time",
-        ),
+        typer.Option(),
     ] = 5000,
     bypass_records_ffp: Annotated[
         Path,
         typer.Option(
-            help="The full file path to the bypass records file for custom p_wave_ix values",
             readable=True,
             exists=True,
             dir_okay=False,
         ),
     ] = None,
 ):
-    # Define the default paths if not provided
+    """
+    Calculate the signal-to-noise ratio (SNR) of waveforms and compute the Fourier Amplitude Spectrum (FAS).
+
+    This function requires the phase arrival table and mseed files to be generated beforehand.
+    Allows custom output directories for metadata, SNR, and FAS output. If not provided,
+    the default directories are used as if running the full NZGMDB pipeline.
+
+    Parameters
+    ----------
+    main_dir : Path
+        The main directory of the NZGMDB results (Highest level directory).
+    phase_table_path : Path, optional
+        Path to the phase arrival table. If not provided, defaults to the expected location.
+    meta_output_dir : Path, optional
+        Path to the output directory for metadata and skipped records. Defaults to the expected location.
+    snr_fas_output_dir : Path, optional
+        Path to the output directory for the SNR and FAS data. Defaults to the expected location.
+    n_procs : int, optional
+        Number of processes to use (default is 1).
+    batch_size : int, optional
+        The batch size for SNR calculation (default is 5000).
+    bypass_records_ffp : Path, optional
+        The full file path to the bypass records file for custom P-wave index values.
+    """
     if phase_table_path is None:
         phase_table_path = (
             file_structure.get_flatfile_dir(main_dir)
@@ -247,6 +259,7 @@ def calculate_snr(  # noqa: D103
         meta_output_dir = file_structure.get_flatfile_dir(main_dir)
     if snr_fas_output_dir is None:
         snr_fas_output_dir = file_structure.get_snr_fas_dir(main_dir)
+
     snr.compute_snr_for_mseed_data(
         main_dir,
         phase_table_path,
@@ -259,16 +272,11 @@ def calculate_snr(  # noqa: D103
     )
 
 
-@app.command(
-    help="Calculate the maximum useable frequency (fmax). "
-    "Requires the snr_fas files and the snr metadata. "
-    "Several parameters are set in the config file."
-)
-def calc_fmax(  # noqa: D103
+@cli.from_docstring(app)
+def calc_fmax(
     main_dir: Annotated[
         Path,
         typer.Argument(
-            help="The main directory of the NZGMDB results (Highest level directory)",
             exists=True,
             file_okay=False,
         ),
@@ -276,35 +284,52 @@ def calc_fmax(  # noqa: D103
     meta_output_dir: Annotated[
         Path,
         typer.Option(
-            help="Path to the output directory for the metadata and skipped records",
             file_okay=False,
         ),
     ] = None,
     waveform_dir: Annotated[
         Path,
         typer.Option(
-            help="Path to the directory containing the mseed files to process",
             file_okay=False,
         ),
     ] = None,
     snr_fas_output_dir: Annotated[
         Path,
         typer.Option(
-            help="Path to the output directory for the SNR and FAS data",
             file_okay=False,
         ),
     ] = None,
-    n_procs: Annotated[int, typer.Option(help="Number of processes to use")] = 1,
+    n_procs: Annotated[int, typer.Option()] = 1,
     bypass_records_ffp: Annotated[
         Path,
         typer.Option(
-            help="The full file path to the bypass records file for custom fmax values",
             readable=True,
             exists=True,
             dir_okay=False,
         ),
     ] = None,
 ):
+    """
+    Calculate the maximum usable frequency (fmax) for waveforms.
+
+    This function requires the SNR/FAS files and SNR metadata. Several parameters
+    are configured in the config file.
+
+    Parameters
+    ----------
+    main_dir : Path
+        The main directory of the NZGMDB results (Highest level directory).
+    meta_output_dir : Path, optional
+        Path to the output directory for metadata and skipped records. Defaults to the expected location.
+    waveform_dir : Path, optional
+        Path to the directory containing the mseed files to process. Defaults to the expected location.
+    snr_fas_output_dir : Path, optional
+        Path to the output directory for the SNR and FAS data. Defaults to the expected location.
+    n_procs : int, optional
+        Number of processes to use (default is 1).
+    bypass_records_ffp : Path, optional
+        The full file path to the bypass records file for custom fmax values.
+    """
     if meta_output_dir is None:
         meta_output_dir = file_structure.get_flatfile_dir(main_dir)
     if waveform_dir is None:
@@ -317,15 +342,11 @@ def calc_fmax(  # noqa: D103
     )
 
 
-@app.command(
-    help="Process the mseed files to txt files. "
-    "Saves the skipped records to a csv file and gives reasons why they were skipped"
-)
-def process_records(  # noqa: D103
+@cli.from_docstring(app)
+def process_records(
     main_dir: Annotated[
         Path,
         typer.Argument(
-            help="The main directory of the NZGMDB results (Highest level directory)",
             exists=True,
             file_okay=False,
         ),
@@ -333,7 +354,6 @@ def process_records(  # noqa: D103
     gmc_ffp: Annotated[
         Path,
         typer.Option(
-            help="The full file path to the GMC predictions file",
             readable=True,
             exists=True,
         ),
@@ -341,7 +361,6 @@ def process_records(  # noqa: D103
     fmax_ffp: Annotated[
         Path,
         typer.Option(
-            help="The full file path to the Fmax file",
             readable=True,
             exists=True,
         ),
@@ -349,32 +368,60 @@ def process_records(  # noqa: D103
     bypass_records_ffp: Annotated[
         Path,
         typer.Option(
-            help="The full file path to the bypass records file",
             readable=True,
             exists=True,
             dir_okay=False,
         ),
     ] = None,
-    n_procs: Annotated[int, typer.Option(help="The number of processes to use")] = 1,
+    n_procs: Annotated[int, typer.Option()] = 1,
 ):
+    """
+    Process mseed files into txt files and log skipped records.
+
+    This function converts mseed files to txt format and saves skipped records
+    with reasons in a CSV file.
+
+    Parameters
+    ----------
+    main_dir : Path
+        The main directory of the NZGMDB results (Highest level directory).
+    gmc_ffp : Path, optional
+        The full file path to the GMC predictions file. Defaults to the expected location.
+    fmax_ffp : Path, optional
+        The full file path to the Fmax file. Defaults to the expected location.
+    bypass_records_ffp : Path, optional
+        The full file path to the bypass records file.
+    n_procs : int, optional
+        The number of processes to use (default is 1).
+    """
+    if gmc_ffp is None:
+        gmc_ffp = (
+            file_structure.get_flatfile_dir(main_dir)
+            / file_structure.FlatfileNames.GMC_PREDICTIONS
+        )
+    if fmax_ffp is None:
+        fmax_ffp = (
+            file_structure.get_flatfile_dir(main_dir)
+            / file_structure.FlatfileNames.FMAX
+        )
+
     process_observed.process_mseeds_to_txt(
         main_dir, gmc_ffp, fmax_ffp, bypass_records_ffp, n_procs
     )
 
 
-@app.command(help="Run IM Calculation on processed waveform files")
-def run_im_calculation(  # noqa: D103
+@cli.from_docstring(app)
+def run_im_calculation(
     main_dir: Annotated[
         Path,
         typer.Argument(
-            help="The main directory of the NZGMDB results (Highest level directory)",
             exists=True,
             file_okay=False,
         ),
     ],
     output_dir: Annotated[
         Path,
-        typer.Option(help="The directory to save the IM files", file_okay=False),
+        typer.Option(file_okay=False),
     ] = None,
     ko_directory: Annotated[
         Path,
@@ -384,11 +431,10 @@ def run_im_calculation(  # noqa: D103
             file_okay=False,
         ),
     ] = None,
-    n_procs: Annotated[int, typer.Option(help="The number of processes to use")] = 1,
+    n_procs: Annotated[int, typer.Option()] = 1,
     checkpoint: Annotated[
         bool,
         typer.Option(
-            help="If True, the function will check for already completed files and skip them",
             is_flag=True,
         ),
     ] = False,
@@ -400,6 +446,22 @@ def run_im_calculation(  # noqa: D103
         ),
     ] = None,
 ):
+    """
+    Run IM Calculation on processed waveform files.
+
+    This function computes intensity measures (IMs) for processed waveform files.
+
+    Parameters
+    ----------
+    main_dir : Path
+        The main directory of the NZGMDB results (Highest level directory).
+    output_dir : Path, optional
+        The directory to save the IM files. Defaults to the expected location.
+    n_procs : int, optional
+        The number of processes to use (default is 1).
+    checkpoint : bool, optional
+        If True, the function will check for already completed files and skip them.
+    """
     if output_dir is None:
         output_dir = file_structure.get_im_dir(main_dir)
     ims.compute_ims_for_all_processed_records(
@@ -407,17 +469,26 @@ def run_im_calculation(  # noqa: D103
     )
 
 
-@app.command(help="Generate the site table basin flatfile")
-def generate_site_table_basin(  # noqa: D103
+@cli.from_docstring(app)
+def generate_site_table_basin(
     main_dir: Annotated[
         Path,
         typer.Argument(
-            help="The main directory of the NZGMDB results (Highest level directory)",
             exists=True,
             file_okay=False,
         ),
     ],
 ):
+    """
+    Generate the site table basin flatfile.
+
+    This function creates a site table with basin information and saves it as a flatfile.
+
+    Parameters
+    ----------
+    main_dir : Path
+        The main directory of the NZGMDB results (Highest level directory).
+    """
     main_dir.mkdir(parents=True, exist_ok=True)
     # Generate the site basin flatfile
     flatfile_dir = file_structure.get_flatfile_dir(main_dir)
@@ -431,59 +502,73 @@ def generate_site_table_basin(  # noqa: D103
     )
 
 
-@app.command(
-    help="Calculate the distances between the earthquake source and the station"
-)
-def calculate_distances(  # noqa: D103
+@cli.from_docstring(app)
+def calculate_distances(
     main_dir: Annotated[
         Path,
         typer.Argument(
-            help="The main directory of the NZGMDB results (Highest level directory)",
             exists=True,
             file_okay=False,
         ),
     ],
     n_procs: Annotated[int, typer.Option(help="The number of processes to use")] = 1,
 ):
+    """
+    Calculate the distances between the earthquake source and the station.
+
+    This function computes the distances between earthquake sources and seismic stations
+    and saves the results to the appropriate output location.
+
+    Parameters
+    ----------
+    main_dir : Path
+        The main directory of the NZGMDB results (Highest level directory).
+    n_procs : int, optional
+        The number of processes to use, by default 1.
+    """
     distances.calc_distances(main_dir, n_procs)
 
 
-@app.command(help="Calculate the aftershock flags for the earthquake source table")
-def calculate_aftershocks(  # noqa: D103
+@cli.from_docstring(app)
+def calculate_aftershocks(
     main_dir: Annotated[
         Path,
         typer.Argument(
-            help="The main directory of the NZGMDB results (Highest level directory)",
             exists=True,
             file_okay=False,
         ),
     ],
 ):
+    """
+    Calculate the aftershock flags for the earthquake source table.
+
+    This function determines whether earthquakes in the source table are classified as aftershocks
+    based on predefined criteria and updates the table accordingly.
+
+    Parameters
+    ----------
+    main_dir : Path
+        The main directory of the NZGMDB results (Highest level directory).
+    """
     aftershocks.merge_aftershocks(main_dir)
 
 
-@app.command(
-    help="Merge IM results together into one flatfile. As well as perform a filter for Ds595"
-)
-def merge_im_results(  # noqa: D103
+@cli.from_docstring(app)
+def merge_im_results(
     im_dir: Annotated[
         Path,
         typer.Argument(
-            help="The directory containing the IM results to merge",
             exists=True,
             file_okay=False,
         ),
     ],
     output_dir: Annotated[
         Path,
-        typer.Argument(
-            help="The directory to save the merged IM file", file_okay=False
-        ),
+        typer.Argument(file_okay=False),
     ],
     gmc_ffp: Annotated[
         Path,
         typer.Option(
-            help="The full file path to the GMC predictions file",
             readable=True,
             exists=True,
         ),
@@ -491,23 +576,36 @@ def merge_im_results(  # noqa: D103
     fmax_ffp: Annotated[
         Path,
         typer.Option(
-            help="The full file path to the Fmax file",
             readable=True,
             exists=True,
         ),
     ] = None,
 ):
+    """
+    Merge IM results together into one flatfile and perform a filter for Ds595.
+
+    This function consolidates individual IM result files into a single comprehensive
+    dataset, ensuring consistency and filtering for the Ds595 parameter.
+
+    Parameters
+    ----------
+    im_dir : Path
+        The directory containing the IM results to merge.
+    output_dir : Path
+        The directory to save the merged IM file.
+    gmc_ffp : Path
+        The full file path to the GMC predictions file.
+    fmax_ffp : Path
+        The full file path to the Fmax file.
+    """
     merge_flatfiles.merge_im_data(im_dir, output_dir, gmc_ffp, fmax_ffp)
 
 
-@app.command(
-    help="Merge all flatfiles together for final output and ensure correct filtering for only results with IM values"
-)
-def merge_flat_files(  # noqa: D103
+@cli.from_docstring(app)
+def merge_flat_files(
     main_dir: Annotated[
         Path,
         typer.Argument(
-            help="The main directory of the NZGMDB results (Highest level directory)",
             exists=True,
             file_okay=False,
         ),
@@ -515,24 +613,33 @@ def merge_flat_files(  # noqa: D103
     bypass_records_ffp: Annotated[
         Path,
         typer.Option(
-            help="The full file path to the bypass records file",
             readable=True,
             exists=True,
             dir_okay=False,
         ),
     ] = None,
 ):
+    """
+    Merge all flatfiles together for final output and ensure correct filtering for only results with IM values.
+
+    This function consolidates various flatfiles into a single output file while ensuring that only results
+    containing IM values are included. It also integrates bypass records if provided.
+
+    Parameters
+    ----------
+    main_dir : Path
+        The main directory of the NZGMDB results (Highest level directory).
+    bypass_records_ffp : Path, optional
+        The full file path to the bypass records file, if applicable.
+    """
     merge_flatfiles.merge_flatfiles(main_dir, bypass_records_ffp)
 
 
-@app.command(
-    help="Create a quality database for the NZGMDB results by running quality checks"
-)
-def create_quality_db(  # noqa: D103
+@cli.from_docstring(app)
+def create_quality_db(
     main_dir: Annotated[
         Path,
         typer.Argument(
-            help="The main directory of the NZGMDB results (Highest level directory)",
             exists=True,
             file_okay=False,
         ),
@@ -540,152 +647,119 @@ def create_quality_db(  # noqa: D103
     bypass_records_ffp: Annotated[
         Path,
         typer.Option(
-            help="The full file path to the bypass records file",
             readable=True,
             exists=True,
             dir_okay=False,
         ),
     ] = None,
 ):
+    """
+    Create a quality database for the NZGMDB results by running quality checks.
+
+    This function generates a quality database by performing various quality checks on the NZGMDB results.
+    It ensures that data integrity and consistency are maintained across the dataset.
+
+    Parameters
+    ----------
+    main_dir : Path
+        The main directory of the NZGMDB results (Highest level directory).
+    bypass_records_ffp : Path, optional
+        The full file path to the bypass records file, if applicable.
+    """
     quality_db.create_quality_db(main_dir, bypass_records_ffp)
 
 
-@app.command(
-    help="Run the Entire NZGMDB pipeline."
-    "- Fetch Geonet data "
-    "- Merge tectonic domains "
-    "- Generate phase arrival table "
-    "- Calculate SNR "
-    "- Calculate Fmax"
-    "- Run GMC"
-    "- Process and filter waveform data to txt files "
-    "- Calculate IM's "
-    "- Merge IM results into flatfiles"
-    "- Calculate distances"
-    "- Merge flat files"
-    "- Upload to Dropbox"
-)
-def run_full_nzgmdb(  # noqa: D103
+@cli.from_docstring(app)
+def run_full_nzgmdb(
     main_dir: Annotated[
         Path,
         typer.Argument(
-            help="The main directory of the NZGMDB results (Highest level directory)",
+            exists=True,
             file_okay=False,
         ),
     ],
     start_date: Annotated[
         datetime,
-        typer.Argument(
-            help="The start date to filter the earthquake data",
-        ),
+        typer.Argument(),
     ],
     end_date: Annotated[
         datetime,
-        typer.Argument(
-            help="The end date to filter the earthquake data",
-        ),
+        typer.Argument(),
     ],
     gm_classifier_dir: Annotated[
         Path,
-        typer.Argument(
-            help="Directory for gm_classifier.",
-        ),
+        typer.Argument(),
     ],
     conda_sh: Annotated[
         Path,
-        typer.Argument(
-            help="Path to activate your mamba conda.sh script.",
-        ),
+        typer.Argument(),
     ],
     gmc_activate: Annotated[
         str,
-        typer.Argument(
-            help="Command to activate gmc environment for extracting features.",
-        ),
+        typer.Argument(),
     ],
     gmc_predict_activate: Annotated[
         str,
-        typer.Argument(
-            help="Command to activate gmc_predict environment to run the predictions.",
-        ),
+        typer.Argument(),
     ],
     gmc_procs: Annotated[
         int,
-        typer.Option(
-            help="Number of processes to use for GMC due to large memory requirement"
-        ),
+        typer.Option(),
     ] = 1,
-    n_procs: Annotated[int, typer.Option(help="The number of processes to use")] = 1,
+    n_procs: Annotated[int, typer.Option()] = 1,
     ko_matrix_path: Annotated[
         Path,
         typer.Option(
-            help="Path to the ko matrix directory",
             exists=True,
             file_okay=False,
         ),
     ] = None,
     checkpoint: Annotated[
         bool,
-        typer.Option(
-            help="If True, the function will check for already completed files and skip them",
-        ),
+        typer.Option(),
     ] = False,
     only_event_ids: Annotated[
         list[str],
         typer.Option(
-            help="A list of event ids to filter the earthquake data, separated by commas",
             callback=lambda x: [] if x is None else x[0].split(","),
         ),
     ] = None,
     only_sites: Annotated[
         list[str],
         typer.Option(
-            help="A list of site names to filter the earthquake data, separated by commas",
             callback=lambda x: [] if x is None else x[0].split(","),
         ),
     ] = None,
     only_record_ids_ffp: Annotated[
         Path,
         typer.Option(
-            help="The full file path to the a set of record_ids to only run for.",
             exists=True,
             dir_okay=False,
         ),
     ] = None,
     geonet_batch_size: Annotated[
         int,
-        typer.Option(
-            help="The batch size for the Geonet data retrieval for how many events to process at a time",
-        ),
+        typer.Option(),
     ] = 500,
     snr_batch_size: Annotated[
         int,
-        typer.Option(
-            help="The batch size for the SNR calculation for how many mseeds to process at a time",
-        ),
+        typer.Option(),
     ] = 5000,
     real_time: Annotated[
         bool,
-        typer.Option(
-            help="If True, the function will run in real time mode by using a different client",
-        ),
+        typer.Option(),
     ] = False,
     upload: Annotated[
         bool,
-        typer.Option(
-            help="If True, the function will upload the results to Dropbox",
-        ),
+        typer.Option(),
     ] = False,
     create_quality_db: Annotated[
         bool,
-        typer.Option(
-            help="If True, the function will create a quality database",
-        ),
+        typer.Option(),
     ] = False,
     bypass_records_ffp: Annotated[
         Path,
         typer.Option(
-            help="The full file path to the bypass records file",
             exists=True,
             dir_okay=False,
         ),
@@ -698,6 +772,68 @@ def run_full_nzgmdb(  # noqa: D103
         ),
     ] = None,
 ):
+    """
+    Run the Entire NZGMDB pipeline.
+
+    This function orchestrates the full pipeline of NZGMDB, executing all necessary steps sequentially.
+
+    Steps Included:
+    - Fetch Geonet data
+    - Merge tectonic domains
+    - Generate phase arrival table
+    - Calculate SNR
+    - Calculate Fmax
+    - Run GMC
+    - Process and filter waveform data to txt files
+    - Calculate IMs
+    - Merge IM results into flatfiles
+    - Calculate distances
+    - Merge flat files
+    - Upload results to Dropbox (if specified)
+
+    Parameters
+    ----------
+    main_dir : Path
+        The main directory of the NZGMDB results (Highest level directory).
+    start_date : datetime
+        The start date to filter the earthquake data.
+    end_date : datetime
+        The end date to filter the earthquake data.
+    gm_classifier_dir : Path
+        Directory for gm_classifier.
+    conda_sh : Path
+        Path to activate your mamba conda.sh script.
+    gmc_activate : str
+        Command to activate gmc environment for extracting features.
+    gmc_predict_activate : str
+        Command to activate gmc_predict environment to run the predictions.
+    gmc_procs : int, optional
+        Number of processes to use for GMC (default is 1).
+    n_procs : int, optional
+        The number of processes to use (default is 1).
+    ko_matrix_path : Path, optional
+        Path to the ko matrix directory, if applicable.
+    checkpoint : bool, optional
+        If True, the function will check for already completed files and skip them (default is False).
+    only_event_ids : list[str], optional
+        A list of event ids to filter the earthquake data, separated by commas.
+    only_sites : list[str], optional
+        A list of site names to filter the earthquake data, separated by commas.
+    only_record_ids_ffp : Path, optional
+        The full file path to a set of record_ids to process only those records.
+    geonet_batch_size : int, optional
+        The batch size for Geonet data retrieval (default is 500).
+    snr_batch_size : int, optional
+        The batch size for the SNR calculation (default is 5000).
+    real_time : bool, optional
+        If True, the function will run in real-time mode using a different client (default is False).
+    upload : bool, optional
+        If True, the function will upload the results to Dropbox (default is False).
+    create_quality_db : bool, optional
+        If True, the function will create a quality database (default is False).
+    bypass_records_ffp : Path, optional
+        The full file path to the bypass records file, if applicable.
+    """
     main_dir.mkdir(parents=True, exist_ok=True)
     config = cfg.Config()
 
@@ -944,14 +1080,11 @@ def run_full_nzgmdb(  # noqa: D103
         upload_to_dropbox.upload_to_dropbox(main_dir, n_procs=up_n_procs)
 
 
-@app.command(
-    help="Merge 2 databases together and allow 1 to overwrite the other if duplicates found"
-)
-def merge_databases(  # noqa: D103
+@cli.from_docstring(app)
+def merge_databases(
     flatfile_db_dir: Annotated[
         Path,
         typer.Argument(
-            help="The flatfile directory of the NZGMDB results (Where the flatifles are located)",
             exists=True,
             file_okay=False,
         ),
@@ -959,18 +1092,27 @@ def merge_databases(  # noqa: D103
     to_merge_db_dir: Annotated[
         Path,
         typer.Argument(
-            help="The flatifle directory of the NZGMDB results to replace and add to the main DB",
             exists=True,
             file_okay=False,
         ),
     ],
     output_ffp: Annotated[
         Path,
-        typer.Argument(
-            help="The full file path to place the output flatfiles for the merged DB",
-        ),
+        typer.Argument(),
     ],
 ):
+    """
+    Merge two databases together, allowing one to overwrite the other if duplicates are found.
+
+    Parameters
+    ----------
+    flatfile_db_dir : Path
+        The flatfile directory of the NZGMDB results (where the flatfiles are located).
+    to_merge_db_dir : Path
+        The flatfile directory of the NZGMDB results to replace and add to the main database.
+    output_ffp : Path
+        The full file path to place the output flatfiles for the merged database.
+    """
     merge_flatfiles.merge_dbs(flatfile_db_dir, to_merge_db_dir, output_ffp)
 
 
