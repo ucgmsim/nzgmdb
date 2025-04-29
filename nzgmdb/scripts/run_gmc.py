@@ -136,23 +136,19 @@ def run_gmc_processing(
     ],
     conda_sh: Annotated[
         Path,
-        typer.Argument(
-        ),
+        typer.Argument(),
     ],
     gmc_activate: Annotated[
         str,
-        typer.Argument(
-        ),
+        typer.Argument(),
     ],
     gmc_predict_activate: Annotated[
         str,
-        typer.Argument(
-        ),
+        typer.Argument(),
     ],
     n_procs: Annotated[
         int,
-        typer.Option(
-        ),
+        typer.Option(),
     ] = 1,
     waveform_dir: Annotated[
         Path,
@@ -170,8 +166,7 @@ def run_gmc_processing(
     ] = None,
     bypass_records_ffp: Annotated[
         Path,
-        typer.Option(
-        ),
+        typer.Option(),
     ] = None,
 ):
     """

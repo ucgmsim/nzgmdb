@@ -85,7 +85,6 @@ def fetch_event_line(event_cat: Event, event_id: str):
 
     # If the preferred origin is None, return None
     if preferred_origin is None:
-        print(f"Event {event_id} has no preferred origin")
         return None
 
     # Extract basic info from the catalog
@@ -198,7 +197,7 @@ def fetch_event_line(event_cat: Event, event_id: str):
 
 def get_stations_within_radius(
     event_cat: Event,
-    mw_rrup_data: interp1d,
+    mw_rrup_data: np.ndarray,
     inventory: Inventory,
 ):
     """
@@ -208,8 +207,8 @@ def get_stations_within_radius(
     ----------
     event_cat : Event
         The event catalog to fetch the event data from
-    mw_rrup_data : interp1d
-        The Mw_rrup data to get the max radius from the interpolation function
+    mw_rrup_data : np.ndarray
+        The Mw_rrup data to get the interpolation function to determine the max radius.
     inventory : Inventory
         The inventory of the stations from all networks to extract the stations from
 
@@ -378,17 +377,7 @@ def fetch_sta_mag_line(
             )
 
         # Calculate clip to determine if the record should be dropped
-        try:
-            clip = filtering.get_clip_probability(pref_mag, r_hyp, mseed)
-        except:
-            stats = mseed[0].stats
-            skipped_records.append(
-                [
-                    f"{event_id}_{stats.station}_{stats.channel}_{stats.location}",
-                    "Clip calculation error",
-                ]
-            )
-            continue
+        clip = filtering.get_clip_probability(pref_mag, r_hyp, mseed)
 
         # Check if the record should be dropped
         if clip > threshold:
@@ -466,7 +455,7 @@ def fetch_event_data(
     client_NZ: FDSN_Client,
     inventory: Inventory,
     site_table: pd.DataFrame,
-    mw_rrup_data: interp1d,
+    mw_rrup_data: np.ndarray,
     only_sites: list[str] = None,
     only_record_ids: pd.DataFrame = None,
     n_procs: int = 1,
@@ -486,8 +475,8 @@ def fetch_event_data(
         The inventory of the stations from all networks to extract the stations from
     site_table : pd.DataFrame
         The site table to extract the vs30 value from
-    mw_rrup_data : interp1d
-        The Mw_rrup data to get the max radius from the interpolation function
+    mw_rrup_data : np.ndarray
+        The Mw_rrup data to get the interpolation function to determine the max radius.
     only_sites : list[str] (optional)
         Will only fetch the data for the sites in the list
     only_record_ids : pd.DataFrame (optional)
@@ -589,7 +578,7 @@ def process_batch(
     client_NZ: FDSN_Client,
     inventory: Inventory,
     site_table: pd.DataFrame,
-    mw_rrup_data: interp1d,
+    mw_rrup_data: np.ndarray,
     n_procs: int = 1,
     only_sites: list[str] = None,
     only_record_ids: pd.DataFrame = None,
@@ -612,8 +601,8 @@ def process_batch(
         The inventory of the stations from all networks to extract the stations from
     site_table : pd.DataFrame
         The site table to extract the vs30 value from
-    mw_rrup_data : interp1d
-        The Mw_rrup data to get the max radius from the interpolation function
+    mw_rrup_data : np.ndarray
+        The Mw_rrup data to get the interpolation function to determine the max radius.
     n_procs : int (optional)
         The number of processes to run
     only_sites : list[str] (optional)

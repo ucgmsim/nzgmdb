@@ -92,13 +92,6 @@ def initial_preprocessing(
                 f"No inventory information found for station {station} with location {location}"
             )
 
-        # Add the response (Same for all channels)
-        # this is done so that the sensitivity can be removed otherwise it tries to find the exact same channel
-        # which can fail when including the inventory information
-        # response = next(cha.response for sta in inv.networks[0] for cha in sta.channels)
-        # for tr in mseed:
-        #     tr.stats.response = response
-
         try:
             mseed = mseed.remove_sensitivity(inventory=inv)
         except ValueError:

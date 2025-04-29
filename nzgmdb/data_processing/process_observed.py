@@ -32,11 +32,11 @@ def process_single_mseed(
     ----------
     mseed_file : Path
         The path to the mseed file
-    gmc_df : pd.DataFrame
+    gmc_df : pd.DataFrame, optional
         The GMC values containing fmin information
-    fmax_df : pd.DataFrame
+    fmax_df : pd.DataFrame, optional
         The Fmax values
-    bypass_df : pd.DataFrame
+    bypass_df : pd.DataFrame, optional
         The bypass records containing custom fmin, fmax values
 
     Returns

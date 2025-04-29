@@ -28,9 +28,9 @@ def merge_im_data(
         The directory where the IM files are stored
     output_dir : Path
         The directory to save the final IM flatfile and the skipped records
-    gmc_ffp : Path
+    gmc_ffp : Path, optional
         The file path to the GMC results
-    fmax_ffp : Path
+    fmax_ffp : Path, optional
         The file path to the fmax results
     """
     # Load the GMC file

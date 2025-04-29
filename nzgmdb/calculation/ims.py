@@ -4,11 +4,6 @@ This module contains functions for calculating the Intensity Measures (IMs) for 
 
 import functools
 import multiprocessing as mp
-
-
-# if __name__ == "__main__":
-
-
 import warnings
 from pathlib import Path
 
@@ -18,24 +13,6 @@ import pandas as pd
 from IM import im_calculation, ims, waveform_reading
 from nzgmdb.management import config as cfg
 from nzgmdb.management import file_structure
-import cProfile
-import pstats
-import io
-
-
-def calculate_im_for_record_profiled(*args, **kwargs):
-    # profiler = cProfile.Profile()
-    # profiler.enable()
-
-    result = calculate_im_for_record(*args, **kwargs)  # Your original function
-
-    # profiler.disable()
-    # s = io.StringIO()
-    # stats = pstats.Stats(profiler, stream=s).sort_stats(pstats.SortKey.TIME)
-    # stats.print_stats(15)  # Print top 10 slowest functions
-    # print(s.getvalue())  # Print profiling results to stdout
-
-    return result
 
 
 def calculate_im_for_record(
@@ -107,8 +84,6 @@ def calculate_im_for_record(
             cores=1,
             ko_directory=ko_directory,
         )
-
-    print(f"Saving IMs for {record_id}")
 
     # Set a column for the record_id and then component and set at the front
     im_result_df = im_result_df.reset_index()

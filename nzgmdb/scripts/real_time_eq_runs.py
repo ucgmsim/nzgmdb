@@ -41,6 +41,12 @@ def send_message_to_slack(message: str):
     Returns:
     -------
         dict: The response JSON containing the message timestamp (ts)
+
+    Raises:
+    ------
+    ValueError:
+        If SLACK_CHANNEL or SLACK_BOT_TOKEN is not set in the environment.
+        Or if the response from Slack is not successful.
     """
     if not SLACK_CHANNEL:
         raise ValueError(
@@ -83,19 +89,34 @@ def reply_to_message_on_slack(thread_ts: str, reply_message: str):
     Returns:
     -------
         dict: The response JSON containing the message timestamp (ts)
+
+    Raises:
+    ------
+    ValueError:
+        If SLACK_CHANNEL or SLACK_BOT_TOKEN is not set in the environment.
+        Or if the response from Slack is not successful.
     """
+    if not SLACK_CHANNEL:
+        raise ValueError(
+            "No slack channel provided from the environment var SLACK_CHANNEL"
+        )
+    if not SLACK_BOT_TOKEN:
+        raise ValueError(
+            "No slack bot token provided from the environment var SLACK_BOT_TOKEN"
+        )
+
     url = "https://slack.com/api/chat.postMessage"
     data = {
         "channel": SLACK_CHANNEL,
         "text": reply_message,
         "thread_ts": thread_ts,  # This ensures it's a threaded reply
     }
-    HEADERS = {
+    headers = {
         "Authorization": f"Bearer {SLACK_BOT_TOKEN}",
         "Content-Type": "application/json",
     }
 
-    response = requests.post(url, headers=HEADERS, json=data)
+    response = requests.post(url, headers=headers, json=data)
     response_data = response.json()
 
     if not response_data.get("ok"):
@@ -154,7 +175,8 @@ def update_eq_source_table(
     event_dir: Path,
 ):
     """
-    Update the earthquake source table with the latest data
+    Update the earthquake source table with the latest data, such as
+    magnitude, latitude, longitude, and depth.
 
     Parameters
     ----------
@@ -480,7 +502,7 @@ def poll_earthquake_data(
 
     init_start_date = None
     while True:
-        # Get the last 2 minutes worth of data and check if there are any new events
+        # Get the last 10 minutes worth of data and check if there are any new events
         end_date = datetime.datetime.utcnow() - datetime.timedelta(minutes=1)
         # If an event was just executed, ensures we capture any events that may have been missed during the execution
         start_date = (

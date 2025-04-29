@@ -702,18 +702,18 @@ def run_full_nzgmdb(
         str,
         typer.Argument(),
     ],
+    ko_matrix_path: Annotated[
+        Path,
+        typer.Argument(
+            exists=True,
+            file_okay=False,
+        ),
+    ],
     gmc_procs: Annotated[
         int,
         typer.Option(),
     ] = 1,
     n_procs: Annotated[int, typer.Option()] = 1,
-    ko_matrix_path: Annotated[
-        Path,
-        typer.Option(
-            exists=True,
-            file_okay=False,
-        ),
-    ] = None,
     checkpoint: Annotated[
         bool,
         typer.Option(),
@@ -767,7 +767,6 @@ def run_full_nzgmdb(
     machine: Annotated[
         cfg.MachineName,
         typer.Option(
-            help="The machine name to use for the number of processes",
             case_sensitive=False,
         ),
     ] = None,
@@ -807,12 +806,12 @@ def run_full_nzgmdb(
         Command to activate gmc environment for extracting features.
     gmc_predict_activate : str
         Command to activate gmc_predict environment to run the predictions.
+    ko_matrix_path : Path
+        Path to the ko matrix directory
     gmc_procs : int, optional
         Number of processes to use for GMC (default is 1).
     n_procs : int, optional
         The number of processes to use (default is 1).
-    ko_matrix_path : Path, optional
-        Path to the ko matrix directory, if applicable.
     checkpoint : bool, optional
         If True, the function will check for already completed files and skip them (default is False).
     only_event_ids : list[str], optional
@@ -833,6 +832,8 @@ def run_full_nzgmdb(
         If True, the function will create a quality database (default is False).
     bypass_records_ffp : Path, optional
         The full file path to the bypass records file, if applicable.
+    machine : cfg.MachineName, optional
+        The machine name to use for process configuration (default is None).
     """
     main_dir.mkdir(parents=True, exist_ok=True)
     config = cfg.Config()
