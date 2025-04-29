@@ -10,7 +10,7 @@ import typer
 from nzgmdb.mseed_management.mseed_to_gmprocess import convert_mseed_to_gmprocess
 from qcore import cli
 
-app = typer.Typer()
+app = typer.Typer(pretty_exceptions_enable=False)
 
 
 @cli.from_docstring(app)
@@ -29,9 +29,7 @@ def mseed_to_gmprocess(
             file_okay=False,
         ),
     ],
-    n_procs: Annotated[
-        int, typer.Option()
-    ] = 1,
+    n_procs: Annotated[int, typer.Option()] = 1,
 ):
     """
     Convert MiniSEED data to gmprocess format and file structure.

@@ -14,7 +14,7 @@ import typer
 from nzgmdb.management import file_structure, shell_commands
 from qcore import cli
 
-app = typer.Typer()
+app = typer.Typer(pretty_exceptions_enable=False)
 
 
 def process_batch(

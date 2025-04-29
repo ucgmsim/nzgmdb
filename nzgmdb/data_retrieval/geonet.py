@@ -29,6 +29,7 @@ class EventData(NamedTuple):
     """
     A named tuple to store each events data.
     """
+
     event_line: list[Any]
     """The full event line with all metadata."""
     station_magnitudes: list[Any]

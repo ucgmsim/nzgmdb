@@ -19,7 +19,7 @@ from nzgmdb.management import custom_errors, file_structure
 from nzgmdb.scripts import run_nzgmdb
 from qcore import cli
 
-app = typer.Typer()
+app = typer.Typer(pretty_exceptions_enable=False)
 
 SEISMIC_NOW_URL = (
     "https://quakecoresoft.canterbury.ac.nz/seismicnow/api/earthquakes/add"
