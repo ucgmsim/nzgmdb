@@ -1,13 +1,19 @@
+"""
+Script to upload the NZGMDB results to Dropbox.
+"""
+
 import multiprocessing as mp
 import subprocess
 import zipfile
 from pathlib import Path
+from typing import Annotated, Optional
 
 import typer
 
 from nzgmdb.management import file_structure
+from qcore import cli
 
-app = typer.Typer()
+app = typer.Typer(pretty_exceptions_enable=False)
 
 DROPBOX_PATH = "dropbox:/QuakeCoRE/Public/NZGMDB"
 
@@ -24,6 +30,11 @@ def zip_files(file_list: list, output_dir: Path, zip_name: str):
         Directory to save the zip file
     zip_name : str
         Name of the zip file
+
+    Returns
+    -------
+    Path
+        The path to the zip file
     """
     zip_filename = output_dir / f"{zip_name}.zip"
     with zipfile.ZipFile(zip_filename, "w", zipfile.ZIP_DEFLATED) as zipf:
@@ -43,6 +54,11 @@ def upload_zip_to_dropbox(local_file: Path, dropbox_path: str):
         The local file to upload
     dropbox_path : str
         The path on Dropbox to upload the file to
+
+    Returns
+    -------
+    Path | None
+        The local file if it failed to upload, otherwise None
     """
     print(f"Uploading {local_file} to {dropbox_path}")
     try:
@@ -224,16 +240,23 @@ def determine_dropbox_path(dropbox_version_dir: str, local_file: Path):
         return dropbox_version_dir
 
 
-@app.command()
-def upload_to_dropbox(  # noqa: D103
-    input_directory: Path = typer.Argument(
-        help="Directory containing the results", file_okay=False, exists=True
-    ),
-    version: str = typer.Option(
-        None, help="Version of the results, defaults to the directory name"
-    ),
-    n_procs: int = typer.Option(1, help="Number of processes to use"),
-):
+@cli.from_docstring(app)
+def upload_to_dropbox(
+    input_directory: Annotated[Path, typer.Argument(exists=True, file_okay=False)],
+    version: Annotated[Optional[str], typer.Option()] = None,
+    n_procs: Annotated[int, typer.Option()] = 1,
+) -> None:
+    """Upload results to Dropbox.
+
+    Parameters
+    ----------
+    input_directory : Path
+        Directory containing the results.
+    version : Optional[str]
+        Version of the results, defaults to the directory name.
+    n_procs : int
+        Number of processes to use.
+    """
     main(
         input_directory,
         n_procs,
@@ -241,16 +264,23 @@ def upload_to_dropbox(  # noqa: D103
     )
 
 
-@app.command()
-def upload_failed_files(  # noqa: D103
-    failed_files_file: Path = typer.Argument(
-        help="File containing the failed files", dir_okay=False, exists=True
-    ),
-    version: str = typer.Option(
-        None, help="Version of the results, defaults to the directory name"
-    ),
-    n_procs: int = typer.Option(1, help="Number of processes to use"),
-):
+@cli.from_docstring(app)
+def upload_failed_files(
+    failed_files_file: Annotated[Path, typer.Argument(exists=True, dir_okay=False)],
+    version: Annotated[Optional[str], typer.Option()] = None,
+    n_procs: Annotated[int, typer.Option()] = 1,
+) -> None:
+    """Upload failed files.
+
+    Parameters
+    ----------
+    failed_files_file : Path
+        File containing the failed files.
+    version : Optional[str]
+        Version of the results, defaults to the directory name.
+    n_procs : int
+        Number of processes to use.
+    """
     with open(failed_files_file, "r") as f:
         failed_files = f.read().splitlines()
 

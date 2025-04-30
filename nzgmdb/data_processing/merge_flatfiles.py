@@ -1,3 +1,7 @@
+"""
+This module contains the functions to merge different flatfiles together to create the final flatfiles
+"""
+
 from pathlib import Path
 
 import pandas as pd
@@ -362,8 +366,20 @@ def merge_flatfiles(main_dir: Path, bypass_records_ffp: Path = None):
     # Group by 'evid', 'sta', and 'chan'
     grouped = gm_im_df_flat.groupby(["evid", "sta", "chan"])
 
-    # Custom function to handle NaN values and find the index of the row with the loc_elev value closest to 0
     def custom_idxmin(group: pd.DataFrame):
+        """
+        Custom function to handle NaN values and find the index of the row with the loc_elev value closest to 0
+
+        Parameters
+        ----------
+        group : pd.DataFrame
+            The group of the DataFrame with the same 'evid', 'sta', and 'chan' values
+
+        Returns
+        -------
+        int | None
+            The index of the row with the loc_elev value closest to 0, or None if all values are NaN
+        """
         # Filter out loc_elev values greater than 5 meters (In either direction)
         group = group[group["loc_elev"].abs() <= config.get_value("locations_max_elev")]
         if group["loc_elev"].isna().all():

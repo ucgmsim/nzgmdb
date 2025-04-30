@@ -1,3 +1,7 @@
+"""
+This module contains functions for the initial pre-processing of waveform data and full waveform processing
+"""
+
 import numpy as np
 from obspy.clients.fdsn import Client as FDSN_Client
 from obspy.clients.fdsn.header import FDSNNoDataException
@@ -32,7 +36,7 @@ def initial_preprocessing(
 
     Returns
     -------
-    mseed : Stream
+    Stream
         The processed waveform data
 
     Raises
@@ -140,7 +144,7 @@ def butter_bandpass(lowcut: float, highcut: float, fs: float, order: int):
 
     Returns
     -------
-    sos : np.ndarray
+    np.ndarray
         Array of second-order filter coefficients
     """
     nyquist_frequency = 0.5 * fs
@@ -171,7 +175,7 @@ def butter_bandpass_filter(
 
     Returns
     -------
-    y_sos : np.ndarray
+    np.ndarray
         The digital filtered data ouptut
     """
     try:

@@ -1,3 +1,7 @@
+"""
+This module contains functions to calculate the SNR for a single mseed file.
+"""
+
 import functools
 import multiprocessing as mp
 import warnings
@@ -212,10 +216,6 @@ def compute_snr_for_mseed_data(
         Path to the output directory for the SNR and FAS data
     n_procs : int, optional
         Number of processes to use, by default 1
-    apply_smoothing : bool, optional
-        Whether to apply smoothing to the SNR calculation, by default True
-    ko_matrix_path : Path, optional
-        Path to the ko matrix, by default None
     common_frequency_vector : np.ndarray, optional
         Common frequency vector to use for all the waveforms, by default None
         Uses a default frequency vector if not specified defined in the configuration file

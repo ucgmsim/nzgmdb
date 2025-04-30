@@ -1,3 +1,6 @@
+"""
+Module to create the quality database for the NZGMDB.
+"""
 from pathlib import Path
 
 import numpy as np
@@ -402,6 +405,13 @@ def apply_clipNet_filter(
         The file path to the clipped records (created during the GeoNet processing)
     bypass_records : np.ndarray, optional
         The records to bypass the quality
+
+    Returns
+    -------
+    pd.DataFrame
+        The filtered catalog
+    pd.DataFrame
+        The skipped records
     """
     # Read the clipped records
     clipped_records = pd.read_csv(clipped_records_ffp)
@@ -516,41 +526,43 @@ def apply_all_filters(
     fmin_max: float = None,
 ):
     """
-    Apply all the quality filters to the catalog
-    Does the following:
-    1) Filter by contains GMC predictions
-    2) Filter by score mean
-    3) Filter by multi mean
-    4) Filter by fmax
-    5) Filter by fmin
-    6) Ensure we use ground level locations
-    7) Filter out clipped records
-    8) Select which channel to use for duplicate HN, BN for the same evid / sta
+    Apply all the quality filters to the catalog.
+
+    This function performs the following filtering steps:
+    1) Filter by presence of GMC predictions.
+    2) Filter by score mean.
+    3) Filter by multi mean.
+    4) Filter by fmax.
+    5) Filter by fmin.
+    6) Ensure only ground level locations are used.
+    7) Filter out clipped records.
+    8) Select the appropriate channel for duplicate HN/BN records for the same event/station.
 
     Parameters
     ----------
     catalog : pd.DataFrame
-        The catalog dataframe to filter
+        The catalog dataframe to filter.
     clipped_records_ffp : Path
-        The file path to the clipped records (created during the GeoNet processing)
+        The file path to the clipped records (created during GeoNet processing).
     bypass_records : np.ndarray, optional
-        The records to bypass the quality checks
-    score_min: float, optional
-        The minimum score value to filter on
-    multi_max: float, optional
-        The maximum multi_mean value to filter on
-    fmax_min: float, optional
-        The minimum fmax value to filter on
-    fmin_max: float, optional
-        The maximum fmin value to filter on
+        The records to bypass the quality checks.
+    score_min : float, optional
+        The minimum score value to filter on.
+    multi_max : float, optional
+        The maximum multi_mean value to filter on.
+    fmax_min : float, optional
+        The minimum fmax value to filter on.
+    fmin_max : float, optional
+        The maximum fmin value to filter on.
 
     Returns
     -------
     pd.DataFrame
-        The filtered catalog
+        The filtered catalog.
     pd.DataFrame
-        The skipped records
+        The skipped records.
     """
+
     config = cfg.Config()
 
     # Get the config values if they are not provided

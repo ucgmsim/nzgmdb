@@ -1,3 +1,7 @@
+"""
+This module contains functions to process observed data from mseed files and turn them into ascii files
+"""
+
 import functools
 import multiprocessing
 from pathlib import Path
@@ -37,7 +41,7 @@ def process_single_mseed(
 
     Returns
     -------
-    skipped_record : pd.DataFrame, None
+    pd.DataFrame | None
         Dataframe containing the skipped record name and reason why
         or None if the record was processed successfully
     """

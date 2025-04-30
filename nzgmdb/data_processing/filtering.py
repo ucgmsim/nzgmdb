@@ -1,3 +1,7 @@
+"""
+This module contains the functions for determining the clip probability of a given mseed file
+"""
+
 import numpy as np
 from gmprocess.waveform_processing.clipping.clipping_ann import clipNet
 from gmprocess.waveform_processing.clipping.histogram import Histogram
@@ -11,6 +15,20 @@ from nzgmdb.management import config as cfg
 def get_clip_probability(event_mag: float, dist: float, mseed: Stream) -> float:
     """
     Calculate the clip probability based on the mseed inputs
+
+    Parameters
+    ----------
+    event_mag : float
+        The magnitude of the event
+    dist : float
+        The distance of the event to the station
+    mseed : Stream
+        The mseed Stream object
+
+    Returns
+    -------
+    float
+        The clip probability from ClipNet
     """
     # Get the config values
     config = cfg.Config()
