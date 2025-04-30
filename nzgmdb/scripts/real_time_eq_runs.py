@@ -34,17 +34,17 @@ def send_message_to_slack(message: str):
     """
     Send a message to a Slack channel.
 
-    Parameters:
+    Parameters
     ----------
     message : str
         The message to send.
 
-    Returns:
+    Returns
     -------
     response_data : dict
         The response from the Slack API, containing the message timestamp.
 
-    Raises:
+    Raises
     ------
     ValueError:
         If SLACK_CHANNEL or SLACK_BOT_TOKEN is not set in the environment.
@@ -81,21 +81,21 @@ def reply_to_message_on_slack(thread_ts: str, reply_message: str):
     """
     Reply to a message in Slack (threaded reply).
 
-    Parameters:
+    Parameters
     ----------
     thread_ts : str
         The timestamp of the message to reply to.
     reply_message : str
         The reply text.
 
-    Returns:
+    Returns
     -------
     response_data : dict
         The response JSON containing the message timestamp (ts)
 
     Raises:
     ------
-    ValueError:
+    ValueError
         If SLACK_CHANNEL or SLACK_BOT_TOKEN is not set in the environment.
         Or if the response from Slack is not successful.
     """

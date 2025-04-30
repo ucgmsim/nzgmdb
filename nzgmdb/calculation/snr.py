@@ -11,7 +11,7 @@ import numpy as np
 import pandas as pd
 from pandas.errors import EmptyDataError
 
-from IM import snr_calculation, im_calculation
+from IM import im_calculation, snr_calculation
 from nzgmdb.management import config as cfg
 from nzgmdb.management import custom_errors, file_structure
 from nzgmdb.mseed_management import reading
