@@ -13,7 +13,7 @@ import typer
 from nzgmdb.management import file_structure
 from qcore import cli
 
-app = typer.Typer()
+app = typer.Typer(pretty_exceptions_enable=False)
 
 DROPBOX_PATH = "dropbox:/QuakeCoRE/Public/NZGMDB"
 

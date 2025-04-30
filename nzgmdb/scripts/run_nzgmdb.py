@@ -18,7 +18,7 @@ from nzgmdb.phase_arrival import gen_phase_arrival_table
 from nzgmdb.scripts import run_gmc, upload_to_dropbox
 from qcore import cli
 
-app = typer.Typer()
+app = typer.Typer(pretty_exceptions_enable=False)
 
 
 @cli.from_docstring(app)
