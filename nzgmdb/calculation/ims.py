@@ -38,7 +38,7 @@ def calculate_im_for_record(
         The periods for calculating the pseudo-spectral acceleration
     fas_frequencies : np.ndarray
         The frequencies for calculating the Fourier amplitude spectrum
-    ko_directory: Path
+    ko_directory : Path
         The path to the directory containing the Konno-Ohmachi smoothing files
 
     Returns

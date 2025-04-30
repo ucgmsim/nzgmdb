@@ -36,12 +36,12 @@ def send_message_to_slack(message: str):
 
     Parameters:
     ----------
-    message: str
+    message : str
         The message to send.
 
     Returns:
     -------
-    response_data: dict
+    response_data : dict
         The response from the Slack API, containing the message timestamp.
 
     Raises:
@@ -83,14 +83,14 @@ def reply_to_message_on_slack(thread_ts: str, reply_message: str):
 
     Parameters:
     ----------
-    thread_ts: str
+    thread_ts : str
         The timestamp of the message to reply to.
-    reply_message: str
+    reply_message : str
         The reply text.
 
     Returns:
     -------
-    response_data: dict
+    response_data : dict
         The response JSON containing the message timestamp (ts)
 
     Raises:
