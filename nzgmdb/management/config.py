@@ -91,6 +91,16 @@ class Config:
     def _load_machine_config(self):
         """
         Load the machine config file.
+
+        Returns
+        -------
+        dict
+            The loaded machine configuration as a dictionary. Returns an empty dictionary if the file is not found.
+
+        Raises
+        ------
+        FileNotFoundError
+            If the machine config file is not found.
         """
         try:
             with open(self.machine_config_path, "r") as file:

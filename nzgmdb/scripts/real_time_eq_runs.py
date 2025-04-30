@@ -36,11 +36,13 @@ def send_message_to_slack(message: str):
 
     Parameters:
     ----------
-    message (str): The message to send to the Slack channel.
+    message: str
+        The message to send.
 
     Returns:
     -------
-        dict: The response JSON containing the message timestamp (ts)
+    response_data: dict
+        The response from the Slack API, containing the message timestamp.
 
     Raises:
     ------
@@ -81,14 +83,15 @@ def reply_to_message_on_slack(thread_ts: str, reply_message: str):
 
     Parameters:
     ----------
-    thread_ts (str):
+    thread_ts: str
         The timestamp of the message to reply to.
-    reply_message (str):
+    reply_message: str
         The reply text.
 
     Returns:
     -------
-        dict: The response JSON containing the message timestamp (ts)
+    response_data: dict
+        The response JSON containing the message timestamp (ts)
 
     Raises:
     ------
@@ -182,6 +185,11 @@ def update_eq_source_table(
     ----------
     event_dir : Path
         The event directory
+
+    Returns
+    -------
+    tuple
+        A tuple containing the updated values: (magnitude, latitude, longitude, depth)
     """
     flatfile_dir = file_structure.get_flatfile_dir(event_dir)
     eq_source_ffp = (

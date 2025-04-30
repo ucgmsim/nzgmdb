@@ -215,7 +215,7 @@ def compute_snr_for_mseed_data(
         Path to the output directory for the metadata and skipped records
     snr_fas_output_dir : Path
         Path to the output directory for the SNR and FAS data
-    ko_matrix_path : Path
+    ko_directory : Path
         Path to the ko matrix directory
     n_procs : int, optional
         Number of processes to use, by default 1

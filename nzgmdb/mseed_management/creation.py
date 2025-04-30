@@ -183,6 +183,8 @@ def split_stream_into_mseeds(st: Stream, unique_channels: Iterable, event_id: st
     unique_channels : Iterable
         An Iterable of tuples containing the unique channel and location for each mseed file created
         [(channel, location), ...]
+    event_id: str
+        The event id which is used if there is a raised issue with the mseed file
 
     Returns
     -------

@@ -23,7 +23,6 @@ from nzgmdb.data_processing import filtering
 from nzgmdb.management import config as cfg
 from nzgmdb.management import custom_errors, file_structure
 from nzgmdb.mseed_management import creation
-from qcore import geo
 
 
 class EventData(NamedTuple):

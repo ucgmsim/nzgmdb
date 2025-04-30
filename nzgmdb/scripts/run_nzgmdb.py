@@ -68,6 +68,8 @@ def fetch_geonet_data(
         The full file path to a set of record IDs to only run for (default is None).
     real_time : bool, optional
         If True, the function will run in real-time mode by using a different client (default is False).
+    mp_sites : bool, optional
+        If True, the function will use multiprocessing over sites instead of events (default is False).
     """
     geonet.parse_geonet_information(
         main_dir,
@@ -237,6 +239,8 @@ def calculate_snr(
     ----------
     main_dir : Path
         The main directory of the NZGMDB results (Highest level directory).
+    ko_directory : Path
+        The directory containing the Konno-Ohmachi smoothing files.
     phase_table_path : Path, optional
         Path to the phase arrival table. If not provided, defaults to the expected location.
     meta_output_dir : Path, optional
@@ -419,17 +423,16 @@ def run_im_calculation(
             file_okay=False,
         ),
     ],
-    output_dir: Annotated[
-        Path,
-        typer.Option(file_okay=False),
-    ] = None,
     ko_directory: Annotated[
         Path,
-        typer.Option(
-            help="The directory containing the Konno-Ohmachi smoothing files",
+        typer.Argument(
             exists=True,
             file_okay=False,
         ),
+    ],
+    output_dir: Annotated[
+        Path,
+        typer.Option(file_okay=False),
     ] = None,
     n_procs: Annotated[int, typer.Option()] = 1,
     checkpoint: Annotated[
@@ -441,7 +444,6 @@ def run_im_calculation(
     intensity_measures: Annotated[
         list[IM],
         typer.Option(
-            help="The list of intensity measures to calculate",
             callback=lambda x: [IM(i) for i in x[0].split(",")],
         ),
     ] = None,
@@ -455,12 +457,16 @@ def run_im_calculation(
     ----------
     main_dir : Path
         The main directory of the NZGMDB results (Highest level directory).
+    ko_directory : Path
+        The directory containing the Konno-Ohmachi smoothing files. Defaults to the expected location.
     output_dir : Path, optional
         The directory to save the IM files. Defaults to the expected location.
     n_procs : int, optional
         The number of processes to use (default is 1).
     checkpoint : bool, optional
         If True, the function will check for already completed files and skip them.
+    intensity_measures : list[IM], optional
+        The list of intensity measures to calculate, by default None and will use the config file.
     """
     if output_dir is None:
         output_dir = file_structure.get_im_dir(main_dir)

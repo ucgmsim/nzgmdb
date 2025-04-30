@@ -4,7 +4,6 @@ Contains functions to run shell commands with Conda environment activation.
 
 import os
 import subprocess
-import sys
 from pathlib import Path
 
 
