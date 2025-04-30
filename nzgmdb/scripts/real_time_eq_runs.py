@@ -41,7 +41,7 @@ def send_message_to_slack(message: str):
 
     Returns
     -------
-    response_data : dict
+    dict
         The response from the Slack API, containing the message timestamp.
 
     Raises
@@ -90,10 +90,10 @@ def reply_to_message_on_slack(thread_ts: str, reply_message: str):
 
     Returns
     -------
-    response_data : dict
+    dict
         The response JSON containing the message timestamp (ts)
 
-    Raises:
+    Raises
     ------
     ValueError
         If SLACK_CHANNEL or SLACK_BOT_TOKEN is not set in the environment.
