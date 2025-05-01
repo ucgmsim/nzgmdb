@@ -71,6 +71,8 @@ def read_mseed_to_stream(file_path: Path):
 def create_waveform_from_mseed(
     mseed_file: Path,
     pre_process: bool = False,
+    apply_taper: bool = False,
+    apply_zero_padding: bool = False,
 ):
     """
     Create a waveform object from a mseed file
@@ -83,6 +85,10 @@ def create_waveform_from_mseed(
     pre_process : bool (optional)
         Whether to do some small processing such as detrending and removing sensitivity
         (Can however fail if the sensitivity can't be removed and raise errors), by default False
+    apply_taper : bool (optional)
+        Whether to apply a taper to the data, by default True (Only when pre_process is True)
+    apply_zero_padding : bool (optional)
+        Whether to apply zero padding to the data, by default True (Only when pre_process is True)
 
     Returns
     -------
@@ -108,7 +114,7 @@ def create_waveform_from_mseed(
 
     # Process the data if needed
     if pre_process:
-        mseed = waveform_manipulation.initial_preprocessing(mseed)
+        mseed = waveform_manipulation.initial_preprocessing(mseed, apply_taper=apply_taper, apply_zero_padding=apply_zero_padding)
 
     # Stack the data
     try:
