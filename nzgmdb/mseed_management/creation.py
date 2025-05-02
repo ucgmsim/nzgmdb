@@ -140,7 +140,7 @@ def get_waveforms(
                     net,
                     sta,
                     location,
-                    channel_codes,
+                    "*",
                     start_time,
                     end_time,
                     attach_response=True,
@@ -188,6 +188,10 @@ def split_stream_into_mseeds(st: Stream, unique_channels: Iterable, event_id: st
     mseeds = []
     raised_issues = []
     for chan, loc in unique_channels:
+        if chan in ["HN", "BN"]:
+            # Skip these
+            continue
+
         # Each unique channel and location pair is a new mseed file
         st_new = st.select(location=loc, channel=f"{chan}?")
         record_id = f"{event_id}_{st_new[0].stats.station}_{st_new[0].stats.channel[:2]}_{st_new[0].stats.location}"
@@ -205,49 +209,49 @@ def split_stream_into_mseeds(st: Stream, unique_channels: Iterable, event_id: st
 
         # Check again if the length of the traces is higher than 3
         # if len(st_new) > 3:
-            # Save the stream image file
-            # try:
-            # st_new.plot(
-            #     outfile=f"/mnt/hypo_data/jri83/nzgmdb/stream_test/st_plots/{record_id}.png",
-            #     show=False,
-            # )
-            # write_stream_to_mseed(
-            #     st_new,
-            #     f"/mnt/hypo_data/jri83/nzgmdb/stream_test/st_plots/{record_id}.mseed",
-            # )
-            # except:
-            #     raised_issues.append([record_id, "Split stream, unable to save plot"])
-            # st_new.plot(
-            #     outfile=f"/home/joel/local/gmdb/testing_folder/3366146/st_plots/{record_id}.png",
-            #     show=False,
-            # )
+        # Save the stream image file
+        # try:
+        # st_new.plot(
+        #     outfile=f"/mnt/hypo_data/jri83/nzgmdb/stream_test/st_plots/{record_id}.png",
+        #     show=False,
+        # )
+        # write_stream_to_mseed(
+        #     st_new,
+        #     f"/mnt/hypo_data/jri83/nzgmdb/stream_test/st_plots/{record_id}.mseed",
+        # )
+        # except:
+        #     raised_issues.append([record_id, "Split stream, unable to save plot"])
+        # st_new.plot(
+        #     outfile=f"/home/joel/local/gmdb/testing_folder/3366146/st_plots/{record_id}.png",
+        #     show=False,
+        # )
 
-            # Get the longest traces start and end time
-            # try:
-            #     max_trace = max(
-            #         [
-            #             (
-            #                 len(tr),
-            #                 tr.stats.starttime,
-            #                 tr.stats.endtime,
-            #             )
-            #             for tr in st_new
-            #             if tr.stats.starttime != tr.stats.endtime
-            #         ],
-            #         key=lambda x: x[0],  # Compare based on the duration
-            #     )
-            #
-            #     _, max_starttime, max_endtime = max_trace
-            #
-            #     # Select the longest streams
-            #     st_new = st_new.trim(max_starttime, max_endtime)
-            #
-            #     # Add to the raised issues
-            #     raised_issues.append([record_id, "Split stream, multiple traces"])
-            # except:
-            #     raised_issues.append(
-            #         [record_id, "Unknown Issue, max arg empty sequence"]
-            #     )
+        # Get the longest traces start and end time
+        # try:
+        #     max_trace = max(
+        #         [
+        #             (
+        #                 len(tr),
+        #                 tr.stats.starttime,
+        #                 tr.stats.endtime,
+        #             )
+        #             for tr in st_new
+        #             if tr.stats.starttime != tr.stats.endtime
+        #         ],
+        #         key=lambda x: x[0],  # Compare based on the duration
+        #     )
+        #
+        #     _, max_starttime, max_endtime = max_trace
+        #
+        #     # Select the longest streams
+        #     st_new = st_new.trim(max_starttime, max_endtime)
+        #
+        #     # Add to the raised issues
+        #     raised_issues.append([record_id, "Split stream, multiple traces"])
+        # except:
+        #     raised_issues.append(
+        #         [record_id, "Unknown Issue, max arg empty sequence"]
+        #     )
 
         # Check the final length of the traces
         if len(st_new) != 3:
