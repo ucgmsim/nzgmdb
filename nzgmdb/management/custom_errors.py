@@ -14,6 +14,7 @@ class DiffrentiateError(Exception):
 
     pass
 
+
 class SensitivityRemovalError(Exception):
     """Exception raised when sensitivity removal fails."""
 

@@ -125,7 +125,9 @@ def initial_preprocessing(
             # differentiate data i.e., m/s to m/s^2
             mseed.differentiate()
         except ValueError:
-            raise custom_errors.DiffrentiateError(f"Failed to differentiate station {station} with location {location}")
+            raise custom_errors.DiffrentiateError(
+                f"Failed to differentiate station {station} with location {location}"
+            )
 
     # Get constant gravity (g)
     g = config.get_value("g")

@@ -231,7 +231,7 @@ def upload_to_dropbox(  # noqa: D103
     ),
     version: str = typer.Option(
         None, help="Version of the results, defaults to the directory name"
-    ),
+    ) = None,
     n_procs: int = typer.Option(1, help="Number of processes to use"),
 ):
     main(
@@ -248,16 +248,17 @@ def upload_failed_files(  # noqa: D103
     ),
     version: str = typer.Option(
         None, help="Version of the results, defaults to the directory name"
-    ),
+    ) = None,
     n_procs: int = typer.Option(1, help="Number of processes to use"),
 ):
     with open(failed_files_file, "r") as f:
         failed_files = f.read().splitlines()
 
     if version is None:
-        version = failed_files_file.parent.name
+        version = failed_files_file.parent.parent.name
 
     dropbox_version_dir = f"{DROPBOX_PATH}/{version}"
+    print(dropbox_version_dir)
 
     with mp.Pool(n_procs) as pool:
         failed_files = pool.starmap(
