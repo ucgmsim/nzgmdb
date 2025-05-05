@@ -9,6 +9,11 @@ class EventIDNotFoundError(Exception):
     pass
 
 
+class DiffrentiateError(Exception):
+    """Exception raised for when differentiate fails"""
+
+    pass
+
 class SensitivityRemovalError(Exception):
     """Exception raised when sensitivity removal fails."""
 

@@ -85,6 +85,13 @@ def process_single_mseed(
         }
         skipped_record = pd.DataFrame([skipped_record_dict])
         return skipped_record
+    except custom_errors.DiffrentiateError:
+        skipped_record_dict = {
+            "record_id": mseed_file.stem,
+            "reason": "Unable to differentiate record",
+        }
+        skipped_record = pd.DataFrame([skipped_record_dict])
+        return skipped_record
 
     # Get the GMC fmin and fmax values
     fmin = None if gmc_rows is None or gmc_rows.empty else gmc_rows["fmin_mean"].max()

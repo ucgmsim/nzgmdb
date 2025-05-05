@@ -121,8 +121,11 @@ def initial_preprocessing(
 
     # If the channel is not a Strong Motion station then we need to differentiate
     if channel[:2] not in ["HN", "BN"]:
-        # differentiate data i.e., m/s to m/s^2
-        mseed.differentiate()
+        try:
+            # differentiate data i.e., m/s to m/s^2
+            mseed.differentiate()
+        except ValueError:
+            raise custom_errors.DiffrentiateError(f"Failed to differentiate station {station} with location {location}")
 
     # Get constant gravity (g)
     g = config.get_value("g")
