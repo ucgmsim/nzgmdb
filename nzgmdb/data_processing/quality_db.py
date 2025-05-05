@@ -472,9 +472,18 @@ def apply_clipNet_filter(
 
 def filter_duplicate_channels(catalog: pd.DataFrame, bypass_records: np.ndarray = None):
     """
-    Filter the catalog based on the duplicate channels.
-    Selects HN over BN except for the bypass records if the BN
-    for the duplicate evid / sta is selected.
+    Filter the catalog by removing lower-priority duplicate channel records.
+
+    For each (evid, sta) combination that has multiple channel entries, the function
+    keeps only one record based on the following priority:
+    1. Records listed in `bypass_records` (highest priority)
+    2. HN channels (Strong motion, high frequency)
+    3. BN channels (Strong motion, lower frequency)
+    4. HH channels (Broadband, higher priority channel)
+    5. All other channels (Broadband, lowest priority)
+
+    If multiple records have the same priority, the first one encountered is kept.
+    All other duplicates are removed and returned in the skipped records.
 
     Parameters
     ----------
@@ -490,61 +499,43 @@ def filter_duplicate_channels(catalog: pd.DataFrame, bypass_records: np.ndarray 
     pd.DataFrame
         The skipped records
     """
-    # Remove all channels that are not HN or BN
-    catalog = catalog[catalog["chan"].isin(["HN", "BN"])]
-
-    # Find same evid_sta combos by combining evid and sta columns
+    # Step 1: Create 'evid_sta' for grouping
     catalog["evid_sta"] = catalog["evid"].astype(str) + "_" + catalog["sta"]
 
-    # Get the ones that are duplicated
+    # Step 2: Mark all duplicates
     dup_mask = catalog["evid_sta"].duplicated(keep=False)
+    catalog_dups = catalog[dup_mask].copy()
 
-    # Select all the BN ones from the original dataframe to remove that are duplicates
-    duplicate_channels_filter = catalog.loc[dup_mask & (catalog["chan"] == "BN")]
+    # Step 3: Create bypass flag using record_id
+    if bypass_records is None:
+        bypass_records = []
+    catalog_dups["bypass"] = catalog_dups["record_id"].isin(bypass_records)
 
-    # Remove the bypass records if they exist and add other duplicated channels to ignore
-    if bypass_records is not None:
-        # Get the catalog records that are in the bypass_records
-        bypass_records_mask = catalog.loc[
-            catalog["record_id"].isin(bypass_records), "evid_sta"
-        ]
-        bypass_records_mask = catalog[catalog["evid_sta"].isin(bypass_records_mask)]
+    # Step 4: Define priority levels
+    priority = {"HN": 1, "BN": 2, "HH": 3}
+    catalog_dups["chan_priority"] = catalog_dups["chan"].map(priority).fillna(4)
 
-        # remove the bypass records from the bypass_records_mask
-        add_to_duplicated = bypass_records_mask[
-            ~bypass_records_mask["record_id"].isin(bypass_records)
-        ]
+    # Step 5: Override priority for bypass records
+    catalog_dups.loc[catalog_dups["bypass"], "chan_priority"] = 0
 
-        # Add the non bypass records to the duplicate_channels_filter that are duplicates
-        duplicate_channels_filter = pd.concat(
-            [
-                duplicate_channels_filter,
-                catalog.loc[catalog["record_id"].isin(add_to_duplicated["record_id"])],
-            ]
-        )
+    # Step 6: Sort by priority and select top-priority row per group
+    catalog_dups_sorted = catalog_dups.sort_values(by=["evid_sta", "chan_priority"])
+    best_dups = catalog_dups_sorted.groupby("evid_sta", as_index=False).nth(0)
 
-        # Remove the bypass records from the duplicate_channels_filter
-        duplicate_channels_filter = duplicate_channels_filter[
-            ~duplicate_channels_filter["record_id"].isin(bypass_records)
-        ]
+    # Step 7: Identify which records to drop (the non-best ones)
+    records_to_keep = best_dups["record_id"]
+    records_to_drop = catalog_dups[~catalog_dups["record_id"].isin(records_to_keep)]
 
-    # Create the skipped_records dataframe from duplicate_channels_filter
+    # Step 8: Prepare skipped_records
     skipped_records = pd.DataFrame(
-        {
-            "record_id": duplicate_channels_filter["record_id"],
-            "reason": "Duplicate channels",
-        }
+        {"record_id": records_to_drop["record_id"], "reason": "Duplicate channels"}
     )
 
-    # Filter out the duplicate channel records out of the catalog
-    catalog = catalog[
-        ~catalog["record_id"].isin(duplicate_channels_filter["record_id"])
-    ]
+    # Step 9: Remove skipped records from catalog
+    catalog = catalog[~catalog["record_id"].isin(records_to_drop["record_id"])]
 
-    # Ensure that there is no duplictes in the evid_sta column
+    # Step 10: Clean up
     assert len(catalog["evid_sta"].unique()) == len(catalog)
-
-    # Remove the evid_sta column
     catalog = catalog.drop(columns=["evid_sta"])
 
     return catalog, skipped_records
