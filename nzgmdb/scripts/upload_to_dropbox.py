@@ -226,13 +226,21 @@ def determine_dropbox_path(dropbox_version_dir: str, local_file: Path):
 
 @app.command()
 def upload_to_dropbox(  # noqa: D103
-    input_directory: Path = typer.Argument(
-        help="Directory containing the results", file_okay=False, exists=True
-    ),
-    version: str = typer.Option(
-        None, help="Version of the results, defaults to the directory name"
-    ) = None,
-    n_procs: int = typer.Option(1, help="Number of processes to use"),
+    input_directory: Annotated[
+        Path,
+        typer.Argument(
+            help="Directory containing the results",
+            file_okay=False,
+            exists=True,
+        ),
+    ],
+    version: Annotated[
+        str,
+        typer.Option(
+            help="Version of the results, defaults to the directory name",
+        ),
+    ] = None,
+    n_procs: Annotated[int, typer.Option(help="The number of processes to use")] = 1,
 ):
     main(
         input_directory,
@@ -243,13 +251,21 @@ def upload_to_dropbox(  # noqa: D103
 
 @app.command()
 def upload_failed_files(  # noqa: D103
-    failed_files_file: Path = typer.Argument(
-        help="File containing the failed files", dir_okay=False, exists=True
-    ),
-    version: str = typer.Option(
-        None, help="Version of the results, defaults to the directory name"
-    ) = None,
-    n_procs: int = typer.Option(1, help="Number of processes to use"),
+    failed_files_file: Annotated[
+        Path,
+        typer.Argument(
+            help="File containing the failed files",
+            dir_okay=False,
+            exists=True,
+        ),
+    ],
+    version: Annotated[
+        str,
+        typer.Option(
+            help="Version of the results, defaults to the directory name",
+        ),
+    ] = None,
+    n_procs: Annotated[int, typer.Option(help="The number of processes to use")] = 1,
 ):
     with open(failed_files_file, "r") as f:
         failed_files = f.read().splitlines()
