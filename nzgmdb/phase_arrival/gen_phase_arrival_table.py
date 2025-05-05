@@ -185,10 +185,15 @@ def generate_phase_arrival_table(
         phase_df["p_wave_ix"] = phase_df["p_wave_ix_bypass"].combine_first(
             phase_df["p_wave_ix"]
         )
+        # Identify which rows were overridden
+        overridden_mask = phase_df["p_wave_ix_bypass"].notnull()
+        # Set corresponding p_wave_prob to 1.0 where overridden
+        phase_df.loc[overridden_mask, "p_wave_prob"] = 1.0
+
         phase_df = phase_df.drop(columns=["p_wave_ix_bypass"])
-        # Ensure the p_wave_ix and s_wave_ix column is an int
-        phase_df["p_wave_ix"] = phase_df["p_wave_ix"].astype(int)
-        phase_df["s_wave_ix"] = phase_df["s_wave_ix"].astype(int)
+    # Ensure the p_wave_ix and s_wave_ix column is an int
+    phase_df["p_wave_ix"] = phase_df["p_wave_ix"].astype(int)
+    phase_df["s_wave_ix"] = phase_df["s_wave_ix"].astype(int)
 
     # Save the phase arrival table
     output_dir.mkdir(parents=True, exist_ok=True)

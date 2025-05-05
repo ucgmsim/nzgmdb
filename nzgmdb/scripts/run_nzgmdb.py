@@ -162,6 +162,14 @@ def make_phase_arrival_table(  # noqa: D103
         ),
     ],
     n_procs: Annotated[int, typer.Option(help="Number of processes to use")] = 1,
+    bypass_records_ffp: Annotated[
+        Path,
+        typer.Option(
+            help="The full file path to the bypass records file for custom p_wave_ix values",
+            exists=True,
+            dir_okay=False,
+        ),
+    ] = None,
 ):
     gen_phase_arrival_table.generate_phase_arrival_table(
         main_dir,
@@ -170,6 +178,7 @@ def make_phase_arrival_table(  # noqa: D103
         conda_sh,
         env_activate_command,
         n_procs,
+        bypass_records_ffp,
     )
 
 

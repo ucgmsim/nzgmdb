@@ -51,15 +51,19 @@ def run_phase_net(
         probs = ph.predict(input_resampled)
         p_wave_ix, s_wave_ix = np.argmax(probs[0, :, 1]), np.argmax(probs[0, :, 2])
 
+        # Get the probability of the p and s wave
+        p_prob, s_prob = probs[0, p_wave_ix, 1], probs[0, s_wave_ix, 2]
+
         # Adjust for original dt
         p_wave_ix = int(np.round((dt_new / dt) * p_wave_ix))
         s_wave_ix = int(np.round((dt_new / dt) * s_wave_ix))
     else:
         probs = ph.predict(input_data)
         p_wave_ix, s_wave_ix = np.argmax(probs[0, :, 1]), np.argmax(probs[0, :, 2])
+        p_prob, s_prob = probs[0, p_wave_ix, 1], probs[0, s_wave_ix, 2]
 
     if return_prob_series:
-        return p_wave_ix, s_wave_ix, probs[0, :, 1], probs[0, :, 2]
+        return p_wave_ix, s_wave_ix, probs[0, :, 1], probs[0, :, 2], p_prob, s_prob
 
     return p_wave_ix, s_wave_ix
 
@@ -174,10 +178,12 @@ def process_mseed(mseed_file: Path, h5_ffp: Path):
         return None, skipped_record
 
     try:
-        p_wave_ix, s_wave_ix, p_prob_series, s_prob_series = run_phase_net(
-            np.stack([trace.data for trace in mseed], axis=1)[np.newaxis, ...],
-            mseed[0].stats["delta"],
-            return_prob_series=True,
+        p_wave_ix, s_wave_ix, p_prob_series, s_prob_series, p_prob, s_prob = (
+            run_phase_net(
+                np.stack([trace.data for trace in mseed], axis=1)[np.newaxis, ...],
+                mseed[0].stats["delta"],
+                return_prob_series=True,
+            )
         )
     except ValueError:
         skipped_record = pd.DataFrame(
@@ -204,12 +210,25 @@ def process_mseed(mseed_file: Path, h5_ffp: Path):
             compression="lzf",
         )
 
+    # Get the extra columns such as datetime of p and s wave as well as the probability at the p and s wave
+    tr1 = mseed[0]
+    start_time = tr1.stats.starttime
+    end_time = tr1.stats.endtime
+    times = np.linspace(start_time.timestamp, end_time.timestamp, tr1.stats.npts)
+
+    p_wave_datetime = UTCDateTime(times[p_wave_ix])
+    s_wave_datetime = UTCDateTime(times[s_wave_ix])
+
     return (
         pd.DataFrame(
             {
                 "record_id": [mseed_file.stem],
                 "p_wave_ix": [p_wave_ix],
+                "p_wave_datetime": [p_wave_datetime],
+                "p_wave_prob": [p_prob],
                 "s_wave_ix": [s_wave_ix],
+                "s_wave_datetime": [s_wave_datetime],
+                "s_wave_prob": [s_prob],
             }
         ),
         None,
