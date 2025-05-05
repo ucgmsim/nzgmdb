@@ -27,6 +27,43 @@ from empirical.util import classdef, openquake_wrapper_vectorized, z_model_calcu
 from nzgmdb.management import config as cfg
 
 
+def get_arias_intensity_norm(
+    st: Stream,
+):
+    """
+    Calculate the normalized Arias intensity from a stream object.
+
+    Parameters
+    ----------
+    st : Stream
+        The stream object containing the waveform data
+
+    Returns
+    -------
+    Ia_norm : np.ndarray
+        The normalized Arias intensity as a 2D array with time and normalized intensity values
+    """
+    g = 9.81
+    trace = st[0]  # assumes one Trace
+    dt = trace.stats.delta
+    npts = trace.stats.npts
+
+    t = np.linspace(0, (npts - 1) * dt, npts)
+    a = trace.data  # acceleration in m/s^2
+
+    a_sq = a**2.0
+    Ia_1col = np.zeros(npts)
+
+    for i in range(1, npts):
+        Ia_1col[i] = Ia_1col[i - 1] + np.pi / (2 * g) * a_sq[i - 1] * dt
+
+    Ia_peak = float(Ia_1col[-1])
+    Ia_norm_1col = Ia_1col / Ia_peak
+    Ia_norm = np.column_stack((t, Ia_norm_1col))
+
+    return Ia_1col, Ia_norm
+
+
 def get_waveforms(
     preferred_origin: Origin,
     client: FDSN_Client,
@@ -149,6 +186,56 @@ def get_waveforms(
                     end_time,
                     attach_response=True,
                 )
+
+                # Calculate the normalized Arias intensity
+                # Ia, Ia_norm = get_arias_intensity_norm(st)
+
+                # Check the value 7.5 seconds in
+                # print(Ia_norm[0][7.5])
+
+                data = st[0].data
+
+                # Min-Max normalization
+                normalized_values = (data - data.min()) / (data.max() - data.min())
+
+                # Get the time array
+                dt = st[0].stats.delta
+                npts = st[0].stats.npts
+                t = np.linspace(0, (npts - 1) * dt, npts)
+
+                # Find the index of the value closest to 7.5
+                target = 7.5
+                closest_index = np.abs(t - target).argmin()
+
+                # Calculate n_points per second
+                npts_per_sec = 1 / dt
+
+                # Check the values from index 0 -> closest_index if above the value 0.75
+                selection = normalized_values[:closest_index]
+                if np.any(selection > 0.75):
+                    print("Over")
+
+                # Do a check for the end of the waveform
+                end_check = npts_per_sec * 15
+                selection = normalized_values[int(len(normalized_values) - end_check) :]
+                if np.any(selection > 0.75):
+                    print("Multiple waveform potential")
+                    # Check values before the peak to see if it is below 0.75 for at least 15 sec
+                    # Find the first occurance of the value above 0.75 in the selection
+                    # last_index = int(len(normalized_values) - np.argmax(selection > threshold))
+                # Flowchart is as follows
+                """
+                Check the current AI norm, check values at start and end from some value in to see the value
+                less than or greater than to find the flat points.
+                If not then we push forward or backward by some exta time
+                we check then for ledges to end the waveform extraction on, or start it
+                keep repeating till a limit is reached in either direction.
+                
+                Compare against a dataset of quality waveforms to ensure we dont screw them up
+                and new ones from the issued set to fix multiple earthquakes.
+                Do a full run to see the differences.
+                """
+
             break
         except FDSNNoDataException:
             return None
