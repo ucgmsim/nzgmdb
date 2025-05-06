@@ -177,7 +177,18 @@ def merge_flatfiles(main_dir: Path, bypass_records_ffp: Path = None):
             flatfile_dir / file_structure.PreFlatfileNames.PHASE_ARRIVAL_TABLE
         )
     else:
-        phase_table_df = pd.DataFrame(columns=["record_id", "p_wave_ix", "s_wave_ix"])
+        phase_table_df = pd.DataFrame(
+            columns=[
+                "record_id",
+                "p_wave_ix",
+                "p_wave_datetime",
+                "p_wave_prob",
+                "s_wave_ix",
+                "s_wave_datetime",
+                "s_wave_prob",
+                "evid_datetime",
+            ]
+        )
     prop_df = pd.read_csv(
         flatfile_dir / file_structure.PreFlatfileNames.PROPAGATION_TABLE,
         dtype={"evid": str},
