@@ -38,12 +38,7 @@ def fetch_geonet_data(
         Path, typer.Option(exists=True, dir_okay=False)
     ] = None,
     real_time: Annotated[bool, typer.Option()] = False,
-    mp_sites: Annotated[
-        bool,
-        typer.Option(
-            help="If True, the function will use the multiprocessing over sites instead of events",
-        ),
-    ] = False,
+    mp_sites: Annotated[bool, typer.Option()] = False,
 ):
     """
     Fetch earthquake data from Geonet and generate the earthquake source and station magnitude tables.
@@ -771,7 +766,7 @@ def run_full_nzgmdb(
         ),
     ] = None,
     machine: Annotated[
-        cfg.MachineName,
+        cfg.MachineName | None,
         typer.Option(
             case_sensitive=False,
         ),

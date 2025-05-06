@@ -14,8 +14,8 @@ from nzgmdb.management import file_structure
 def merge_im_data(
     im_dir: Path,
     output_dir: Path,
-    gmc_ffp: Path = None,
-    fmax_ffp: Path = None,
+    gmc_ffp: Path | None = None,
+    fmax_ffp: Path | None = None,
 ):
     """
     Merge the IM data into a single flatfile. Also merges in the GMC and fmax data and

@@ -100,7 +100,7 @@ def compute_ims_for_all_processed_records(
     ko_directory: Path,
     n_procs: int = 1,
     checkpoint: bool = False,
-    intensity_measures: list[ims.IM] = None,
+    intensity_measures: list[ims.IM] | None = None,
 ):
     """
     Compute the IMs for all processed records in the main directory

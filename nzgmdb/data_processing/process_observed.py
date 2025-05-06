@@ -17,9 +17,9 @@ from nzgmdb.mseed_management import reading
 
 def process_single_mseed(
     mseed_file: Path,
-    gmc_df: pd.DataFrame = None,
-    fmax_df: pd.DataFrame = None,
-    bypass_df: pd.DataFrame = None,
+    gmc_df: pd.DataFrame | None = None,
+    fmax_df: pd.DataFrame | None = None,
+    bypass_df: pd.DataFrame | None = None,
 ):
     """
     Process a single mseed file and save the processed data to a txt file
@@ -168,9 +168,9 @@ def process_single_mseed(
 
 def process_mseeds_to_txt(
     main_dir: Path,
-    gmc_ffp: Path = None,
-    fmax_ffp: Path = None,
-    bypass_records_ffp: Path = None,
+    gmc_ffp: Path | None = None,
+    fmax_ffp: Path | None = None,
+    bypass_records_ffp: Path | None = None,
     n_procs: int = 1,
 ):
     """
@@ -181,13 +181,13 @@ def process_mseeds_to_txt(
     ----------
     main_dir : Path
         The main directory of the NZGMDB results (Highest level directory)
-    gmc_ffp : Path
+    gmc_ffp : Path, optional
         The full file path to the GMC predictions file
-    fmax_ffp : Path
+    fmax_ffp : Path, optional
         The full file path to the Fmax file
-    bypass_records_ffp : Path
+    bypass_records_ffp : Path, optional
         The full file path to the bypass records file, which includes a custom fmin, fmax
-    n_procs : int
+    n_procs : int, optional
         The number of processes to use for multiprocessing
     """
     # Get the raw waveform mseed files

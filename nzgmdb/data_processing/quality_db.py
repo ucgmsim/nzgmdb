@@ -1,6 +1,7 @@
 """
 Module to create the quality database for the NZGMDB.
 """
+
 from pathlib import Path
 
 import numpy as np
@@ -344,7 +345,9 @@ def filter_fmin(
     return catalog, skipped_records
 
 
-def filter_missing_sta_info(catalog: pd.DataFrame, bypass_records: np.ndarray = None):
+def filter_missing_sta_info(
+    catalog: pd.DataFrame, bypass_records: np.ndarray | None = None
+):
     """
     Filter the catalog based on the missing station information
 

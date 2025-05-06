@@ -2,14 +2,14 @@
 Module to manage the configuration file for constants and configuration settings for an NZGMDB run.
 """
 
-from enum import Enum
+from enum import StrEnum
 
 import yaml
 
 from nzgmdb.management import file_structure
 
 
-class MachineName(str, Enum):
+class MachineName(StrEnum):
     """
     Enum for the machine names.
     """
@@ -19,7 +19,7 @@ class MachineName(str, Enum):
     HYPOCENTRE = "hypocentre"
 
 
-class WorkflowStep(str, Enum):
+class WorkflowStep(StrEnum):
     """
     Enum for the workflow steps.
     """

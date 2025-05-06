@@ -23,7 +23,7 @@ def create_empty_h5_file(h5_ffp: Path, group_name: str):
     h5_ffp : Path
         The full file path to the HDF5 file.
     group_name : str
-        The name of the group to create in the HDF5 file. (mseed file name)
+        The name of the group to create in the HDF5 file (mseed file name).
     """
     # Create empty arrays with shape but no data
     empty_shape = (0,)  # 0-length array
