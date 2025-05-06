@@ -135,12 +135,6 @@ def make_phase_arrival_table(  # noqa: D103
             file_okay=False,
         ),
     ],
-    output_dir: Annotated[
-        Path,
-        typer.Argument(
-            help="The directory to save the phase arrival table", file_okay=False
-        ),
-    ],
     run_phasenet_script_ffp: Annotated[
         Path,
         typer.Argument(
@@ -173,7 +167,6 @@ def make_phase_arrival_table(  # noqa: D103
 ):
     gen_phase_arrival_table.generate_phase_arrival_table(
         main_dir,
-        output_dir,
         run_phasenet_script_ffp,
         conda_sh,
         env_activate_command,
@@ -788,7 +781,6 @@ def run_full_nzgmdb(  # noqa: D103
         )
         gen_phase_arrival_table.generate_phase_arrival_table(
             main_dir,
-            flatfile_dir,
             run_phasenet_script_ffp,
             conda_sh,
             gmc_activate,

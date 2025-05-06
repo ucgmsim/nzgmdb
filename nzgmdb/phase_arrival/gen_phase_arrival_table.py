@@ -72,7 +72,6 @@ def process_batch(
 
 def generate_phase_arrival_table(
     main_dir: Path,
-    output_dir: Path,
     run_phasenet_script_ffp: Path,
     conda_sh: Path,
     env_activate_command: str,
@@ -87,8 +86,6 @@ def generate_phase_arrival_table(
     main_dir : Path
         The main directory of the NZGMDB results (Highest level directory)
         (glob is used to find all mseed files recursively)
-    output_dir : Path
-        The directory to save the phase arrival table
     run_phasenet_script_ffp : Path
         The script full file path to run PhaseNet (In NZGMDB/phase_arrival).
     conda_sh : Path
@@ -103,6 +100,9 @@ def generate_phase_arrival_table(
     # Get the Phase_arrival directory
     phase_dir = main_dir / "phase_arrival"
     phase_dir.mkdir(exist_ok=True)
+
+    # Get the flatfile directory
+    flatfile_dir = file_structure.get_flatfile_dir(main_dir)
 
     # Find all mseed files recursively
     mseed_files = list(main_dir.rglob("*.mseed"))
@@ -160,7 +160,7 @@ def generate_phase_arrival_table(
             )
 
     # Merge the prob_series files
-    prob_series_output_ffp = output_dir / file_structure.PreFlatfileNames.PROB_SERIES
+    prob_series_output_ffp = flatfile_dir / file_structure.PreFlatfileNames.PROB_SERIES
     with h5py.File(prob_series_output_ffp, "w") as out_f:
         for prob_series_file in prob_series_files:
             with h5py.File(prob_series_file, "r") as in_f:
@@ -195,13 +195,34 @@ def generate_phase_arrival_table(
     phase_df["p_wave_ix"] = phase_df["p_wave_ix"].astype(int)
     phase_df["s_wave_ix"] = phase_df["s_wave_ix"].astype(int)
 
+    # Load the earthquake source table to add evid_datetime
+    source_table = pd.read_csv(
+        flatfile_dir / file_structure.PreFlatfileNames.EARTHQUAKE_SOURCE_TABLE_TECTONIC,
+        dtype={"evid": str},
+    )
+
+    # Create the evid col in the phase table with the split of record_id taking the 1st index
+    phase_df["evid"] = phase_df["record_id"].str.split("_").str[0]
+
+    # Merge in the datetime from the source table
+    phase_df = phase_df.merge(
+        source_table[["evid", "datetime"]],
+        on="evid",
+        how="left",
+    )
+
+    # Relabel the datetime column to evid_datetime
+    phase_df = phase_df.rename(columns={"datetime": "evid_datetime"})
+
+    # Remove the evid column
+    phase_df = phase_df.drop(columns=["evid"])
+
     # Save the phase arrival table
-    output_dir.mkdir(parents=True, exist_ok=True)
     phase_df.to_csv(
-        output_dir / file_structure.PreFlatfileNames.PHASE_ARRIVAL_TABLE, index=False
+        flatfile_dir / file_structure.PreFlatfileNames.PHASE_ARRIVAL_TABLE, index=False
     )
     skipped_df.to_csv(
-        output_dir
+        flatfile_dir
         / file_structure.SkippedRecordFilenames.PHASE_ARRIVAL_SKIPPED_RECORDS,
         index=False,
     )
