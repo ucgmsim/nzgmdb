@@ -832,10 +832,11 @@ def calc_distances(main_dir: Path, n_procs: int = 1):
     for srf_file in (data_dir / "SrfSourceModels").glob("*.srf"):
         srf_files[srf_file.stem] = srf_file
 
-    # Get the IM data
+    # Get the IM data to know what stations to calculate the distances for each event
     im_df = pd.read_csv(
         flatfile_dir / file_structure.PreFlatfileNames.GROUND_MOTION_IM_CATALOGUE,
         dtype={"evid": str},
+        usecols=["evid", "sta"],
     )
 
     # Get the station information

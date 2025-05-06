@@ -86,6 +86,10 @@ def fetch_event_line(event_cat: Event, event_id: str):
     preferred_origin = event_cat.preferred_origin()
     preferred_magnitude = event_cat.preferred_magnitude()
 
+    # If the preferred origin is None, return None
+    if preferred_origin is None:
+        return None
+
     # Extract basic info from the catalog
     ev_datetime = preferred_origin.time
     ev_lat = preferred_origin.latitude
@@ -196,9 +200,7 @@ def fetch_event_line(event_cat: Event, event_id: str):
 
 def get_stations_within_radius(
     event_cat: Event,
-    mags: np.ndarray,
-    rrups: np.ndarray,
-    f_rrup: interp1d,
+    mw_rrup_data: np.ndarray,
     inventory: Inventory,
 ):
     """
@@ -208,12 +210,8 @@ def get_stations_within_radius(
     ----------
     event_cat : Event
         The event catalog to fetch the event data from
-    mags : np.ndarray
-        The magnitudes from the Mw_rrup file
-    rrups : np.ndarray
-        The rrups from the Mw_rrup file
-    f_rrup : interp1d
-        The cubic interpolation function for the magnitude distance relationship
+    mw_rrup_data : np.ndarray
+        The Mw_rrup data to get the interpolation function to determine the max radius.
     inventory : Inventory
         The inventory of the stations from all networks to extract the stations from
 
@@ -228,12 +226,16 @@ def get_stations_within_radius(
     event_lon = preferred_origin.longitude
 
     # Get the max radius
-    if preferred_magnitude < mags.min():
-        rrup = np.array(rrups.min())
-    elif preferred_magnitude > mags.max():
-        rrup = np.array(rrups.max())
+    mags = mw_rrup_data[:, 0]
+    rrups = mw_rrup_data[:, 1]
+
+    if preferred_magnitude <= mags.min():
+        rrup = rrups.min()
+    elif preferred_magnitude >= mags.max():
+        rrup = rrups.max()
     else:
-        rrup = f_rrup(preferred_magnitude)
+        interpolator = interp1d(mags, rrups, kind="cubic")
+        rrup = float(interpolator(preferred_magnitude))
     maxradius = obspy.geodetics.kilometers2degrees(rrup)
 
     inv_sub = inventory.select(
@@ -342,7 +344,12 @@ def fetch_sta_mag_line(
     unique_channels = set([(tr.stats.channel[:2], tr.stats.location) for tr in st])
 
     # Split the stream into mseeds
-    mseeds = creation.split_stream_into_mseeds(st, unique_channels)
+    mseeds, raised_issues = creation.split_stream_into_mseeds(
+        st, unique_channels, event_id
+    )
+
+    # Extend the raised_issues list with the skipped records
+    skipped_records.extend(raised_issues)
 
     # Get the station magnitudes
     station_magnitudes = [
@@ -358,7 +365,7 @@ def fetch_sta_mag_line(
                 stats = mseed[0].stats
                 skipped_records.append(
                     [
-                        f"{event_id}_{stats.station}_{stats.location}_{stats.channel}",
+                        f"{event_id}_{stats.station}_{stats.channel}_{stats.location}",
                         "All 0's",
                     ]
                 )
@@ -367,7 +374,7 @@ def fetch_sta_mag_line(
             stats = mseed[0].stats
             skipped_records.append(
                 [
-                    f"{event_id}_{stats.station}_{stats.location}_{stats.channel}",
+                    f"{event_id}_{stats.station}_{stats.channel}_{stats.location}",
                     "TypeError when checking for all 0's",
                 ]
             )
@@ -380,7 +387,7 @@ def fetch_sta_mag_line(
             stats = mseed[0].stats
             clipped_records.append(
                 [
-                    f"{event_id}_{stats.station}_{stats.location}_{stats.channel}",
+                    f"{event_id}_{stats.station}_{stats.channel}_{stats.location}",
                     "Clipped",
                 ]
             )
@@ -451,11 +458,10 @@ def fetch_event_data(
     client_NZ: FDSN_Client,
     inventory: Inventory,
     site_table: pd.DataFrame,
-    mags: np.ndarray,
-    rrups: np.ndarray,
-    f_rrup: interp1d,
+    mw_rrup_data: np.ndarray,
     only_sites: list[str] = None,
     only_record_ids: pd.DataFrame = None,
+    n_procs: int = 1,
 ):
     """
     Fetch the event data from the geonet client to form the event and magnitude dataframes
@@ -472,16 +478,14 @@ def fetch_event_data(
         The inventory of the stations from all networks to extract the stations from
     site_table : pd.DataFrame
         The site table to extract the vs30 value from
-    mags : np.ndarray
-        The magnitudes from the Mw_rrup file
-    rrups : np.ndarray
-        The rrups from the Mw_rrup file
-    f_rrup : interp1d
-        The cubic interpolation function for the magnitude distance relationship
+    mw_rrup_data : np.ndarray
+        The Mw_rrup data to get the interpolation function to determine the max radius.
     only_sites : list[str] (optional)
         Will only fetch the data for the sites in the list
     only_record_ids : pd.DataFrame (optional)
         Will only fetch the data for the record ids in the df, should all be a subset of the only_sites list
+    n_procs : int (optional)
+        The number of processes to run, to multiprocess over sites (when not using mp over events)
 
     Returns
     -------
@@ -496,59 +500,74 @@ def fetch_event_data(
     event_line = fetch_event_line(event_cat, event_id)
 
     if event_line is not None:
-        sta_mag_lines = []
-        skipped_records = []
-        clipped_records = []
 
         # Get Networks / Stations within a certain radius of the event
-        inv_sub_sta = get_stations_within_radius(
-            event_cat, mags, rrups, f_rrup, inventory
-        )
+        inv_sub_sta = get_stations_within_radius(event_cat, mw_rrup_data, inventory)
 
-        # Filter the only_record_ids to only include the event_id
+        # Create a filtered list of tuples (network, station)
+        filtered_stations = [
+            (network, station)
+            for network in inv_sub_sta
+            for station in network
+            if only_sites is None or station.code in only_sites
+        ]
+
+        # Further filter the list based on only_record_ids if defined
         if only_record_ids is not None:
             event_only_record_ids = only_record_ids[
                 only_record_ids["record_id"].str.contains(f"^{event_id}_")
             ]
             if event_only_record_ids.empty:
                 return [], [], [], []
+            filtered_stations = [
+                (network, station)
+                for network, station in filtered_stations
+                if not event_only_record_ids[
+                    event_only_record_ids["record_id"].str.contains(f"_{station.code}_")
+                ].empty
+            ]
         else:
             event_only_record_ids = None
 
-        # Loop through the Inventory Subset of Networks / Stations
-        for network in inv_sub_sta:
-            for station in network:
-                # Check if the station is in the only_sites list if only_sites is defined
-                if only_sites is None or station.code in only_sites:
-                    # Filter the only_record_ids to only include the station code if it is defined
-                    if event_only_record_ids is not None:
-                        site_only_record_ids = event_only_record_ids[
-                            event_only_record_ids["record_id"].str.contains(
-                                f"_{station.code}_"
-                            )
-                        ]
-                        if site_only_record_ids.empty:
-                            continue
-                    else:
-                        site_only_record_ids = None
-                    # Get the station magnitude lines
-                    sta_mag_line, new_skipped_records, new_clipped_records = (
-                        fetch_sta_mag_line(
-                            station,
-                            network,
-                            event_cat,
-                            event_id,
-                            main_dir,
-                            client_NZ,
-                            event_line[7],
-                            event_line[8],
-                            site_table,
-                            site_only_record_ids,
-                        )
-                    )
-                    sta_mag_lines.extend(sta_mag_line)
-                    skipped_records.extend(new_skipped_records)
-                    clipped_records.extend(new_clipped_records)
+        if n_procs > 1:
+            with mp.Pool(n_procs) as pool:
+                results = pool.starmap(
+                    functools.partial(
+                        fetch_sta_mag_line,
+                        event_cat=event_cat,
+                        event_id=event_id,
+                        main_dir=main_dir,
+                        client_NZ=client_NZ,
+                        pref_mag=event_line[7],
+                        pref_mag_type=event_line[8],
+                        site_table=site_table,
+                        only_record_ids=event_only_record_ids,
+                    ),
+                    [(station, network) for network, station in filtered_stations],
+                )
+        else:
+            results = [
+                fetch_sta_mag_line(
+                    station,
+                    network,
+                    event_cat,
+                    event_id,
+                    main_dir,
+                    client_NZ,
+                    event_line[7],
+                    event_line[8],
+                    site_table,
+                    event_only_record_ids,
+                )
+                for network, station in filtered_stations
+            ]
+
+        sta_mag_lines, skipped_records, clipped_records = [], [], []
+        for sta_mag_line, new_skipped_records, new_clipped_records in results:
+            sta_mag_lines.extend(sta_mag_line)
+            skipped_records.extend(new_skipped_records)
+            clipped_records.extend(new_clipped_records)
+
     else:
         sta_mag_lines, skipped_records, clipped_records = None, None, None
 
@@ -562,12 +581,11 @@ def process_batch(
     client_NZ: FDSN_Client,
     inventory: Inventory,
     site_table: pd.DataFrame,
-    mags: np.ndarray,
-    rrups: np.ndarray,
-    f_rrup: interp1d,
+    mw_rrup_data: np.ndarray,
     n_procs: int = 1,
     only_sites: list[str] = None,
     only_record_ids: pd.DataFrame = None,
+    mp_sites: bool = False,
 ):
     """
     Process a batch of events to fetch the event data and create the dataframes
@@ -586,36 +604,49 @@ def process_batch(
         The inventory of the stations from all networks to extract the stations from
     site_table : pd.DataFrame
         The site table to extract the vs30 value from
-    mags : np.ndarray
-        The magnitudes from the Mw_rrup file
-    rrups : np.ndarray
-        The rrups from the Mw_rrup file
-    f_rrup : interp1d
-        The cubic interpolation function for the magnitude distance relationship
+    mw_rrup_data : np.ndarray
+        The Mw_rrup data to get the interpolation function to determine the max radius.
     n_procs : int (optional)
         The number of processes to run
     only_sites : list[str] (optional)
         Will only fetch the data for the sites in the list
     only_record_ids : pd.DataFrame (optional)
         Will only fetch the data for the record ids in the df, should all be a subset of the only_sites list
+    mp_sites : bool (optional)
+        Whether to multiprocess over sites (when not using mp over events)
     """
     # Fetch results
-    with mp.Pool(n_procs) as p:
-        results = p.map(
-            functools.partial(
-                fetch_event_data,
-                main_dir=main_dir,
-                client_NZ=client_NZ,
-                inventory=inventory,
-                site_table=site_table,
-                mags=mags,
-                rrups=rrups,
-                f_rrup=f_rrup,
-                only_sites=only_sites,
-                only_record_ids=only_record_ids,
-            ),
-            batch_events,
-        )
+    if mp_sites:
+        results = [
+            fetch_event_data(
+                event_id,
+                main_dir,
+                client_NZ,
+                inventory,
+                site_table,
+                mw_rrup_data,
+                only_sites,
+                only_record_ids,
+                n_procs,
+            )
+            for event_id in batch_events
+        ]
+    else:
+        with mp.Pool(n_procs) as p:
+            results = p.map(
+                functools.partial(
+                    fetch_event_data,
+                    main_dir=main_dir,
+                    client_NZ=client_NZ,
+                    inventory=inventory,
+                    site_table=site_table,
+                    mw_rrup_data=mw_rrup_data,
+                    only_sites=only_sites,
+                    only_record_ids=only_record_ids,
+                    n_procs=1,
+                ),
+                batch_events,
+            )
 
     # Extract the results
     event_data, sta_mag_data, skipped_records, clipped_records = [], [], [], []
@@ -626,10 +657,11 @@ def process_batch(
             finished_skipped_records,
             finished_clipped_records,
         ) = result
-        event_data.append(finished_event_data)
-        sta_mag_data.extend(finished_sta_mag_data)
-        skipped_records.extend(finished_skipped_records)
-        clipped_records.extend(finished_clipped_records)
+        if finished_event_data is not None:
+            event_data.append(finished_event_data)
+            sta_mag_data.extend(finished_sta_mag_data)
+            skipped_records.extend(finished_skipped_records)
+            clipped_records.extend(finished_clipped_records)
 
     # Create the output directory for the batch files
     flatfile_dir = file_structure.get_flatfile_dir(main_dir)
@@ -807,6 +839,7 @@ def parse_geonet_information(
     only_sites: list[str] = None,
     only_record_ids_ffp: Path = None,
     real_time: bool = False,
+    mp_sites: bool = False,
 ):
     """
     Read the geonet information and manage the fetching of more data to create the mseed files
@@ -831,6 +864,8 @@ def parse_geonet_information(
         Will only fetch the data for the record ids in the df, will override the only_sites, only_event_ids lists
     real_time : bool (optional)
         If the function is being used in real time use a different client, default is False
+    mp_sites : bool (optional)
+        Whether to multiprocess over sites (when not using mp over events)
     """
     if only_record_ids_ffp:
         # Read the only record ids file
@@ -868,11 +903,8 @@ def parse_geonet_information(
     # Get the data_dir
     data_dir = file_structure.get_data_dir()
 
-    mw_rrup = np.loadtxt(data_dir / "Mw_rrup.txt")
-    mags = mw_rrup[:, 0]
-    rrups = mw_rrup[:, 1]
-    # Generate cubic interpolation for magnitude distance relationship
-    f_rrup = interp1d(mags, rrups, kind="cubic")
+    # Get the rrup data
+    mw_rrup_data = np.loadtxt(data_dir / "Mw_rrup.txt")
 
     # Get the site table
     flatfile_dir = file_structure.get_flatfile_dir(main_dir)
@@ -898,12 +930,11 @@ def parse_geonet_information(
                 client_NZ,
                 inventory,
                 site_table,
-                mags,
-                rrups,
-                f_rrup,
+                mw_rrup_data,
                 n_procs,
                 only_sites,
                 only_record_ids,
+                mp_sites,
             )
 
     # Combine all the event and sta_mag dataframes

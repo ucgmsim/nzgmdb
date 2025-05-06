@@ -17,9 +17,9 @@ from nzgmdb.mseed_management import reading
 
 def process_single_mseed(
     mseed_file: Path,
-    gmc_df: pd.DataFrame,
-    fmax_df: pd.DataFrame,
-    bypass_df: pd.DataFrame = None,
+    gmc_df: pd.DataFrame | None = None,
+    fmax_df: pd.DataFrame | None = None,
+    bypass_df: pd.DataFrame | None = None,
 ):
     """
     Process a single mseed file and save the processed data to a txt file
@@ -32,11 +32,11 @@ def process_single_mseed(
     ----------
     mseed_file : Path
         The path to the mseed file
-    gmc_df : pd.DataFrame
+    gmc_df : pd.DataFrame, optional
         The GMC values containing fmin information
-    fmax_df : pd.DataFrame
+    fmax_df : pd.DataFrame, optional
         The Fmax values
-    bypass_df : pd.DataFrame
+    bypass_df : pd.DataFrame, optional
         The bypass records containing custom fmin, fmax values
 
     Returns
@@ -47,7 +47,7 @@ def process_single_mseed(
     """
     # Check if the mseed file is in the GMC predictions
     mseed_stem = mseed_file.stem
-    gmc_rows = gmc_df[gmc_df["record"] == mseed_stem]
+    gmc_rows = None if gmc_df is None else gmc_df[gmc_df["record"] == mseed_stem]
 
     # Read mseed information
     mseed = reading.read_mseed_to_stream(mseed_file)
@@ -91,16 +91,16 @@ def process_single_mseed(
         return skipped_record
 
     # Get the GMC fmin and fmax values
-    fmin = None if gmc_rows.empty else gmc_rows["fmin_mean"].max()
-    fmax_rows = fmax_df[fmax_df["record_id"] == mseed_stem]
+    fmin = None if gmc_rows is None or gmc_rows.empty else gmc_rows["fmin_mean"].max()
+    fmax_rows = None if fmax_df is None else fmax_df[fmax_df["record_id"] == mseed_stem]
     fmax = (
         None
-        if fmax_rows.empty
+        if fmax_df is None or fmax_rows.empty
         else min(fmax_rows.loc[:, ["fmax_000", "fmax_090", "fmax_ver"]].values[0])
     )
 
     # Check if the record is in the bypass records (Only if there wasnt an existing fmin, fmax)
-    if bypass_df is not None and fmin is None or fmax is None:
+    if bypass_df is not None and (fmin is None or fmax is None):
         if mseed_stem in bypass_df["record_id"].values:
             bypass_row = bypass_df[bypass_df["record_id"] == mseed_stem]
             fmin_bypass = max(
@@ -168,9 +168,9 @@ def process_single_mseed(
 
 def process_mseeds_to_txt(
     main_dir: Path,
-    gmc_ffp: Path,
-    fmax_ffp: Path,
-    bypass_records_ffp: Path = None,
+    gmc_ffp: Path | None = None,
+    fmax_ffp: Path | None = None,
+    bypass_records_ffp: Path | None = None,
     n_procs: int = 1,
 ):
     """
@@ -181,13 +181,13 @@ def process_mseeds_to_txt(
     ----------
     main_dir : Path
         The main directory of the NZGMDB results (Highest level directory)
-    gmc_ffp : Path
+    gmc_ffp : Path, optional
         The full file path to the GMC predictions file
-    fmax_ffp : Path
+    fmax_ffp : Path, optional
         The full file path to the Fmax file
-    bypass_records_ffp : Path
+    bypass_records_ffp : Path, optional
         The full file path to the bypass records file, which includes a custom fmin, fmax
-    n_procs : int
+    n_procs : int, optional
         The number of processes to use for multiprocessing
     """
     # Get the raw waveform mseed files
@@ -195,9 +195,9 @@ def process_mseeds_to_txt(
     mseed_files = waveform_dir.rglob("*.mseed")
 
     # Load the GMC, Fmax and bypass records
-    gmc_df = pd.read_csv(gmc_ffp)
+    gmc_df = None if gmc_ffp is None else pd.read_csv(gmc_ffp)
     try:
-        fmax_df = pd.read_csv(fmax_ffp)
+        fmax_df = None if fmax_ffp is None else pd.read_csv(fmax_ffp)
     except pd.errors.EmptyDataError:
         fmax_df = pd.DataFrame(
             columns=["record_id", "fmax_000", "fmax_090", "fmax_ver"]

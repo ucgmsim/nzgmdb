@@ -1,6 +1,7 @@
 """
 Module to create the quality database for the NZGMDB.
 """
+
 from pathlib import Path
 
 import numpy as np
@@ -344,6 +345,49 @@ def filter_fmin(
     return catalog, skipped_records
 
 
+def filter_missing_sta_info(
+    catalog: pd.DataFrame, bypass_records: np.ndarray | None = None
+):
+    """
+    Filter the catalog based on the missing station information
+
+    Parameters
+    ----------
+    catalog : pd.DataFrame
+        The catalog dataframe to filter
+    bypass_records : np.ndarray, optional
+        The records to bypass the quality checks
+
+    Returns
+    -------
+    pd.DataFrame
+        The filtered catalog
+    pd.DataFrame
+        The skipped records
+    """
+    # Find records that are missing station information
+    missing_sta_filter = catalog[catalog["Vs30"].isna()]
+
+    # Remove the bypass records if they exist
+    if bypass_records is not None:
+        missing_sta_filter = missing_sta_filter[
+            ~missing_sta_filter["record_id"].isin(bypass_records)
+        ]
+
+    # Create the skipped_records dataframe from missing_sta_filter
+    skipped_records = pd.DataFrame(
+        {
+            "record_id": missing_sta_filter["record_id"],
+            "reason": "Missing station information",
+        }
+    )
+
+    # Filter out the missing_sta records out of the catalog
+    catalog = catalog[~catalog["record_id"].isin(missing_sta_filter["record_id"])]
+
+    return catalog, skipped_records
+
+
 def filter_ground_level_locations(
     catalog: pd.DataFrame, bypass_records: np.ndarray = None
 ):
@@ -414,7 +458,10 @@ def apply_clipNet_filter(
         The skipped records
     """
     # Read the clipped records
-    clipped_records = pd.read_csv(clipped_records_ffp)
+    try:
+        clipped_records = pd.read_csv(clipped_records_ffp)
+    except pd.errors.EmptyDataError:
+        return catalog, pd.DataFrame(columns=["record_id", "reason"])
 
     # Remove the bypass records if they exist
     if bypass_records is not None:
@@ -534,9 +581,10 @@ def apply_all_filters(
     3) Filter by multi mean.
     4) Filter by fmax.
     5) Filter by fmin.
-    6) Ensure only ground level locations are used.
-    7) Filter out clipped records.
-    8) Select the appropriate channel for duplicate HN/BN records for the same event/station.
+    6) Filter by missing station information
+    7) Ensure only ground level locations are used.
+    8) Filter out clipped records.
+    9) Select the appropriate channel for duplicate HN/BN records for the same event/station.
 
     Parameters
     ----------
@@ -589,6 +637,9 @@ def apply_all_filters(
 
     # Filter by fmin
     catalog, skipped_records_fmin = filter_fmin(catalog, fmin_max, bypass_records)
+
+    # Filter by missing station information
+    catalog, skipped_records_sta = filter_missing_sta_info(catalog, bypass_records)
 
     # Filter by ground level locations
     catalog, skipped_records_ground = filter_ground_level_locations(
@@ -677,6 +728,6 @@ def create_quality_db(
     # Save the gm_df and skipped_records
     gm_df.to_csv(output_dir / FlatfileNames.GROUND_MOTION_IM_ROTD50_FLAT, index=False)
     skipped_records.to_csv(
-        output_dir / file_structure.SkippedRecordFilenames.QUALITY_SKIPPED_RECORDS,
+        flatfile_dir / file_structure.SkippedRecordFilenames.QUALITY_SKIPPED_RECORDS,
         index=False,
     )

@@ -7,6 +7,7 @@ import io
 import os
 import shutil
 import time
+from datetime import timedelta
 from pathlib import Path
 from typing import Annotated
 
@@ -14,9 +15,10 @@ import pandas as pd
 import requests
 import typer
 
+from IM import ims
 from nzgmdb.management import config as cfg
 from nzgmdb.management import custom_errors, file_structure
-from nzgmdb.scripts import run_nzgmdb
+from nzgmdb.scripts import run_gmc, run_nzgmdb
 from qcore import cli
 
 app = typer.Typer(pretty_exceptions_enable=False)
@@ -24,36 +26,106 @@ app = typer.Typer(pretty_exceptions_enable=False)
 SEISMIC_NOW_URL = (
     "https://quakecoresoft.canterbury.ac.nz/seismicnow/api/earthquakes/add"
 )
-WEBHOOK_URL = os.getenv("SLACK_WEBHOOK_URL")
+SLACK_BOT_TOKEN = os.getenv("SLACK_BOT_TOKEN")
+SLACK_CHANNEL = os.getenv("SLACK_CHANNEL")
 
 
 def send_message_to_slack(message: str):
     """
-    Send a message to a slack channel
+    Send a message to a Slack channel.
 
     Parameters
     ----------
     message : str
-        The message to send
+        The message to send.
+
+    Returns
+    -------
+    dict
+        The response from the Slack API, containing the message timestamp.
+
+    Raises
+    ------
+    ValueError:
+        If SLACK_CHANNEL or SLACK_BOT_TOKEN is not set in the environment.
+        Or if the response from Slack is not successful.
+    """
+    if not SLACK_CHANNEL:
+        raise ValueError(
+            "No slack channel provided from the environment var SLACK_CHANNEL"
+        )
+    if not SLACK_BOT_TOKEN:
+        raise ValueError(
+            "No slack bot token provided from the environment var SLACK_BOT_TOKEN"
+        )
+    url = "https://slack.com/api/chat.postMessage"
+    data = {
+        "channel": SLACK_CHANNEL,
+        "text": message,
+    }
+    headers = {
+        "Authorization": f"Bearer {SLACK_BOT_TOKEN}",
+        "Content-Type": "application/json",
+    }
+
+    response = requests.post(url, headers=headers, json=data)
+    response_data = response.json()
+
+    if not response_data.get("ok"):
+        raise ValueError(f"Error sending message: {response_data}")
+
+    return response_data
+
+
+def reply_to_message_on_slack(thread_ts: str, reply_message: str):
+    """
+    Reply to a message in Slack (threaded reply).
+
+    Parameters
+    ----------
+    thread_ts : str
+        The timestamp of the message to reply to.
+    reply_message : str
+        The reply text.
+
+    Returns
+    -------
+    dict
+        The response JSON containing the message timestamp (ts)
 
     Raises
     ------
     ValueError
-        If the message fails to send
-        Or if the webhook URL is not provided
+        If SLACK_CHANNEL or SLACK_BOT_TOKEN is not set in the environment.
+        Or if the response from Slack is not successful.
     """
-    if not WEBHOOK_URL:
+    if not SLACK_CHANNEL:
         raise ValueError(
-            "No slack webhook URL provided from the environment var SLACK_WEBHOOK_URL"
+            "No slack channel provided from the environment var SLACK_CHANNEL"
+        )
+    if not SLACK_BOT_TOKEN:
+        raise ValueError(
+            "No slack bot token provided from the environment var SLACK_BOT_TOKEN"
         )
 
-    response = requests.post(
-        WEBHOOK_URL,
-        json={"text": message},
-    )
+    url = "https://slack.com/api/chat.postMessage"
+    data = {
+        "channel": SLACK_CHANNEL,
+        "text": reply_message,
+        "thread_ts": thread_ts,  # This ensures it's a threaded reply
+    }
+    headers = {
+        "Authorization": f"Bearer {SLACK_BOT_TOKEN}",
+        "Content-Type": "application/json",
+    }
 
-    if response.status_code != 200:
-        raise ValueError("Failed to send message to slack")
+    response = requests.post(url, headers=headers, json=data)
+    response_data = response.json()
+
+    if not response_data.get("ok"):
+        raise ValueError(f"Error sending reply: {response_data}")
+
+    return response_data
 
 
 def download_earthquake_data(
@@ -102,6 +174,61 @@ def download_earthquake_data(
     return df
 
 
+def update_eq_source_table(
+    event_dir: Path,
+):
+    """
+    Update the earthquake source table with the latest data, such as
+    magnitude, latitude, longitude, and depth.
+
+    Parameters
+    ----------
+    event_dir : Path
+        The event directory
+
+    Returns
+    -------
+    tuple
+        A tuple containing the updated values: (magnitude, latitude, longitude, depth)
+    """
+    flatfile_dir = file_structure.get_flatfile_dir(event_dir)
+    eq_source_ffp = (
+        flatfile_dir / file_structure.PreFlatfileNames.EARTHQUAKE_SOURCE_TABLE_GEONET
+    )
+    eq_source_df = pd.read_csv(eq_source_ffp)
+
+    # Get the datetime of the event
+    datetime_evid = eq_source_df["datetime"].values[0]
+    datetime_evid = pd.to_datetime(datetime_evid)
+
+    # Get the latest data
+    geonet_df = download_earthquake_data(
+        datetime_evid - timedelta(minutes=2),
+        datetime_evid + timedelta(minutes=2),
+        mag_filter=0.0,
+    )
+
+    # Get the new data for this event
+    new_data = geonet_df[geonet_df["publicid"] == eq_source_df["evid"].values[0]]
+
+    # Update the data
+    eq_source_df["mag"] = new_data["magnitude"].values[0]
+    eq_source_df["lat"] = new_data["latitude"].values[0]
+    eq_source_df["lon"] = new_data["longitude"].values[0]
+    eq_source_df["depth"] = new_data["depth"].values[0]
+
+    # Save the updated data
+    eq_source_df.to_csv(eq_source_ffp, index=False)
+
+    # return the new data values
+    return (
+        eq_source_df["mag"].values[0],
+        eq_source_df["lat"].values[0],
+        eq_source_df["lon"].values[0],
+        eq_source_df["depth"].values[0],
+    )
+
+
 @cli.from_docstring(app)
 def run_event(
     event_id: Annotated[str, typer.Argument()],
@@ -110,18 +237,16 @@ def run_event(
     conda_sh: Annotated[Path, typer.Argument(exists=True, file_okay=True)],
     gmc_activate: Annotated[str, typer.Argument()],
     gmc_predict_activate: Annotated[str, typer.Argument()],
-    n_procs: Annotated[int, typer.Option()] = 1,
-    gmc_procs: Annotated[int, typer.Option()] = 1,
     ko_matrix_path: Annotated[
         Path | None, typer.Option(exists=True, file_okay=False)
     ] = None,
     add_seismic_now: Annotated[bool, typer.Option(is_flag=True)] = False,
-    start_date: Annotated[
-        datetime.datetime, typer.Option()
-    ] = datetime.datetime.utcnow()
-    - datetime.timedelta(days=8),
-    end_date: Annotated[datetime.datetime, typer.Option()] = datetime.datetime.utcnow()
-    - datetime.timedelta(minutes=1),
+    machine: Annotated[
+        cfg.MachineName,
+        typer.Option(
+            case_sensitive=False,
+        ),
+    ] = cfg.MachineName.LOCAL,
 ):
     """
     Run the NZGMDB pipeline for a specific event in near-real-time mode.
@@ -140,18 +265,12 @@ def run_event(
         Command to activate gmc environment.
     gmc_predict_activate : str
         Command to activate gmc_predict environment.
-    n_procs : int, optional
-        Number of processes to use in the pipeline (default is 1).
-    gmc_procs : int, optional
-        Number of GMC processes to use (default is 1).
     ko_matrix_path : Path, optional
         Path to the KO matrix directory (default is None).
     add_seismic_now : bool, optional
         Whether to add the event to SeismicNow (default is False).
-    start_date : datetime.datetime, optional
-        Start date for the event (default is 8 days ago).
-    end_date : datetime.datetime, optional
-        End date for the event (default is 1 minute ago).
+    machine : cfg.MachineName, optional
+        The machine name to use for the number of processes (default is cfg.MachineName.LOCAL).
 
     Returns
     -------
@@ -159,22 +278,75 @@ def run_event(
         True if the event was processed, False if the event was skipped.
     """
     try:
-        # Run the rest of the pipeline
-        run_nzgmdb.run_full_nzgmdb(
+        config = cfg.Config()
+        # Execute custom pipeline
+        run_nzgmdb.generate_site_table_basin(event_dir)
+        # Get geonet data
+        run_nzgmdb.fetch_geonet_data(
             event_dir,
-            start_date,
-            end_date,
-            gm_classifier_dir,
-            conda_sh,
-            gmc_activate,
-            gmc_predict_activate,
-            gmc_procs,
-            n_procs,
-            ko_matrix_path=ko_matrix_path,
-            checkpoint=True,
+            None,
+            None,
+            config.get_n_procs(machine, cfg.WorkflowStep.GEONET),
             only_event_ids=[event_id],
             real_time=True,
+            mp_sites=True,
         )
+
+        if add_seismic_now:
+            # Update with latest info
+            mag, lat, lon, depth = update_eq_source_table(event_dir)
+            # Send a message to slack to indicate the event is being processed
+            response = send_message_to_slack(
+                f"Event ID: {event_id} started processing for SeismicNow: Mag: {mag:.1f}; Depth: {depth:.1f} km; Lat: {lat:.2f}; Lon: {lon:.2f}",
+            )
+            message_ts = response["ts"]
+
+        # Tectonic types
+        flatfile_dir = file_structure.get_flatfile_dir(event_dir)
+        eq_source_ffp = (
+            flatfile_dir
+            / file_structure.PreFlatfileNames.EARTHQUAKE_SOURCE_TABLE_GEONET
+        )
+        eq_tect_domain_ffp = (
+            flatfile_dir
+            / file_structure.PreFlatfileNames.EARTHQUAKE_SOURCE_TABLE_TECTONIC
+        )
+        run_nzgmdb.merge_tect_domain(
+            eq_source_ffp,
+            eq_tect_domain_ffp,
+            config.get_n_procs(machine, cfg.WorkflowStep.TEC_DOMAIN),
+        )
+        # Process the records
+        run_nzgmdb.process_records(
+            event_dir, n_procs=config.get_n_procs(machine, cfg.WorkflowStep.PROCESS)
+        )
+        # Run IM_calculation
+        im_dir = file_structure.get_im_dir(event_dir)
+        im_dir.mkdir(parents=True, exist_ok=True)
+        intensity_measures = [
+            ims.IM.PGA,
+            ims.IM.PGV,
+            ims.IM.CAV,
+            ims.IM.CAV5,
+            ims.IM.AI,
+            ims.IM.Ds575,
+            ims.IM.Ds595,
+            ims.IM.pSA,
+        ]
+        run_nzgmdb.run_im_calculation(
+            event_dir,
+            n_procs=config.get_n_procs(machine, cfg.WorkflowStep.IM),
+            intensity_measures=intensity_measures,
+        )
+        # Merge results
+        run_nzgmdb.merge_im_results(im_dir, flatfile_dir, None, None)
+        # Calculate distances
+        run_nzgmdb.distances.calc_distances(
+            event_dir, config.get_n_procs(machine, cfg.WorkflowStep.DISTANCES)
+        )
+        # Merge the flatfiles
+        run_nzgmdb.merge_flat_files(event_dir)
+
     except custom_errors.NoStationsError:
         print(f"Event {event_id} has no stations, skipping")
         # Remove the event directory
@@ -191,29 +363,99 @@ def run_event(
         # Check the response status
         if response.status_code == 200:
             print("Event added successfully")
-            # Get the Magnitude information
-            source_ffp = (
-                file_structure.get_flatfile_dir(event_dir)
-                / file_structure.FlatfileNames.EARTHQUAKE_SOURCE_TABLE
-            )
-            source_table = pd.read_csv(source_ffp, dtype={"evid": str})
-            magnitude = source_table["mag"].values[0]
-            latitude = source_table["lat"].values[0]
-            longitude = source_table["lon"].values[0]
-            depth = source_table["depth"].values[0]
+            # Get updated values
+            mag, lat, lon, depth = update_eq_source_table(event_dir)
             # Add a new message to slack
-            send_message_to_slack(
-                f"Event ID: {event_id} added to SeismicNow: Mag: {magnitude:.1f}; Depth: {depth:.1f} km; Lat: {latitude:.2f}; Lon: {longitude:.2f}",
+            response = reply_to_message_on_slack(
+                message_ts,
+                f"Event ID: {event_id} added to SeismicNow (Basic Processing): Mag: {mag:.1f}; Depth: {depth:.1f} km; Lat: {lat:.2f}; Lon: {lon:.2f}",
             )
+            message_ts = response["ts"]
 
         else:
             print(f"Failed to add event. Status code: {response.status_code}")
             print(f"Response: {response.text}")
             # Add a new message to slack
-            send_message_to_slack(
-                f"Failed to add event {event_id} to SeismicNow, SW team investigate"
+            reply_to_message_on_slack(
+                message_ts,
+                f"Failed to add event {event_id} to SeismicNow, SW team investigate",
             )
             return False
+
+    # Continue the rest of the pipeline
+    run_phasenet_script_ffp = (
+        Path(__file__).parent.parent / "phase_arrival/run_phasenet.py"
+    )
+    phase_n_procs = config.get_n_procs(machine, cfg.WorkflowStep.PHASE_TABLE)
+    run_nzgmdb.make_phase_arrival_table(
+        event_dir,
+        flatfile_dir,
+        run_phasenet_script_ffp,
+        conda_sh,
+        gmc_activate,
+        phase_n_procs,
+    )
+
+    phase_table_path = (
+        flatfile_dir / file_structure.PreFlatfileNames.PHASE_ARRIVAL_TABLE
+    )
+    snr_fas_output_dir = file_structure.get_snr_fas_dir(event_dir)
+    run_nzgmdb.calculate_snr(
+        event_dir,
+        ko_matrix_path,
+        phase_table_path,
+        flatfile_dir,
+        snr_fas_output_dir,
+        config.get_n_procs(machine, cfg.WorkflowStep.SNR),
+    )
+
+    waveform_dir = file_structure.get_waveform_dir(event_dir)
+    run_nzgmdb.calc_fmax(
+        event_dir,
+        flatfile_dir,
+        waveform_dir,
+        snr_fas_output_dir,
+        config.get_n_procs(machine, cfg.WorkflowStep.FMAX),
+    )
+
+    run_gmc.run_gmc_processing(
+        event_dir,
+        gm_classifier_dir,
+        ko_matrix_path,
+        conda_sh,
+        gmc_activate,
+        gmc_predict_activate,
+        config.get_n_procs(machine, cfg.WorkflowStep.GMC),
+    )
+
+    run_nzgmdb.process_records(
+        event_dir, n_procs=config.get_n_procs(machine, cfg.WorkflowStep.PROCESS)
+    )
+
+    run_nzgmdb.run_im_calculation(
+        event_dir,
+        n_procs=config.get_n_procs(machine, cfg.WorkflowStep.IM),
+        intensity_measures=intensity_measures,
+    )
+
+    # Calculate distances
+    run_nzgmdb.distances.calc_distances(
+        event_dir, config.get_n_procs(machine, cfg.WorkflowStep.DISTANCES)
+    )
+
+    run_nzgmdb.merge_im_results(im_dir, flatfile_dir, None, None)
+
+    run_nzgmdb.merge_flat_files(event_dir)
+
+    if add_seismic_now:
+        # Get updated values
+        mag, lat, lon, depth = update_eq_source_table(event_dir)
+        # Reply to the slack message for final results
+        reply_to_message_on_slack(
+            message_ts,
+            f"Event ID: {event_id} completed final processing: Mag: {mag:.1f}; Depth: {depth:.1f} km; Lat: {lat:.2f}; Lon: {lon:.2f}",
+        )
+
     return True
 
 
@@ -224,12 +466,14 @@ def poll_earthquake_data(
     conda_sh: Annotated[Path, typer.Argument(exists=True, file_okay=True)],
     gmc_activate: Annotated[str, typer.Argument()],
     gmc_predict_activate: Annotated[str, typer.Argument()],
-    n_procs: Annotated[int, typer.Option()] = 1,
-    gmc_procs: Annotated[int, typer.Option()] = 1,
-    ko_matrix_path: Annotated[
-        Path | None, typer.Option(exists=True, file_okay=False)
-    ] = None,
+    ko_matrix_path: Annotated[Path, typer.Argument(exists=True, file_okay=False)],
     add_seismic_now: Annotated[bool, typer.Option(is_flag=True)] = False,
+    machine: Annotated[
+        cfg.MachineName,
+        typer.Option(
+            case_sensitive=False,
+        ),
+    ] = cfg.MachineName.LOCAL,
 ):
     """
     Poll earthquake data, process events, and run the NZGMDB pipeline for real-time data.
@@ -246,39 +490,48 @@ def poll_earthquake_data(
         Command to activate gmc environment.
     gmc_predict_activate : str
         Command to activate gmc_predict environment.
-    n_procs : int, optional
-        Number of processes to use in the pipeline (default is 1).
-    gmc_procs : int, optional
-        Number of GMC processes to use (default is 1).
-    ko_matrix_path : Path, optional
-        Path to the KO matrix directory (default is None).
+    ko_matrix_path : Path
+        Path to the KO matrix directory.
     add_seismic_now : bool, optional
         Whether to add the event to SeismicNow (default is False).
+    machine : cfg.MachineName, optional
+        The machine name to use for the number of processes (default is cfg.MachineName.LOCAL).
 
     Returns
     -------
     bool
         True if polling and processing were successful, False otherwise.
     """
+    # Array to keep track of events that ran but resulted in no stations
+    # So that we don't re-run them
+    no_stations_events = []
+
     init_start_date = None
     while True:
-        # Get the last 2 minutes worth of data and check if there are any new events
+        # Get the last 10 minutes worth of data and check if there are any new events
         end_date = datetime.datetime.utcnow() - datetime.timedelta(minutes=1)
         # If an event was just executed, ensures we capture any events that may have been missed during the execution
         start_date = (
-            end_date - datetime.timedelta(minutes=2)
+            end_date - datetime.timedelta(minutes=10)
             if init_start_date is None
             else init_start_date
         )
-        geonet_df = download_earthquake_data(start_date, end_date, mag_filter=4.0)
         init_start_date = None
+
+        try:
+            geonet_df = download_earthquake_data(start_date, end_date, mag_filter=4.0)
+        except ValueError:
+            # Server down temporarily edge case
+            print("Could not get the earthquake data, waiting for 1 minute")
+            geonet_df = pd.DataFrame()
+            init_start_date = start_date
 
         if not geonet_df.empty:
             # Run every event
             for event_id in geonet_df["publicid"].values:
                 event_dir = main_dir / str(event_id)
                 # If the event exists skip
-                if event_dir.exists():
+                if event_dir.exists() or event_id in no_stations_events:
                     print(f"Event {event_id} already exists")
                     continue
                 event_dir.mkdir()
@@ -290,17 +543,16 @@ def poll_earthquake_data(
                     conda_sh,
                     gmc_activate,
                     gmc_predict_activate,
-                    n_procs,
-                    gmc_procs,
                     ko_matrix_path,
                     add_seismic_now,
-                    start_date,
-                    end_date,
+                    machine,
                 )
 
                 if not result:
                     # remove the event directory
                     shutil.rmtree(event_dir)
+                    # add the event to the no stations events
+                    no_stations_events.append(event_id)
                 init_start_date = end_date
 
         time.sleep(60)

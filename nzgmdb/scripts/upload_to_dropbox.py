@@ -63,7 +63,7 @@ def upload_zip_to_dropbox(local_file: Path, dropbox_path: str):
     print(f"Uploading {local_file} to {dropbox_path}")
     try:
         subprocess.check_call(
-            f"rclone --progress copy {local_file} {dropbox_path}",
+            f"rclone copy {local_file} {dropbox_path}",
             shell=True,
             stdout=subprocess.PIPE,
             stderr=subprocess.PIPE,
