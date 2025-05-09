@@ -102,18 +102,17 @@ def process_single_mseed(
         else min(fmax_rows.loc[:, ["fmax_000", "fmax_090", "fmax_ver"]].values[0])
     )
 
-    # Check if the record is in the bypass records (Only if there wasnt an existing fmin, fmax)
-    if bypass_df is not None and (fmin is None or fmax is None):
-        if mseed_stem in bypass_df["record_id"].values:
-            bypass_row = bypass_df[bypass_df["record_id"] == mseed_stem]
-            fmin_bypass = max(
-                bypass_row.loc[:, ["fmin_000", "fmin_090", "fmin_ver"]].values[0]
-            )
-            fmax_bypass = min(
-                bypass_row.loc[:, ["fmax_000", "fmax_090", "fmax_ver"]].values[0]
-            )
-            fmin = None if np.isnan(fmin_bypass) else fmin_bypass
-            fmax = None if np.isnan(fmax_bypass) else fmax_bypass
+    # Check if the record is in the bypass records to get custom fmin, fmax values
+    if bypass_df is not None and mseed_stem in bypass_df["record_id"].values:
+        bypass_row = bypass_df[bypass_df["record_id"] == mseed_stem]
+        fmin_bypass = max(
+            bypass_row.loc[:, ["fmin_000", "fmin_090", "fmin_ver"]].values[0]
+        )
+        fmax_bypass = min(
+            bypass_row.loc[:, ["fmax_000", "fmax_090", "fmax_ver"]].values[0]
+        )
+        fmin = fmin if np.isnan(fmin_bypass) else fmin_bypass
+        fmax = fmax if np.isnan(fmax_bypass) else fmax_bypass
 
     # Perform high and lowcut processing
     try:

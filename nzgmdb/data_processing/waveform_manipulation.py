@@ -82,12 +82,12 @@ def initial_preprocessing(
         )
     except FDSNNoDataException:
         # Divide trace counts by 10^6 to convert to units g
-        for tr in mseed:
-            tr.data = tr.data / no_response_conversion
-        missing_sensitivity = True
-        # raise custom_errors.InventoryNotFoundError(
-        #     f"No inventory information found for station {station} with location {location}"
-        # )
+        # for tr in mseed:
+        #     tr.data = tr.data / no_response_conversion
+        # missing_sensitivity = True
+        raise custom_errors.InventoryNotFoundError(
+            f"No inventory information found for station {station} with location {location}"
+        )
 
     # Add the response (Same for all channels)
     # this is done so that the sensitivity can be removed otherwise it tries to find the exact same channel
@@ -100,12 +100,12 @@ def initial_preprocessing(
             mseed = mseed.remove_sensitivity(inventory=inv)
         except ValueError:
             # Divide trace counts by 10^6 to convert to units g
-            for tr in mseed:
-                tr.data = tr.data / no_response_conversion
-            missing_sensitivity = True
-            # raise custom_errors.SensitivityRemovalError(
-            #     f"Failed to remove sensitivity for station {station} with location {location}"
-            # )
+            # for tr in mseed:
+            #     tr.data = tr.data / no_response_conversion
+            # missing_sensitivity = True
+            raise custom_errors.SensitivityRemovalError(
+                f"Failed to remove sensitivity for station {station} with location {location}"
+            )
 
     if not missing_sensitivity:
         # Rotate

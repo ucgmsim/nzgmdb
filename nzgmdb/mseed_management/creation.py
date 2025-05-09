@@ -120,15 +120,20 @@ def get_waveforms(
 
     # Check what channel codes and locations to use from only_record_ids if provided
     if only_record_ids is not None:
+        site_only_record_ids = only_record_ids[
+            only_record_ids["record_id"].str.contains(f"_{sta}_")
+        ]
+        if len(site_only_record_ids) > 1:
+            print("Issue")
         # Check that we only have 1 record_id
         assert (
-            len(only_record_ids) == 1
+            len(site_only_record_ids) == 1
         ), "Multiple record_ids for the same event_sta combo"
         # Get the channel and location to use
         channel_codes = (
-            only_record_ids["record_id"].str.split("_").str[-2].values[0] + "?"
+            site_only_record_ids["record_id"].str.split("_").str[-2].values[0] + "?"
         )
-        location = only_record_ids["record_id"].str.split("_").str[-1].values[0]
+        location = site_only_record_ids["record_id"].str.split("_").str[-1].values[0]
 
     # Get the waveforms with multiple retries when IncompleteReadError occurs
     max_retries = 3
@@ -140,7 +145,7 @@ def get_waveforms(
                     net,
                     sta,
                     location,
-                    "*",
+                    channel_codes,
                     start_time,
                     end_time,
                     attach_response=True,
@@ -188,10 +193,6 @@ def split_stream_into_mseeds(st: Stream, unique_channels: Iterable, event_id: st
     mseeds = []
     raised_issues = []
     for chan, loc in unique_channels:
-        if chan in ["HN", "BN"]:
-            # Skip these
-            continue
-
         # Each unique channel and location pair is a new mseed file
         st_new = st.select(location=loc, channel=f"{chan}?")
         record_id = f"{event_id}_{st_new[0].stats.station}_{st_new[0].stats.channel[:2]}_{st_new[0].stats.location}"
