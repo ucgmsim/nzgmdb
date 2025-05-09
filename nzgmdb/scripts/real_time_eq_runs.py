@@ -383,7 +383,6 @@ def run_event(  # noqa: D103
     phase_n_procs = config.get_n_procs(machine, cfg.WorkflowStep.PHASE_TABLE)
     run_nzgmdb.make_phase_arrival_table(
         event_dir,
-        flatfile_dir,
         run_phasenet_script_ffp,
         conda_sh,
         gmc_activate,
