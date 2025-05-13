@@ -310,7 +310,7 @@ def fetch_sta_mag_line(
     )
     r_epi = dist / 1000
     ev_depth = preferred_origin.depth / 1000
-    r_hyp = ((r_epi) ** 2 + (ev_depth + station.elevation) ** 2) ** 0.5
+    r_hyp = ((r_epi) ** 2 + (ev_depth + station.elevation / 1000) ** 2) ** 0.5
 
     # Get the vs30 value
     site_vs30_row = site_table.loc[
@@ -318,6 +318,14 @@ def fetch_sta_mag_line(
         "Vs30",
     ]
     vs30 = None if site_vs30_row.empty else site_vs30_row.values[0]
+
+    if only_record_ids is not None:
+        # Filter down by site
+        site_only_record_ids = only_record_ids[
+            only_record_ids["record_id"].str.contains(f"_{station.code}_")
+        ]
+    else:
+        site_only_record_ids = None
 
     # Get the waveforms
     st = creation.get_waveforms(
@@ -329,7 +337,7 @@ def fetch_sta_mag_line(
         r_hyp,
         r_epi,
         vs30,
-        only_record_ids,
+        site_only_record_ids,
     )
     # Check that data was found
     if st is None:

@@ -12,7 +12,7 @@ from pathlib import Path
 import mseedlib
 import numpy as np
 import pandas as pd
-from obspy import Stream
+from obspy import Trace, Stream
 from obspy.clients.fdsn import Client as FDSN_Client
 from obspy.clients.fdsn.header import (
     FDSNNoDataException,
@@ -22,21 +22,23 @@ from obspy.core.event import Origin
 from obspy.geodetics import kilometers2degrees
 from obspy.io.mseed import InternalMSEEDError, ObsPyMSEEDFilesizeTooSmallError
 from obspy.taup import TauPyModel
+from scipy.ndimage import gaussian_filter1d
+import matplotlib.pyplot as plt
 
 from empirical.util import classdef, openquake_wrapper_vectorized, z_model_calculations
 from nzgmdb.management import config as cfg
 
 
 def get_arias_intensity_norm(
-    st: Stream,
+    trace: Trace,
 ):
     """
-    Calculate the normalized Arias intensity from a stream object.
+    Calculate the normalized Arias intensity from a trace object.
 
     Parameters
     ----------
-    st : Stream
-        The stream object containing the waveform data
+    trace : Trace
+        The trace object containing the waveform data
 
     Returns
     -------
@@ -44,7 +46,6 @@ def get_arias_intensity_norm(
         The normalized Arias intensity as a 2D array with time and normalized intensity values
     """
     g = 9.81
-    trace = st[0]  # assumes one Trace
     dt = trace.stats.delta
     npts = trace.stats.npts
 
@@ -161,15 +162,13 @@ def get_waveforms(
 
     # Check what channel codes and locations to use from only_record_ids if provided
     if only_record_ids is not None:
-        # Check that we only have 1 record_id
-        assert (
-            len(only_record_ids) == 1
-        ), "Multiple record_ids for the same event_sta combo"
         # Get the channel and location to use
-        channel_codes = (
-            only_record_ids["record_id"].str.split("_").str[-2].values[0] + "?"
+        channel_codes = ",".join(
+            only_record_ids["record_id"].str.split("_").str[-2].unique() + "?"
         )
-        location = only_record_ids["record_id"].str.split("_").str[-1].values[0]
+        location = ",".join(
+            only_record_ids["record_id"].str.split("_").str[-1].unique()
+        )
 
     # Get the waveforms with multiple retries when IncompleteReadError occurs
     max_retries = 3
@@ -177,64 +176,323 @@ def get_waveforms(
         try:
             with warnings.catch_warnings():
                 warnings.filterwarnings("ignore", category=UserWarning)
-                st = client.get_waveforms(
-                    net,
-                    sta,
-                    location,
-                    channel_codes,
-                    start_time,
-                    end_time,
-                    attach_response=True,
-                )
 
-                # Calculate the normalized Arias intensity
-                # Ia, Ia_norm = get_arias_intensity_norm(st)
+                final_st = False
+                end_time_repeats = 0
+                start_time_repeats = 0
+                orig_start_time = start_time
+                orig_end_time = end_time
 
-                # Check the value 7.5 seconds in
-                # print(Ia_norm[0][7.5])
+                while not final_st:
+                    st = client.get_waveforms(
+                        net,
+                        sta,
+                        location,
+                        channel_codes,
+                        start_time,
+                        end_time,
+                        attach_response=True,
+                    )
 
-                data = st[0].data
+                    start_frozen = False
+                    end_frozen = False
+                    # Checks for if the start and end time are outside the current bounds of the waveform
+                    if st[0].stats.starttime > start_time:
+                        start_frozen = True
+                    if st[0].stats.endtime < end_time:
+                        end_frozen = True
+                    if start_frozen and end_frozen:
+                        # We can't adjust the start and end times anymore
+                        break
 
-                # Min-Max normalization
-                normalized_values = (data - data.min()) / (data.max() - data.min())
+                    # Copy the st
+                    st_copy = st.copy()
+                    # Detrend the stream
+                    st_copy.detrend("demean")
+                    st_copy.detrend("linear")
+                    # Filter the stream
+                    st_copy.filter("bandpass", freqmin=0.1, freqmax=40)
 
-                # Get the time array
-                dt = st[0].stats.delta
-                npts = st[0].stats.npts
-                t = np.linspace(0, (npts - 1) * dt, npts)
+                    # Calculate AI
+                    Ia, Ia_norm = get_arias_intensity_norm(st_copy[0])
+                    _, Ia_norm_1 = get_arias_intensity_norm(st_copy[1])
 
-                # Find the index of the value closest to 7.5
-                target = 7.5
-                closest_index = np.abs(t - target).argmin()
+                    dt = st[0].stats.delta
+                    npts = st[0].stats.npts
+                    t = np.linspace(0, (npts - 1) * dt, npts)
 
-                # Calculate n_points per second
-                npts_per_sec = 1 / dt
+                    # compute the derivative of the IA_norm
+                    Ia_norm_diff = np.gradient(Ia_norm[:, 1], dt)
+                    Ia_norm_diff_1 = np.gradient(Ia_norm_1[:, 1], dt)
 
-                # Check the values from index 0 -> closest_index if above the value 0.75
-                selection = normalized_values[:closest_index]
-                if np.any(selection > 0.75):
-                    print("Over")
+                    # Apply Gaussian filter to IA_norm_diff
+                    Ia_norm_diff = gaussian_filter1d(Ia_norm_diff, sigma=10)
+                    Ia_norm_diff_1 = gaussian_filter1d(Ia_norm_diff_1, sigma=10)
 
-                # Do a check for the end of the waveform
-                end_check = npts_per_sec * 15
-                selection = normalized_values[int(len(normalized_values) - end_check) :]
-                if np.any(selection > 0.75):
-                    print("Multiple waveform potential")
-                    # Check values before the peak to see if it is below 0.75 for at least 15 sec
-                    # Find the first occurance of the value above 0.75 in the selection
-                    # last_index = int(len(normalized_values) - np.argmax(selection > threshold))
-                # Flowchart is as follows
-                """
-                Check the current AI norm, check values at start and end from some value in to see the value
-                less than or greater than to find the flat points.
-                If not then we push forward or backward by some exta time
-                we check then for ledges to end the waveform extraction on, or start it
-                keep repeating till a limit is reached in either direction.
-                
-                Compare against a dataset of quality waveforms to ensure we dont screw them up
-                and new ones from the issued set to fix multiple earthquakes.
-                Do a full run to see the differences.
-                """
+                    # Plot the AI
+
+                    data = st[0].data
+                    data_1 = st[1].data
+                    orig_start_time_sec = orig_start_time - start_time
+                    orig_end_time_sec = orig_end_time - start_time
+
+                    fig, axs = plt.subplots(
+                        3,
+                        2,
+                        figsize=(14, 9),
+                        sharex="row",
+                        gridspec_kw={"hspace": 0.3},
+                    )
+
+                    # Left column = original input
+                    # Right column = second input to compare
+
+                    # --- COLUMN 1 (Original channel) ---
+                    # 1. Arias Intensity
+                    axs[0, 0].plot(t, Ia_norm[:, 1], label="Arias Intensity")
+                    axs[0, 0].set_ylabel("Arias Intensity")
+                    axs[0, 0].set_title(f"Channel 1")
+                    axs[0, 0].grid(ls=":")
+                    axs[0, 0].legend()
+
+                    # 2. Derivative
+                    axs[1, 0].plot(t, Ia_norm_diff, label="d(AI)/dt", color="tab:green")
+                    axs[1, 0].axhline(
+                        0.01, color="r", linestyle="--", label="Threshold"
+                    )
+                    axs[1, 0].set_ylabel("Derivative")
+                    axs[1, 0].set_ylim(0, 0.05)
+                    axs[1, 0].grid(ls=":")
+                    axs[1, 0].legend()
+
+                    # 3. Waveform
+                    axs[2, 0].plot(t, data, label="Waveform", color="tab:orange")
+                    axs[2, 0].axvline(
+                        ptime_est - start_time,
+                        color="b",
+                        linestyle="--",
+                        label="Estimated P Arrival",
+                    )
+                    axs[2, 0].axvline(
+                        orig_start_time_sec,
+                        color="g",
+                        linestyle="--",
+                        label="Original Start",
+                    )
+                    axs[2, 0].axvline(
+                        orig_end_time_sec,
+                        color="r",
+                        linestyle="--",
+                        label="Original End",
+                    )
+                    axs[2, 0].set_xlabel("Time [s]")
+                    axs[2, 0].set_ylabel("Amplitude")
+                    axs[2, 0].grid(ls=":")
+                    axs[2, 0].legend()
+
+                    # --- COLUMN 2 (Second channel/input) ---
+                    # Replace these with your second channel inputs
+                    # Variables you need: t2, Ia_norm2, Ia_norm_diff2, data2, ptime_est2, etc.
+
+                    axs[0, 1].plot(t, Ia_norm_1[:, 1], label="Arias Intensity")
+                    axs[0, 1].set_title("Channel 2")
+                    axs[0, 1].grid(ls=":")
+                    axs[0, 1].legend()
+
+                    axs[1, 1].plot(
+                        t, Ia_norm_diff_1, label="d(AI)/dt", color="tab:green"
+                    )
+                    axs[1, 1].axhline(
+                        0.01, color="r", linestyle="--", label="Threshold"
+                    )
+                    axs[1, 1].set_ylim(0, 0.05)
+                    axs[1, 1].grid(ls=":")
+                    axs[1, 1].legend()
+
+                    axs[2, 1].plot(t, data_1, label="Waveform", color="tab:orange")
+                    axs[2, 1].axvline(
+                        ptime_est - start_time,
+                        color="b",
+                        linestyle="--",
+                        label="Estimated P Arrival",
+                    )
+                    axs[2, 1].axvline(
+                        orig_start_time_sec,
+                        color="g",
+                        linestyle="--",
+                        label="Original Start",
+                    )
+                    axs[2, 1].axvline(
+                        orig_end_time_sec,
+                        color="r",
+                        linestyle="--",
+                        label="Original End",
+                    )
+                    axs[2, 1].set_xlabel("Time [s]")
+                    axs[2, 1].grid(ls=":")
+                    axs[2, 1].legend()
+
+                    # Optional: shared suptitle
+                    fig.suptitle(
+                        f"Waveform Info | Mag={mag:.2f}, Ds595={ds:.2f}, Station={sta}",
+                        fontsize=12,
+                    )
+
+                    # Final layout
+                    plt.tight_layout(rect=[0, 0, 1, 0.97])  # Leave space for suptitle
+
+                    # Create subplots with shared x-axis
+                    # fig, (ax1, ax2, ax3) = plt.subplots(
+                    #     3, 1, sharex=True, figsize=(10, 8)
+                    # )
+                    #
+                    # # Plot Arias Intensity on the first subplot
+                    # ax1.plot(t, Ia_norm[:, 1], label="Arias Intensity")
+                    # ax1.set_ylabel("Arias Intensity")
+                    # # Format title
+                    # title = (
+                    #     f"Waveform Info: Mag={mag:.2f}, Ds595={ds:.2f}, Station={sta}"
+                    # )
+                    # ax1.set_title(title)
+                    # ax1.grid(ls=":")
+                    # ax1.legend()
+                    #
+                    # # 2. Gradient of Arias Intensity
+                    # ax2.plot(
+                    #     t,
+                    #     Ia_norm_diff,
+                    #     label="d(AI)/dt",
+                    #     color="tab:green",
+                    # )
+                    # ax2.axhline(
+                    #     0.01,
+                    #     color="r",
+                    #     linestyle="--",
+                    #     label="Threshold",
+                    # )
+                    # ax2.set_ylabel("Gradient")
+                    # ax2.grid(ls=":")
+                    # # Scale to be between 0 and 0.05
+                    # ax2.set_ylim(0, 0.05)
+                    # ax2.legend()
+                    #
+                    # # Plot waveform on the second subplot
+                    # ax3.plot(t, data, label="Waveform", color="tab:orange")
+                    # # Plot the ptime_est
+                    # ax3.axvline(
+                    #     ptime_est - start_time,
+                    #     color="b",
+                    #     linestyle="--",
+                    #     label="Estimated P Arrival Time",
+                    # )
+                    # # Only plot these if the start and end times are not the same
+                    # ax3.axvline(
+                    #     orig_start_time_sec,
+                    #     color="g",
+                    #     linestyle="--",
+                    #     label="Original Start Time",
+                    # )
+                    # ax3.axvline(
+                    #     orig_end_time_sec,
+                    #     color="r",
+                    #     linestyle="--",
+                    #     label="Original End Time",
+                    # )
+                    # ax3.set_xlabel("Time [s]")
+                    # ax3.set_ylabel("Amplitude")
+                    # ax3.grid(ls=":")
+                    # ax3.legend()
+                    #
+                    # # Adjust layout
+                    # plt.tight_layout()
+                    # plt.show()
+
+                    # save the fig
+                    output_dir = (
+                        "/home/joel/local/gmdb/testing_folder/new_window_10_scenarios"
+                    )
+                    output_file = f"{output_dir}/{(st[0].id).replace('.', '_')}.png"
+                    plt.savefig(output_file)
+
+                    plt.close()
+
+                    final_st = True
+
+                    # Calculate n_points per second
+                    # npts_per_sec = 1 / dt
+                    #
+                    # # Do the first step of splitting the waveform
+                    # ds_npts = (ds / 10) * npts_per_sec
+                    # counter = 0
+                    #
+                    # check_value = npts_per_sec * 7.5
+                    #
+                    # # A quick check that the check value is less than the length of the Ia_norm
+                    # if check_value > len(Ia_norm):
+                    #     value = 0.01  # We want to try and push the start time back
+                    # else:
+                    #     # Get the value from IA_norm
+                    #     value = Ia_norm[int(check_value), 1]
+                    #
+                    # if value > 0.02 and not start_frozen:
+                    #     # push the start time back 5 seconds
+                    #     if start_time_repeats < 6:
+                    #         start_time -= 5
+                    #         start_time_repeats += 1
+                    #         final_st = False
+                    #
+                    # # A quick check that the check value is less than the length of the Ia_norm
+                    # if check_value > len(Ia_norm):
+                    #     value = 0.94  # We want to try and push the end time forward
+                    # else:
+                    #     # Get the value from IA_norm
+                    #     value = Ia_norm[int(len(Ia_norm) - check_value), 1]
+                    #
+                    # if value < 0.97:
+                    #     ds_npts = (ds / 10) * npts_per_sec
+                    #     counter = 0
+                    #     back_test_cut_point = None
+                    #     # Travel backwards in time from end of Ia_norm_diff
+                    #     for i, Ia_diff_value in enumerate(Ia_norm_diff[::-1]):
+                    #         # Check if the value is less than 0.01
+                    #         if Ia_diff_value < 0.01:
+                    #             # Increment the counter
+                    #             counter += 1
+                    #         else:
+                    #             # Reset the counter
+                    #             counter = 0
+                    #         if counter >= ds_npts:
+                    #             # Check the current IA norm value that it is above 0.2
+                    #             # (There is another waveform before)
+                    #             ix = len(Ia_norm_diff) - i
+                    #             if Ia_norm[ix, 1] > 0.2:
+                    #                 # We have found the end time
+                    #                 # As there is a ds_npts worth of points with less than 0.01 in a row
+                    #                 back_test_cut_point = ix + counter
+                    #             break
+                    #
+                    #     if back_test_cut_point is not None:
+                    #         end_time = back_test_cut_point
+                    #         end_time_repeats = 0
+                    #         final_st = False
+                    #     elif not end_frozen and end_time_repeats < 6:
+                    #         # push the end time forward 5 seconds
+                    #         end_time += 5
+                    #         end_time_repeats += 1
+                    #         final_st = False
+
+                    # Flowchart is as follows
+                    """
+                    Check the current AI norm, check values at start and end from some value in to see the value
+                    less than or greater than to find the flat points.
+                    If not then we push forward or backward by some exta time
+                    we check then for ledges to end the waveform extraction on, or start it
+                    keep repeating till a limit is reached in either direction.
+                    
+                    Compare against a dataset of quality waveforms to ensure we dont screw them up
+                    and new ones from the issued set to fix multiple earthquakes.
+                    Do a full run to see the differences.
+                    """
 
             break
         except FDSNNoDataException:
