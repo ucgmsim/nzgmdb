@@ -60,7 +60,7 @@ def compute_snr_for_single_mseed(
 
     # Read mseed information
     try:
-        waveform = reading.create_waveform_from_mseed(mseed_file, pre_process=True)
+        waveform = reading.create_waveform_from_mseed(mseed_file, pre_process=True, apply_taper=False, apply_zero_padding=False)
     except custom_errors.InventoryNotFoundError:
         skipped_record_dict = {
             "record_id": mseed_file.stem,
@@ -136,7 +136,6 @@ def compute_snr_for_single_mseed(
                 frequencies=common_frequency_vector,
                 cores=1,
                 ko_directory=ko_directory,
-                apply_taper=False,
             )
     except FileNotFoundError:
         skipped_record_dict = {
