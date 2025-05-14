@@ -172,7 +172,7 @@ def get_waveforms(
     return st
 
 
-def split_stream_into_mseeds(st: Stream, unique_channels: Iterable):
+def split_stream_into_mseeds(st: Stream, unique_channels: Iterable, event_id: str):
     """
     Split the stream object into multiple mseed files based on the unique channel and location
 
@@ -183,6 +183,8 @@ def split_stream_into_mseeds(st: Stream, unique_channels: Iterable):
     unique_channels : Iterable
         An Iterable of tuples containing the unique channel and location for each mseed file created
         [(channel, location), ...]
+    event_id : str
+        The event id which is used if there is a raised issue with the mseed file
 
     Returns
     -------
@@ -190,9 +192,11 @@ def split_stream_into_mseeds(st: Stream, unique_channels: Iterable):
         A list of stream objects containing the waveform data for each mseed file created
     """
     mseeds = []
+    raised_issues = []
     for chan, loc in unique_channels:
         # Each unique channel and location pair is a new mseed file
         st_new = st.select(location=loc, channel=f"{chan}?")
+        record_id = f"{event_id}_{st_new[0].stats.station}_{st_new[0].stats.channel[:2]}_{st_new[0].stats.location}"
 
         if len(st_new) > 3:
             # Check if all the sample rates are the same
@@ -201,9 +205,13 @@ def split_stream_into_mseeds(st: Stream, unique_channels: Iterable):
                 # If they are different take the highest and resample with the others using interpolation
                 st_new = st_new.select(sampling_rate=max(samples))
                 st_new.merge(fill_value="interpolate")
+                raised_issues.append(
+                    [record_id, "Split stream, different sample rates"]
+                )
 
         # Check the final length of the traces
         if len(st_new) != 3:
+            raised_issues.append([record_id, "Unknown issue, multiple traces"])
             continue
 
         # Ensure traces all have the same length
@@ -211,12 +219,15 @@ def split_stream_into_mseeds(st: Stream, unique_channels: Iterable):
         endtime_trim = min([tr.stats.endtime for tr in st_new])
         # Check that the start time is before the end time
         if starttime_trim > endtime_trim:
+            raised_issues.append(
+                [record_id, "Unknown issue, start time after end time"]
+            )
             continue
         st_new.trim(starttime_trim, endtime_trim)
 
         mseeds.append(st_new)
 
-    return mseeds
+    return mseeds, raised_issues
 
 
 def write_stream_to_mseed(stream: Stream, output_file: Path):

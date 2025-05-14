@@ -8,9 +8,11 @@ from typing import Annotated
 
 import typer
 
+from IM.ims import IM
 from nzgmdb.calculation import aftershocks, distances, fmax, ims, snr
 from nzgmdb.data_processing import merge_flatfiles, process_observed, quality_db
 from nzgmdb.data_retrieval import geonet, sites, tect_domain
+from nzgmdb.management import config as cfg
 from nzgmdb.management import file_structure
 from nzgmdb.phase_arrival import gen_phase_arrival_table
 from nzgmdb.scripts import run_gmc, upload_to_dropbox
@@ -36,6 +38,7 @@ def fetch_geonet_data(
         Path, typer.Option(exists=True, dir_okay=False)
     ] = None,
     real_time: Annotated[bool, typer.Option()] = False,
+    mp_sites: Annotated[bool, typer.Option()] = False,
 ):
     """
     Fetch earthquake data from Geonet and generate the earthquake source and station magnitude tables.
@@ -60,6 +63,8 @@ def fetch_geonet_data(
         The full file path to a set of record IDs to only run for (default is None).
     real_time : bool, optional
         If True, the function will run in real-time mode by using a different client (default is False).
+    mp_sites : bool, optional
+        If True, the function will use multiprocessing over sites instead of events (default is False).
     """
     geonet.parse_geonet_information(
         main_dir,
@@ -71,6 +76,7 @@ def fetch_geonet_data(
         only_sites,
         only_record_ids_ffp,
         real_time,
+        mp_sites,
     )
 
 
@@ -176,6 +182,14 @@ def calculate_snr(
             file_okay=False,
         ),
     ],
+    ko_directory: Annotated[
+        Path,
+        typer.Argument(
+            help="The directory containing the Konno-Ohmachi smoothing files",
+            exists=True,
+            file_okay=False,
+        ),
+    ],
     phase_table_path: Annotated[
         Path,
         typer.Option(
@@ -220,6 +234,8 @@ def calculate_snr(
     ----------
     main_dir : Path
         The main directory of the NZGMDB results (Highest level directory).
+    ko_directory : Path
+        The directory containing the Konno-Ohmachi smoothing files.
     phase_table_path : Path, optional
         Path to the phase arrival table. If not provided, defaults to the expected location.
     meta_output_dir : Path, optional
@@ -248,6 +264,7 @@ def calculate_snr(
         phase_table_path,
         meta_output_dir,
         snr_fas_output_dir,
+        ko_directory,
         n_procs,
         batch_size=batch_size,
         bypass_records_ffp=bypass_records_ffp,
@@ -401,6 +418,13 @@ def run_im_calculation(
             file_okay=False,
         ),
     ],
+    ko_directory: Annotated[
+        Path,
+        typer.Argument(
+            exists=True,
+            file_okay=False,
+        ),
+    ],
     output_dir: Annotated[
         Path,
         typer.Option(file_okay=False),
@@ -412,6 +436,12 @@ def run_im_calculation(
             is_flag=True,
         ),
     ] = False,
+    intensity_measures: Annotated[
+        list[IM],
+        typer.Option(
+            callback=lambda x: [IM(i) for i in x[0].split(",")],
+        ),
+    ] = None,
 ):
     """
     Run IM Calculation on processed waveform files.
@@ -422,16 +452,22 @@ def run_im_calculation(
     ----------
     main_dir : Path
         The main directory of the NZGMDB results (Highest level directory).
+    ko_directory : Path
+        The directory containing the Konno-Ohmachi smoothing files. Defaults to the expected location.
     output_dir : Path, optional
         The directory to save the IM files. Defaults to the expected location.
     n_procs : int, optional
         The number of processes to use (default is 1).
     checkpoint : bool, optional
         If True, the function will check for already completed files and skip them.
+    intensity_measures : list[IM], optional
+        The list of intensity measures to calculate, by default None and will use the config file.
     """
     if output_dir is None:
         output_dir = file_structure.get_im_dir(main_dir)
-    ims.compute_ims_for_all_processed_records(main_dir, output_dir, n_procs, checkpoint)
+    ims.compute_ims_for_all_processed_records(
+        main_dir, output_dir, ko_directory, n_procs, checkpoint, intensity_measures
+    )
 
 
 @cli.from_docstring(app)
@@ -533,18 +569,18 @@ def merge_im_results(
     ],
     gmc_ffp: Annotated[
         Path,
-        typer.Argument(
+        typer.Option(
             readable=True,
             exists=True,
         ),
-    ],
+    ] = None,
     fmax_ffp: Annotated[
         Path,
-        typer.Argument(
+        typer.Option(
             readable=True,
             exists=True,
         ),
-    ],
+    ] = None,
 ):
     """
     Merge IM results together into one flatfile and perform a filter for Ds595.
@@ -667,18 +703,18 @@ def run_full_nzgmdb(
         str,
         typer.Argument(),
     ],
+    ko_matrix_path: Annotated[
+        Path,
+        typer.Argument(
+            exists=True,
+            file_okay=False,
+        ),
+    ],
     gmc_procs: Annotated[
         int,
         typer.Option(),
     ] = 1,
     n_procs: Annotated[int, typer.Option()] = 1,
-    ko_matrix_path: Annotated[
-        Path,
-        typer.Option(
-            exists=True,
-            file_okay=False,
-        ),
-    ] = None,
     checkpoint: Annotated[
         bool,
         typer.Option(),
@@ -729,6 +765,12 @@ def run_full_nzgmdb(
             dir_okay=False,
         ),
     ] = None,
+    machine: Annotated[
+        cfg.MachineName | None,
+        typer.Option(
+            case_sensitive=False,
+        ),
+    ] = None,
 ):
     """
     Run the Entire NZGMDB pipeline.
@@ -765,12 +807,12 @@ def run_full_nzgmdb(
         Command to activate gmc environment for extracting features.
     gmc_predict_activate : str
         Command to activate gmc_predict environment to run the predictions.
+    ko_matrix_path : Path
+        Path to the ko matrix directory
     gmc_procs : int, optional
         Number of processes to use for GMC (default is 1).
     n_procs : int, optional
         The number of processes to use (default is 1).
-    ko_matrix_path : Path, optional
-        Path to the ko matrix directory, if applicable.
     checkpoint : bool, optional
         If True, the function will check for already completed files and skip them (default is False).
     only_event_ids : list[str], optional
@@ -791,8 +833,11 @@ def run_full_nzgmdb(
         If True, the function will create a quality database (default is False).
     bypass_records_ffp : Path, optional
         The full file path to the bypass records file, if applicable.
+    machine : cfg.MachineName, optional
+        The machine name to use for process configuration (default is None).
     """
     main_dir.mkdir(parents=True, exist_ok=True)
+    config = cfg.Config()
 
     # Generate the site basin flatfile
     flatfile_dir = file_structure.get_flatfile_dir(main_dir)
@@ -813,11 +858,16 @@ def run_full_nzgmdb(
         ).exists()
     ):
         print("Fetching Geonet data")
+        geo_n_procs = (
+            n_procs
+            if machine is None
+            else config.get_n_procs(machine, cfg.WorkflowStep.GEONET)
+        )
         geonet.parse_geonet_information(
             main_dir,
             start_date,
             end_date,
-            n_procs,
+            geo_n_procs,
             geonet_batch_size,
             only_event_ids,
             only_sites,
@@ -842,7 +892,12 @@ def run_full_nzgmdb(
             flatfile_dir
             / file_structure.PreFlatfileNames.EARTHQUAKE_SOURCE_TABLE_TECTONIC
         )
-        tect_domain.add_tect_domain(eq_source_ffp, eq_tect_domain_ffp, n_procs)
+        tect_n_procs = (
+            n_procs
+            if machine is None
+            else config.get_n_procs(machine, cfg.WorkflowStep.TEC_DOMAIN)
+        )
+        tect_domain.add_tect_domain(eq_source_ffp, eq_tect_domain_ffp, tect_n_procs)
 
     # Generate the phase arrival table
     if not (
@@ -855,13 +910,18 @@ def run_full_nzgmdb(
         run_phasenet_script_ffp = (
             Path(__file__).parent.parent / "phase_arrival/run_phasenet.py"
         )
+        phase_n_procs = (
+            n_procs
+            if machine is None
+            else config.get_n_procs(machine, cfg.WorkflowStep.PHASE_TABLE)
+        )
         gen_phase_arrival_table.generate_phase_arrival_table(
             main_dir,
             flatfile_dir,
             run_phasenet_script_ffp,
             conda_sh,
             gmc_activate,
-            n_procs,
+            phase_n_procs,
             bypass_records_ffp,
         )
 
@@ -875,12 +935,18 @@ def run_full_nzgmdb(
         phase_table_path = (
             flatfile_dir / file_structure.PreFlatfileNames.PHASE_ARRIVAL_TABLE
         )
+        snr_n_procs = (
+            n_procs
+            if machine is None
+            else config.get_n_procs(machine, cfg.WorkflowStep.SNR)
+        )
         calculate_snr(
             main_dir,
+            ko_matrix_path,
             phase_table_path,
             flatfile_dir,
             snr_fas_output_dir,
-            n_procs,
+            snr_n_procs,
             batch_size=snr_batch_size,
             bypass_records_ffp=bypass_records_ffp,
         )
@@ -889,12 +955,17 @@ def run_full_nzgmdb(
     if not (checkpoint and (flatfile_dir / file_structure.FlatfileNames.FMAX).exists()):
         print("Calculating Fmax")
         waveform_dir = file_structure.get_waveform_dir(main_dir)
+        fmax_n_procs = (
+            n_procs
+            if machine is None
+            else config.get_n_procs(machine, cfg.WorkflowStep.FMAX)
+        )
         calc_fmax(
             main_dir,
             flatfile_dir,
             waveform_dir,
             snr_fas_output_dir,
-            n_procs,
+            fmax_n_procs,
             bypass_records_ffp,
         )
 
@@ -904,6 +975,11 @@ def run_full_nzgmdb(
         and (flatfile_dir / file_structure.FlatfileNames.GMC_PREDICTIONS).exists()
     ):
         print("Running GMC")
+        gmc_n_procs = (
+            gmc_procs
+            if machine is None
+            else config.get_n_procs(machine, cfg.WorkflowStep.GMC)
+        )
         run_gmc.run_gmc_processing(
             main_dir,
             gm_classifier_dir,
@@ -911,7 +987,7 @@ def run_full_nzgmdb(
             conda_sh,
             gmc_activate,
             gmc_predict_activate,
-            gmc_procs,
+            gmc_n_procs,
             bypass_records_ffp=bypass_records_ffp,
         )
 
@@ -926,12 +1002,23 @@ def run_full_nzgmdb(
         ).exists()
     ):
         print("Processing records")
-        process_records(main_dir, gmc_ffp, fmax_ffp, bypass_records_ffp, n_procs)
+        process_n_procs = (
+            n_procs
+            if machine is None
+            else config.get_n_procs(machine, cfg.WorkflowStep.PROCESS)
+        )
+        process_records(
+            main_dir, gmc_ffp, fmax_ffp, bypass_records_ffp, process_n_procs
+        )
 
     # Run IM calculation
     im_dir = file_structure.get_im_dir(main_dir)
+    im_dir.mkdir(parents=True, exist_ok=True)
     print("Calculating IMs")
-    run_im_calculation(main_dir, im_dir, n_procs, checkpoint)
+    im_n_procs = (
+        n_procs if machine is None else config.get_n_procs(machine, cfg.WorkflowStep.IM)
+    )
+    run_im_calculation(main_dir, im_dir, ko_matrix_path, im_n_procs, checkpoint)
 
     # Merge IM results
     if not (
@@ -952,7 +1039,12 @@ def run_full_nzgmdb(
         ).exists()
     ):
         print("Calculating distances")
-        distances.calc_distances(main_dir, n_procs)
+        dist_n_procs = (
+            n_procs
+            if machine is None
+            else config.get_n_procs(machine, cfg.WorkflowStep.DISTANCES)
+        )
+        distances.calc_distances(main_dir, dist_n_procs)
 
     # Calculate aftershocks
     if not (
@@ -982,7 +1074,12 @@ def run_full_nzgmdb(
     # Upload to dropbox
     if upload:
         print("Uploading to Dropbox")
-        upload_to_dropbox.upload_to_dropbox(main_dir, n_procs=n_procs)
+        up_n_procs = (
+            n_procs
+            if machine is None
+            else config.get_n_procs(machine, cfg.WorkflowStep.UPLOAD)
+        )
+        upload_to_dropbox.upload_to_dropbox(main_dir, n_procs=up_n_procs)
 
 
 @cli.from_docstring(app)

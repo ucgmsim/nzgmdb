@@ -21,7 +21,7 @@ def calculate_im_for_record(
     intensity_measures: list[ims.IM],
     psa_periods: np.ndarray,
     fas_frequencies: np.ndarray,
-    ko_bandwith: int = 40,
+    ko_directory: Path,
 ):
     """
     Calculate the IMs for a single record and save the results to a csv file
@@ -38,8 +38,8 @@ def calculate_im_for_record(
         The periods for calculating the pseudo-spectral acceleration
     fas_frequencies : np.ndarray
         The frequencies for calculating the Fourier amplitude spectrum
-    ko_bandwith : int, optional
-        The bandwidth for the Konno-Ohmachi smoothing, by default 40
+    ko_directory : Path
+        The path to the directory containing the Konno-Ohmachi smoothing files
 
     Returns
     -------
@@ -61,6 +61,8 @@ def calculate_im_for_record(
         skipped_record = pd.DataFrame([skipped_record_dict])
         return skipped_record
 
+    print(f"Calculating IMs for {record_id}")
+
     # Get the event_id and create the output directory
     event_id = file_structure.get_event_id_from_mseed(ffp_000)
     event_output_path = output_path / event_id
@@ -80,7 +82,7 @@ def calculate_im_for_record(
             psa_periods,
             fas_frequencies,
             cores=1,
-            ko_bandwidth=ko_bandwith,
+            ko_directory=ko_directory,
         )
 
     # Set a column for the record_id and then component and set at the front
@@ -95,8 +97,10 @@ def calculate_im_for_record(
 def compute_ims_for_all_processed_records(
     main_dir: Path,
     output_path: Path,
+    ko_directory: Path,
     n_procs: int = 1,
     checkpoint: bool = False,
+    intensity_measures: list[ims.IM] | None = None,
 ):
     """
     Compute the IMs for all processed records in the main directory
@@ -107,10 +111,14 @@ def compute_ims_for_all_processed_records(
         The main directory of the NZGMDB results (Highest level directory)
     output_path : Path
         The path to the output directory
+    ko_directory : Path
+        The path to the directory containing the Konno-Ohmachi smoothing files
     n_procs : int, optional
         The number of processes to use
     checkpoint : bool, optional
         If True, the function will check for already completed files and skip them
+    intensity_measures : list[ims.IM], optional
+        The list of intensity measures to calculate, by default None and will use the config file
     """
     # Get the waveform directory and all the 000 files
     waveform_dir = file_structure.get_waveform_dir(main_dir)
@@ -126,14 +134,20 @@ def compute_ims_for_all_processed_records(
 
     # Load the config and extract the IM options
     config = cfg.Config()
-    intensity_measures = [ims.IM[measure] for measure in config.get_value("ims")]
+    intensity_measures = (
+        [ims.IM[measure] for measure in config.get_value("ims")]
+        if intensity_measures is None
+        else intensity_measures
+    )
     psa_periods = np.asarray(config.get_value("psa_periods"))
     fas_frequencies = np.logspace(
         np.log10(config.get_value("common_frequency_start")),
         np.log10(config.get_value("common_frequency_end")),
         num=config.get_value("common_frequency_num"),
     )
-    ko_bandwith = config.get_value("ko_bandwidth")
+
+    # This is a fix for multiprocessing issues in IM calculation
+    mp.set_start_method("spawn", force=True)
 
     # Fetch results
     with mp.Pool(n_procs) as p:
@@ -144,10 +158,12 @@ def compute_ims_for_all_processed_records(
                 intensity_measures=intensity_measures,
                 psa_periods=psa_periods,
                 fas_frequencies=fas_frequencies,
-                ko_bandwith=ko_bandwith,
+                ko_directory=ko_directory,
             ),
             comp_000_files,
         )
+
+    mp.set_start_method("fork", force=True)
 
     print("Finished calculating IMs")
 

@@ -136,23 +136,19 @@ def run_gmc_processing(
     ],
     conda_sh: Annotated[
         Path,
-        typer.Argument(
-        ),
+        typer.Argument(),
     ],
     gmc_activate: Annotated[
         str,
-        typer.Argument(
-        ),
+        typer.Argument(),
     ],
     gmc_predict_activate: Annotated[
         str,
-        typer.Argument(
-        ),
+        typer.Argument(),
     ],
     n_procs: Annotated[
         int,
-        typer.Option(
-        ),
+        typer.Option(),
     ] = 1,
     waveform_dir: Annotated[
         Path,
@@ -170,8 +166,7 @@ def run_gmc_processing(
     ] = None,
     bypass_records_ffp: Annotated[
         Path,
-        typer.Option(
-        ),
+        typer.Option(),
     ] = None,
 ):
     """
@@ -226,6 +221,9 @@ def run_gmc_processing(
 
     # Get all the mseed files
     mseed_files = list(waveform_dir.rglob("*.mseed"))
+
+    # Ensure that n_procs is equal too or less than the number of mseed files
+    n_procs = min(n_procs, len(mseed_files))
 
     # Split them into even batches based on number of mseeds and n_procs
     mseed_batches = np.array_split(mseed_files, n_procs)

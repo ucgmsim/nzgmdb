@@ -14,8 +14,8 @@ from nzgmdb.management import file_structure
 def merge_im_data(
     im_dir: Path,
     output_dir: Path,
-    gmc_ffp: Path,
-    fmax_ffp: Path,
+    gmc_ffp: Path | None = None,
+    fmax_ffp: Path | None = None,
 ):
     """
     Merge the IM data into a single flatfile. Also merges in the GMC and fmax data and
@@ -28,32 +28,46 @@ def merge_im_data(
         The directory where the IM files are stored
     output_dir : Path
         The directory to save the final IM flatfile and the skipped records
-    gmc_ffp : Path
+    gmc_ffp : Path, optional
         The file path to the GMC results
-    fmax_ffp : Path
+    fmax_ffp : Path, optional
         The file path to the fmax results
     """
     # Load the GMC file
-    gmc_results = pd.read_csv(gmc_ffp)
-
-    try:
-        # Load the fmax file
-        fmax_results = pd.read_csv(fmax_ffp)
-    except pd.errors.EmptyDataError:
-        fmax_results = pd.DataFrame(
-            columns=["record_id", "fmax_000", "fmax_090", "fmax_ver"]
+    if gmc_ffp is None:
+        new_df = pd.DataFrame(
+            columns=[
+                "record",
+                "score_mean_X",
+                "fmin_mean_X",
+                "multi_mean_X",
+                "score_mean_Y",
+                "fmin_mean_Y",
+                "multi_mean_Y",
+                "score_mean_Z",
+                "fmin_mean_Z",
+                "multi_mean_Z",
+            ]
         )
+    else:
+        gmc_results = pd.read_csv(gmc_ffp)
 
-    # Define the columns to be grouped
-    columns = ["score_mean", "fmin_mean", "multi_mean"]
+        # Define the columns to be grouped
+        columns = ["score_mean", "fmin_mean", "multi_mean"]
 
-    # Group by 'record' and 'component', then aggregate the columns
-    new_df = gmc_results.groupby(["record", "component"])[columns].mean().unstack()
+        # Group by 'record' and 'component', then aggregate the columns
+        new_df = gmc_results.groupby(["record", "component"])[columns].mean().unstack()
 
-    # Join the column names to score_mean_X etc.
-    new_df.columns = ["_".join(col) for col in new_df.columns]
+        # Join the column names to score_mean_X etc.
+        new_df.columns = ["_".join(col) for col in new_df.columns]
 
-    new_df = new_df.reset_index()
+        new_df = new_df.reset_index()
+
+    fmax_results = (
+        pd.DataFrame(columns=["record_id", "fmax_000", "fmax_090", "fmax_ver"])
+        if fmax_ffp is None or not fmax_ffp.stat().st_size
+        else pd.read_csv(fmax_ffp)
+    )
 
     # Find all the IM files
     im_files = im_dir.rglob("*IM.csv")
@@ -162,9 +176,12 @@ def merge_flatfiles(main_dir: Path, bypass_records_ffp: Path = None):
         flatfile_dir / file_structure.PreFlatfileNames.STATION_MAGNITUDE_TABLE_GEONET,
         dtype={"evid": str},
     )
-    phase_table_df = pd.read_csv(
-        flatfile_dir / file_structure.PreFlatfileNames.PHASE_ARRIVAL_TABLE
-    )
+    if (flatfile_dir / file_structure.PreFlatfileNames.PHASE_ARRIVAL_TABLE).exists():
+        phase_table_df = pd.read_csv(
+            flatfile_dir / file_structure.PreFlatfileNames.PHASE_ARRIVAL_TABLE
+        )
+    else:
+        phase_table_df = pd.DataFrame(columns=["record_id", "p_wave_ix", "s_wave_ix"])
     prop_df = pd.read_csv(
         flatfile_dir / file_structure.PreFlatfileNames.PROPAGATION_TABLE,
         dtype={"evid": str},
@@ -319,8 +336,6 @@ def merge_flatfiles(main_dir: Path, bypass_records_ffp: Path = None):
     station_df = pd.DataFrame(
         station_info, columns=["sta", "sta_lat", "sta_lon", "sta_elev"]
     )
-    # Only include stations in the missing_sites dictionary
-    station_df = station_df[station_df["sta"].isin(missing_sites)]
 
     # Merge the station information into the gm_im_df_flat
     gm_im_df_flat = gm_im_df_flat.merge(
@@ -391,11 +406,12 @@ def merge_flatfiles(main_dir: Path, bypass_records_ffp: Path = None):
     idx_min_loc_elev = grouped.apply(custom_idxmin)
 
     gm_im_df_flat["is_ground_level"] = False
-    # Set the flag to True for the rows with the smallest loc_elev value
-    record_ids = gm_im_df_flat.loc[idx_min_loc_elev.dropna(), "record_id"]
-    gm_im_df_flat.loc[
-        gm_im_df_flat["record_id"].isin(record_ids), "is_ground_level"
-    ] = True
+    if len(idx_min_loc_elev) > 0:
+        # Set the flag to True for the rows with the smallest loc_elev value
+        record_ids = gm_im_df_flat.loc[idx_min_loc_elev.dropna(), "record_id"]
+        gm_im_df_flat.loc[
+            gm_im_df_flat["record_id"].isin(record_ids), "is_ground_level"
+        ] = True
 
     # For Locations not found in the dataframe, set the loc_elev to 0 only if there is just 1 location
     # Also set the is_ground_level to True
