@@ -328,7 +328,7 @@ def fetch_sta_mag_line(
         site_only_record_ids = None
 
     # Get the waveforms
-    st = creation.get_waveforms(
+    mseeds = creation.get_waveforms(
         preferred_origin,
         client_NZ,
         network.code,
@@ -338,22 +338,12 @@ def fetch_sta_mag_line(
         r_epi,
         vs30,
         site_only_record_ids,
+        event_id,
     )
     # Check that data was found
-    if st is None:
+    if mseeds is None:
         skipped_records.append([f"{event_id}_{station.code}", "No Waveform Data"])
         return sta_mag_line, skipped_records, []
-
-    # Get the unique channels (Using first 2 keys) and locations
-    unique_channels = set([(tr.stats.channel[:2], tr.stats.location) for tr in st])
-
-    # Split the stream into mseeds
-    mseeds, raised_issues = creation.split_stream_into_mseeds(
-        st, unique_channels, event_id
-    )
-
-    # Extend the raised_issues list with the skipped records
-    skipped_records.extend(raised_issues)
 
     # Get the station magnitudes
     station_magnitudes = [
@@ -384,17 +374,17 @@ def fetch_sta_mag_line(
             )
 
         # Calculate clip to determine if the record should be dropped
-        clip = filtering.get_clip_probability(pref_mag, r_hyp, mseed)
-
-        # Check if the record should be dropped
-        if clip > threshold:
-            stats = mseed[0].stats
-            clipped_records.append(
-                [
-                    f"{event_id}_{stats.station}_{stats.channel}_{stats.location}",
-                    "Clipped",
-                ]
-            )
+        # clip = filtering.get_clip_probability(pref_mag, r_hyp, mseed)
+        #
+        # # Check if the record should be dropped
+        # if clip > threshold:
+        #     stats = mseed[0].stats
+        #     clipped_records.append(
+        #         [
+        #             f"{event_id}_{stats.station}_{stats.channel}_{stats.location}",
+        #             "Clipped",
+        #         ]
+        #     )
 
         # Create the directory structure for the given event
         year = event_cat.origins[0].time.year
@@ -497,7 +487,11 @@ def fetch_event_data(
         The parsed event data.
     """
     # Get the catalog information
-    cat = client_NZ.get_events(eventid=event_id)
+    try:
+        cat = client_NZ.get_events(eventid=event_id)
+    except:
+        print("Yes")
+        return [], [], [], []
     event_cat = cat[0]
 
     # Get the event line

@@ -7,12 +7,13 @@ import http.client
 import time
 import warnings
 from collections.abc import Iterable
+from enum import StrEnum
 from pathlib import Path
 
 import mseedlib
 import numpy as np
 import pandas as pd
-from obspy import Trace, Stream
+from obspy import Trace, Stream, UTCDateTime
 from obspy.clients.fdsn import Client as FDSN_Client
 from obspy.clients.fdsn.header import (
     FDSNNoDataException,
@@ -65,6 +66,135 @@ def get_arias_intensity_norm(
     return Ia_1col, Ia_norm
 
 
+class WaveformState(StrEnum):
+    FIND_WAVEFORM = "find_waveform"
+    FIND_WAVEFORM_END = "find_waveform_end"
+    FIND_NOISE_SECTION = "find_noise_section"
+
+
+def get_sections(ds_npts: int, Ia_norm_diff: np.ndarray, Ia_norm: np.ndarray):
+    # Stores each of the split sections and where they should be cut
+    sections = [0]
+    # Counter to keep track of the number of points in the waveform and when it goes above ds_npts
+    counter = 0
+    cur_i = 0
+
+    # We only need to check 15% Ds for indictaing the start of a waveform
+    ds_npts_find_waveform = max(ds_npts, 4)
+
+    waveform_state = WaveformState.FIND_WAVEFORM
+    # Travel from the start to the end of the IA_norm_diff
+    for i, Ia_diff_value in enumerate(Ia_norm_diff):
+        if waveform_state == WaveformState.FIND_WAVEFORM:
+            if Ia_diff_value > 0.01:
+                # If the value is greater than 0.01, check if the counter is greater than ds_npts_find_waveform
+                # Or if the Ia_norm value is greater than 0.05 then we have found a waveform
+                if counter >= ds_npts_find_waveform or Ia_diff_value > 0.05:
+                    # Confirmed a waveform section, try find the end of the waveform
+                    waveform_state = WaveformState.FIND_WAVEFORM_END
+                    counter = 0
+                    cur_i = i
+                else:
+                    # Increment the counter
+                    counter += 1
+            else:
+                # Reset the counter
+                counter = 0
+        elif waveform_state == WaveformState.FIND_WAVEFORM_END:
+            # Check if the value is less than 0.01
+            if Ia_diff_value < 0.01:
+                # Increment the counter
+                counter += 1
+            else:
+                # Reset the counter
+                counter = 0
+                cur_i = i
+            if counter >= ds_npts:
+                # Add the index to the sections (Of the last value higher than noise)
+                sections.append(cur_i)
+                counter = 0
+                waveform_state = WaveformState.FIND_NOISE_SECTION
+        else:
+            # We are in the noise section, check if the value is greater than 0.01
+            # And only count as a section to end on if the Ia_norm value is less than 0.85
+            # Meaning we have another potential waveform to extract
+            if Ia_diff_value > 0.01 and (Ia_norm[i, 1] < 0.85 or Ia_diff_value > 0.05):
+                # If it is, we have found the end of noise and can look for a waveform
+                waveform_state = WaveformState.FIND_WAVEFORM
+                counter = 1  # This is the first point of the potential waveform
+                sections.append(i)
+    if waveform_state != WaveformState.FIND_WAVEFORM:
+        # We are tyring to find the tail end of the waveform but have not reached it yet
+        # Or we are in the noise section and so we want to cut at the end
+        sections.append(i)
+
+    return sections
+
+
+def stream_to_continuous_array_nan(
+    group: Stream, t: np.ndarray, sampling_rate: float
+) -> np.ndarray:
+    # Initialize with NaNs to represent gaps
+    data = np.full_like(t, np.nan)
+    t_start = t[0]
+    for tr in group:
+        start_idx = int((tr.stats.starttime.timestamp - t_start) * sampling_rate)
+        end_idx = start_idx + len(tr.data)
+        if start_idx < 0:
+            tr_data = tr.data[-start_idx:]
+            start_idx = 0
+        else:
+            tr_data = tr.data
+        if end_idx > len(data):
+            tr_data = tr_data[: len(data) - start_idx]
+            end_idx = len(data)
+        # Insert trace data
+        data[start_idx : start_idx + len(tr_data)] = tr_data
+    return data
+
+
+def get_section(sections: list, p_wave_guess: float, ds_npts: int):
+    """
+    Gets the section of the waveform that is closest to the P wave arrival time
+    """
+    # Get every pair of numbers in the sections list
+    pairs = [
+        (sections[i], sections[i + 1], i, i + 1) for i in range(0, len(sections) - 1, 2)
+    ]
+
+    min_distance = None
+    closest = None
+
+    for start, end, start_i, end_i in pairs:
+        if start <= p_wave_guess <= end:
+            closest = (start, end, start_i, end_i)
+            break
+        else:
+            distance = min(abs(p_wave_guess - start), abs(p_wave_guess - end))
+            if min_distance is None or distance < min_distance:
+                min_distance = distance
+                closest = (start, end, start_i, end_i)
+
+    # Now we want to expand the start and end if possible
+    new_start = (
+        closest[0]
+        if closest[2] == 0
+        else int(
+            sections[closest[2] - 1] + (0 if closest[2] - 1 == 0 else ds_npts * 0.5)
+        )
+    )
+    new_end = (
+        closest[1]
+        if closest[3] == len(sections) - 1
+        else int(
+            sections[closest[3] + 1]
+            - (0 if closest[3] + 2 == len(sections) else ds_npts * 0.5)
+        )
+    )
+
+    return (new_start, new_end)
+
+
 def get_waveforms(
     preferred_origin: Origin,
     client: FDSN_Client,
@@ -75,6 +205,7 @@ def get_waveforms(
     r_epi: float,
     vs30: float = None,
     only_record_ids: list[str] = None,
+    event_id: str = None,
 ):
     """
     Get the waveforms for a given event and station
@@ -172,327 +303,568 @@ def get_waveforms(
 
     # Get the waveforms with multiple retries when IncompleteReadError occurs
     max_retries = 3
+    final_mseeds = []
     for attempt in range(max_retries):
         try:
             with warnings.catch_warnings():
                 warnings.filterwarnings("ignore", category=UserWarning)
 
-                final_st = False
-                end_time_repeats = 0
-                start_time_repeats = 0
-                orig_start_time = start_time
-                orig_end_time = end_time
+                st = client.get_waveforms(
+                    net,
+                    sta,
+                    location,
+                    channel_codes,
+                    start_time,
+                    end_time,
+                    attach_response=True,
+                )
 
-                while not final_st:
-                    st = client.get_waveforms(
-                        net,
-                        sta,
-                        location,
-                        channel_codes,
-                        start_time,
-                        end_time,
-                        attach_response=True,
-                    )
+                # Get the unique channels (Using first 2 keys) and locations
+                unique_channels = set(
+                    [(tr.stats.channel[:2], tr.stats.location) for tr in st]
+                )
 
-                    start_frozen = False
-                    end_frozen = False
-                    # Checks for if the start and end time are outside the current bounds of the waveform
-                    if st[0].stats.starttime > start_time:
-                        start_frozen = True
-                    if st[0].stats.endtime < end_time:
-                        end_frozen = True
-                    if start_frozen and end_frozen:
-                        # We can't adjust the start and end times anymore
-                        break
+                # First split the stream into the diffeent unique records
+                mseeds, _ = split_stream_into_mseeds(st, unique_channels, event_id)
 
-                    # Copy the st
-                    st_copy = st.copy()
-                    # Detrend the stream
-                    st_copy.detrend("demean")
-                    st_copy.detrend("linear")
-                    # Filter the stream
-                    st_copy.filter("bandpass", freqmin=0.1, freqmax=40)
+                for mseed in mseeds:
+                    final_mseed = False
+                    end_time_repeats = 0
+                    start_time_repeats = 0
+                    start_time_Ia_values = []
+                    end_time_Ia_values = []
+                    orig_start_time = start_time
+                    orig_end_time = end_time
 
-                    # Calculate AI
-                    Ia, Ia_norm = get_arias_intensity_norm(st_copy[0])
-                    _, Ia_norm_1 = get_arias_intensity_norm(st_copy[1])
+                    # Extract the exact loc and chan for the mseed
+                    loc = mseed[0].stats.location
+                    chan = mseed[0].stats.channel[:2]
 
-                    dt = st[0].stats.delta
-                    npts = st[0].stats.npts
-                    t = np.linspace(0, (npts - 1) * dt, npts)
+                    # Copy the orig_mseed
+                    orig_mseed = mseed.copy()
+                    step = 0
 
-                    # compute the derivative of the IA_norm
-                    Ia_norm_diff = np.gradient(Ia_norm[:, 1], dt)
-                    Ia_norm_diff_1 = np.gradient(Ia_norm_1[:, 1], dt)
+                    while not final_mseed:
+                        step += 1
+                        start_frozen = False
+                        end_frozen = False
 
-                    # Apply Gaussian filter to IA_norm_diff
-                    Ia_norm_diff = gaussian_filter1d(Ia_norm_diff, sigma=10)
-                    Ia_norm_diff_1 = gaussian_filter1d(Ia_norm_diff_1, sigma=10)
+                        # If we have split traces
+                        if len(mseed) > 3:
+                            # Copy the mseed
+                            mseed_copy = mseed.copy()
+                            # Detrend the mseed
+                            mseed_copy.detrend("demean")
+                            mseed_copy.detrend("linear")
+                            # Filter the mseed
+                            mseed_copy.filter("bandpass", freqmin=0.1, freqmax=40)
+                            # Get the unique ending channel ids
+                            unique_channel_endings = list(
+                                set([tr.stats.channel[-1] for tr in mseed_copy])
+                            )
+                            trace_indexs = []
+                            for unique_channel_ending in unique_channel_endings:
+                                # We need to group together each component with the same ending channel str e.g. HN1 the 1
+                                group = mseed_copy.select(
+                                    location=loc,
+                                    channel=f"{chan}{unique_channel_ending}",
+                                )
+                                # For each trace compute the AI and keep the highest
+                                for i, tr in enumerate(group):
+                                    # Get the IA and IA_norm
+                                    Ia, _ = get_arias_intensity_norm(tr)
+                                    if i == 0:
+                                        Ia_max = Ia[-1]
+                                        Ia_max_index = 0
+                                    else:
+                                        if Ia[-1] > Ia_max:
+                                            Ia_max = Ia
+                                            Ia_max_index = i
+                                trace_indexs.append(Ia_max_index)
+                            # Check all the groups agree
+                            if len(set(trace_indexs)) == 1:
+                                # We grab the last trace from the group and trim the mseed to the start and end time
+                                tr = group[trace_indexs[0]]
+                                mseed = mseed.trim(tr.stats.starttime, tr.stats.endtime)
 
-                    # Plot the AI
+                        # Ensure we crop the mseed to the max and min start and endtime
+                        starttime_trim = max([tr.stats.starttime for tr in mseed])
+                        endtime_trim = min([tr.stats.endtime for tr in mseed])
+                        # Check that the start time is before the end time
+                        if starttime_trim > endtime_trim:
+                            # WE NEED TO RAISE AN ERROR HERE
+                            break
+                        mseed.trim(starttime_trim, endtime_trim)
 
-                    data = st[0].data
-                    data_1 = st[1].data
-                    orig_start_time_sec = orig_start_time - start_time
-                    orig_end_time_sec = orig_end_time - start_time
+                        # Copy the mseed
+                        mseed_copy = mseed.copy()
+                        # Detrend the mseed
+                        mseed_copy.detrend("demean")
+                        mseed_copy.detrend("linear")
+                        # Filter the mseed
+                        mseed_copy.filter("bandpass", freqmin=0.1, freqmax=40)
 
-                    fig, axs = plt.subplots(
-                        3,
-                        2,
-                        figsize=(14, 9),
-                        sharex="row",
-                        gridspec_kw={"hspace": 0.3},
-                    )
+                        # Calculate AI for the horizontal components
+                        Ia, Ia_norm = get_arias_intensity_norm(mseed_copy[0])
+                        _, Ia_norm_1 = get_arias_intensity_norm(mseed_copy[1])
 
-                    # Left column = original input
-                    # Right column = second input to compare
+                        dt = mseed[0].stats.delta
+                        npts = mseed[0].stats.npts
+                        t = np.linspace(0, (npts - 1) * dt, npts)
 
-                    # --- COLUMN 1 (Original channel) ---
-                    # 1. Arias Intensity
-                    axs[0, 0].plot(t, Ia_norm[:, 1], label="Arias Intensity")
-                    axs[0, 0].set_ylabel("Arias Intensity")
-                    axs[0, 0].set_title(f"Channel 1")
-                    axs[0, 0].grid(ls=":")
-                    axs[0, 0].legend()
+                        # compute the derivative of the IA_norm
+                        Ia_norm_diff = np.gradient(Ia_norm[:, 1], dt)
+                        Ia_norm_diff_1 = np.gradient(Ia_norm_1[:, 1], dt)
 
-                    # 2. Derivative
-                    axs[1, 0].plot(t, Ia_norm_diff, label="d(AI)/dt", color="tab:green")
-                    axs[1, 0].axhline(
-                        0.01, color="r", linestyle="--", label="Threshold"
-                    )
-                    axs[1, 0].set_ylabel("Derivative")
-                    axs[1, 0].set_ylim(0, 0.05)
-                    axs[1, 0].grid(ls=":")
-                    axs[1, 0].legend()
+                        # Apply Gaussian filter to IA_norm_diff
+                        Ia_norm_diff = gaussian_filter1d(Ia_norm_diff, sigma=10)
+                        Ia_norm_diff_1 = gaussian_filter1d(Ia_norm_diff_1, sigma=10)
 
-                    # 3. Waveform
-                    axs[2, 0].plot(t, data, label="Waveform", color="tab:orange")
-                    axs[2, 0].axvline(
-                        ptime_est - start_time,
-                        color="b",
-                        linestyle="--",
-                        label="Estimated P Arrival",
-                    )
-                    axs[2, 0].axvline(
-                        orig_start_time_sec,
-                        color="g",
-                        linestyle="--",
-                        label="Original Start",
-                    )
-                    axs[2, 0].axvline(
-                        orig_end_time_sec,
-                        color="r",
-                        linestyle="--",
-                        label="Original End",
-                    )
-                    axs[2, 0].set_xlabel("Time [s]")
-                    axs[2, 0].set_ylabel("Amplitude")
-                    axs[2, 0].grid(ls=":")
-                    axs[2, 0].legend()
+                        # Plot the AI
+                        data = mseed[0].data
+                        data_1 = mseed[1].data
+                        orig_start_time_sec = orig_start_time - start_time
+                        orig_end_time_sec = orig_end_time - start_time
 
-                    # --- COLUMN 2 (Second channel/input) ---
-                    # Replace these with your second channel inputs
-                    # Variables you need: t2, Ia_norm2, Ia_norm_diff2, data2, ptime_est2, etc.
+                        final_mseed = True
 
-                    axs[0, 1].plot(t, Ia_norm_1[:, 1], label="Arias Intensity")
-                    axs[0, 1].set_title("Channel 2")
-                    axs[0, 1].grid(ls=":")
-                    axs[0, 1].legend()
+                        # Calculate n_points per second
+                        npts_per_sec = 1 / dt
 
-                    axs[1, 1].plot(
-                        t, Ia_norm_diff_1, label="d(AI)/dt", color="tab:green"
-                    )
-                    axs[1, 1].axhline(
-                        0.01, color="r", linestyle="--", label="Threshold"
-                    )
-                    axs[1, 1].set_ylim(0, 0.05)
-                    axs[1, 1].grid(ls=":")
-                    axs[1, 1].legend()
+                        # Do the first step of splitting the waveform
+                        ds_npts = max((ds * 0.15), 2.5) * npts_per_sec
 
-                    axs[2, 1].plot(t, data_1, label="Waveform", color="tab:orange")
-                    axs[2, 1].axvline(
-                        ptime_est - start_time,
-                        color="b",
-                        linestyle="--",
-                        label="Estimated P Arrival",
-                    )
-                    axs[2, 1].axvline(
-                        orig_start_time_sec,
-                        color="g",
-                        linestyle="--",
-                        label="Original Start",
-                    )
-                    axs[2, 1].axvline(
-                        orig_end_time_sec,
-                        color="r",
-                        linestyle="--",
-                        label="Original End",
-                    )
-                    axs[2, 1].set_xlabel("Time [s]")
-                    axs[2, 1].grid(ls=":")
-                    axs[2, 1].legend()
+                        if step == 1:
+                            sections = get_sections(ds_npts, Ia_norm_diff, Ia_norm)
+                            sections_1 = get_sections(
+                                ds_npts, Ia_norm_diff_1, Ia_norm_1
+                            )
 
-                    # Optional: shared suptitle
-                    fig.suptitle(
-                        f"Waveform Info | Mag={mag:.2f}, Ds595={ds:.2f}, Station={sta}",
-                        fontsize=12,
-                    )
+                            # Manage merging of the sections
+                            if len(sections) > len(sections_1):
+                                # We want the actual selections to be the higher of the two
+                                final_sections = sections
+                            elif len(sections_1) > len(sections):
+                                # We want the actual selections to be the higher of the two
+                                final_sections = sections_1
+                            else:
+                                # We go through each selection and grab the tightest selections from the 2
+                                final_sections = [0]
+                                signal = True
+                                for i in range(1, len(sections)):
+                                    if signal:
+                                        # We are in the signal section
+                                        # Grab the section that is the highest
+                                        final_sections.append(
+                                            max(sections[i], sections_1[i])
+                                        )
+                                        signal = False
+                                    else:
+                                        # We are in the noise section
+                                        # Grab the section that is the lowest
+                                        final_sections.append(
+                                            min(sections[i], sections_1[i])
+                                        )
+                                        signal = True
 
-                    # Final layout
-                    plt.tight_layout(rect=[0, 0, 1, 0.97])  # Leave space for suptitle
+                            # Get the section of the waveform that is closest to the P wave arrival time
+                            p_wave_guess = (ptime_est - start_time) * npts_per_sec
+                            section = get_section(final_sections, p_wave_guess, ds_npts)
+                        else:
+                            # Create the section as the start and end of the waveform
+                            section = (0, len(mseed[0].data) - 1)
 
-                    # Create subplots with shared x-axis
-                    # fig, (ax1, ax2, ax3) = plt.subplots(
-                    #     3, 1, sharex=True, figsize=(10, 8)
-                    # )
-                    #
-                    # # Plot Arias Intensity on the first subplot
-                    # ax1.plot(t, Ia_norm[:, 1], label="Arias Intensity")
-                    # ax1.set_ylabel("Arias Intensity")
-                    # # Format title
-                    # title = (
-                    #     f"Waveform Info: Mag={mag:.2f}, Ds595={ds:.2f}, Station={sta}"
-                    # )
-                    # ax1.set_title(title)
-                    # ax1.grid(ls=":")
-                    # ax1.legend()
-                    #
-                    # # 2. Gradient of Arias Intensity
-                    # ax2.plot(
-                    #     t,
-                    #     Ia_norm_diff,
-                    #     label="d(AI)/dt",
-                    #     color="tab:green",
-                    # )
-                    # ax2.axhline(
-                    #     0.01,
-                    #     color="r",
-                    #     linestyle="--",
-                    #     label="Threshold",
-                    # )
-                    # ax2.set_ylabel("Gradient")
-                    # ax2.grid(ls=":")
-                    # # Scale to be between 0 and 0.05
-                    # ax2.set_ylim(0, 0.05)
-                    # ax2.legend()
-                    #
-                    # # Plot waveform on the second subplot
-                    # ax3.plot(t, data, label="Waveform", color="tab:orange")
-                    # # Plot the ptime_est
-                    # ax3.axvline(
-                    #     ptime_est - start_time,
-                    #     color="b",
-                    #     linestyle="--",
-                    #     label="Estimated P Arrival Time",
-                    # )
-                    # # Only plot these if the start and end times are not the same
-                    # ax3.axvline(
-                    #     orig_start_time_sec,
-                    #     color="g",
-                    #     linestyle="--",
-                    #     label="Original Start Time",
-                    # )
-                    # ax3.axvline(
-                    #     orig_end_time_sec,
-                    #     color="r",
-                    #     linestyle="--",
-                    #     label="Original End Time",
-                    # )
-                    # ax3.set_xlabel("Time [s]")
-                    # ax3.set_ylabel("Amplitude")
-                    # ax3.grid(ls=":")
-                    # ax3.legend()
-                    #
-                    # # Adjust layout
-                    # plt.tight_layout()
-                    # plt.show()
+                        # Take the orig mseed and generate the data needed to plot including split streams
+                        unique_channel_endings = list(
+                            set(
+                                [
+                                    tr.stats.channel[-1]
+                                    for tr in orig_mseed
+                                    if tr.stats.channel[-1] != "Z"
+                                ]
+                            )
+                        )
+                        plotting_data = []
+                        t_data = []
+                        for unique_channel_ending in unique_channel_endings:
+                            # We need to group together each component with the same ending channel str e.g. HN1 the 1
+                            group = orig_mseed.select(
+                                location=loc,
+                                channel=f"{chan}{unique_channel_ending}",
+                            )
+                            # Create a t array based on the start and end times
+                            plot_t = np.linspace(
+                                group[0].stats.starttime.timestamp,
+                                group[-1].stats.endtime.timestamp,
+                                int(
+                                    npts_per_sec
+                                    * (
+                                        group[-1].stats.endtime.timestamp
+                                        - group[0].stats.starttime.timestamp
+                                    )
+                                ),
+                            )
+                            plotting_data.append(
+                                stream_to_continuous_array_nan(
+                                    group, plot_t, group[0].stats.sampling_rate
+                                )
+                            )
+                            plot_npts = int(
+                                npts_per_sec
+                                * (
+                                    group[-1].stats.endtime.timestamp
+                                    - group[0].stats.starttime.timestamp
+                                )
+                            )
+                            plot_t = np.linspace(0, (plot_npts - 1) * dt, plot_npts)
+                            t_data.append(plot_t)
 
-                    # save the fig
-                    output_dir = (
-                        "/home/joel/local/gmdb/testing_folder/new_window_10_scenarios"
-                    )
-                    output_file = f"{output_dir}/{(st[0].id).replace('.', '_')}.png"
-                    plt.savefig(output_file)
+                        # fig, axs = plt.subplots(
+                        #     3,
+                        #     2,
+                        #     figsize=(14, 9),
+                        #     sharex="row",
+                        #     gridspec_kw={"hspace": 0.3},
+                        # )
+                        #
+                        # # Get the x limits for each plot based on t
+                        # start = t[0] - t[-1] * 0.01
+                        # end = t[-1] + t[-1] * 0.01
+                        #
+                        # # 1. Arias Intensity
+                        # axs[0, 0].plot(t, Ia_norm[:, 1], label="Arias Intensity")
+                        # axs[0, 0].set_ylabel("Arias Intensity")
+                        # axs[0, 0].set_title("Channel 1")
+                        # axs[0, 0].grid(ls=":")
+                        # axs[0, 0].set_xlim(start, end)
+                        # axs[0, 0].legend()
+                        #
+                        # # 2. Derivative
+                        # axs[1, 0].plot(
+                        #     t, Ia_norm_diff, label="d(AI)/dt", color="tab:green"
+                        # )
+                        # axs[1, 0].axhline(
+                        #     0.01, color="r", linestyle="--", label="Threshold"
+                        # )
+                        # if step == 1:
+                        #     for ix, value in enumerate(sections):
+                        #         axs[1, 0].axvline(
+                        #             t[value],
+                        #             color="b",
+                        #             linestyle="--",
+                        #             label="Section" if ix == 0 else "",
+                        #         )
+                        # axs[1, 0].set_ylabel("Derivative")
+                        # axs[1, 0].set_ylim(0, 0.05)
+                        # axs[1, 0].set_xlim(start, end)
+                        # axs[1, 0].grid(ls=":")
+                        # axs[1, 0].legend()
+                        #
+                        # # 3. Waveform
+                        # axs[2, 0].plot(
+                        #     t,
+                        #     data,
+                        #     label="Waveform",
+                        #     color="tab:orange",
+                        # )
+                        # axs[2, 0].axvline(
+                        #     ptime_est - mseed[0].stats.starttime,
+                        #     color="b",
+                        #     linestyle="--",
+                        #     label="Estimated P Arrival",
+                        # )
+                        # axs[2, 0].axvline(
+                        #     orig_start_time_sec,
+                        #     color="g",
+                        #     linestyle="--",
+                        #     label="Original Start",
+                        # )
+                        # axs[2, 0].axvline(
+                        #     orig_end_time_sec,
+                        #     color="r",
+                        #     linestyle="--",
+                        #     label="Original End",
+                        # )
+                        # if step == 1:
+                        #     # Add the section lines
+                        #     for ix, value in enumerate(section):
+                        #         axs[2, 0].axvline(
+                        #             t[value],
+                        #             color="black",
+                        #             linestyle="--",
+                        #             label="Section" if ix == 0 else "",
+                        #         )
+                        # axs[2, 0].set_xlabel("Time [s]")
+                        # axs[2, 0].set_ylabel("Amplitude")
+                        # axs[2, 0].grid(ls=":")
+                        # axs[2, 0].set_xlim(start, end)
+                        # axs[2, 0].legend(loc="lower right", bbox_to_anchor=(0.0, 0.3))
+                        #
+                        # # Second column for the second channel
+                        # axs[0, 1].plot(t, Ia_norm_1[:, 1], label="Arias Intensity")
+                        # axs[0, 1].set_title("Channel 2")
+                        # axs[0, 1].set_xlim(start, end)
+                        # axs[0, 1].grid(ls=":")
+                        # axs[0, 1].legend()
+                        #
+                        # axs[1, 1].plot(
+                        #     t, Ia_norm_diff_1, label="d(AI)/dt", color="tab:green"
+                        # )
+                        # axs[1, 1].axhline(
+                        #     0.01, color="r", linestyle="--", label="Threshold"
+                        # )
+                        # if step == 1:
+                        #     for ix, value in enumerate(sections_1):
+                        #         axs[1, 1].axvline(
+                        #             t[value],
+                        #             color="b",
+                        #             linestyle="--",
+                        #             label="Section" if ix == 0 else "",
+                        #         )
+                        # axs[1, 1].set_ylim(0, 0.05)
+                        # axs[1, 1].set_xlim(start, end)
+                        # axs[1, 1].grid(ls=":")
+                        # axs[1, 1].legend()
+                        #
+                        # axs[2, 1].plot(
+                        #     t,
+                        #     data_1,
+                        #     label="Waveform",
+                        #     color="tab:orange",
+                        # )
+                        # axs[2, 1].axvline(
+                        #     ptime_est - mseed[0].stats.starttime,
+                        #     color="b",
+                        #     linestyle="--",
+                        #     label="Estimated P Arrival",
+                        # )
+                        # axs[2, 1].axvline(
+                        #     orig_start_time_sec,
+                        #     color="g",
+                        #     linestyle="--",
+                        #     label="Original Start",
+                        # )
+                        # axs[2, 1].axvline(
+                        #     orig_end_time_sec,
+                        #     color="r",
+                        #     linestyle="--",
+                        #     label="Original End",
+                        # )
+                        # if step == 1:
+                        #     # Add the section lines
+                        #     for ix, value in enumerate(section):
+                        #         axs[2, 1].axvline(
+                        #             t[value],
+                        #             color="black",
+                        #             linestyle="--",
+                        #             label="Section" if ix == 0 else "",
+                        #         )
+                        # axs[2, 1].set_xlabel("Time [s]")
+                        # axs[2, 1].grid(ls=":")
+                        # axs[2, 1].set_xlim(start, end)
+                        # # axs[2, 1].legend(loc="lower right", bbox_to_anchor=(1.2, 0.3))
+                        #
+                        # # Optional: shared suptitle
+                        # fig.suptitle(
+                        #     f"Waveform Info | Mag={mag:.2f}, Ds595={ds:.2f}, Station={sta}",
+                        #     fontsize=12,
+                        # )
+                        #
+                        # # Final layout
+                        # plt.tight_layout(rect=[0, 0, 1, 0.97])
+                        #
+                        # # save the fig
+                        # output_dir = "/home/joel/local/gmdb/testing_folder/new_window_20_scenarios_2"
+                        # output_file = (
+                        #     f"{output_dir}/{event_id}_{sta}_{chan}_{loc}_{step}.png"
+                        # )
+                        # plt.savefig(output_file)
+                        #
+                        # plt.close()
 
-                    plt.close()
+                        # Now we cut to the section
+                        # First we create a UTCDatetime object from the start and end time
+                        timestamps = np.linspace(
+                            start_time.timestamp, end_time.timestamp, npts
+                        )
+                        utc_array = [UTCDateTime(ts) for ts in timestamps]
+                        # Get the points for the section
+                        start_time = utc_array[section[0]]
+                        end_time = utc_array[section[1]]
 
-                    final_st = True
+                        # Trim the mseed to the start and end time
+                        mseed.trim(start_time, end_time)
 
-                    # Calculate n_points per second
-                    # npts_per_sec = 1 / dt
-                    #
-                    # # Do the first step of splitting the waveform
-                    # ds_npts = (ds / 10) * npts_per_sec
-                    # counter = 0
-                    #
-                    # check_value = npts_per_sec * 7.5
-                    #
-                    # # A quick check that the check value is less than the length of the Ia_norm
-                    # if check_value > len(Ia_norm):
-                    #     value = 0.01  # We want to try and push the start time back
-                    # else:
-                    #     # Get the value from IA_norm
-                    #     value = Ia_norm[int(check_value), 1]
-                    #
-                    # if value > 0.02 and not start_frozen:
-                    #     # push the start time back 5 seconds
-                    #     if start_time_repeats < 6:
-                    #         start_time -= 5
-                    #         start_time_repeats += 1
-                    #         final_st = False
-                    #
-                    # # A quick check that the check value is less than the length of the Ia_norm
-                    # if check_value > len(Ia_norm):
-                    #     value = 0.94  # We want to try and push the end time forward
-                    # else:
-                    #     # Get the value from IA_norm
-                    #     value = Ia_norm[int(len(Ia_norm) - check_value), 1]
-                    #
-                    # if value < 0.97:
-                    #     ds_npts = (ds / 10) * npts_per_sec
-                    #     counter = 0
-                    #     back_test_cut_point = None
-                    #     # Travel backwards in time from end of Ia_norm_diff
-                    #     for i, Ia_diff_value in enumerate(Ia_norm_diff[::-1]):
-                    #         # Check if the value is less than 0.01
-                    #         if Ia_diff_value < 0.01:
-                    #             # Increment the counter
-                    #             counter += 1
-                    #         else:
-                    #             # Reset the counter
-                    #             counter = 0
-                    #         if counter >= ds_npts:
-                    #             # Check the current IA norm value that it is above 0.2
-                    #             # (There is another waveform before)
-                    #             ix = len(Ia_norm_diff) - i
-                    #             if Ia_norm[ix, 1] > 0.2:
-                    #                 # We have found the end time
-                    #                 # As there is a ds_npts worth of points with less than 0.01 in a row
-                    #                 back_test_cut_point = ix + counter
-                    #             break
-                    #
-                    #     if back_test_cut_point is not None:
-                    #         end_time = back_test_cut_point
-                    #         end_time_repeats = 0
-                    #         final_st = False
-                    #     elif not end_frozen and end_time_repeats < 6:
-                    #         # push the end time forward 5 seconds
-                    #         end_time += 5
-                    #         end_time_repeats += 1
-                    #         final_st = False
+                        # We check if the new start time is after the original start time, by at least ds_npts
+                        if start_time > orig_start_time + ds_npts / npts_per_sec:
+                            # We want to force the start to be frozen as we don't want to expand anymore
+                            # as we would go into another waveform
+                            start_frozen = True
+                        # We check if the new end time is before the original end time, by at least ds_npts
+                        if end_time < orig_end_time - ds_npts / npts_per_sec:
+                            # We want to force the end to be frozen as we don't want to expand anymore
+                            # as we would go into another waveform
+                            end_frozen = True
 
-                    # Flowchart is as follows
-                    """
-                    Check the current AI norm, check values at start and end from some value in to see the value
-                    less than or greater than to find the flat points.
-                    If not then we push forward or backward by some exta time
-                    we check then for ledges to end the waveform extraction on, or start it
-                    keep repeating till a limit is reached in either direction.
-                    
-                    Compare against a dataset of quality waveforms to ensure we dont screw them up
-                    and new ones from the issued set to fix multiple earthquakes.
-                    Do a full run to see the differences.
-                    """
+                        if start_frozen and end_frozen:
+                            # We can't adjust the start and end times anymore
+                            final_mseed = True
+                        else:
+                            # Copy the mseed
+                            mseed_copy = mseed.copy()
+                            # Detrend the mseed
+                            mseed_copy.detrend("demean")
+                            mseed_copy.detrend("linear")
+                            # Filter the mseed
+                            mseed_copy.filter("bandpass", freqmin=0.1, freqmax=40)
+
+                            # See if we can adjust the start and end times
+                            # Re-calculate the IA_norm
+                            Ia, Ia_norm = get_arias_intensity_norm(mseed_copy[0])
+                            _, Ia_norm_1 = get_arias_intensity_norm(mseed_copy[1])
+
+                            # A quick check that the check value is less than the length of the Ia_norm / 2
+                            if ds_npts > len(Ia_norm) / 2:
+                                # We want to try and push the start time back
+                                start_value = 0.01
+                                start_value_1 = 0.01
+                                end_value = 0.96
+                                end_value_1 = 0.96
+                            else:
+                                # Get the value from IA_norm
+                                start_value = Ia_norm[int(ds_npts), 1]
+                                start_value_1 = Ia_norm_1[int(ds_npts), 1]
+                                end_value = Ia_norm[int(len(Ia_norm) - ds_npts), 1]
+                                end_value_1 = Ia_norm_1[int(len(Ia_norm) - ds_npts), 1]
+
+                            if (
+                                start_value > 0.02 or start_value_1 > 0.02
+                            ) and not start_frozen:
+                                # push the start time back ds_npts / npts_per_sec
+                                if start_time_repeats < 6:
+                                    # Add the start time to the start_time_Ia_values
+                                    start_time_Ia_values.append(
+                                        (start_time, max(start_value, start_value_1))
+                                    )
+                                    start_time -= ds_npts / npts_per_sec
+                                    start_time_repeats += 1
+                                    final_mseed = False
+                                else:
+                                    # We have reached the limit
+                                    # We want to take the start_time of the lowest value
+                                    lowest_values = sorted(
+                                        start_time_Ia_values, key=lambda x: x[1]
+                                    )
+                                    mseed.trim(lowest_values[0][0], end_time)
+                                    start_time = lowest_values[0][0]
+                                    final_mseed = True
+
+                            if (
+                                end_value < 0.97 or end_value_1 < 0.97
+                            ) and not end_frozen:
+                                if end_time_repeats < 6:
+                                    # Add the end time to the end_time_Ia_values
+                                    end_time_Ia_values.append(
+                                        (end_time, min(end_value, end_value_1))
+                                    )
+                                    # push the end time forward ds_npts / npts_per_sec
+                                    end_time += ds_npts / npts_per_sec
+                                    end_time_repeats += 1
+                                    final_mseed = False
+                                else:
+                                    # We have reached the limit
+                                    # We want to take the end_time of the highest value
+                                    highest_values = sorted(
+                                        end_time_Ia_values, key=lambda x: x[1]
+                                    )
+                                    mseed.trim(start_time, highest_values[-1][0])
+                                    end_time = highest_values[-1][0]
+                                    final_mseed = True
+
+                        if not final_mseed:
+                            mseed = client.get_waveforms(
+                                net,
+                                sta,
+                                loc,
+                                f"{chan}?",
+                                start_time,
+                                end_time,
+                                attach_response=True,
+                            )
+                        else:
+                            final_mseeds.append(mseed)
+
+                            dt = mseed[0].stats.delta
+                            npts = mseed[0].stats.npts
+                            t = np.linspace(0, (npts - 1) * dt, npts)
+                            #
+                            # # Make a plot first of the original mseed
+                            # # Create a figure with 1 row and 2 columns
+                            # # and share the x-axis
+                            # fig, axs = plt.subplots(
+                            #     2,
+                            #     2,
+                            #     figsize=(14, 4),
+                            #     sharex="row",
+                            #     gridspec_kw={"hspace": 0.3},
+                            # )
+                            #
+                            # # Plot the waveform of t_data and plotting_data
+                            # for i, plot_data in enumerate(plotting_data):
+                            #     axs[0, i].plot(t_data[i], plot_data, label="Waveform")
+                            #     axs[0, i].axvline(
+                            #         ptime_est - orig_mseed[0].stats.starttime,
+                            #         color="b",
+                            #         linestyle="--",
+                            #         label="Estimated P Arrival",
+                            #     )
+                            #     axs[0, i].set_xlabel("Time [s]")
+                            #     axs[0, i].set_ylabel("Amplitude")
+                            #     axs[0, i].grid(ls=":")
+                            #     # axs[i].legend(
+                            #     #     loc="bottom right", bbox_to_anchor=(1.05, 1.0)
+                            #     # )
+                            #
+                            # # Plot the final_mseed mseed
+                            # axs[1, 0].plot(
+                            #     t,
+                            #     mseed[0].data,
+                            #     label="Waveform",
+                            #     color="tab:orange",
+                            # )
+                            # axs[1, 0].axvline(
+                            #     ptime_est - mseed[0].stats.starttime,
+                            #     color="b",
+                            #     linestyle="--",
+                            #     label="Estimated P Arrival",
+                            # )
+                            # axs[1, 1].plot(
+                            #     t,
+                            #     mseed[1].data,
+                            #     label="Waveform",
+                            #     color="tab:orange",
+                            # )
+                            # axs[1, 1].axvline(
+                            #     ptime_est - mseed[1].stats.starttime,
+                            #     color="b",
+                            #     linestyle="--",
+                            #     label="Estimated P Arrival",
+                            # )
+                            #
+                            # # Optional: shared suptitle
+                            # fig.suptitle(
+                            #     f"Original Waveform Info | Mag={mag:.2f}, Ds595={ds:.2f}, Station={sta}",
+                            #     fontsize=12,
+                            # )
+                            # # Final layout
+                            # # plt.tight_layout(rect=[0, 0, 1, 0.97])
+                            # # Save the fig
+                            # output_dir = "/home/joel/local/gmdb/testing_folder/new_window_20_scenarios_2"
+                            # output_file = f"{output_dir}/{event_id}_{sta}_{chan}_{loc}_before_after.png"
+                            # plt.savefig(output_file)
+                            #
+                            # # Close the figure
+                            # plt.close()
 
             break
         except FDSNNoDataException:
@@ -514,7 +886,7 @@ def get_waveforms(
             print(f"Unexpected error getting waveforms for {net}.{sta}")
             print(e)
             return None
-    return st
+    return final_mseeds
 
 
 def split_stream_into_mseeds(st: Stream, unique_channels: Iterable, event_id: str):
@@ -542,33 +914,6 @@ def split_stream_into_mseeds(st: Stream, unique_channels: Iterable, event_id: st
         # Each unique channel and location pair is a new mseed file
         st_new = st.select(location=loc, channel=f"{chan}?")
         record_id = f"{event_id}_{st_new[0].stats.station}_{st_new[0].stats.channel[:2]}_{st_new[0].stats.location}"
-
-        if len(st_new) > 3:
-            # Check if all the sample rates are the same
-            samples = [tr.stats.sampling_rate for tr in st_new]
-            if len(set(samples)) > 1:
-                # If they are different take the highest and resample with the others using interpolation
-                st_new = st_new.select(sampling_rate=max(samples))
-                st_new.merge(fill_value="interpolate")
-                raised_issues.append(
-                    [record_id, "Split stream, different sample rates"]
-                )
-
-        # Check the final length of the traces
-        if len(st_new) != 3:
-            raised_issues.append([record_id, "Unknown issue, multiple traces"])
-            continue
-
-        # Ensure traces all have the same length
-        starttime_trim = max([tr.stats.starttime for tr in st_new])
-        endtime_trim = min([tr.stats.endtime for tr in st_new])
-        # Check that the start time is before the end time
-        if starttime_trim > endtime_trim:
-            raised_issues.append(
-                [record_id, "Unknown issue, start time after end time"]
-            )
-            continue
-        st_new.trim(starttime_trim, endtime_trim)
 
         mseeds.append(st_new)
 
