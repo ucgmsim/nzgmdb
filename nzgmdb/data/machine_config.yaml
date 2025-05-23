@@ -6,7 +6,7 @@ local:
   fmax: 6
   gmc: 2
   process: 6
-  im: 6
+  im: 4
   distances: 6
   upload: 6
 mantle:

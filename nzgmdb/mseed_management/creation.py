@@ -9,6 +9,8 @@ import warnings
 from collections.abc import Iterable
 from enum import StrEnum
 from pathlib import Path
+from zoneinfo import ZoneInfo
+from datetime import timedelta
 
 import mseedlib
 import numpy as np
@@ -209,6 +211,7 @@ def run_extract_window_step(
     orig_end_time,
     start_time_Ia_values,
     end_time_Ia_values,
+    input_df: pd.DataFrame,
 ):
     start_frozen = False
     end_frozen = False
@@ -294,9 +297,12 @@ def run_extract_window_step(
     npts_per_sec = 1 / dt
 
     # Do the first step of splitting the waveform
-    ds_npts = max((ds * 0.30), 2.5) * npts_per_sec
+    ds_npts = (
+        max((ds * input_df["ds_percentage"].iloc[0]), input_df["ds_npts_lower"].iloc[0])
+        * npts_per_sec
+    )
 
-    if step == 1:
+    if input_df["section_on_all_steps"].iloc[0] or step == 1:
         sections = get_sections(ds_npts, Ia_norm_diff, Ia_norm)
         sections_1 = get_sections(ds_npts, Ia_norm_diff_1, Ia_norm_1)
 
@@ -437,6 +443,7 @@ def get_waveforms(
     vs30: float = None,
     only_record_ids: list[str] = None,
     event_id: str = None,
+    main_dir: Path = None,
 ):
     """
     Get the waveforms for a given event and station
@@ -532,6 +539,21 @@ def get_waveforms(
             only_record_ids["record_id"].str.split("_").str[-1].unique()
         )
 
+    # nz_tz = ZoneInfo("Pacific/Auckland")
+    # start_time_nz = start_time.datetime.replace(tzinfo=ZoneInfo("UTC")).astimezone(
+    #     nz_tz
+    # )
+    # end_time_nz = end_time.datetime.replace(tzinfo=ZoneInfo("UTC")).astimezone(nz_tz)
+    # # Get the previous event data
+    # geonet = download_earthquake_data(
+    #     (start_time_nz - timedelta(days=1)).date(),
+    #     (end_time_nz + timedelta(days=1)).date(),
+    # )
+
+    # Read the input csv in the main dir
+    input_csv = main_dir / "input.csv"
+    inputs = pd.read_csv(input_csv)
+
     # Get the waveforms with multiple retries when IncompleteReadError occurs
     max_retries = 3
     final_mseeds = []
@@ -555,7 +577,7 @@ def get_waveforms(
                     [(tr.stats.channel[:2], tr.stats.location) for tr in st]
                 )
 
-                # First split the stream into the diffeent unique records
+                # First split the stream into the different unique records
                 mseeds, _ = split_stream_into_mseeds(st, unique_channels, event_id)
 
                 for mseed in mseeds:
@@ -596,6 +618,7 @@ def get_waveforms(
                             orig_end_time,
                             start_time_Ia_values,
                             end_time_Ia_values,
+                            inputs,
                         )
                         if final_mseed is None:
                             # If the mseed is None, we want to break out of the loop

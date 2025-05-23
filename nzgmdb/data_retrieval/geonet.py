@@ -339,6 +339,7 @@ def fetch_sta_mag_line(
         vs30,
         site_only_record_ids,
         event_id,
+        main_dir,
     )
     # Check that data was found
     if mseeds is None:
