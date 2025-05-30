@@ -23,8 +23,8 @@ from obspy.geodetics import kilometers2degrees
 from obspy.io.mseed import InternalMSEEDError, ObsPyMSEEDFilesizeTooSmallError
 from obspy.taup import TauPyModel
 
-from empirical.util import classdef, openquake_wrapper_vectorized, z_model_calculations
 from nzgmdb.management import config as cfg
+from oq_wrapper import constants, estimations, wrapper
 
 
 def get_waveforms(
@@ -71,7 +71,7 @@ def get_waveforms(
     config = cfg.Config()
     vs30 = config.get_value("vs30") if vs30 is None else vs30
     rake = 90  # Assume strike-slip for now
-    z1p0 = z_model_calculations.chiou_young_08_calc_z1p0(vs30)
+    z1p0 = estimations.chiou_young_08_calc_z1p0(vs30)
     # Predict significant duration time from Afshari and Stewart (2016)
     input_df = pd.DataFrame(
         {
@@ -82,9 +82,9 @@ def get_waveforms(
             "z1pt0": [z1p0],
         }
     )
-    result_df = openquake_wrapper_vectorized.oq_run(
-        classdef.GMM.AS_16,
-        classdef.TectType.ACTIVE_SHALLOW,
+    result_df = wrapper.run_gmm(
+        constants.GMM.AS_16,
+        constants.TectType.ACTIVE_SHALLOW,
         input_df,
         "Ds595",
     )

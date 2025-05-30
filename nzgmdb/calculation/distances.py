@@ -17,7 +17,7 @@ from pyproj import Transformer
 from shapely.geometry import Point
 from shapely.geometry.polygon import LineString, Polygon
 
-from empirical.util import estimations
+from oq_wrapper import estimations
 from nzgmdb.CCLD import ccldpy
 from nzgmdb.management import config as cfg
 from nzgmdb.management import file_structure
