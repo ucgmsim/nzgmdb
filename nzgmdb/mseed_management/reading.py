@@ -86,9 +86,9 @@ def create_waveform_from_mseed(
         Whether to do some small processing such as detrending and removing sensitivity
         (Can however fail if the sensitivity can't be removed and raise errors), by default False
     apply_taper : bool (optional)
-        Whether to apply a taper to the data, by default False (Only when pre_process is True)
+        Whether to apply a taper to the data, by default False (Only used when pre_process is True)
     apply_zero_padding : bool (optional)
-        Whether to apply zero padding to the data, by default False (Only when pre_process is True)
+        Whether to apply zero padding to the data, by default False (Only used when pre_process is True)
 
     Returns
     -------
