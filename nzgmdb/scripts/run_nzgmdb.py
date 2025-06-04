@@ -156,8 +156,6 @@ def make_phase_arrival_table(
     main_dir : Path
         The main directory of the NZGMDB results (Highest level directory).
         Glob is used to find all mseed files recursively.
-    output_dir : Path
-        The directory to save the phase arrival table.
     run_phasenet_script_ffp : Path
         The script full file path to run PhaseNet (located in NZGMDB/phase_arrival).
     conda_sh : Path
@@ -166,6 +164,10 @@ def make_phase_arrival_table(
         The command to activate the environment for running PhaseNet.
     n_procs : int, optional
         Number of processes to use (default is 1).
+    bypass_records_ffp : Path, optional
+        The full file path to the bypass records file for custom P-wave index values.
+        This allows you to specify custom P-wave index values for records that may not be
+        processed by PhaseNet or done incorrectly.
     """
     gen_phase_arrival_table.generate_phase_arrival_table(
         main_dir,
