@@ -1,6 +1,6 @@
 # Description: Configuration file for the NZGMDB
 # Geonet filters
-min_mag: 4
+min_mag: 3.5
 max_mag: 10
 # Geonet Variables
 geonet_url: https://quakesearch.geonet.org.nz
@@ -98,7 +98,7 @@ mag_scale_slab_max: 7.8
 # CCLD
 crustal_depth: 50
 # Aftershocks
-rjb_cutoffs:
+crjb_cutoffs:
   - 0
   - 2
   - 5

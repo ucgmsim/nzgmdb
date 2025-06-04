@@ -1,3 +1,7 @@
+"""
+This module contains functions to calculate the SNR for a single mseed file.
+"""
+
 import functools
 import multiprocessing as mp
 import warnings
@@ -7,7 +11,7 @@ import numpy as np
 import pandas as pd
 from pandas.errors import EmptyDataError
 
-from IM import snr_calculation, im_calculation
+from IM import im_calculation, snr_calculation
 from nzgmdb.management import config as cfg
 from nzgmdb.management import custom_errors, file_structure
 from nzgmdb.mseed_management import reading
@@ -56,7 +60,7 @@ def compute_snr_for_single_mseed(
 
     # Read mseed information
     try:
-        waveform = reading.create_waveform_from_mseed(mseed_file, pre_process=True)
+        waveform = reading.create_waveform_from_mseed(mseed_file, pre_process=True, apply_taper=False, apply_zero_padding=False)
     except custom_errors.InventoryNotFoundError:
         skipped_record_dict = {
             "record_id": mseed_file.stem,
@@ -139,7 +143,6 @@ def compute_snr_for_single_mseed(
                 frequencies=common_frequency_vector,
                 cores=1,
                 ko_directory=ko_directory,
-                apply_taper=False,
             )
     except FileNotFoundError:
         skipped_record_dict = {
@@ -218,7 +221,7 @@ def compute_snr_for_mseed_data(
         Path to the output directory for the metadata and skipped records
     snr_fas_output_dir : Path
         Path to the output directory for the SNR and FAS data
-    ko_matrix_path : Path
+    ko_directory : Path
         Path to the ko matrix directory
     n_procs : int, optional
         Number of processes to use, by default 1

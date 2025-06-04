@@ -1,3 +1,7 @@
+"""
+Script to run PhaseNet on mseed files, predict p and s waves as well as save the probability series to an HDF5 file.
+"""
+
 import argparse
 from pathlib import Path
 
@@ -8,6 +12,37 @@ import pandas as pd
 from obspy import Stream, Trace, UTCDateTime
 from obspy.clients.fdsn import Client as FDSN_Client
 from obspy.clients.fdsn.header import FDSNNoDataException
+
+
+def create_empty_h5_file(h5_ffp: Path, group_name: str):
+    """
+    Create an empty HDF5 file with the specified group name.
+
+    Parameters
+    ----------
+    h5_ffp : Path
+        The full file path to the HDF5 file.
+    group_name : str
+        The name of the group to create in the HDF5 file (mseed file name).
+    """
+    # Create empty arrays with shape but no data
+    empty_shape = (0,)  # 0-length array
+    dtype = np.float32
+
+    with h5py.File(h5_ffp, "w") as f:
+        group = f.create_group(group_name)
+        group.create_dataset(
+            "p_prob_series",
+            shape=empty_shape,
+            dtype=dtype,
+            compression="lzf",
+        )
+        group.create_dataset(
+            "s_prob_series",
+            shape=empty_shape,
+            dtype=dtype,
+            compression="lzf",
+        )
 
 
 def run_phase_net(
@@ -29,6 +64,13 @@ def run_phase_net(
         The time vector of the input data, by default None
     return_prob_series : bool, optional
         Whether to return the probability series, by default False
+
+    Returns
+    -------
+    int: p_wave_ix
+        The p-wave index
+    int: s_wave_ix
+        The s-wave index
     """
     import phase_net as ph  # noqa: DEP001
 
@@ -128,6 +170,7 @@ def process_mseed(mseed_file: Path, h5_ffp: Path):
                 "reason": ["File did not contain 3 components"],
             }
         )
+        create_empty_h5_file(h5_ffp, mseed_file.stem)
         return None, skipped_record
 
     # Small Processing
@@ -153,6 +196,7 @@ def process_mseed(mseed_file: Path, h5_ffp: Path):
                 "reason": ["Failed to find Inventory information"],
             }
         )
+        create_empty_h5_file(h5_ffp, mseed_file.stem)
         return None, skipped_record
 
     # Add the response (Same for all channels)
@@ -171,6 +215,7 @@ def process_mseed(mseed_file: Path, h5_ffp: Path):
                 "reason": ["Failed to remove sensitivity"],
             }
         )
+        create_empty_h5_file(h5_ffp, mseed_file.stem)
         return None, skipped_record
 
     try:
@@ -186,6 +231,7 @@ def process_mseed(mseed_file: Path, h5_ffp: Path):
                 "reason": ["Zero size array after re-sample"],
             }
         )
+        create_empty_h5_file(h5_ffp, mseed_file.stem)
         return None, skipped_record
 
     # Save the prob_series

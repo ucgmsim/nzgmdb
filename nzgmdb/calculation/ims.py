@@ -1,10 +1,9 @@
+"""
+This module contains functions for calculating the Intensity Measures (IMs) for the NZGMDB records.
+"""
+
 import functools
 import multiprocessing as mp
-
-
-# if __name__ == "__main__":
-
-
 import warnings
 from pathlib import Path
 
@@ -14,24 +13,6 @@ import pandas as pd
 from IM import im_calculation, ims, waveform_reading
 from nzgmdb.management import config as cfg
 from nzgmdb.management import file_structure
-import cProfile
-import pstats
-import io
-
-
-def calculate_im_for_record_profiled(*args, **kwargs):
-    # profiler = cProfile.Profile()
-    # profiler.enable()
-
-    result = calculate_im_for_record(*args, **kwargs)  # Your original function
-
-    # profiler.disable()
-    # s = io.StringIO()
-    # stats = pstats.Stats(profiler, stream=s).sort_stats(pstats.SortKey.TIME)
-    # stats.print_stats(15)  # Print top 10 slowest functions
-    # print(s.getvalue())  # Print profiling results to stdout
-
-    return result
 
 
 def calculate_im_for_record(
@@ -57,8 +38,13 @@ def calculate_im_for_record(
         The periods for calculating the pseudo-spectral acceleration
     fas_frequencies : np.ndarray
         The frequencies for calculating the Fourier amplitude spectrum
-    ko_bandwith : int, optional
-        The bandwidth for the Konno-Ohmachi smoothing, by default 40
+    ko_directory : Path
+        The path to the directory containing the Konno-Ohmachi smoothing files
+
+    Returns
+    -------
+    pd.DataFrame
+        A DataFrame containing the record_id and the reason for skipping the record only if the record was skipped
     """
     # Get the 090 and ver components full file paths
     ffp_090 = ffp_000.parent / f"{ffp_000.stem}.090"
@@ -99,8 +85,6 @@ def calculate_im_for_record(
             ko_directory=ko_directory,
         )
 
-    print(f"Saving IMs for {record_id}")
-
     # Set a column for the record_id and then component and set at the front
     im_result_df = im_result_df.reset_index()
     im_result_df = im_result_df.rename(columns={"index": "component"})
@@ -116,7 +100,7 @@ def compute_ims_for_all_processed_records(
     ko_directory: Path,
     n_procs: int = 1,
     checkpoint: bool = False,
-    intensity_measures: list[ims.IM] = None,
+    intensity_measures: list[ims.IM] | None = None,
 ):
     """
     Compute the IMs for all processed records in the main directory

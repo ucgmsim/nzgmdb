@@ -1,3 +1,8 @@
+"""
+This module contains functions to calculate distances between earthquake planes and sites, as well
+as determining the rupture plane geometry for a given event.
+"""
+
 import functools
 import multiprocessing as mp
 import zipfile
@@ -12,10 +17,10 @@ from pyproj import Transformer
 from shapely.geometry import Point
 from shapely.geometry.polygon import LineString, Polygon
 
-from empirical.util import estimations
 from nzgmdb.CCLD import ccldpy
 from nzgmdb.management import config as cfg
 from nzgmdb.management import file_structure
+from oq_wrapper import estimations
 from qcore import coordinates, geo, grid, src_site_dist
 from source_modelling import srf
 
@@ -24,22 +29,23 @@ def calc_fnorm_slip(
     strike: float, dip: float, rake: float
 ) -> tuple[np.ndarray, np.ndarray]:
     """
-    Calculate the normal and slip vectors from strike, dip and rake
+    Calculate the normal and slip vectors from strike, dip, and rake angles.
+
     Parameters
     ----------
     strike : float
-        The strike angle of the fault in degrees
+        The strike angle of the fault in degrees.
     dip : float
-        The dip angle of the fault in degrees
+        The dip angle of the fault in degrees.
     rake : float
-        The rake angle of the fault in degrees
+        The rake angle of the fault in degrees.
 
     Returns
     -------
     fnorm : np.ndarray
-        The normal vector of the fault
+        The normal vector of the fault.
     slip : np.ndarray
-        The slip vector of the fault
+        The slip vector of the fault.
     """
     phi = np.deg2rad(strike)
     delt = np.deg2rad(dip)

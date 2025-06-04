@@ -26,6 +26,11 @@ def merge_NZSMDB_flatfile_on_events(
     ----------
     event_df : pd.DataFrame
         The event dataframe
+
+    Returns
+    -------
+    pd.DataFrame
+        The event dataframe with the NZSMDB data merged
     """
     nzsmdb_cols = [
         "CuspID",
@@ -63,6 +68,11 @@ def replace_cmt_data_on_event(
         The event dataframe
     cmt_df : pd.DataFrame
         The CMT dataframe
+
+    Returns
+    -------
+    pd.DataFrame
+        The event dataframe with the CMT data merged
     """
     # Manage index and column renaming
     cmt_df = cmt_df.rename(
@@ -94,27 +104,37 @@ def create_regions(
     region_b_on: dict = None,
     region_c_downdip: dict = None,
 ):
-    """Determine an array of points on, and offshore, of a fault and divide into regions
-    (PEER NGA SUB, 2020)
+    """
+    Determine an array of points on and offshore of a fault and divide them into regions.
 
-    Region A (vertical prism offshore of seismogenic zone of fault plane)
-    Region B (vertical prism containing seismogenic zone of fault plane)
-    Region C (vertical prism downdip of the seismogenic zone of the fault plane)
+    The regions follow the PEER NGA SUB (2020) classification:
+
+    - **Region A**: Vertical prism offshore of the seismogenic zone of the fault plane.
+    - **Region B**: Vertical prism containing the seismogenic zone of the fault plane.
+    - **Region C**: Vertical prism downdip of the seismogenic zone of the fault plane.
 
     Parameters
     ----------
-    fault_file (Path): Text file of longitude, latitude, and depth (-)
-    d_s (int,float): Upper limit of seismogenic zone, Hayes, 2018
-    d_d (int,float): Lower limit of seismogenic zone, Hayes, 2018
-    region_a_offshore (dict): portion of fault in region a (lat,long,depth) NGA-SUB, 2020 (optional)
-    region_b_on (dict): portion of fault in region b (lat,long,depth) NGA-SUB, 2020 (optional)
-    region_c_downdip (dict): portion of fault in region c (lat,long,depth) NGA-SUB, 2020 (optional)
+    fault_file : Path
+        Text file containing longitude, latitude, and depth values.
+    d_s : float
+        Upper limit of the seismogenic zone (Hayes, 2018).
+    d_d : float
+        Lower limit of the seismogenic zone (Hayes, 2018).
+    region_a_offshore : dict, optional
+        Portion of the fault in Region A (latitude, longitude, depth) as defined in NGA-SUB (2020).
+    region_b_on : dict, optional
+        Portion of the fault in Region B (latitude, longitude, depth) as defined in NGA-SUB (2020).
+    region_c_downdip : dict, optional
+        Portion of the fault in Region C (latitude, longitude, depth) as defined in NGA-SUB (2020).
 
     Returns
     -------
-    region_a_offshore (dict): portion of faults in region a (lat,long,depth) NGA-SUB, 2020
-    region_b_on (dict): portion of faults in region b (lat,long,depth) NGA-SUB, 2020
-    region_c_downdip (dict): portion of faults in region c (lat,long,depth) NGA-SUB, 2020
+    tuple
+        A tuple containing:
+        - **region_a_offshore** (*dict*): Portion of faults in Region A (latitude, longitude, depth).
+        - **region_b_on** (*dict*): Portion of faults in Region B (latitude, longitude, depth).
+        - **region_c_downdip** (*dict*): Portion of faults in Region C (latitude, longitude, depth).
 
     """
     # Read fault file
@@ -157,42 +177,50 @@ def ngasub2020_tectclass(
     h_thresh: float = 10,
     v_thresh: float = 10,
 ):
-    """Applies the modified classification logic from the NGA-SUB 2020 report
-    (PEER NGA SUB, 2020)
+    """
+    Applies the modified classification logic from the NGA-SUB 2020 report.
 
-    Region A (vertical prism offshore of seismogenic zone of fault plane):
-    depth<60km: 'Outer rise'
-    depth>=60km: 'Slab'
+    The classification is based on depth and region:
 
-    Region B (vertical prism containing seismogenic zone of fault plane):
-    depth<min(slab surface, 20km): 'Crustal'
-    min(slab surface, 20km)>depth>60km: 'Interface'
-    depth>60km: 'Slab'
-
-    Region C (vertical prism downdip of the seismogenic zone of the fault plane):
-    depth<30km: 'Crustal'
-    30km<depth<slab surface: 'Undetermined'
-    depth>slab surface: 'Slab'
-
-    Elsewhere (Farfield):
-    depth<30km: 'Crustal'
-    depth>30km: 'Undetermined'
-
+    - **Region A (offshore seismogenic zone)**:
+        - depth < 60 km: 'Outer rise'
+        - depth >= 60 km: 'Slab'
+    - **Region B (seismogenic zone)**:
+        - depth < min(slab surface, 20 km): 'Crustal'
+        - min(slab surface, 20 km) > depth > 60 km: 'Interface'
+        - depth > 60 km: 'Slab'
+    - **Region C (downdip of seismogenic zone)**:
+        - depth < 30 km: 'Crustal'
+        - 30 km < depth < slab surface: 'Undetermined'
+        - depth > slab surface: 'Slab'
+    - **Elsewhere (Farfield)**:
+        - depth < 30 km: 'Crustal'
+        - depth > 30 km: 'Undetermined'
 
     Parameters
     ----------
-    row (pd.Series): The event row
-    region_a_offshore (dict): portion of faults in region a (lat,long,depth) NGA-SUB, 2020
-    region_b_on (dict): portion of faults in region b (lat,long,depth) NGA-SUB, 2020
-    region_c_downdip (dict): portion of faults in region c (lat,long,depth) NGA-SUB, 2020
-    fault_label (str): The fault label
-    h_thresh (float): Horizontal distance threshold
-    v_thresh (float): Vertical distance threshold
+    row : pd.Series
+        The event row containing necessary seismic information.
+    region_a_offshore : dict
+        Portion of faults in Region A (latitude, longitude, depth) as defined in NGA-SUB (2020).
+    region_b_on : dict
+        Portion of faults in Region B (latitude, longitude, depth) as defined in NGA-SUB (2020).
+    region_c_downdip : dict
+        Portion of faults in Region C (latitude, longitude, depth) as defined in NGA-SUB (2020).
+    fault_label : str
+        The fault label associated with the event.
+    h_thresh : float
+        Horizontal distance threshold for classification.
+    v_thresh : float
+        Vertical distance threshold for classification.
 
     Returns
     -------
-    tectclass (str): 'Slab', 'Interface', 'Outer rise', 'Crustal', or 'Undetermined'
-    fault (str): fault which triggered 'Interface','Slab' or 'Outer rise' tectclass labels
+    tuple
+        A tuple containing:
+        - **tectclass** (*str*): 'Slab', 'Interface', 'Outer rise', 'Crustal', or 'Undetermined'.
+        - **fault** (*str* or *None*): The fault responsible for 'Interface', 'Slab', or 'Outer rise' tectclass labels.
+
     """
     lat, lon, depth = row["lat"], row["lon"], row["depth"]
 
@@ -254,6 +282,11 @@ def merge_tectclass(event_df: pd.DataFrame):
     ----------
     event_df : pd.DataFrame
         The event dataframe which also includes the NGASUB tectonic class data
+
+    Returns
+    -------
+    pd.DataFrame
+        The event dataframe with the tect_class and tect_method columns updated
     """
     # Ensure the dtype of the tect_class and tect_method columns
     event_df["tect_class"] = event_df["tect_class"].astype("str")
@@ -283,6 +316,11 @@ def find_domain_from_shapes(
         The merged event dataframe with lat, lon data
     shapes : list
         The shapes containing the layers with domain information
+
+    Returns
+    -------
+    pd.DataFrame
+        The merged event dataframe with the domain_no and domain_type columns updated
     """
     # Convert the lat, lon to NZTM coordinate system
     # (https://www.linz.govt.nz/guidance/geodetic-system/coordinate-systems-used-new-zealand/projections/new-zealand-transverse-mercator-2000-nztm2000)

@@ -131,22 +131,6 @@ def split_mseed(mseed: Stream, output_dir: Path):
             creation.write_stream_to_mseed(trace, output_dir / filename)
 
 
-def get_old_event_id(mseed_ffp: Path):
-    """
-    Get the event id from the old style of mseed file storage
-    By getting the xml file and returning the stem which is the event id
-
-    Parameters
-    ----------
-    mseed_ffp : Path
-        The path to the mseed file
-    """
-    event_dir = mseed_ffp.parent.parent.parent
-    # Find the xml file
-    xml_file = list(event_dir.glob("*.xml"))[0]
-    return xml_file.stem
-
-
 def run_for_single_event(
     event_dir: Path,
     client_NZ: FDSN_Client,
@@ -226,7 +210,7 @@ def get_event_dirs(main_dir: Path):
 
     Returns
     -------
-    event_dirs : list
+    list
         A list of the event directories
     """
     waveform_dir = main_dir / "waveforms"
