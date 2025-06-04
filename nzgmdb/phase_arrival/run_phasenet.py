@@ -256,12 +256,11 @@ def process_mseed(mseed_file: Path, h5_ffp: Path):
             compression="lzf",
         )
 
-    # Get the extra columns such as datetime of p and s wave as well as the probability at the p and s wave
+    # Get the extra datetime columns of p and s wave
     tr1 = mseed[0]
     start_time = tr1.stats.starttime
     end_time = tr1.stats.endtime
     times = np.linspace(start_time.timestamp, end_time.timestamp, tr1.stats.npts)
-
     p_wave_datetime = UTCDateTime(times[p_wave_ix])
     s_wave_datetime = UTCDateTime(times[s_wave_ix])
 
