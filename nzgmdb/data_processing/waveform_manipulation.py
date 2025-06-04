@@ -54,7 +54,6 @@ def initial_preprocessing(
 
     # Load config
     config = cfg.Config()
-    no_response_conversion = config.get_value("no_response_conversion")
     taper_fraction = config.get_value("taper_fraction")
     zero_padding_time = config.get_value("zero_padding_time")
 
@@ -74,8 +73,6 @@ def initial_preprocessing(
     location = mseed[0].stats.location
     channel = mseed[0].stats.channel
 
-    missing_sensitivity = False
-
     # Get Station Information from geonet clients
     # Fetching here instead of passing the inventory object as searching for the station, network, and channel
     # information takes a long time as it's implemented in a for loop
@@ -85,43 +82,27 @@ def initial_preprocessing(
             level="response", network="NZ", station=station, location=location
         )
     except FDSNNoDataException:
-        # Divide trace counts by 10^6 to convert to units g
-        for tr in mseed:
-            tr.data = tr.data / no_response_conversion
-        missing_sensitivity = True
-        # raise custom_errors.InventoryNotFoundError(
-        #     f"No inventory information found for station {station} with location {location}"
-        # )
+        raise custom_errors.InventoryNotFoundError(
+            f"No inventory information found for station {station} with location {location}"
+        )
 
-    # Add the response (Same for all channels)
-    # this is done so that the sensitivity can be removed otherwise it tries to find the exact same channel
-    # which can fail when including the inventory information
-    # response = next(cha.response for sta in inv.networks[0] for cha in sta.channels)
-    # for tr in mseed:
-    #     tr.stats.response = response
-    if not missing_sensitivity:
-        try:
-            mseed = mseed.remove_sensitivity(inventory=inv)
-        except ValueError:
-            # Divide trace counts by 10^6 to convert to units g
-            for tr in mseed:
-                tr.data = tr.data / no_response_conversion
-            missing_sensitivity = True
-            # raise custom_errors.SensitivityRemovalError(
-            #     f"Failed to remove sensitivity for station {station} with location {location}"
-            # )
+    try:
+        mseed = mseed.remove_sensitivity(inventory=inv)
+    except ValueError:
+        raise custom_errors.SensitivityRemovalError(
+            f"Failed to remove sensitivity for station {station} with location {location}"
+        )
 
-    if not missing_sensitivity:
-        # Rotate
-        try:
-            mseed.rotate("->ZNE", inventory=inv)
-        except (
-            Exception  # noqa: BLE001
-        ):  # Due to obspy raising an Exception instead of a specific error
-            # Error for no matching channel metadata found
-            raise custom_errors.RotationError(
-                f"Failed to rotate for station {station} with location {location}"
-            )
+    # Rotate
+    try:
+        mseed.rotate("->ZNE", inventory=inv)
+    except (
+        Exception  # noqa: BLE001
+    ):  # Due to obspy raising an Exception instead of a specific error
+        # Error for no matching channel metadata found
+        raise custom_errors.RotationError(
+            f"Failed to rotate for station {station} with location {location}"
+        )
 
     # If the channel is not a Strong Motion station then we need to differentiate
     if channel[:2] not in ["HN", "BN"]:

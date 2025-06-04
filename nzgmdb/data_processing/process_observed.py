@@ -67,7 +67,7 @@ def process_single_mseed(
 
     # Perform initial pre-processing
     try:
-        mseed, missing_sensitivity = waveform_manipulation.initial_preprocessing(mseed)
+        mseed = waveform_manipulation.initial_preprocessing(mseed)
     except custom_errors.InventoryNotFoundError:
         skipped_record_dict = {
             "record_id": mseed_stem,
@@ -171,14 +171,6 @@ def process_single_mseed(
             station,
             comp,
         )
-
-    if missing_sensitivity:
-        skipped_record_dict = {
-            "record_id": mseed_stem,
-            "reason": "Missing sensitivity information",
-        }
-        skipped_record = pd.DataFrame([skipped_record_dict])
-        return skipped_record
 
 
 def process_mseeds_to_txt(

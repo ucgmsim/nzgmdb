@@ -547,7 +547,7 @@ def filter_duplicate_channels(catalog: pd.DataFrame, bypass_records: np.ndarray 
     # Step 9: Remove skipped records from catalog
     catalog = catalog[~catalog["record_id"].isin(records_to_drop["record_id"])]
 
-    # Step 10: Clean up
+    # Step 10: Clean up and ensure uniqueness
     assert len(catalog["evid_sta"].unique()) == len(catalog)
     catalog = catalog.drop(columns=["evid_sta"])
 
