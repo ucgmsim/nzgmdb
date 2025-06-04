@@ -98,24 +98,6 @@ def get_domain_focal(
         return domain.strike, domain.rake, domain.dip
 
 
-def convert_latlon_depth_to_xyz(lat, lon, depth):
-    transformer = Transformer.from_crs("EPSG:4326", "EPSG:2193", always_xy=True)
-    x, y = transformer.transform(lon, lat)
-    z = depth / 1000.0  # Convert m to km
-    return np.array([x / 1000.0, y / 1000.0, z])  # Convert to km
-
-
-def convert_fault_row_to_P(row):
-    P = np.zeros((3, 4, 1))
-    for i in range(4):
-        lat = row[f"corner_{i}_lat"]
-        lon = row[f"corner_{i}_lon"]
-        depth = row[f"corner_{i}_depth"]
-        P[:, i, 0] = convert_latlon_depth_to_xyz(lat, lon, depth)
-    # Swap the 3rd and 4th positions
-    P[:, 2, 0], P[:, 3, 0] = P[:, 3, 0], P[:, 2, 0].copy()
-
-
 def run_ccld_simulation(
     event_id: str,
     event_row: pd.Series,
@@ -600,29 +582,31 @@ def compute_distances_for_event(
     rxs, rys = src_site_dist.calc_rx_ry(srf_points, srf_header, stations)
     rrups_lat, rrups_lon = rrup_points[:, 0], rrup_points[:, 1]
 
-    # Get the P for the srf or corners
+    # Get the segment corners for the srf or corners
     if event_id in srf_files:
-        P = np.zeros((3, 4, len(planes)))
-        for ix, plane in enumerate(planes):
-            corner_0, corner_1, corner_2, corner_3 = plane.corners
+        seg_corners = np.zeros((3, 4, len(planes)))
+        for i, plane in enumerate(planes):
+            for j, idx in enumerate([0, 1, 3, 2]):  # Ordering to match corner mapping
+                seg_corners[:, j, i] = (
+                    coordinates.wgs_depth_to_nztm(plane.corners[idx])[[1, 0, 2]]
+                    / 1000.0
+                )
 
-            P[:, 0, ix] = convert_latlon_depth_to_xyz(
-                corner_0[0], corner_0[1], corner_0[2]
-            )
-            P[:, 1, ix] = convert_latlon_depth_to_xyz(
-                corner_1[0], corner_1[1], corner_1[2]
-            )
-            P[:, 3, ix] = convert_latlon_depth_to_xyz(
-                corner_2[0], corner_2[1], corner_2[2]
-            )
-            P[:, 2, ix] = convert_latlon_depth_to_xyz(
-                corner_3[0], corner_3[1], corner_3[2]
-            )
     else:
-        convert_fault_row_to_P()
+        # If not in srf_files, use the nodal plane info corners
+        seg_corners = np.zeros((3, 4, 1))
+        for i, j in enumerate([0, 1, 3, 2]):  # Map to correct corner order
+            seg_corners[:, i, 0] = (
+                    coordinates.wgs_depth_to_nztm(
+                        np.array(
+                            nodal_plane_info[f"corner_{j}"]
+                        )
+                    )[[1, 0, 2]]
+                    / 1000.0
+            )
 
     # Calculate Ravg
-    ravgs = calc_ravgs(stations, P)
+    # ravgs = calc_ravgs(stations, seg_corners)
 
     r_epis = geo.get_distances(
         np.dstack([event_sta_df.lon.values, event_sta_df.lat.values])[0],
