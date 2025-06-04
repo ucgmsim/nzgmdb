@@ -285,7 +285,7 @@ def upload_failed_files(
         failed_files = f.read().splitlines()
 
     if version is None:
-        version = failed_files_file.parent.name
+        version = failed_files_file.parent.parent.name
 
     dropbox_version_dir = f"{DROPBOX_PATH}/{version}"
 

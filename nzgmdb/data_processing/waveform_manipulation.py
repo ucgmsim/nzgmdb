@@ -54,8 +54,6 @@ def initial_preprocessing(
 
     # Load config
     config = cfg.Config()
-    no_response_stations = config.get_value("no_response_stations")
-    no_response_conversion = config.get_value("no_response_conversion")
     taper_fraction = config.get_value("taper_fraction")
     zero_padding_time = config.get_value("zero_padding_time")
 
@@ -73,49 +71,55 @@ def initial_preprocessing(
     # Get the inventory information
     station = mseed[0].stats.station
     location = mseed[0].stats.location
+    channel = mseed[0].stats.channel
 
-    if station in no_response_stations:
-        # Divide trace counts by 10^6 to convert to units g as there is no response for these stations
-        for tr in mseed:
-            tr.data /= no_response_conversion
-    else:
-        # Get Station Information from geonet clients
-        # Fetching here instead of passing the inventory object as searching for the station, network, and channel
-        # information takes a long time as it's implemented in a for loop
-        try:
-            client_NZ = FDSN_Client("GEONET")
-            inv = client_NZ.get_stations(
-                level="response", network="NZ", station=station, location=location
-            )
-        except FDSNNoDataException:
-            raise custom_errors.InventoryNotFoundError(
-                f"No inventory information found for station {station} with location {location}"
-            )
+    # Get Station Information from geonet clients
+    # Fetching here instead of passing the inventory object as searching for the station, network, and channel
+    # information takes a long time as it's implemented in a for loop
+    try:
+        client_NZ = FDSN_Client("GEONET")
+        inv = client_NZ.get_stations(
+            level="response", network="NZ", station=station, location=location
+        )
+    except FDSNNoDataException:
+        raise custom_errors.InventoryNotFoundError(
+            f"No inventory information found for station {station} with location {location}"
+        )
 
+    try:
+        mseed = mseed.remove_sensitivity(inventory=inv)
+    except ValueError:
+        raise custom_errors.SensitivityRemovalError(
+            f"Failed to remove sensitivity for station {station} with location {location}"
+        )
+
+    # Rotate
+    try:
+        mseed.rotate("->ZNE", inventory=inv)
+    except (
+        Exception  # noqa: BLE001
+    ):  # Due to obspy raising an Exception instead of a specific error
+        # Error for no matching channel metadata found
+        raise custom_errors.RotationError(
+            f"Failed to rotate for station {station} with location {location}"
+        )
+
+    # If the channel is not a Strong Motion station then we need to differentiate
+    if channel[:2] not in ["HN", "BN"]:
         try:
-            mseed = mseed.remove_sensitivity(inventory=inv)
+            # differentiate data i.e., m/s to m/s^2
+            mseed.differentiate()
         except ValueError:
-            raise custom_errors.SensitivityRemovalError(
-                f"Failed to remove sensitivity for station {station} with location {location}"
+            raise custom_errors.DiffrentiateError(
+                f"Failed to differentiate station {station} with location {location}"
             )
 
-        # Rotate
-        try:
-            mseed.rotate("->ZNE", inventory=inv)
-        except (
-            Exception  # noqa: BLE001
-        ):  # Due to obspy raising an Exception instead of a specific error
-            # Error for no matching channel metadata found
-            raise custom_errors.RotationError(
-                f"Failed to rotate for station {station} with location {location}"
-            )
+    # Get constant gravity (g)
+    g = config.get_value("g")
 
-        # Get constant gravity (g)
-        g = config.get_value("g")
-
-        # Divide each trace data by g
-        for tr in mseed:
-            tr.data /= g
+    # Divide each trace data by g
+    for tr in mseed:
+        tr.data /= g
 
     return mseed
 
