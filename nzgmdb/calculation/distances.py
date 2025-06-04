@@ -597,12 +597,10 @@ def compute_distances_for_event(
         seg_corners = np.zeros((3, 4, 1))
         for i, j in enumerate([0, 1, 3, 2]):  # Map to correct corner order
             seg_corners[:, i, 0] = (
-                    coordinates.wgs_depth_to_nztm(
-                        np.array(
-                            nodal_plane_info[f"corner_{j}"]
-                        )
-                    )[[1, 0, 2]]
-                    / 1000.0
+                coordinates.wgs_depth_to_nztm(
+                    np.array(nodal_plane_info[f"corner_{j}"])
+                )[[1, 0, 2]]
+                / 1000.0
             )
 
     # Calculate Ravg
