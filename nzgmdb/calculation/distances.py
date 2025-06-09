@@ -603,8 +603,13 @@ def compute_distances_for_event(
                 / 1000.0
             )
 
+    # Do station conversion to NZTM
+    # coordinates.wgs_depth_to_nztm(
+    #     np.dstack([event_sta_df.lon.values, event_sta_df.lat.values, event_sta_df.depth.values]).T
+    # )
+
     # Calculate Ravg
-    # ravgs = calc_ravgs(stations, seg_corners)
+    ravgs = compute_ravg_distance_vectorized(stations, seg_corners)
 
     r_epis = geo.get_distances(
         np.dstack([event_sta_df.lon.values, event_sta_df.lat.values])[0],
@@ -697,6 +702,76 @@ def compute_distances_for_event(
     )
 
     return propagation_data_combo, extra_event_data
+
+
+def perpendicular_height(point, base_start, base_end):
+    """Compute perpendicular height from a point to a line defined by two points."""
+    base_vec = base_end - base_start
+    point_vec = point - base_start
+    cross = np.cross(base_vec, point_vec)
+    base_len = np.linalg.norm(base_vec)
+    return np.linalg.norm(cross) / base_len if base_len else 0.0
+
+
+def inverse_square_integral(sites, p1, p2):
+    """
+    Vectorized inverse square integral over a segment for multiple sites.
+    Parameters
+    ----------
+    sites : np.ndarray, shape (n_sites, 3)
+    p1 : np.ndarray, shape (3,)
+    p2 : np.ndarray, shape (3,)
+    Returns
+    -------
+    np.ndarray, shape (n_sites,)
+    """
+    vec1 = p1 - sites
+    vec2 = p2 - p1
+    A = np.sum(vec1**2, axis=1)
+    B = np.sum(vec1 * vec2, axis=1)
+    C = np.dot(vec2, vec2)
+    D = A * C - B**2
+    # Handle invalid values safely
+    with np.errstate(divide="ignore", invalid="ignore"):
+        sqrt_D = np.sqrt(D)
+        atan_diff = np.arctan((C + B) / sqrt_D) - np.arctan(B / sqrt_D)
+        result = np.where(D > 0, atan_diff / sqrt_D, 0.0)
+    return result
+
+
+def compute_ravg_distance_vectorized(seg_corners, sites):
+    """
+    Vectorized Ravg calculation for multiple site locations.
+    Parameters
+    ----------
+    seg_corners : np.ndarray, shape (3, 4, n_segments)
+        Fault plane corner segments
+    sites : np.ndarray, shape (n_sites, 2)
+        Site (x, y) coordinates
+    Returns
+    -------
+    np.ndarray
+        Ravg values for each site, shape (n_sites,)
+    """
+    vertical_step = 0.1
+    n_sites = sites.shape[0]
+    n_segments = seg_corners.shape[2]
+    sites_3d = np.hstack((sites, np.zeros((n_sites, 1))))  # Add z=0
+    sum_inv_rsq = np.zeros(n_sites)
+    for i in range(n_segments):
+        TL, TR, BR, BL = seg_corners[:, :, i].T
+        height = perpendicular_height(TL, TR, BR)
+        n_steps = int(height / vertical_step) + 1
+        left_deltas = (BL - TL) / n_steps
+        right_deltas = (BR - TR) / n_steps
+        seg_start = TL + left_deltas * 0.5
+        seg_end = TR + right_deltas * 0.5
+        for _ in range(n_steps):
+            result = inverse_square_integral(sites_3d, seg_start, seg_end)
+            sum_inv_rsq += result / (n_steps * n_segments)
+            seg_start += left_deltas
+            seg_end += right_deltas
+    return np.sqrt(1.0 / sum_inv_rsq)
 
 
 def distance_in_taupo(
