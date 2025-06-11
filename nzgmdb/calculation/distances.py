@@ -751,6 +751,7 @@ def inverse_square_integral(
     Returns
     -------
     np.ndarray, shape (n_sites,)
+        The integral values for each site.
     """
     vec1 = p1 - sites
     vec2 = p2 - p1
