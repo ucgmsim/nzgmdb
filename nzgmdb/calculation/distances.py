@@ -595,21 +595,22 @@ def compute_distances_for_event(
     else:
         # If not in srf_files, use the nodal plane info corners
         seg_corners = np.zeros((3, 4, 1))
-        for i, j in enumerate([0, 1, 3, 2]):  # Map to correct corner order
+        for i, corner in enumerate(
+            [corner_0, corner_1, corner_3, corner_2]
+        ):  # Map to correct corner order
             seg_corners[:, i, 0] = (
-                coordinates.wgs_depth_to_nztm(
-                    np.array(nodal_plane_info[f"corner_{j}"])
-                )[[1, 0, 2]]
-                / 1000.0
+                coordinates.wgs_depth_to_nztm(np.array(corner))[[1, 0, 2]] / 1000.0
             )
+            # Times depth by 1000 to convert to km
+            seg_corners[:, i, 0][2] *= 1000.0
 
-    # Do station conversion to NZTM
-    # coordinates.wgs_depth_to_nztm(
-    #     np.dstack([event_sta_df.lon.values, event_sta_df.lat.values, event_sta_df.depth.values]).T
-    # )
+    # Flip the stations index 0 and 1 to match for NZTM convention
+    nztm_stations = (
+        coordinates.wgs_depth_to_nztm(stations[:, [1, 0, 2]])[:, [1, 0, 2]] / 1000
+    )
 
     # Calculate Ravg
-    ravgs = compute_ravg_distance_vectorized(stations, seg_corners)
+    ravgs = compute_ravg_distance_vectorized(seg_corners, nztm_stations)
 
     r_epis = geo.get_distances(
         np.dstack([event_sta_df.lon.values, event_sta_df.lat.values])[0],
@@ -654,6 +655,7 @@ def compute_distances_for_event(
                         "r_hyp": r_hyps[station_index],
                         "r_jb": rjbs[station_index],
                         "r_rup": rrups[station_index],
+                        "Ravg": ravgs[station_index],
                         "r_x": rxs[station_index],
                         "r_y": rys[station_index],
                         "r_tvz": tvz_lengths[station_index],
@@ -704,8 +706,26 @@ def compute_distances_for_event(
     return propagation_data_combo, extra_event_data
 
 
-def perpendicular_height(point, base_start, base_end):
-    """Compute perpendicular height from a point to a line defined by two points."""
+def perpendicular_height(
+    point: np.ndarray, base_start: np.ndarray, base_end: np.ndarray
+) -> float:
+    """
+    Compute perpendicular height from a point to a line defined by two points.
+
+    Parameters
+    ----------
+    point : np.ndarray, shape (3,)
+        The point from which the height is measured.
+    base_start : np.ndarray, shape (3,)
+        The start point of the line segment.
+    base_end : np.ndarray, shape (3,)
+        The end point of the line segment.
+
+    Returns
+    -------
+    float
+        The perpendicular height from the point to the line segment.
+    """
     base_vec = base_end - base_start
     point_vec = point - base_start
     cross = np.cross(base_vec, point_vec)
@@ -713,14 +733,21 @@ def perpendicular_height(point, base_start, base_end):
     return np.linalg.norm(cross) / base_len if base_len else 0.0
 
 
-def inverse_square_integral(sites, p1, p2):
+def inverse_square_integral(
+    sites: np.ndarray, p1: np.ndarray, p2: np.ndarray
+) -> np.ndarray:
     """
     Vectorized inverse square integral over a segment for multiple sites.
+
     Parameters
     ----------
     sites : np.ndarray, shape (n_sites, 3)
+        The sites (x, y, z) coordinates.
     p1 : np.ndarray, shape (3,)
+        The first point of the segment (x, y, z).
     p2 : np.ndarray, shape (3,)
+        The second point of the segment (x, y, z).
+
     Returns
     -------
     np.ndarray, shape (n_sites,)
@@ -739,15 +766,19 @@ def inverse_square_integral(sites, p1, p2):
     return result
 
 
-def compute_ravg_distance_vectorized(seg_corners, sites):
+def compute_ravg_distance_vectorized(
+    seg_corners: np.ndarray, sites: np.ndarray
+) -> np.ndarray:
     """
     Vectorized Ravg calculation for multiple site locations.
+
     Parameters
     ----------
     seg_corners : np.ndarray, shape (3, 4, n_segments)
         Fault plane corner segments
-    sites : np.ndarray, shape (n_sites, 2)
-        Site (x, y) coordinates
+    sites : np.ndarray, shape (n_sites, 3)
+        Site (x, y, z) coordinates
+
     Returns
     -------
     np.ndarray
@@ -756,7 +787,8 @@ def compute_ravg_distance_vectorized(seg_corners, sites):
     vertical_step = 0.1
     n_sites = sites.shape[0]
     n_segments = seg_corners.shape[2]
-    sites_3d = np.hstack((sites, np.zeros((n_sites, 1))))  # Add z=0
+    # Set the site depth to 0
+    sites[:, 2] = 0.0
     sum_inv_rsq = np.zeros(n_sites)
     for i in range(n_segments):
         TL, TR, BR, BL = seg_corners[:, :, i].T
@@ -767,7 +799,7 @@ def compute_ravg_distance_vectorized(seg_corners, sites):
         seg_start = TL + left_deltas * 0.5
         seg_end = TR + right_deltas * 0.5
         for _ in range(n_steps):
-            result = inverse_square_integral(sites_3d, seg_start, seg_end)
+            result = inverse_square_integral(sites, seg_start, seg_end)
             sum_inv_rsq += result / (n_steps * n_segments)
             seg_start += left_deltas
             seg_end += right_deltas
