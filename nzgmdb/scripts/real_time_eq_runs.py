@@ -238,8 +238,8 @@ def run_event(
     gmc_activate: Annotated[str, typer.Argument()],
     gmc_predict_activate: Annotated[str, typer.Argument()],
     ko_matrix_path: Annotated[
-        Path | None, typer.Option(exists=True, file_okay=False)
-    ] = None,
+        Path, typer.Argument(exists=True, file_okay=False)
+    ],
     add_seismic_now: Annotated[bool, typer.Option(is_flag=True)] = False,
     machine: Annotated[
         cfg.MachineName,
@@ -265,8 +265,8 @@ def run_event(
         Command to activate gmc environment.
     gmc_predict_activate : str
         Command to activate gmc_predict environment.
-    ko_matrix_path : Path, optional
-        Path to the KO matrix directory (default is None).
+    ko_matrix_path : Path
+        Path to the KO matrix directory.
     add_seismic_now : bool, optional
         Whether to add the event to SeismicNow (default is False).
     machine : cfg.MachineName, optional
@@ -335,6 +335,7 @@ def run_event(
         ]
         run_nzgmdb.run_im_calculation(
             event_dir,
+            ko_matrix_path,
             n_procs=config.get_n_procs(machine, cfg.WorkflowStep.IM),
             intensity_measures=intensity_measures,
         )
@@ -434,6 +435,7 @@ def run_event(
 
     run_nzgmdb.run_im_calculation(
         event_dir,
+        ko_matrix_path,
         n_procs=config.get_n_procs(machine, cfg.WorkflowStep.IM),
         intensity_measures=intensity_measures,
     )

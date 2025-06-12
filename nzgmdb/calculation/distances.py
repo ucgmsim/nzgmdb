@@ -794,7 +794,7 @@ def compute_ravg_distance_vectorized(
     for i in range(n_segments):
         TL, TR, BR, BL = seg_corners[:, :, i].T
         height = perpendicular_height(TL, TR, BR)
-        n_steps = int(height / vertical_step) + 1
+        n_steps = np.ceil(height / vertical_step)
         left_deltas = (BL - TL) / n_steps
         right_deltas = (BR - TR) / n_steps
         seg_start = TL + left_deltas * 0.5
