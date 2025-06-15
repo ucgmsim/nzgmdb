@@ -655,7 +655,7 @@ def compute_distances_for_event(
                         "r_hyp": r_hyps[station_index],
                         "r_jb": rjbs[station_index],
                         "r_rup": rrups[station_index],
-                        "Ravg": ravgs[station_index],
+                        "r_avg": ravgs[station_index],
                         "r_x": rxs[station_index],
                         "r_y": rys[station_index],
                         "r_tvz": tvz_lengths[station_index],
