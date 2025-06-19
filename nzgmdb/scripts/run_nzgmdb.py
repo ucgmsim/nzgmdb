@@ -121,10 +121,6 @@ def make_phase_arrival_table(
             file_okay=False,
         ),
     ],
-    output_dir: Annotated[
-        Path,
-        typer.Argument(file_okay=False),
-    ],
     run_phasenet_script_ffp: Annotated[
         Path,
         typer.Argument(
@@ -141,6 +137,14 @@ def make_phase_arrival_table(
         typer.Argument(),
     ],
     n_procs: Annotated[int, typer.Option()] = 1,
+    bypass_records_ffp: Annotated[
+        Path,
+        typer.Option(
+            help="The full file path to the bypass records file for custom p_wave_ix values",
+            exists=True,
+            dir_okay=False,
+        ),
+    ] = None,
 ):
     """
     Generate the phase arrival table using mseed data and a P-wave picker.
@@ -152,8 +156,6 @@ def make_phase_arrival_table(
     main_dir : Path
         The main directory of the NZGMDB results (Highest level directory).
         Glob is used to find all mseed files recursively.
-    output_dir : Path
-        The directory to save the phase arrival table.
     run_phasenet_script_ffp : Path
         The script full file path to run PhaseNet (located in NZGMDB/phase_arrival).
     conda_sh : Path
@@ -162,14 +164,18 @@ def make_phase_arrival_table(
         The command to activate the environment for running PhaseNet.
     n_procs : int, optional
         Number of processes to use (default is 1).
+    bypass_records_ffp : Path, optional
+        The full file path to the bypass records file for custom P-wave index values.
+        This allows you to specify custom P-wave index values for records that may not be
+        processed by PhaseNet or done incorrectly.
     """
     gen_phase_arrival_table.generate_phase_arrival_table(
         main_dir,
-        output_dir,
         run_phasenet_script_ffp,
         conda_sh,
         env_activate_command,
         n_procs,
+        bypass_records_ffp,
     )
 
 
@@ -917,7 +923,6 @@ def run_full_nzgmdb(
         )
         gen_phase_arrival_table.generate_phase_arrival_table(
             main_dir,
-            flatfile_dir,
             run_phasenet_script_ffp,
             conda_sh,
             gmc_activate,
