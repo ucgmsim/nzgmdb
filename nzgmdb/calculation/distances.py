@@ -17,7 +17,7 @@ from pyproj import Transformer
 from shapely.geometry import Point
 from shapely.geometry.polygon import LineString, Polygon
 
-from empirical.util import estimations
+from oq_wrapper import estimations
 from nzgmdb.CCLD import ccldpy
 from nzgmdb.management import config as cfg
 from nzgmdb.management import file_structure
@@ -602,7 +602,7 @@ def compute_distances_for_event(
                 coordinates.wgs_depth_to_nztm(np.array(corner))[[1, 0, 2]] / 1000.0
             )
             # Times depth by 1000 to convert to km
-            seg_corners[:, i, 0][2] *= 1000.0
+            # seg_corners[:, i, 0][2] *= 1000.0
 
     # Flip the stations index 0 and 1 to match for NZTM convention
     nztm_stations = (
@@ -799,7 +799,7 @@ def compute_ravg_distance_vectorized(
         right_deltas = (BR - TR) / n_steps
         seg_start = TL + left_deltas * 0.5
         seg_end = TR + right_deltas * 0.5
-        for _ in range(n_steps):
+        for _ in range(int(n_steps)):
             result = inverse_square_integral(sites, seg_start, seg_end)
             sum_inv_rsq += result / (n_steps * n_segments)
             seg_start += left_deltas

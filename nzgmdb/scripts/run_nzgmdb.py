@@ -1007,9 +1007,9 @@ def run_full_nzgmdb(
             if machine is None
             else config.get_n_procs(machine, cfg.WorkflowStep.PROCESS)
         )
-        process_records(
-            main_dir, gmc_ffp, fmax_ffp, bypass_records_ffp, process_n_procs
-        )
+        # process_records(
+        #     main_dir, gmc_ffp, fmax_ffp, bypass_records_ffp, process_n_procs
+        # )
 
     # Run IM calculation
     im_dir = file_structure.get_im_dir(main_dir)
@@ -1018,7 +1018,7 @@ def run_full_nzgmdb(
     im_n_procs = (
         n_procs if machine is None else config.get_n_procs(machine, cfg.WorkflowStep.IM)
     )
-    run_im_calculation(main_dir, ko_matrix_path, im_dir, im_n_procs, checkpoint)
+    # run_im_calculation(main_dir, ko_matrix_path, im_dir, im_n_procs, checkpoint)
 
     # Merge IM results
     if not (
