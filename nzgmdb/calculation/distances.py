@@ -755,14 +755,12 @@ def inverse_square_integral(
     """
     vec1 = p1 - sites
     vec2 = p2 - p1
-    A = np.sum(vec1**2, axis=1)
     B = np.sum(vec1 * vec2, axis=1)
     C = np.dot(vec2, vec2)
-    D = A * C - B**2
-    # Handle invalid values safely
+    D = np.sum(np.cross(vec1, vec2) ** 2, axis=1)
+    sqrt_D = np.sqrt(D)
+    atan_diff = np.arctan2(C + B, sqrt_D) - np.arctan2(B, sqrt_D)
     with np.errstate(divide="ignore", invalid="ignore"):
-        sqrt_D = np.sqrt(D)
-        atan_diff = np.arctan((C + B) / sqrt_D) - np.arctan(B / sqrt_D)
         result = np.where(D > 0, atan_diff / sqrt_D, 0.0)
     return result
 
