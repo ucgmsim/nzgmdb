@@ -12,6 +12,7 @@ from shapely import MultiPoint, Point, Polygon
 
 from nzgmdb.management import config as cfg
 from nzgmdb.management import file_structure
+from nzgmdb.management.data_registry import REGISTRY, NZGMDB_DATA
 from qcore import geo
 from source_modelling import srf
 
@@ -31,16 +32,22 @@ def merge_aftershocks(main_dir: Path):
         / file_structure.PreFlatfileNames.EARTHQUAKE_SOURCE_TABLE_DISTANCES,
         dtype={"evid": str},
     )
+    geo_df = pd.read_csv(
+        flatfile_dir / file_structure.PreFlatfileNames.EARTHQUAKE_SOURCE_GEOMETRY,
+        dtype={"evid": str},
+    )
 
     # Apply % 360 to manage the longitude negative values
-    catalogue_pd.loc[
+    geo_df.loc[
         :, ["corner_0_lon", "corner_1_lon", "corner_2_lon", "corner_3_lon", "hyp_lon"]
     ] %= 360
 
-    # Get the SRF source models
-    data_dir = file_structure.get_data_dir()
-    srf_dir = data_dir / "SrfSourceModels"
-    srf_evids = [srf_file.stem for srf_file in srf_dir.glob("*.srf")]
+    # Go through the registry keys and check if they are .srf files to use
+    srf_files = {}
+    for file in REGISTRY.keys():
+        if file.endswith(".srf"):
+            # If they are, add them to the srf files dictionary
+            srf_files[Path(file).stem] = Path(NZGMDB_DATA.abspath) / file
 
     config = cfg.Config()
     ll_num = config.get_value("ll_num")
@@ -50,9 +57,9 @@ def merge_aftershocks(main_dir: Path):
     # Create all the rupture polygons
     rupture_area_poly = []
     for _, row in catalogue_pd.iterrows():
-        if row["evid"] in srf_evids:
+        if row["evid"] in srf_files:
             # Generate the convex hull for the SRF
-            srf_file = srf_dir / f"{row['evid']}.srf"
+            srf_file = srf_files[row["evid"]]
             srf_model = srf.read_srf(srf_file)
             # Transform the srf_model geometry to WGS84
             transformed_coords = [
@@ -62,19 +69,20 @@ def merge_aftershocks(main_dir: Path):
             rupture_area_poly.append(Polygon(transformed_coords))
 
         else:
+            geo_row = geo_df[geo_df["evid"] == row["evid"]].iloc[0]
             lon_values = [
-                row["corner_0_lon"],
-                row["corner_1_lon"],
-                row["corner_3_lon"],
-                row["corner_2_lon"],
-                row["corner_0_lon"],
+                geo_row["corner_0_lon"],
+                geo_row["corner_1_lon"],
+                geo_row["corner_3_lon"],
+                geo_row["corner_2_lon"],
+                geo_row["corner_0_lon"],
             ]
             lat_values = [
-                row["corner_0_lat"],
-                row["corner_1_lat"],
-                row["corner_3_lat"],
-                row["corner_2_lat"],
-                row["corner_0_lat"],
+                geo_row["corner_0_lat"],
+                geo_row["corner_1_lat"],
+                geo_row["corner_3_lat"],
+                geo_row["corner_2_lat"],
+                geo_row["corner_0_lat"],
             ]
 
             # Create a Polygon from the corner coordinates

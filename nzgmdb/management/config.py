@@ -46,8 +46,8 @@ class Config:
     """
 
     _instance = None
-    config_path = file_structure.get_data_dir() / "config.yaml"
-    machine_config_path = file_structure.get_data_dir() / "machine_config.yaml"
+    config_path = file_structure.get_config_dir() / "config.yaml"
+    machine_config_path = file_structure.get_config_dir() / "machine_config.yaml"
 
     def __new__(cls, *args, **kwargs):
         """
