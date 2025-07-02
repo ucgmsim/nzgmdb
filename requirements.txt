@@ -15,5 +15,5 @@ oq_wrapper @ git+https://github.com/ucgmsim/Empirical_Engine.git#subdirectory=oq
 openquake-engine @ git+https://github.com/gem/oq-engine.git
 qcore @ git+https://github.com/ucgmsim/qcore.git
 IM_calculation @ git+https://github.com/ucgmsim/IM_calculation.git
-Velocity_Model @ git+https://github.com/ucgmsim/Velocity-Model.git
+velocity_modelling @ git+https://github.com/ucgmsim/velocity_modelling.git
 source-modelling @ git+https://github.com/ucgmsim/source_modelling.git
