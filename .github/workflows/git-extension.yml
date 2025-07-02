@@ -11,7 +11,16 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - run: sed -i '/git\+/ { /\.git$/! s/$/.git/ }' requirements.txt
+
+      - name: Fix VCS URLs in requirements.txt
+        run: |
+          awk '/git\+/{ 
+              match($0, /(git\+[^# ]+)/, a); 
+              if (a[1] !~ /\.git$/) 
+                  sub(a[1], a[1] ".git") 
+          } 
+          { print }' requirements.txt > tmp && mv tmp requirements.txt
+
       - uses: parkerbxyz/suggest-changes@v2
         with:
           comment: 'Please change the following dependencies for consistency.'
