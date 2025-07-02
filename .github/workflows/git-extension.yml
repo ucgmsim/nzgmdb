@@ -24,7 +24,7 @@ jobs:
             from pathlib import Path
             import sys
 
-            pyproject_path = Path("oq_wrapper/pyproject.toml")
+            pyproject_path = Path("pyproject.toml")
             if not pyproject_path.exists():
                 print("Error: pyproject.toml not found in the current directory.")
                 sys.exit(1)
