@@ -772,7 +772,7 @@ def run_full_nzgmdb(
         ),
     ] = None,
     machine: Annotated[
-        cfg.MachineName | None,
+        cfg.MachineName,
         typer.Option(
             case_sensitive=False,
         ),
