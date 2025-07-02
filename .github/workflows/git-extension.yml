@@ -7,21 +7,44 @@ permissions:
   pull-requests: write
 
 jobs:
-  test:
+  check-git-deps:
     runs-on: ubuntu-latest
+
     steps:
-      - uses: actions/checkout@v4
+      - name: Checkout repository
+        uses: actions/checkout@v4
 
-      - name: Fix VCS URLs in requirements.txt
+
+      - name: Set up Python
+        uses: actions/setup-python@v4
+
+      - name: Run Git dependency check
         run: |
-          awk '/git\+/{ 
-              match($0, /(git\+[^# ]+)/, a); 
-              if (a[1] !~ /\.git$/) 
-                  sub(a[1], a[1] ".git") 
-          } 
-          { print }' requirements.txt > tmp && mv tmp requirements.txt
+            import tomllib
+            from pathlib import Path
+            import sys
 
-      - uses: parkerbxyz/suggest-changes@v2
-        with:
-          comment: 'Please change the following dependencies for consistency.'
-          event: 'REQUEST_CHANGES'
+            pyproject_path = Path("oq_wrapper/pyproject.toml")
+            if not pyproject_path.exists():
+                print("Error: pyproject.toml not found in the current directory.")
+                sys.exit(1)
+
+            with open(pyproject_path, "rb") as f:
+                config = tomllib.load(f)
+
+            issues = []
+            for section in ["project", "project.optional-dependencies"]:
+                if section in config and "dependencies" in config[section]:
+                    deps = config[section]["dependencies"]
+                    for dep in deps:
+                        if "git+https://" in dep and not dep.endswith(".git"):
+                            issues.append(dep)
+
+            if issues:
+                print("The following git dependencies are missing the .git extension:")
+                for issue in issues:
+                    print(f"  - {issue}")
+                sys.exit(1)
+            else:
+                print("All git dependencies are correctly formatted.")
+        shell: python
