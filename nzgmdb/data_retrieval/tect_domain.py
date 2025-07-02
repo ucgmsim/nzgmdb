@@ -12,7 +12,6 @@ import pandas as pd
 from pyproj import Transformer
 
 from nzgmdb.management import config as cfg
-from nzgmdb.management import file_structure
 from nzgmdb.management.data_registry import NZGMDB_DATA
 from qcore import geo, point_in_polygon
 

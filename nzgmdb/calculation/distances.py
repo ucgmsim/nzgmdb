@@ -5,7 +5,6 @@ as determining the rupture plane geometry for a given event.
 
 import functools
 import multiprocessing as mp
-import zipfile
 from collections import defaultdict
 from pathlib import Path
 from typing import Optional
@@ -20,8 +19,8 @@ from shapely.geometry.polygon import LineString, Polygon
 from nzgmdb.CCLD import ccldpy
 from nzgmdb.management import config as cfg
 from nzgmdb.management import file_structure
-from oq_wrapper import estimations
 from nzgmdb.management.data_registry import NZGMDB_DATA, REGISTRY
+from oq_wrapper import estimations
 from qcore import coordinates, geo, grid, src_site_dist
 from source_modelling import srf
 

@@ -338,11 +338,7 @@ def merge_flatfiles(main_dir: Path, bypass_records_ffp: Path = None):
     config = cfg.Config()
     channel_codes = ",".join(config.get_value("channel_codes"))
     client_NZ = FDSN_Client("GEONET")
-    from datetime import datetime
-
-    inventory = client_NZ.get_stations(
-        channel=channel_codes, level="response", endtime=datetime(2025, 5, 19)
-    )
+    inventory = client_NZ.get_stations(channel=channel_codes, level="response")
     station_info = [
         [
             station.code,

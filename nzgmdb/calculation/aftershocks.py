@@ -12,7 +12,7 @@ from shapely import MultiPoint, Point, Polygon
 
 from nzgmdb.management import config as cfg
 from nzgmdb.management import file_structure
-from nzgmdb.management.data_registry import REGISTRY, NZGMDB_DATA
+from nzgmdb.management.data_registry import NZGMDB_DATA, REGISTRY
 from qcore import geo
 from source_modelling import srf
 

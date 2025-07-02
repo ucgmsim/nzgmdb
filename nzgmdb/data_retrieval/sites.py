@@ -3,10 +3,11 @@ Creates the site table for the NZGMDB. This module fetches the station informati
 Geonet metadata summary information.
 """
 
+from pathlib import Path
+
 import fiona
 import numpy as np
 import pandas as pd
-from pathlib import Path
 from obspy.clients.fdsn import Client as FDSN_Client
 
 from nzgmdb.data_retrieval import tect_domain
