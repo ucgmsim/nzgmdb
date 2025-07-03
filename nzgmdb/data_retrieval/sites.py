@@ -141,9 +141,12 @@ def add_site_basins(site_df: pd.DataFrame) -> pd.DataFrame:
     basin_versions = basin_wiki._get_basin_versions(vm_const.NZCVM_REGISTRY_PATH)
 
     for basin_name, versions in basin_versions.items():
+        # Make sure to grab the latest version of the basin
         latest_version = max(versions, key=lambda x: x["version_tuple"])
         basin_data = latest_version["data"]
-        boundaries = basin_data.get("boundaries", [])  #     # Get the outline
+
+        # Load the basin outline
+        boundaries = basin_data.get("boundaries", [])
         basin_outline = np.loadtxt(f"{vm_const.DATA_ROOT}/{boundaries[0]}")
 
         # Find sites within basin
