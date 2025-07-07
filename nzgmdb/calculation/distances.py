@@ -5,7 +5,6 @@ as determining the rupture plane geometry for a given event.
 
 import functools
 import multiprocessing as mp
-import zipfile
 from collections import defaultdict
 from pathlib import Path
 from typing import Optional
@@ -20,6 +19,7 @@ from shapely.geometry.polygon import LineString, Polygon
 from nzgmdb.CCLD import ccldpy
 from nzgmdb.management import config as cfg
 from nzgmdb.management import file_structure
+from nzgmdb.management.data_registry import NZGMDB_DATA, REGISTRY
 from oq_wrapper import estimations
 from qcore import coordinates, geo, grid, src_site_dist
 from source_modelling import srf
@@ -280,21 +280,21 @@ def get_nodal_plane_info(
         srf_model = srf.read_srf(srf_files[event_id])
         nodal_plane_info["f_type"] = "ff"
 
-        # Find the total slip and average rake for each subfault
-        total_slip = [
-            np.sum(plane_points["slip"]) for plane_points in srf_model.segments
-        ]
+        # Find the plane areas and average rake for each subfault
+        plane_areas = [plane.length * plane.width for plane in srf_model.planes]
         avg_rake = [
             np.average(plane_points["rake"]) for plane_points in srf_model.segments
         ]
+        nodal_plane_info["avg_rake"] = avg_rake
 
         # Calculate the average strike, dip and rake based on weighted average of slip
         (
             nodal_plane_info["strike"],
             nodal_plane_info["dip"],
             nodal_plane_info["rake"],
-        ) = estimations.calculate_avg_strike_dip_rake(
-            srf_model.planes, avg_rake, total_slip
+            nodal_plane_info["dip_dist"],
+        ) = estimations.calculate_avg_multi_plane_properties(
+            srf_model.planes, avg_rake, plane_areas
         )
 
         config = cfg.Config()
@@ -336,21 +336,39 @@ def get_nodal_plane_info(
             [plane.bottom_m / 1000 for plane in srf_model.planes]
         )
         nodal_plane_info["length"] = sum([plane.length for plane in srf_model.planes])
-        nodal_plane_info["dip_dist"] = sum([plane.width for plane in srf_model.planes])
 
-        # Check if there is only 1 plane
-        if len(srf_model.planes) == 1:
-            plane = srf_model.planes[0]
-            nodal_plane_info["corner_0"] = plane.corners[0]
-            nodal_plane_info["corner_1"] = plane.corners[1]
-            nodal_plane_info["corner_2"] = plane.corners[2]
-            nodal_plane_info["corner_3"] = plane.corners[3]
-        else:
-            # Ensure the corners are None
-            nodal_plane_info["corner_0"] = [None, None, None]
-            nodal_plane_info["corner_1"] = [None, None, None]
-            nodal_plane_info["corner_2"] = [None, None, None]
-            nodal_plane_info["corner_3"] = [None, None, None]
+        nodal_plane_info["planes"] = srf_model.planes
+
+        # Find the location of the hypocentre in the srf model
+        # Grab the point at which tinit is 0
+        hyp_point = srf_model.points[srf_model.points["tinit"] == 0]
+        nodal_plane_info["hyp_lat"] = hyp_point["lat"].values[0]
+        nodal_plane_info["hyp_lon"] = hyp_point["lon"].values[0]
+
+        # Grab the header information and get the nstk * ndip for each plane
+        nstk_ndip = [
+            header.nstk * header.ndip for ix, header in srf_model.header.iterrows()
+        ]
+        # Cumulate the nstk * ndip to find the plane index
+        cum_nstk_ndip = np.cumsum(nstk_ndip)
+        # Use the index of the hyp_point in the srf_points to find the plane index
+        hyp_index = hyp_point.index.values[0]
+        plane_index = np.searchsorted(cum_nstk_ndip, hyp_index, side="right")
+
+        # Now we can find the s_hyp and d_hyp
+        nstk = srf_model.header.iloc[plane_index]["nstk"]
+        ndip = srf_model.header.iloc[plane_index]["ndip"]
+
+        plane_start_index = 0 if plane_index == 0 else cum_nstk_ndip[plane_index - 1]
+        local_index = hyp_index - plane_start_index
+
+        dip_idx = local_index // nstk
+        stk_idx = local_index % nstk
+
+        nodal_plane_info["hyp_strike"] = stk_idx / (nstk - 1)
+        nodal_plane_info["hyp_dip"] = dip_idx / (ndip - 1)
+        nodal_plane_info["plane_index"] = plane_index
+
 
     elif event_id in modified_cmt_df.PublicID.values:
         # Event is in the modified CMT data
@@ -433,6 +451,8 @@ def compute_distances_for_event(
         The propagation data for the event
     extra_event_data : pd.DataFrame
         The extra event data for the event which includes the correct nodal plane information
+    geometry_data : pd.DataFrame
+        The geometry data for the event which includes the corners of the rupture plane / planes
     """
 
     # Extract out the relevant event_row data
@@ -442,7 +462,7 @@ def compute_distances_for_event(
     # Check if the event doesn't have IM data
     # If it doesn't, skip the event
     if im_event_df.empty:
-        return None, None
+        return None, None, None
 
     # Get the station data
     event_sta_df = station_df[station_df["sta"].isin(im_event_df["sta"])].reset_index()
@@ -460,6 +480,7 @@ def compute_distances_for_event(
     (
         strike,
         rake,
+        avg_rake,
         dip,
         length,
         dip_dist,
@@ -472,13 +493,16 @@ def compute_distances_for_event(
         hyp_lon,
         hyp_strike,
         hyp_dip,
+        hyp_plane_index,
         corner_0,
         corner_1,
         corner_2,
         corner_3,
+        planes,
     ) = (
         nodal_plane_info["strike"],
         nodal_plane_info["rake"],
+        nodal_plane_info["avg_rake"],
         nodal_plane_info["dip"],
         nodal_plane_info["length"],
         nodal_plane_info["dip_dist"],
@@ -491,10 +515,12 @@ def compute_distances_for_event(
         nodal_plane_info["hyp_lon"],
         nodal_plane_info["hyp_strike"],
         nodal_plane_info["hyp_dip"],
+        nodal_plane_info["plane_index"],
         nodal_plane_info["corner_0"],
         nodal_plane_info["corner_1"],
         nodal_plane_info["corner_2"],
         nodal_plane_info["corner_3"],
+        nodal_plane_info["planes"],
     )
 
     if srf_header is None or srf_points is None:
@@ -578,6 +604,34 @@ def compute_distances_for_event(
     rxs, rys = src_site_dist.calc_rx_ry(srf_points, srf_header, stations)
     rrups_lat, rrups_lon = rrup_points[:, 0], rrup_points[:, 1]
 
+    # Get the segment corners for the srf or corners
+    if event_id in srf_files:
+        seg_corners = np.zeros((3, 4, len(planes)))
+        for i, plane in enumerate(planes):
+            for j, idx in enumerate([0, 1, 3, 2]):  # Ordering to match corner mapping
+                seg_corners[:, j, i] = (
+                    coordinates.wgs_depth_to_nztm(plane.corners[idx])[[1, 0, 2]]
+                    / 1000.0
+                )
+
+    else:
+        # If not in srf_files, use the nodal plane info corners
+        seg_corners = np.zeros((3, 4, 1))
+        for i, corner in enumerate(
+            [corner_0, corner_1, corner_3, corner_2]
+        ):  # Map to correct corner order
+            seg_corners[:, i, 0] = (
+                coordinates.wgs_depth_to_nztm(np.array(corner))[[1, 0, 2]] / 1000.0
+            )
+
+    # Flip the stations index 0 and 1 to match for NZTM convention
+    nztm_stations = (
+        coordinates.wgs_depth_to_nztm(stations[:, [1, 0, 2]])[:, [1, 0, 2]] / 1000
+    )
+
+    # Calculate Ravg
+    ravgs = compute_ravg_distance_vectorized(seg_corners, nztm_stations)
+
     r_epis = geo.get_distances(
         np.dstack([event_sta_df.lon.values, event_sta_df.lat.values])[0],
         event_row["lon"],
@@ -621,6 +675,7 @@ def compute_distances_for_event(
                         "r_hyp": r_hyps[station_index],
                         "r_jb": rjbs[station_index],
                         "r_rup": rrups[station_index],
+                        "r_avg": ravgs[station_index],
                         "r_x": rxs[station_index],
                         "r_y": rys[station_index],
                         "r_tvz": tvz_lengths[station_index],
@@ -648,27 +703,183 @@ def compute_distances_for_event(
                 "f_type": f_type,
                 "z_tor": ztor,
                 "z_bor": dbottom,
-                "hyp_lat": hyp_lat,
-                "hyp_lon": hyp_lon,
-                "hyp_strike": hyp_strike,
-                "hyp_dip": hyp_dip,
-                "corner_0_lat": corner_0[0],
-                "corner_0_lon": corner_0[1],
-                "corner_0_depth": corner_0[2],
-                "corner_1_lat": corner_1[0],
-                "corner_1_lon": corner_1[1],
-                "corner_1_depth": corner_1[2],
-                "corner_2_lat": corner_2[0],
-                "corner_2_lon": corner_2[1],
-                "corner_2_depth": corner_2[2],
-                "corner_3_lat": corner_3[0],
-                "corner_3_lon": corner_3[1],
-                "corner_3_depth": corner_3[2],
             },
         ]
     )
 
-    return propagation_data_combo, extra_event_data
+    # Create the geometry data per plane
+    if event_id in srf_files:
+        geometry_rows = []
+        for plane_id, plane in enumerate(planes, start=1):
+            corners = plane.corners
+            geometry_rows.append(
+                {
+                    "evid": event_id,
+                    "plane_id": plane_id,
+                    "f_type": f_type,
+                    "strike": plane.strike,
+                    "dip": plane.dip,
+                    "rake": avg_rake[plane_id - 1],
+                    "f_length": plane.length,
+                    "f_width": plane.width,
+                    "z_tor": plane.top_m / 1000,
+                    "z_bor": plane.bottom_m / 1000,
+                    "hyp_lat": hyp_lat,
+                    "hyp_lon": hyp_lon,
+                    "hyp_strike": (
+                        hyp_strike if plane_id == hyp_plane_index + 1 else None
+                    ),
+                    "hyp_dip": hyp_dip if plane_id == hyp_plane_index + 1 else None,
+                    "corner_0_lat": corners[0][0],
+                    "corner_0_lon": corners[0][1],
+                    "corner_0_depth": corners[0][2] / 1000.0,
+                    "corner_1_lat": corners[1][0],
+                    "corner_1_lon": corners[1][1],
+                    "corner_1_depth": corners[1][2] / 1000.0,
+                    "corner_2_lat": corners[2][0],
+                    "corner_2_lon": corners[2][1],
+                    "corner_2_depth": corners[2][2] / 1000.0,
+                    "corner_3_lat": corners[3][0],
+                    "corner_3_lon": corners[3][1],
+                    "corner_3_depth": corners[3][2] / 1000.0,
+                }
+            )
+
+        geometry_data = pd.DataFrame(geometry_rows)
+    else:
+        geometry_data = pd.DataFrame(
+            [
+                {
+                    "evid": event_id,
+                    "plane_id": 1,
+                    "f_type": f_type,
+                    "strike": strike,
+                    "dip": dip,
+                    "rake": rake,
+                    "f_length": length,
+                    "f_width": dip_dist,
+                    "z_tor": ztor,
+                    "z_bor": dbottom,
+                    "hyp_lat": hyp_lat,
+                    "hyp_lon": hyp_lon,
+                    "hyp_strike": hyp_strike,
+                    "hyp_dip": hyp_dip,
+                    "corner_0_lat": corner_0[0],
+                    "corner_0_lon": corner_0[1],
+                    "corner_0_depth": corner_0[2] / 1000.0,
+                    "corner_1_lat": corner_1[0],
+                    "corner_1_lon": corner_1[1],
+                    "corner_1_depth": corner_1[2] / 1000.0,
+                    "corner_2_lat": corner_2[0],
+                    "corner_2_lon": corner_2[1],
+                    "corner_2_depth": corner_2[2] / 1000.0,
+                    "corner_3_lat": corner_3[0],
+                    "corner_3_lon": corner_3[1],
+                    "corner_3_depth": corner_3[2] / 1000.0,
+                }
+            ]
+        )
+
+    return propagation_data_combo, extra_event_data, geometry_data
+
+
+def perpendicular_height(
+    point: np.ndarray, base_start: np.ndarray, base_end: np.ndarray
+) -> float:
+    """
+    Compute perpendicular height from a point to a line defined by two points.
+
+    Parameters
+    ----------
+    point : np.ndarray, shape (3,)
+        The point from which the height is measured.
+    base_start : np.ndarray, shape (3,)
+        The start point of the line segment.
+    base_end : np.ndarray, shape (3,)
+        The end point of the line segment.
+
+    Returns
+    -------
+    float
+        The perpendicular height from the point to the line segment.
+    """
+    base_vec = base_end - base_start
+    point_vec = point - base_start
+    cross = np.cross(base_vec, point_vec)
+    base_len = np.linalg.norm(base_vec)
+    return np.linalg.norm(cross) / base_len if base_len else 0.0
+
+
+def inverse_square_integral(
+    sites: np.ndarray, p1: np.ndarray, p2: np.ndarray
+) -> np.ndarray:
+    """
+    Vectorized inverse square integral over a segment for multiple sites.
+
+    Parameters
+    ----------
+    sites : np.ndarray, shape (n_sites, 3)
+        The sites (x, y, z) coordinates.
+    p1 : np.ndarray, shape (3,)
+        The first point of the segment (x, y, z).
+    p2 : np.ndarray, shape (3,)
+        The second point of the segment (x, y, z).
+
+    Returns
+    -------
+    np.ndarray, shape (n_sites,)
+        The integral values for each site.
+    """
+    vec1 = p1 - sites
+    vec2 = p2 - p1
+    B = np.sum(vec1 * vec2, axis=1)
+    C = np.dot(vec2, vec2)
+    D = np.sum(np.cross(vec1, vec2) ** 2, axis=1)
+    sqrt_D = np.sqrt(D)
+    atan_diff = np.arctan2(C + B, sqrt_D) - np.arctan2(B, sqrt_D)
+    with np.errstate(divide="ignore", invalid="ignore"):
+        result = np.where(D > 0, atan_diff / sqrt_D, 0.0)
+    return result
+
+
+def compute_ravg_distance_vectorized(
+    seg_corners: np.ndarray, sites: np.ndarray
+) -> np.ndarray:
+    """
+    Vectorized Ravg calculation for multiple site locations.
+
+    Parameters
+    ----------
+    seg_corners : np.ndarray, shape (3, 4, n_segments)
+        Fault plane corner segments
+    sites : np.ndarray, shape (n_sites, 3)
+        Site (x, y, z) coordinates
+
+    Returns
+    -------
+    np.ndarray
+        Ravg values for each site, shape (n_sites,)
+    """
+    vertical_step = 0.1
+    n_sites = sites.shape[0]
+    n_segments = seg_corners.shape[2]
+    # Set the site depth to 0
+    sites[:, 2] = 0.0
+    sum_inv_rsq = np.zeros(n_sites)
+    for i in range(n_segments):
+        TL, TR, BR, BL = seg_corners[:, :, i].T
+        height = perpendicular_height(TL, TR, BR)
+        n_steps = np.ceil(height / vertical_step)
+        left_deltas = (BL - TL) / n_steps
+        right_deltas = (BR - TR) / n_steps
+        seg_start = TL + left_deltas * 0.5
+        seg_end = TR + right_deltas * 0.5
+        for _ in range(n_steps):
+            result = inverse_square_integral(sites, seg_start, seg_end)
+            sum_inv_rsq += result / (n_steps * n_segments)
+            seg_start += left_deltas
+            seg_end += right_deltas
+    return np.sqrt(1.0 / sum_inv_rsq)
 
 
 def distance_in_taupo(
@@ -773,15 +984,13 @@ def calc_distances(main_dir: Path, n_procs: int = 1):
     n_procs : int
         The number of processes to use for the calculation (per event)
     """
-    # Get the data / flatfile directory
-    data_dir = file_structure.get_data_dir()
+    # Get the flatfile directory
     flatfile_dir = file_structure.get_flatfile_dir(main_dir)
 
     # Get the modified CMT data
-    modified_cmt_file = (
-        data_dir / "GeoNet_CMT_solutions_20201129_PreferredNodalPlane_v1.csv"
+    modified_cmt_df = pd.read_csv(
+        NZGMDB_DATA.fetch("GeoNet_CMT_solutions_20201129_PreferredNodalPlane_v1.csv")
     )
-    modified_cmt_df = pd.read_csv(modified_cmt_file)
 
     # Get the regular CMT data
     config = cfg.Config()
@@ -795,12 +1004,12 @@ def calc_distances(main_dir: Path, n_procs: int = 1):
 
     # Get the focal domain
     domain_focal_df = pd.read_csv(
-        data_dir / "focal_mech_tectonic_domain_v1.csv", low_memory=False
+        NZGMDB_DATA.fetch("focal_mech_tectonic_domain_v1.csv"), low_memory=False
     )
 
     # Get the Taupo VZ polygon
     tect_domain_points = pd.read_csv(
-        data_dir / "tect_domain" / "tectonic_domain_polygon_points.csv",
+        NZGMDB_DATA.fetch("tectonic_domain_polygon_points.csv"),
         low_memory=False,
     )
     tvz_points = tect_domain_points[tect_domain_points.domain_no == 4][
@@ -814,23 +1023,13 @@ def calc_distances(main_dir: Path, n_procs: int = 1):
     )[0]
     taupo_polygon = Polygon(taupo_transform)
 
-    # Check the SrfSourceModels directory for the srf files
-    if not (data_dir / "SrfSourceModels").exists():
-        # Check for the SrfSourceModels.zip and unzip it
-        srf_zip = data_dir / "SrfSourceModels.zip"
-        if srf_zip.exists():
-            with zipfile.ZipFile(srf_zip, "r") as zip_ref:
-                # Extract all the contents to the destination directory
-                zip_ref.extractall(data_dir)
-        else:
-            raise FileNotFoundError(
-                "The SrfSourceModels directory and zip file does not exist"
-            )
-
-    # Get the srf files as a dictionary of file paths and event_id as the key
+    # Go through the registry keys and check if they are .srf files to use
     srf_files = {}
-    for srf_file in (data_dir / "SrfSourceModels").glob("*.srf"):
-        srf_files[srf_file.stem] = srf_file
+    for file in REGISTRY.keys():
+        if file.endswith(".srf"):
+            # If they are, add them to the srf files dictionary and fetch them
+            NZGMDB_DATA.fetch(file)
+            srf_files[Path(file).stem] = Path(NZGMDB_DATA.abspath) / file
 
     # Get the IM data to know what stations to calculate the distances for each event
     im_df = pd.read_csv(
@@ -880,9 +1079,10 @@ def calc_distances(main_dir: Path, n_procs: int = 1):
         )
 
     # Combine the results
-    propagation_results, extra_event_results = zip(*result_dfs)
+    propagation_results, extra_event_results, geometry_results = zip(*result_dfs)
     propagation_data = pd.concat(propagation_results)
     extra_event_data = pd.concat(extra_event_results)
+    geometry_data = pd.concat(geometry_results)
 
     # Merge the extra event data with the event data
     event_df = pd.merge(event_df, extra_event_data, on="evid", how="right")
@@ -890,6 +1090,10 @@ def calc_distances(main_dir: Path, n_procs: int = 1):
     # Save the results
     propagation_data.to_csv(
         flatfile_dir / file_structure.PreFlatfileNames.PROPAGATION_TABLE, index=False
+    )
+    geometry_data.to_csv(
+        flatfile_dir / file_structure.PreFlatfileNames.EARTHQUAKE_SOURCE_GEOMETRY,
+        index=False,
     )
     event_df.to_csv(
         flatfile_dir

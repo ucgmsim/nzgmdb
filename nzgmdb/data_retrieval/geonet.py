@@ -22,6 +22,7 @@ from scipy.interpolate import interp1d
 from nzgmdb.data_processing import filtering
 from nzgmdb.management import config as cfg
 from nzgmdb.management import custom_errors, file_structure
+from nzgmdb.management.data_registry import NZGMDB_DATA
 from nzgmdb.mseed_management import creation
 
 
@@ -900,11 +901,8 @@ def parse_geonet_information(
         client_NZ = FDSN_Client("GEONET")
     inventory = client_NZ.get_stations(channel=channel_codes, level="response")
 
-    # Get the data_dir
-    data_dir = file_structure.get_data_dir()
-
     # Get the rrup data
-    mw_rrup_data = np.loadtxt(data_dir / "Mw_rrup.txt")
+    mw_rrup_data = np.loadtxt(NZGMDB_DATA.fetch("Mw_rrup.txt"))
 
     # Get the site table
     flatfile_dir = file_structure.get_flatfile_dir(main_dir)

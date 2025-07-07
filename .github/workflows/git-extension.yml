@@ -7,12 +7,44 @@ permissions:
   pull-requests: write
 
 jobs:
-  test:
+  check-git-deps:
     runs-on: ubuntu-latest
+
     steps:
-      - uses: actions/checkout@v4
-      - run: sed -i '/git\+/ { /\.git$/! s/$/.git/ }' requirements.txt
-      - uses: parkerbxyz/suggest-changes@v2
-        with:
-          comment: 'Please change the following dependencies for consistency.'
-          event: 'REQUEST_CHANGES'
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+
+      - name: Set up Python
+        uses: actions/setup-python@v4
+
+      - name: Run Git dependency check
+        run: |
+            import tomllib
+            from pathlib import Path
+            import sys
+
+            pyproject_path = Path("pyproject.toml")
+            if not pyproject_path.exists():
+                print("Error: pyproject.toml not found in the current directory.")
+                sys.exit(1)
+
+            with open(pyproject_path, "rb") as f:
+                config = tomllib.load(f)
+
+            issues = []
+            for section in ["project", "project.optional-dependencies"]:
+                if section in config and "dependencies" in config[section]:
+                    deps = config[section]["dependencies"]
+                    for dep in deps:
+                        if "git+https://" in dep and not dep.endswith(".git"):
+                            issues.append(dep)
+
+            if issues:
+                print("The following git dependencies are missing the .git extension:")
+                for issue in issues:
+                    print(f"  - {issue}")
+                sys.exit(1)
+            else:
+                print("All git dependencies are correctly formatted.")
+        shell: python

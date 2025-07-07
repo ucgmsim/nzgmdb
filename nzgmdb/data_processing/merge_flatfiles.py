@@ -172,6 +172,10 @@ def merge_flatfiles(main_dir: Path, bypass_records_ffp: Path = None):
         / file_structure.PreFlatfileNames.EARTHQUAKE_SOURCE_TABLE_AFTERSHOCKS,
         dtype={"evid": str},
     )
+    geo_df = pd.read_csv(
+        flatfile_dir / file_structure.PreFlatfileNames.EARTHQUAKE_SOURCE_GEOMETRY,
+        dtype={"evid": str},
+    )
     sta_mag_df = pd.read_csv(
         flatfile_dir / file_structure.PreFlatfileNames.STATION_MAGNITUDE_TABLE_GEONET,
         dtype={"evid": str},
@@ -220,6 +224,7 @@ def merge_flatfiles(main_dir: Path, bypass_records_ffp: Path = None):
     unique_events = im_df.evid.unique()
     # Ensure that the other dfs only have the unique events
     event_df = event_df[event_df.evid.isin(unique_events)]
+    geo_df = geo_df[geo_df.evid.isin(unique_events)]
 
     phase_table_df = phase_table_df[
         phase_table_df["record_id"].isin(im_df["record_id"])
@@ -451,6 +456,7 @@ def merge_flatfiles(main_dir: Path, bypass_records_ffp: Path = None):
                 "r_hyp",
                 "r_jb",
                 "r_rup",
+                "r_avg",
                 "r_x",
                 "r_y",
                 "r_tvz",
@@ -565,6 +571,7 @@ def merge_flatfiles(main_dir: Path, bypass_records_ffp: Path = None):
             "r_hyp",
             "r_jb",
             "r_rup",
+            "r_avg",
             "r_x",
             "r_y",
             "r_tvz",
@@ -658,6 +665,10 @@ def merge_flatfiles(main_dir: Path, bypass_records_ffp: Path = None):
     event_df.to_csv(
         flatfile_dir / file_structure.FlatfileNames.EARTHQUAKE_SOURCE_TABLE, index=False
     )
+    geo_df.to_csv(
+        flatfile_dir / file_structure.FlatfileNames.EARTHQUAKE_SOURCE_GEOMETRY,
+        index=False,
+    )
     sta_mag_df.to_csv(
         flatfile_dir / file_structure.FlatfileNames.STATION_MAGNITUDE_TABLE, index=False
     )
@@ -727,7 +738,10 @@ def merge_dbs(
         main_df = pd.read_csv(flatfile_db_dir / flatfile_name, dtype={"evid": str})
         to_merge_df = pd.read_csv(to_merge_db_dir / flatfile_name, dtype={"evid": str})
 
-        if flatfile_name == file_structure.FlatfileNames.EARTHQUAKE_SOURCE_TABLE:
+        if flatfile_name in [
+            file_structure.FlatfileNames.EARTHQUAKE_SOURCE_TABLE,
+            file_structure.FlatfileNames.EARTHQUAKE_SOURCE_GEOMETRY,
+        ]:
             # Merge based on evid, replace values if they exist and append new ones
             main_df = pd.concat([main_df, to_merge_df]).drop_duplicates(
                 subset=["evid"], keep="last"
