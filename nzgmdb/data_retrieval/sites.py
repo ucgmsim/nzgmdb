@@ -11,7 +11,6 @@ import pandas as pd
 from obspy.clients.fdsn import Client as FDSN_Client
 
 from nzgmdb.data_retrieval import tect_domain
-from nzgmdb.management import config as cfg
 from nzgmdb.management.data_registry import NZGMDB_DATA
 from qcore import point_in_polygon
 from velocity_modelling import constants as vm_const
