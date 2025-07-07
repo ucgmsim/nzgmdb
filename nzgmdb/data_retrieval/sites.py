@@ -3,6 +3,8 @@ Creates the site table for the NZGMDB. This module fetches the station informati
 Geonet metadata summary information.
 """
 
+from pathlib import Path
+
 import fiona
 import numpy as np
 import pandas as pd
@@ -10,7 +12,7 @@ from obspy.clients.fdsn import Client as FDSN_Client
 
 from nzgmdb.data_retrieval import tect_domain
 from nzgmdb.management import config as cfg
-from nzgmdb.management import file_structure
+from nzgmdb.management.data_registry import NZGMDB_DATA
 from qcore import point_in_polygon
 from Velocity_Model.basins import basin_outlines_dict
 
@@ -46,8 +48,9 @@ def create_site_table_response() -> pd.DataFrame:
     sta_df = sta_df.drop_duplicates().reset_index(drop=True)
 
     # Get the Geonet metadata summary information
-    data_dir = file_structure.get_data_dir()
-    geo_meta_summary_df = pd.read_csv(data_dir / "Geonet  Metadata  Summary_v1.4.csv")
+    geo_meta_summary_df = pd.read_csv(
+        NZGMDB_DATA.fetch("Geonet_Metadata_Summary_v1.4.csv")
+    )
 
     # Rename the columns
     geo_meta_summary_df = geo_meta_summary_df.rename(
@@ -75,9 +78,14 @@ def create_site_table_response() -> pd.DataFrame:
     merged_df = geo_meta_summary_df.merge(
         sta_df[["net", "elev", "sta"]], on="sta", how="left"
     )
-    # Shape file for determining domain
+    # Specify the required files for fiona
+    NZGMDB_DATA.fetch("TectonicDomains_Feb2021_8_NZTM.shp")
+    NZGMDB_DATA.fetch("TectonicDomains_Feb2021_8_NZTM.dbf")
+    NZGMDB_DATA.fetch("TectonicDomains_Feb2021_8_NZTM.shx")
+
+    # Shape file for determining neotectonic domain
     shapes = list(
-        fiona.open(data_dir / "tect_domain" / "TectonicDomains_Feb2021_8_NZTM.shp")
+        fiona.open(Path(NZGMDB_DATA.abspath) / "TectonicDomains_Feb2021_8_NZTM.shp")
     )
     tect_merged_df = tect_domain.find_domain_from_shapes(merged_df, shapes)
 

@@ -18,6 +18,7 @@ class PreFlatfileNames(StrEnum):
     EARTHQUAKE_SOURCE_TABLE_TECTONIC = "earthquake_source_table_tectonic.csv"
     EARTHQUAKE_SOURCE_TABLE_DISTANCES = "earthquake_source_table_distances.csv"
     EARTHQUAKE_SOURCE_TABLE_AFTERSHOCKS = "earthquake_source_table_aftershocks.csv"
+    EARTHQUAKE_SOURCE_GEOMETRY = "earthquake_source_geometry_all.csv"
     PHASE_ARRIVAL_TABLE = "phase_arrival_table_all.csv"
     SITE_TABLE = "site_table_all.csv"
     PROPAGATION_TABLE = "propagation_path_table_all.csv"
@@ -31,6 +32,7 @@ class FlatfileNames(StrEnum):
     """
 
     EARTHQUAKE_SOURCE_TABLE = "earthquake_source_table.csv"
+    EARTHQUAKE_SOURCE_GEOMETRY = "earthquake_source_geometry.csv"
     STATION_MAGNITUDE_TABLE = "station_magnitude_table.csv"
     SITE_TABLE = "site_table.csv"
     PHASE_ARRIVAL_TABLE = "phase_arrival_table.csv"
@@ -162,16 +164,16 @@ def get_event_id_from_mseed(mseed_file: Path) -> str:
     return mseed_file.parent.parent.name
 
 
-def get_data_dir() -> Path:
+def get_config_dir() -> Path:
     """
-    Get the directory where data files are stored.
+    Get the directory where config files are stored.
 
     Returns
     -------
     Path
-        The directory containing the data files.
+        The directory containing the config files.
     """
-    return Path(__file__).parent.parent / "data"
+    return Path(__file__).parent.parent / "config"
 
 
 def get_snr_fas_dir(main_dir: Path) -> Path:

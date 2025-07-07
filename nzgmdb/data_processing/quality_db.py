@@ -30,6 +30,7 @@ def filter_flatfiles_on_catalouge(
     """
     file_to_filter = [
         FlatfileNames.EARTHQUAKE_SOURCE_TABLE,
+        FlatfileNames.EARTHQUAKE_SOURCE_GEOMETRY,
         FlatfileNames.FMAX,
         FlatfileNames.STATION_MAGNITUDE_TABLE,
         FlatfileNames.SITE_TABLE,
@@ -49,7 +50,10 @@ def filter_flatfiles_on_catalouge(
     for file in file_to_filter:
         # Load the new file and filter based on record_id
         df = pd.read_csv(flatfile_dir / file, dtype={"evid": str})
-        if file == FlatfileNames.EARTHQUAKE_SOURCE_TABLE:
+        if file in [
+            FlatfileNames.EARTHQUAKE_SOURCE_TABLE,
+            FlatfileNames.EARTHQUAKE_SOURCE_GEOMETRY,
+        ]:
             # filter by evid
             df_filtered = df[df["evid"].isin(rotd50_flat["evid"])]
         elif file == FlatfileNames.STATION_MAGNITUDE_TABLE:

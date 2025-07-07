@@ -12,7 +12,7 @@ import pandas as pd
 from pyproj import Transformer
 
 from nzgmdb.management import config as cfg
-from nzgmdb.management import file_structure
+from nzgmdb.management.data_registry import NZGMDB_DATA
 from qcore import geo, point_in_polygon
 
 
@@ -458,12 +458,14 @@ def add_tect_domain(
     n_procs : int
         The number of processes to use
     """
-    # Get the Data folder
-    data_dir = file_structure.get_data_dir()
+    # Specify the required files for fiona
+    NZGMDB_DATA.fetch("TectonicDomains_Feb2021_8_NZTM.shp")
+    NZGMDB_DATA.fetch("TectonicDomains_Feb2021_8_NZTM.dbf")
+    NZGMDB_DATA.fetch("TectonicDomains_Feb2021_8_NZTM.shx")
 
     # Shape file for determining neotectonic domain
     shapes = list(
-        fiona.open(data_dir / "tect_domain" / "TectonicDomains_Feb2021_8_NZTM.shp")
+        fiona.open(Path(NZGMDB_DATA.abspath) / "TectonicDomains_Feb2021_8_NZTM.shp")
     )
 
     # Read the geonet CMT and event data
@@ -487,14 +489,14 @@ def add_tect_domain(
 
     # Merge Kermadec and Hikurangi datasets into the fault regions
     region_a_offshore, region_b_on, region_c_downdip = create_regions(
-        fault_file=data_dir / "hik_kerm_fault_300km_wgs84_poslon.txt",
+        fault_file=Path(NZGMDB_DATA.fetch("hik_kerm_fault_300km_wgs84_poslon.txt")),
         d_s=10,  # Hayes et al., 2018
         d_d=47,  # Hayes et al., 2018
     )
 
     # Merge Puysegur dataset into the fault regions
     region_a_offshore, region_b_on, region_c_downdip = create_regions(
-        fault_file=data_dir / "puy_slab2_dep_02.26.18.xyz",
+        fault_file=Path(NZGMDB_DATA.fetch("puy_slab2_dep_02.26.18.xyz")),
         d_s=11,  # Hayes et al., 2018
         d_d=30,  # Hayes et al., 2018
         region_a_offshore=region_a_offshore,
