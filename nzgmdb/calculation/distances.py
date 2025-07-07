@@ -1,3 +1,8 @@
+"""
+This module contains functions to calculate distances between earthquake planes and sites, as well
+as determining the rupture plane geometry for a given event.
+"""
+
 import functools
 import multiprocessing as mp
 import zipfile
@@ -12,10 +17,10 @@ from pyproj import Transformer
 from shapely.geometry import Point
 from shapely.geometry.polygon import LineString, Polygon
 
-from empirical.util import estimations
 from nzgmdb.CCLD import ccldpy
 from nzgmdb.management import config as cfg
 from nzgmdb.management import file_structure
+from oq_wrapper import estimations
 from qcore import coordinates, geo, grid, src_site_dist
 from source_modelling import srf
 
@@ -24,22 +29,23 @@ def calc_fnorm_slip(
     strike: float, dip: float, rake: float
 ) -> tuple[np.ndarray, np.ndarray]:
     """
-    Calculate the normal and slip vectors from strike, dip and rake
+    Calculate the normal and slip vectors from strike, dip, and rake angles.
+
     Parameters
     ----------
     strike : float
-        The strike angle of the fault in degrees
+        The strike angle of the fault in degrees.
     dip : float
-        The dip angle of the fault in degrees
+        The dip angle of the fault in degrees.
     rake : float
-        The rake angle of the fault in degrees
+        The rake angle of the fault in degrees.
 
     Returns
     -------
     fnorm : np.ndarray
-        The normal vector of the fault
+        The normal vector of the fault.
     slip : np.ndarray
-        The slip vector of the fault
+        The slip vector of the fault.
     """
     phi = np.deg2rad(strike)
     delt = np.deg2rad(dip)
@@ -332,6 +338,8 @@ def get_nodal_plane_info(
         nodal_plane_info["length"] = sum([plane.length for plane in srf_model.planes])
         nodal_plane_info["dip_dist"] = sum([plane.width for plane in srf_model.planes])
 
+        nodal_plane_info["planes"] = srf_model.planes
+
         # Check if there is only 1 plane
         if len(srf_model.planes) == 1:
             plane = srf_model.planes[0]
@@ -470,6 +478,7 @@ def compute_distances_for_event(
         corner_1,
         corner_2,
         corner_3,
+        planes,
     ) = (
         nodal_plane_info["strike"],
         nodal_plane_info["rake"],
@@ -489,6 +498,7 @@ def compute_distances_for_event(
         nodal_plane_info["corner_1"],
         nodal_plane_info["corner_2"],
         nodal_plane_info["corner_3"],
+        nodal_plane_info["planes"],
     )
 
     if srf_header is None or srf_points is None:
@@ -572,6 +582,36 @@ def compute_distances_for_event(
     rxs, rys = src_site_dist.calc_rx_ry(srf_points, srf_header, stations)
     rrups_lat, rrups_lon = rrup_points[:, 0], rrup_points[:, 1]
 
+    # Get the segment corners for the srf or corners
+    if event_id in srf_files:
+        seg_corners = np.zeros((3, 4, len(planes)))
+        for i, plane in enumerate(planes):
+            for j, idx in enumerate([0, 1, 3, 2]):  # Ordering to match corner mapping
+                seg_corners[:, j, i] = (
+                    coordinates.wgs_depth_to_nztm(plane.corners[idx])[[1, 0, 2]]
+                    / 1000.0
+                )
+
+    else:
+        # If not in srf_files, use the nodal plane info corners
+        seg_corners = np.zeros((3, 4, 1))
+        for i, corner in enumerate(
+            [corner_0, corner_1, corner_3, corner_2]
+        ):  # Map to correct corner order
+            seg_corners[:, i, 0] = (
+                coordinates.wgs_depth_to_nztm(np.array(corner))[[1, 0, 2]] / 1000.0
+            )
+            # Times depth by 1000 to convert to km
+            seg_corners[:, i, 0][2] *= 1000.0
+
+    # Flip the stations index 0 and 1 to match for NZTM convention
+    nztm_stations = (
+        coordinates.wgs_depth_to_nztm(stations[:, [1, 0, 2]])[:, [1, 0, 2]] / 1000
+    )
+
+    # Calculate Ravg
+    ravgs = compute_ravg_distance_vectorized(seg_corners, nztm_stations)
+
     r_epis = geo.get_distances(
         np.dstack([event_sta_df.lon.values, event_sta_df.lat.values])[0],
         event_row["lon"],
@@ -615,6 +655,7 @@ def compute_distances_for_event(
                         "r_hyp": r_hyps[station_index],
                         "r_jb": rjbs[station_index],
                         "r_rup": rrups[station_index],
+                        "r_avg": ravgs[station_index],
                         "r_x": rxs[station_index],
                         "r_y": rys[station_index],
                         "r_tvz": tvz_lengths[station_index],
@@ -663,6 +704,105 @@ def compute_distances_for_event(
     )
 
     return propagation_data_combo, extra_event_data
+
+
+def perpendicular_height(
+    point: np.ndarray, base_start: np.ndarray, base_end: np.ndarray
+) -> float:
+    """
+    Compute perpendicular height from a point to a line defined by two points.
+
+    Parameters
+    ----------
+    point : np.ndarray, shape (3,)
+        The point from which the height is measured.
+    base_start : np.ndarray, shape (3,)
+        The start point of the line segment.
+    base_end : np.ndarray, shape (3,)
+        The end point of the line segment.
+
+    Returns
+    -------
+    float
+        The perpendicular height from the point to the line segment.
+    """
+    base_vec = base_end - base_start
+    point_vec = point - base_start
+    cross = np.cross(base_vec, point_vec)
+    base_len = np.linalg.norm(base_vec)
+    return np.linalg.norm(cross) / base_len if base_len else 0.0
+
+
+def inverse_square_integral(
+    sites: np.ndarray, p1: np.ndarray, p2: np.ndarray
+) -> np.ndarray:
+    """
+    Vectorized inverse square integral over a segment for multiple sites.
+
+    Parameters
+    ----------
+    sites : np.ndarray, shape (n_sites, 3)
+        The sites (x, y, z) coordinates.
+    p1 : np.ndarray, shape (3,)
+        The first point of the segment (x, y, z).
+    p2 : np.ndarray, shape (3,)
+        The second point of the segment (x, y, z).
+
+    Returns
+    -------
+    np.ndarray, shape (n_sites,)
+        The integral values for each site.
+    """
+    vec1 = p1 - sites
+    vec2 = p2 - p1
+    B = np.sum(vec1 * vec2, axis=1)
+    C = np.dot(vec2, vec2)
+    D = np.sum(np.cross(vec1, vec2) ** 2, axis=1)
+    sqrt_D = np.sqrt(D)
+    atan_diff = np.arctan2(C + B, sqrt_D) - np.arctan2(B, sqrt_D)
+    with np.errstate(divide="ignore", invalid="ignore"):
+        result = np.where(D > 0, atan_diff / sqrt_D, 0.0)
+    return result
+
+
+def compute_ravg_distance_vectorized(
+    seg_corners: np.ndarray, sites: np.ndarray
+) -> np.ndarray:
+    """
+    Vectorized Ravg calculation for multiple site locations.
+
+    Parameters
+    ----------
+    seg_corners : np.ndarray, shape (3, 4, n_segments)
+        Fault plane corner segments
+    sites : np.ndarray, shape (n_sites, 3)
+        Site (x, y, z) coordinates
+
+    Returns
+    -------
+    np.ndarray
+        Ravg values for each site, shape (n_sites,)
+    """
+    vertical_step = 0.1
+    n_sites = sites.shape[0]
+    n_segments = seg_corners.shape[2]
+    # Set the site depth to 0
+    sites[:, 2] = 0.0
+    sum_inv_rsq = np.zeros(n_sites)
+    for i in range(n_segments):
+        TL, TR, BR, BL = seg_corners[:, :, i].T
+        height = perpendicular_height(TL, TR, BR)
+        n_steps = np.ceil(height / vertical_step)
+        left_deltas = (BL - TL) / n_steps
+        right_deltas = (BR - TR) / n_steps
+        seg_start = TL + left_deltas * 0.5
+        seg_end = TR + right_deltas * 0.5
+        for _ in range(n_steps):
+            result = inverse_square_integral(sites, seg_start, seg_end)
+            sum_inv_rsq += result / (n_steps * n_segments)
+            seg_start += left_deltas
+            seg_end += right_deltas
+    return np.sqrt(1.0 / sum_inv_rsq)
 
 
 def distance_in_taupo(

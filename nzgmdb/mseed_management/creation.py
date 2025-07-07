@@ -1,3 +1,7 @@
+"""
+This module contains functions for creating mseed files from the waveform data from the FDSN client
+"""
+
 import http
 import http.client
 import time
@@ -19,8 +23,8 @@ from obspy.geodetics import kilometers2degrees
 from obspy.io.mseed import InternalMSEEDError, ObsPyMSEEDFilesizeTooSmallError
 from obspy.taup import TauPyModel
 
-from empirical.util import classdef, openquake_wrapper_vectorized, z_model_calculations
 from nzgmdb.management import config as cfg
+from oq_wrapper import constants, estimations, wrapper
 
 
 def get_waveforms(
@@ -61,13 +65,13 @@ def get_waveforms(
 
     Returns
     -------
-    st : Union[Stream, None]
+    Union[Stream, None]
         The stream object containing the waveform data or None if no data is found
     """
     config = cfg.Config()
     vs30 = config.get_value("vs30") if vs30 is None else vs30
     rake = 90  # Assume strike-slip for now
-    z1p0 = z_model_calculations.chiou_young_08_calc_z1p0(vs30)
+    z1p0 = estimations.chiou_young_08_calc_z1p0(vs30)
     # Predict significant duration time from Afshari and Stewart (2016)
     input_df = pd.DataFrame(
         {
@@ -78,9 +82,9 @@ def get_waveforms(
             "z1pt0": [z1p0],
         }
     )
-    result_df = openquake_wrapper_vectorized.oq_run(
-        classdef.GMM.AS_16,
-        classdef.TectType.ACTIVE_SHALLOW,
+    result_df = wrapper.run_gmm(
+        constants.GMM.AS_16,
+        constants.TectType.ACTIVE_SHALLOW,
         input_df,
         "Ds595",
     )
@@ -184,10 +188,12 @@ def split_stream_into_mseeds(st: Stream, unique_channels: Iterable, event_id: st
     unique_channels : Iterable
         An Iterable of tuples containing the unique channel and location for each mseed file created
         [(channel, location), ...]
+    event_id : str
+        The event id which is used if there is a raised issue with the mseed file
 
     Returns
     -------
-    mseeds : list
+    list
         A list of stream objects containing the waveform data for each mseed file created
     """
     mseeds = []
@@ -207,52 +213,6 @@ def split_stream_into_mseeds(st: Stream, unique_channels: Iterable, event_id: st
                 raised_issues.append(
                     [record_id, "Split stream, different sample rates"]
                 )
-
-        # Check again if the length of the traces is higher than 3
-        # if len(st_new) > 3:
-        # Save the stream image file
-        # try:
-        # st_new.plot(
-        #     outfile=f"/mnt/hypo_data/jri83/nzgmdb/stream_test/st_plots/{record_id}.png",
-        #     show=False,
-        # )
-        # write_stream_to_mseed(
-        #     st_new,
-        #     f"/mnt/hypo_data/jri83/nzgmdb/stream_test/st_plots/{record_id}.mseed",
-        # )
-        # except:
-        #     raised_issues.append([record_id, "Split stream, unable to save plot"])
-        # st_new.plot(
-        #     outfile=f"/home/joel/local/gmdb/testing_folder/3366146/st_plots/{record_id}.png",
-        #     show=False,
-        # )
-
-        # Get the longest traces start and end time
-        # try:
-        #     max_trace = max(
-        #         [
-        #             (
-        #                 len(tr),
-        #                 tr.stats.starttime,
-        #                 tr.stats.endtime,
-        #             )
-        #             for tr in st_new
-        #             if tr.stats.starttime != tr.stats.endtime
-        #         ],
-        #         key=lambda x: x[0],  # Compare based on the duration
-        #     )
-        #
-        #     _, max_starttime, max_endtime = max_trace
-        #
-        #     # Select the longest streams
-        #     st_new = st_new.trim(max_starttime, max_endtime)
-        #
-        #     # Add to the raised issues
-        #     raised_issues.append([record_id, "Split stream, multiple traces"])
-        # except:
-        #     raised_issues.append(
-        #         [record_id, "Unknown Issue, max arg empty sequence"]
-        #     )
 
         # Check the final length of the traces
         if len(st_new) != 3:

@@ -29,8 +29,6 @@ def process_batch(
         Holds the list of mseed files to process and the output directory.
     run_phasenet_script_ffp : Path
         The script full file path to run PhaseNet (In NZGMDB/phase_arrival).
-    output_dir : Path
-        The directory to save the results.
     conda_sh : Path
         The path to the conda.sh script. (Used to activate the conda PhaseNet environment)
     env_activate_command : str

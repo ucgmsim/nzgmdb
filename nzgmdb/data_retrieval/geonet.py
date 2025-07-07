@@ -7,6 +7,7 @@ import functools
 import io
 import multiprocessing as mp
 from pathlib import Path
+from typing import Any, NamedTuple
 
 import numpy as np
 import obspy
@@ -22,7 +23,21 @@ from nzgmdb.data_processing import filtering
 from nzgmdb.management import config as cfg
 from nzgmdb.management import custom_errors, file_structure
 from nzgmdb.mseed_management import creation
-from qcore import geo
+
+
+class EventData(NamedTuple):
+    """
+    A named tuple to store each events data.
+    """
+
+    event_line: list[Any]
+    """The full event line with all metadata."""
+    station_magnitudes: list[Any]
+    """List of custom station magnitudes with metadata."""
+    skipped_records: list[str]
+    """List of records skipped during processing."""
+    clipped_records: list[str]
+    """List of clipped records."""
 
 
 def get_max_magnitude(magnitudes: list[Magnitude], mag_type: str):
@@ -35,6 +50,11 @@ def get_max_magnitude(magnitudes: list[Magnitude], mag_type: str):
         The list of magnitudes to search through
     mag_type : str
         The magnitude type to search for
+
+    Returns
+    -------
+    float, None
+        The maximum magnitude of the given type or None if not found
     """
     filtered_mags = [
         mag for mag in magnitudes if mag.magnitude_type.lower() == mag_type
@@ -54,6 +74,11 @@ def fetch_event_line(event_cat: Event, event_id: str):
         The event catalog to fetch the data from
     event_id : str
         The event id to add to the event line
+
+    Returns
+    -------
+    list
+        The event line to be added to the event_df
     """
     reloc = "no"  # Indicates if an earthquake has been relocated, default to 'no'.
 
@@ -63,7 +88,6 @@ def fetch_event_line(event_cat: Event, event_id: str):
 
     # If the preferred origin is None, return None
     if preferred_origin is None:
-        print(f"Event {event_id} has no preferred origin")
         return None
 
     # Extract basic info from the catalog
@@ -176,7 +200,7 @@ def fetch_event_line(event_cat: Event, event_id: str):
 
 def get_stations_within_radius(
     event_cat: Event,
-    mw_rrup_data: interp1d,
+    mw_rrup_data: np.ndarray,
     inventory: Inventory,
 ):
     """
@@ -186,14 +210,14 @@ def get_stations_within_radius(
     ----------
     event_cat : Event
         The event catalog to fetch the event data from
-    mw_rrup_data : interp1d
-        The Mw_rrup data to get the max radius from the interpolation function
+    mw_rrup_data : np.ndarray
+        The Mw_rrup data to get the interpolation function to determine the max radius.
     inventory : Inventory
         The inventory of the stations from all networks to extract the stations from
 
     Returns
     -------
-    inv_sub : Inventory
+    Inventory
         The subset of the inventory with the stations within the radius
     """
     preferred_magnitude = event_cat.preferred_magnitude().mag
@@ -259,6 +283,15 @@ def fetch_sta_mag_line(
         The site table to extract the vs30 value from
     only_record_ids : pd.DataFrame (optional)
         Will only fetch the data for the record ids in the df
+
+    Returns
+    -------
+    list
+        The station magnitude line to be added to the sta_mag_df
+    list
+        The skipped records
+    list
+        The clipped records
     """
     sta_mag_line = []
     skipped_records = []
@@ -347,17 +380,7 @@ def fetch_sta_mag_line(
             )
 
         # Calculate clip to determine if the record should be dropped
-        try:
-            clip = filtering.get_clip_probability(pref_mag, r_hyp, mseed)
-        except:
-            stats = mseed[0].stats
-            skipped_records.append(
-                [
-                    f"{event_id}_{stats.station}_{stats.channel}_{stats.location}",
-                    "Clip calculation error",
-                ]
-            )
-            continue
+        clip = filtering.get_clip_probability(pref_mag, r_hyp, mseed)
 
         # Check if the record should be dropped
         if clip > threshold:
@@ -435,7 +458,7 @@ def fetch_event_data(
     client_NZ: FDSN_Client,
     inventory: Inventory,
     site_table: pd.DataFrame,
-    mw_rrup_data: interp1d,
+    mw_rrup_data: np.ndarray,
     only_sites: list[str] = None,
     only_record_ids: pd.DataFrame = None,
     n_procs: int = 1,
@@ -455,14 +478,19 @@ def fetch_event_data(
         The inventory of the stations from all networks to extract the stations from
     site_table : pd.DataFrame
         The site table to extract the vs30 value from
-    mw_rrup_data : interp1d
-        The Mw_rrup data to get the max radius from the interpolation function
+    mw_rrup_data : np.ndarray
+        The Mw_rrup data to get the interpolation function to determine the max radius.
     only_sites : list[str] (optional)
         Will only fetch the data for the sites in the list
     only_record_ids : pd.DataFrame (optional)
         Will only fetch the data for the record ids in the df, should all be a subset of the only_sites list
     n_procs : int (optional)
         The number of processes to run, to multiprocess over sites (when not using mp over events)
+
+    Returns
+    -------
+    EventData
+        The parsed event data.
     """
     # Get the catalog information
     cat = client_NZ.get_events(eventid=event_id)
@@ -543,7 +571,7 @@ def fetch_event_data(
     else:
         sta_mag_lines, skipped_records, clipped_records = None, None, None
 
-    return event_line, sta_mag_lines, skipped_records, clipped_records
+    return EventData(event_line, sta_mag_lines, skipped_records, clipped_records)
 
 
 def process_batch(
@@ -553,7 +581,7 @@ def process_batch(
     client_NZ: FDSN_Client,
     inventory: Inventory,
     site_table: pd.DataFrame,
-    mw_rrup_data: interp1d,
+    mw_rrup_data: np.ndarray,
     n_procs: int = 1,
     only_sites: list[str] = None,
     only_record_ids: pd.DataFrame = None,
@@ -576,8 +604,8 @@ def process_batch(
         The inventory of the stations from all networks to extract the stations from
     site_table : pd.DataFrame
         The site table to extract the vs30 value from
-    mw_rrup_data : interp1d
-        The Mw_rrup data to get the max radius from the interpolation function
+    mw_rrup_data : np.ndarray
+        The Mw_rrup data to get the interpolation function to determine the max radius.
     n_procs : int (optional)
         The number of processes to run
     only_sites : list[str] (optional)
@@ -735,6 +763,11 @@ def download_earthquake_data(
         The start date for the data extraction from the earthquake data
     end_date : datetime
         The end date for the data extraction from the earthquake data
+
+    Returns
+    -------
+    pd.DataFrame
+        The dataframe with the earthquake data from the geonet website
     """
     # Define bbox for New Zealand
     config = cfg.Config()
