@@ -115,11 +115,6 @@ def merge_reyners_catalogue_on_events(
     pd.DataFrame
         The event dataframe with the Reyners Catalogue data merged
     """
-    config = cfg.Config()
-    # Get the horizontal and vertical distance thresholds
-    h_thresh = config.get_value("reyners_horiz_dist_thresh")
-    v_thresh = config.get_value("reyners_vert_dist_thresh")
-
     event_df = event_df.merge(
         right=reyners_catalogue_df.loc[
             :, ["evid", "lon", "lat", "depth", "loc_type", "loc_grid"]
@@ -129,35 +124,7 @@ def merge_reyners_catalogue_on_events(
         suffixes=("", "_reyners"),
     )
 
-    # Compute the Horizontal and Vertical distance between the event and Reyners Catalogue data
-    event_df.loc[:, "h_dist"] = event_df.apply(
-        lambda row: geo.get_distances(
-            np.array([[row["lon"], row["lat"]]]), row["lon_reyners"], row["lat_reyners"]
-        )[0],
-        axis=1,
-    )
-
-    event_df.loc[:, "v_dist"] = (
-        event_df["depth"].to_numpy() - event_df["depth_reyners"].to_numpy()
-    )
-    # Set the Reyner value to NaN if the horizontal distance is greater than 10 km
-    # or the vertical distance is greater than 5 km
-    # Only if the loc_type is CMT
-    event_df.loc[
-        (
-            (event_df["h_dist"] > h_thresh)
-            | (event_df["v_dist"].abs() > v_thresh) & (event_df["loc_type"] == "CMT")
-        ),
-        [
-            "lon_reyners",
-            "lat_reyners",
-            "depth_reyners",
-            "loc_type_reyners",
-            "loc_grid_reyners",
-        ],
-    ] = np.nan
-
-    # Update the reloc column to True if the Reyners Catalogue data is used
+    # Update the reloc column to Reyners if the Reyners Catalogue data is used
     # And the latitude and Longitude did not change
     event_df["reloc"] = np.where(
         (
@@ -195,8 +162,6 @@ def merge_reyners_catalogue_on_events(
             "depth_reyners",
             "loc_type_reyners",
             "loc_grid_reyners",
-            "h_dist",
-            "v_dist",
         ]
     )
 
