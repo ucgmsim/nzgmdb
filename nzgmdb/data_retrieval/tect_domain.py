@@ -124,8 +124,8 @@ def merge_reyners_catalogue_on_events(
         suffixes=("", "_reyners"),
     )
 
-    # Update the reloc column to Reyners if the Reyners Catalogue data is used
-    # And the latitude and Longitude did not change
+    # Update the reloc column to 'reyners' if the event is in the Reyners Catalogue data
+    # and the latitude, longitude or depth did not change
     event_df["reloc"] = np.where(
         (
             (event_df["lon"] != event_df["lon_reyners"])
@@ -138,21 +138,13 @@ def merge_reyners_catalogue_on_events(
     )
 
     # Update the event dataframe with the Reyners Catalogue data when not nan
-    event_df["lon"] = event_df["lon_reyners"].where(
-        event_df["lon_reyners"].notna(), event_df["lon"]
+    event_df["lon"] = event_df["lon_reyners"].combine_first(event_df["lon"])
+    event_df["lat"] = event_df["lat_reyners"].combine_first(event_df["lat"])
+    event_df["depth"] = event_df["depth_reyners"].combine_first(event_df["depth"])
+    event_df["loc_type"] = event_df["loc_type_reyners"].combine_first(
+        event_df["loc_type"]
     )
-    event_df["lat"] = event_df["lat_reyners"].where(
-        event_df["lat_reyners"].notna(), event_df["lat"]
-    )
-    event_df["depth"] = event_df["depth_reyners"].where(
-        event_df["depth_reyners"].notna(), event_df["depth"]
-    )
-    event_df["loc_type"] = event_df["loc_type_reyners"].where(
-        event_df["loc_type_reyners"].notna(), event_df["loc_type"]
-    )
-    event_df["loc_grid"] = event_df["loc_grid_reyners"].where(
-        event_df["loc_grid_reyners"].notna(), event_df["loc_grid"]
-    )
+    event_df["loc_grid"] = event_df["loc_grid_reyners"].combine_first(event_df["loc_grid"])
 
     # Drop the Reyners Catalogue columns
     event_df = event_df.drop(
