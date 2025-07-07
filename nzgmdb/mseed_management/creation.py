@@ -127,12 +127,6 @@ def get_waveforms(
         site_only_record_ids = only_record_ids[
             only_record_ids["record_id"].str.contains(f"_{sta}_")
         ]
-        if len(site_only_record_ids) > 1:
-            print("Issue")
-        # Check that we only have 1 record_id
-        assert (
-            len(site_only_record_ids) == 1
-        ), "Multiple record_ids for the same event_sta combo"
         # Get the channel and location to use
         channel_codes = (
             site_only_record_ids["record_id"].str.split("_").str[-2].values[0] + "?"
