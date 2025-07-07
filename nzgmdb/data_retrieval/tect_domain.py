@@ -480,7 +480,7 @@ def add_tect_domain(
 
     # Merge in the Reyners Catalogue data for relocations
     reyners_catalogue_df = pd.read_csv(
-        data_dir / "reyners_relocations.csv", dtype={"evid": str}
+        NZGMDB_DATA.fetch("reyners_relocations.csv"), dtype={"evid": str}
     )
     event_df = merge_reyners_catalogue_on_events(event_df, reyners_catalogue_df)
 
