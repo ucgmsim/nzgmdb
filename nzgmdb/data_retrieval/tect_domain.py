@@ -96,6 +96,113 @@ def replace_cmt_data_on_event(
     return event_df.reset_index()
 
 
+def merge_reyners_catalogue_on_events(
+    event_df: pd.DataFrame,
+    reyners_catalogue_df: pd.DataFrame,
+):
+    """
+    Merge the Reyners catalogue data on the event data for relocations.
+
+    Parameters
+    ----------
+    event_df : pd.DataFrame
+        The event dataframe
+    reyners_catalogue_df : pd.DataFrame
+        The Reyners catalogue dataframe
+
+    Returns
+    -------
+    pd.DataFrame
+        The event dataframe with the Reyners Catalogue data merged
+    """
+    config = cfg.Config()
+    # Get the horizontal and vertical distance thresholds
+    h_thresh = config.get_value("reyners_horiz_dist_thresh")
+    v_thresh = config.get_value("reyners_vert_dist_thresh")
+
+    event_df = event_df.merge(
+        right=reyners_catalogue_df.loc[
+            :, ["evid", "lon", "lat", "depth", "loc_type", "loc_grid"]
+        ],
+        how="left",
+        on="evid",
+        suffixes=("", "_reyners"),
+    )
+
+    # Compute the Horizontal and Vertical distance between the event and Reyners Catalogue data
+    event_df.loc[:, "h_dist"] = event_df.apply(
+        lambda row: geo.get_distances(
+            np.array([[row["lon"], row["lat"]]]), row["lon_reyners"], row["lat_reyners"]
+        )[0],
+        axis=1,
+    )
+
+    event_df.loc[:, "v_dist"] = (
+        event_df["depth"].to_numpy() - event_df["depth_reyners"].to_numpy()
+    )
+    # Set the Reyner value to NaN if the horizontal distance is greater than 10 km
+    # or the vertical distance is greater than 5 km
+    # Only if the loc_type is CMT
+    event_df.loc[
+        (
+            (event_df["h_dist"] > h_thresh)
+            | (event_df["v_dist"].abs() > v_thresh) & (event_df["loc_type"] == "CMT")
+        ),
+        [
+            "lon_reyners",
+            "lat_reyners",
+            "depth_reyners",
+            "loc_type_reyners",
+            "loc_grid_reyners",
+        ],
+    ] = np.nan
+
+    # Update the reloc column to True if the Reyners Catalogue data is used
+    # And the latitude and Longitude did not change
+    event_df["reloc"] = np.where(
+        (
+            (event_df["lon"] != event_df["lon_reyners"])
+            | (event_df["lat"] != event_df["lat_reyners"])
+            | (event_df["depth"] != event_df["depth_reyners"])
+        )
+        & event_df["lon_reyners"].notna(),
+        "reyners",
+        "no",
+    )
+
+    # Update the event dataframe with the Reyners Catalogue data when not nan
+    event_df["lon"] = event_df["lon_reyners"].where(
+        event_df["lon_reyners"].notna(), event_df["lon"]
+    )
+    event_df["lat"] = event_df["lat_reyners"].where(
+        event_df["lat_reyners"].notna(), event_df["lat"]
+    )
+    event_df["depth"] = event_df["depth_reyners"].where(
+        event_df["depth_reyners"].notna(), event_df["depth"]
+    )
+    event_df["loc_type"] = event_df["loc_type_reyners"].where(
+        event_df["loc_type_reyners"].notna(), event_df["loc_type"]
+    )
+    event_df["loc_grid"] = event_df["loc_grid_reyners"].where(
+        event_df["loc_grid_reyners"].notna(), event_df["loc_grid"]
+    )
+
+    # Drop the Reyners Catalogue columns
+    event_df = event_df.drop(
+        columns=[
+            "lon_reyners",
+            "lat_reyners",
+            "depth_reyners",
+            "loc_type_reyners",
+            "loc_grid_reyners",
+            "h_dist",
+            "v_dist",
+        ]
+    )
+
+    return event_df
+
+
 def create_regions(
     fault_file: Path,
     d_s: float,
@@ -403,6 +510,12 @@ def add_tect_domain(
 
     # Replace the geonet CMT data on the event data
     event_df = replace_cmt_data_on_event(event_df, geonet_cmt_df)
+
+    # Merge in the Reyners Catalogue data for relocations
+    reyners_catalogue_df = pd.read_csv(
+        data_dir / "reyners_relocations.csv", dtype={"evid": str}
+    )
+    event_df = merge_reyners_catalogue_on_events(event_df, reyners_catalogue_df)
 
     # Merge the NZSMDB data
     event_df = merge_NZSMDB_flatfile_on_events(event_df)
