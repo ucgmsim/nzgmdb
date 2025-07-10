@@ -642,9 +642,9 @@ def apply_all_filters(
     )
 
     # Filter by clipped records
-    catalog, skipped_records_clipped = apply_clipNet_filter(
-        catalog, clipped_records_ffp, bypass_records
-    )
+    # catalog, skipped_records_clipped = apply_clipNet_filter(
+    #     catalog, clipped_records_ffp, bypass_records
+    # )
 
     # Filter by duplicate channels
     catalog, skipped_records_duplicate = filter_duplicate_channels(
