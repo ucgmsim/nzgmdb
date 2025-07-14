@@ -3,16 +3,18 @@ Creates the site table for the NZGMDB. This module fetches the station informati
 Geonet metadata summary information.
 """
 
+from pathlib import Path
+
 import fiona
 import numpy as np
 import pandas as pd
 from obspy.clients.fdsn import Client as FDSN_Client
 
 from nzgmdb.data_retrieval import tect_domain
-from nzgmdb.management import config as cfg
-from nzgmdb.management import file_structure
+from nzgmdb.management.data_registry import NZGMDB_DATA
 from qcore import point_in_polygon
-from Velocity_Model.basins import basin_outlines_dict
+from velocity_modelling import constants as vm_const
+from velocity_modelling.tools import basin_wiki
 
 
 def create_site_table_response() -> pd.DataFrame:
@@ -46,8 +48,9 @@ def create_site_table_response() -> pd.DataFrame:
     sta_df = sta_df.drop_duplicates().reset_index(drop=True)
 
     # Get the Geonet metadata summary information
-    data_dir = file_structure.get_data_dir()
-    geo_meta_summary_df = pd.read_csv(data_dir / "Geonet  Metadata  Summary_v1.4.csv")
+    geo_meta_summary_df = pd.read_csv(
+        NZGMDB_DATA.fetch("Geonet_Metadata_Summary_v1.4.csv")
+    )
 
     # Rename the columns
     geo_meta_summary_df = geo_meta_summary_df.rename(
@@ -75,9 +78,14 @@ def create_site_table_response() -> pd.DataFrame:
     merged_df = geo_meta_summary_df.merge(
         sta_df[["net", "elev", "sta"]], on="sta", how="left"
     )
-    # Shape file for determining domain
+    # Specify the required files for fiona
+    NZGMDB_DATA.fetch("TectonicDomains_Feb2021_8_NZTM.shp")
+    NZGMDB_DATA.fetch("TectonicDomains_Feb2021_8_NZTM.dbf")
+    NZGMDB_DATA.fetch("TectonicDomains_Feb2021_8_NZTM.shx")
+
+    # Shape file for determining neotectonic domain
     shapes = list(
-        fiona.open(data_dir / "tect_domain" / "TectonicDomains_Feb2021_8_NZTM.shp")
+        fiona.open(Path(NZGMDB_DATA.abspath) / "TectonicDomains_Feb2021_8_NZTM.shp")
     )
     tect_merged_df = tect_domain.find_domain_from_shapes(merged_df, shapes)
 
@@ -138,39 +146,16 @@ def add_site_basins(site_df: pd.DataFrame) -> pd.DataFrame:
     ll_points = site_df[["lon", "lat"]].values
     site_df["basin"] = None
 
-    # Define rename basins
-    rename_dict = {
-        "NewCanterburyBasinBoundary": "Canterbury",
-        "BPVBoundary": "Banks Peninsula volcanics",
-        "waitaki": "Waitaki",
-        "Napier1": "Napier",
-        "mackenzie": "Mackenzie",
-        "NorthCanterbury": "North Canterbury",
-        "dun": "Dun",
-        "WakatipuBasinOutlineWGS84": "Wakatipu",
-        "WaikatoHaurakiBasinEdge": "Waikato Hauraki",
-        "HawkesBay1": "Hawkes Bay",
-        "WanakaOutlineWGS84": "Wanaka",
-        "Porirua1": "Porirua",
-        "SpringsJ": "Springs Junction",
-        "CollingwoodBasinOutline": "Collingwood",
-        "GreaterWellington4": "Greater Wellington",
-    }
+    basin_versions = basin_wiki._get_basin_versions(vm_const.NZCVM_REGISTRY_PATH)
 
-    # Get the basin version
-    config = cfg.Config()
-    version = config.get_value("basin_version")
+    for basin_name, versions in basin_versions.items():
+        # Make sure to grab the latest version of the basin
+        latest_version = max(versions, key=lambda x: x["version_tuple"])
+        basin_data = latest_version["data"]
 
-    # Get the basin outlines
-    basin_outlines = basin_outlines_dict[version]
-
-    for cur_ffp in basin_outlines:
-        # Get the basin name and its rename
-        basin_name = cur_ffp.stem.split("_")[0].split(".")[0]
-        basin_name = rename_dict.get(basin_name, basin_name)
-
-        # Get the outline
-        basin_outline = np.loadtxt(cur_ffp)
+        # Load the basin outline
+        boundaries = basin_data.get("boundaries", [])
+        basin_outline = np.loadtxt(f"{vm_const.DATA_ROOT}/{boundaries[0]}")
 
         # Find sites within basin
         is_inside_basin = point_in_polygon.is_inside_postgis_parallel(

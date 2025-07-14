@@ -174,7 +174,7 @@ def generate_phase_arrival_table(
         bypass_df = pd.read_csv(bypass_records_ffp)
         phase_df = pd.merge(
             phase_df,
-            bypass_df[["record_id", "p_wave_ix"]],
+            bypass_df[["record_id", "p_wave_ix", "s_wave_ix"]],
             how="left",
             on="record_id",
             suffixes=("", "_bypass"),
@@ -183,12 +183,20 @@ def generate_phase_arrival_table(
         phase_df["p_wave_ix"] = phase_df["p_wave_ix_bypass"].combine_first(
             phase_df["p_wave_ix"]
         )
-        # Identify which rows were overridden
+        phase_df["s_wave_ix"] = phase_df["s_wave_ix_bypass"].combine_first(
+            phase_df["s_wave_ix"]
+        )
+        # Identify which rows were overridden for p_wave_ix
         overridden_mask = phase_df["p_wave_ix_bypass"].notnull()
         # Set corresponding p_wave_prob to 1.0 where overridden
         phase_df.loc[overridden_mask, "p_wave_prob"] = 1.0
 
-        phase_df = phase_df.drop(columns=["p_wave_ix_bypass"])
+        # Identify which rows were overridden for s_wave_ix
+        overridden_mask = phase_df["s_wave_ix_bypass"].notnull()
+        # Set corresponding s_wave_prob to 1.0 where overridden
+        phase_df.loc[overridden_mask, "s_wave_prob"] = 1.0
+
+        phase_df = phase_df.drop(columns=["p_wave_ix_bypass", "s_wave_ix_bypass"])
     # Ensure the p_wave_ix and s_wave_ix column is an int
     phase_df["p_wave_ix"] = phase_df["p_wave_ix"].astype(int)
     phase_df["s_wave_ix"] = phase_df["s_wave_ix"].astype(int)

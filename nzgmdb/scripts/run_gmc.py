@@ -271,7 +271,7 @@ def run_gmc_processing(
         bypass_df = pd.read_csv(bypass_records_ffp)
         # Merge in the bypass fmin values
         combined_df = combined_df.merge(
-            bypass_df[["record_id", "fmin_000", "fmin_090", "fmin_ver"]],
+            bypass_df[["record_id", "fmin_000", "fmin_090", "fmin_ver", "score_000", "score_090", "score_ver"]],
             left_on="record",
             right_on="record_id",
             how="left",
@@ -291,9 +291,20 @@ def run_gmc_processing(
             mask_ver, "fmin_ver"
         ].fillna(combined_df.loc[mask_ver, "fmin_mean"])
 
-        # Remove the fmin_000, fmin_090, fmin_ver, record_id_bypass columns
+        # Replace the score values with the bypass values if they are not nan
+        combined_df.loc[mask_000, "score_mean"] = combined_df.loc[
+            mask_000, "score_000"
+        ].fillna(combined_df.loc[mask_000, "score_mean"])
+        combined_df.loc[mask_090, "score_mean"] = combined_df.loc[
+            mask_090, "score_090"
+        ].fillna(combined_df.loc[mask_090, "score_mean"])
+        combined_df.loc[mask_ver, "score_mean"] = combined_df.loc[
+            mask_ver, "score_ver"
+        ].fillna(combined_df.loc[mask_ver, "score_mean"])
+
+        # Remove the bypass columns
         combined_df = combined_df.drop(
-            columns=["fmin_000", "fmin_090", "fmin_ver", "record_id_bypass"]
+            columns=["fmin_000", "fmin_090", "fmin_ver", "record_id_bypass", "score_000", "score_090", "score_ver"]
         )
 
     combined_df.to_csv(final_predictions_output, index=False)
