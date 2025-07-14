@@ -174,8 +174,8 @@ def main(
     pre_flatfiles_zip = zip_files(pre_flatfiles, output_dir, f"pre_flatfiles_{version}")
 
     # 5) Zip snr_fas_{ver}.zip
-    snr_files = list(snr_fas_dir.rglob("*.csv"))
-    snr_fas_zip = zip_files(snr_files, output_dir, f"snr_fas_{version}")
+    # snr_files = list(snr_fas_dir.rglob("*.csv"))
+    # snr_fas_zip = zip_files(snr_files, output_dir, f"snr_fas_{version}")
 
     # Upload everything to Dropbox
     dropbox_waveforms_path = f"{dropbox_version_dir}/waveforms"
@@ -199,7 +199,7 @@ def main(
     failed_files.append(upload_zip_to_dropbox(flatfiles_zip, dropbox_version_dir))
     failed_files.append(upload_zip_to_dropbox(skipped_zip, dropbox_version_dir))
     failed_files.append(upload_zip_to_dropbox(pre_flatfiles_zip, dropbox_version_dir))
-    failed_files.append(upload_zip_to_dropbox(snr_fas_zip, dropbox_version_dir))
+    # failed_files.append(upload_zip_to_dropbox(snr_fas_zip, dropbox_version_dir))
 
     # Remove any None values from the failed_files list
     failed_files = [f for f in failed_files if f is not None]
@@ -354,11 +354,11 @@ def download_dropbox_archive(
             zip_dir,
             flatfiles_dir,
         ),
-        (
-            f"{dropbox_version_dir}/{snr_fas_zip}",
-            zip_dir,
-            snr_fas_dir,
-        ),
+        # (
+        #     f"{dropbox_version_dir}/{snr_fas_zip}",
+        #     zip_dir,
+        #     snr_fas_dir,
+        # ),
         (f"{dropbox_version_dir}/{quality_zip}", zip_dir, quality_dir),
         (f"{dropbox_version_dir}/{skipped_zip}", zip_dir, flatfiles_dir),
     ]
