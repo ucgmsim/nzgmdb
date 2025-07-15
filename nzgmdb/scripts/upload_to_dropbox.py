@@ -327,6 +327,13 @@ def download_dropbox_archive(
     """
     Download the NZGMDB archive from Dropbox.
     And extract the contents into the output directory, setup for a NZGMDB pipeline run.
+
+    Parameters
+    ----------
+    output_dir : Path
+        Directory where the NZGMDB archive will be downloaded and extracted.
+    version : str
+        Version of the NZGMDB archive to download, e.g. "4p3".
     """
     dropbox_version_dir = f"{DROPBOX_PATH}/{version}"
 
@@ -411,7 +418,7 @@ def download_dropbox_archive(
             with zipfile.ZipFile(local_zip, "r") as zip_ref:
                 zip_ref.extractall(extract_dir)
             print(f"Downloaded and extracted {local_zip} to {extract_dir}")
-        except Exception as e:
+        except Exception as e:  # noqa: BLE001
             print(f"Failed to extract {local_zip}: {e}")
 
     # Manage the waveforms data structure
