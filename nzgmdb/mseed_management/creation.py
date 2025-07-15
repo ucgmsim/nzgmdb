@@ -124,15 +124,14 @@ def get_waveforms(
 
     # Check what channel codes and locations to use from only_record_ids if provided
     if only_record_ids is not None:
-        # Check that we only have 1 record_id
-        assert (
-            len(only_record_ids) == 1
-        ), "Multiple record_ids for the same event_sta combo"
+        site_only_record_ids = only_record_ids[
+            only_record_ids["record_id"].str.contains(f"_{sta}_")
+        ]
         # Get the channel and location to use
         channel_codes = (
-            only_record_ids["record_id"].str.split("_").str[-2].values[0] + "?"
+            site_only_record_ids["record_id"].str.split("_").str[-2].values[0] + "?"
         )
-        location = only_record_ids["record_id"].str.split("_").str[-1].values[0]
+        location = site_only_record_ids["record_id"].str.split("_").str[-1].values[0]
 
     # Get the waveforms with multiple retries when IncompleteReadError occurs
     max_retries = 3
