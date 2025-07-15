@@ -174,14 +174,14 @@ def main(
     pre_flatfiles_zip = zip_files(pre_flatfiles, output_dir, f"pre_flatfiles_{version}")
 
     # 5) Zip snr_fas_{ver}.zip
-    # snr_files = list(snr_fas_dir.rglob("*.csv"))
-    # snr_fas_zip = zip_files(snr_files, output_dir, f"snr_fas_{version}")
+    snr_files = list(snr_fas_dir.rglob("*.csv"))
+    snr_fas_zip = zip_files(snr_files, output_dir, f"snr_fas_{version}")
 
     # Upload everything to Dropbox
     failed_files = upload_zip_to_dropbox(flatfiles_zip, dropbox_version_dir)
     failed_files.append(upload_zip_to_dropbox(skipped_zip, dropbox_version_dir))
     failed_files.append(upload_zip_to_dropbox(pre_flatfiles_zip, dropbox_version_dir))
-    # failed_files.append(upload_zip_to_dropbox(snr_fas_zip, dropbox_version_dir))
+    failed_files.append(upload_zip_to_dropbox(snr_fas_zip, dropbox_version_dir))
 
     dropbox_waveforms_path = f"{dropbox_version_dir}/waveforms"
     # Upload waveform year zips
@@ -353,25 +353,33 @@ def download_dropbox_archive(
 
     # List of (dropbox_zip_path, local_zip_path, extract_dir)
     zips_to_download = [
-        (f"{dropbox_version_dir}/{flatfiles_zip}", zip_dir, flatfiles_dir),
+        (
+            f"{dropbox_version_dir}/{flatfiles_zip}",
+            zip_dir / flatfiles_zip,
+            flatfiles_dir,
+        ),
         (
             f"{dropbox_version_dir}/{pre_flatfiles_zip}",
             zip_dir / pre_flatfiles_zip,
             flatfiles_dir,
         ),
-        # (
-        #     f"{dropbox_version_dir}/{snr_fas_zip}",
-        #     zip_dir,
-        #     snr_fas_dir,
-        # ),
-        (f"{dropbox_version_dir}/{quality_zip}", zip_dir / quality_dir, quality_dir),
-        (f"{dropbox_version_dir}/{skipped_zip}", zip_dir / quality_dir, flatfiles_dir),
+        (
+            f"{dropbox_version_dir}/{snr_fas_zip}",
+            zip_dir / snr_fas_zip,
+            snr_fas_dir,
+        ),
+        (f"{dropbox_version_dir}/{quality_zip}", zip_dir / quality_zip, quality_dir),
+        (f"{dropbox_version_dir}/{skipped_zip}", zip_dir / skipped_zip, flatfiles_dir),
     ]
 
     # Gather the list of waveform zip files from Dropbox
     dropbox_waveforms_dir = f"{DROPBOX_PATH}/{version}/waveforms"
-    cmd = f"rclone lsf {dropbox_waveforms_dir}"
-    result = subprocess.run(cmd, shell=True, capture_output=True, text=True)
+    result = subprocess.run(
+        ["rclone", "lsf", dropbox_waveforms_dir],
+        shell=False,
+        capture_output=True,
+        text=True,
+    )
     waveform_files = [
         line.strip()
         for line in result.stdout.splitlines()
@@ -391,8 +399,8 @@ def download_dropbox_archive(
     for dropbox_zip, local_zip, extract_dir in zips_to_download:
         try:
             subprocess.check_call(
-                f"rclone copy {dropbox_zip} {zip_dir}",
-                shell=True,
+                ["rclone", "copy", dropbox_zip, str(zip_dir)],
+                shell=False,
                 stdout=subprocess.PIPE,
                 stderr=subprocess.PIPE,
             )

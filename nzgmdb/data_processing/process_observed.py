@@ -97,7 +97,7 @@ def process_single_mseed(
         skipped_record = pd.DataFrame([skipped_record_dict])
         return skipped_record
 
-    # Get the GMC fmin and fmax values
+    # Get the GMC fmin values
     fmin_h = (
         None
         if gmc_rows is None or gmc_rows.empty
@@ -108,6 +108,8 @@ def process_single_mseed(
         if gmc_rows is None or gmc_rows.empty
         else gmc_rows[gmc_rows["component"] == "Z"]["fmin_mean"].iloc[0]
     )
+
+    # Get the fmax values
     fmax_rows = None if fmax_df is None else fmax_df[fmax_df["record_id"] == mseed_stem]
     fmax_h = (
         None
@@ -121,11 +123,13 @@ def process_single_mseed(
     # Check if the record is in the bypass records
     if bypass_df is not None:
         if mseed_stem in bypass_df["record_id"].values:
-            bypass_row = bypass_df[bypass_df["record_id"] == mseed_stem]
-            fmin_bypass_h = max(bypass_row.loc[:, ["fmin_000", "fmin_090"]].values[0])
-            fmin_bypass_v = bypass_row["fmin_ver"].iloc[0]
-            fmax_bypass_h = min(bypass_row.loc[:, ["fmax_000", "fmax_090"]].values[0])
-            fmax_bypass_v = bypass_row["fmax_ver"].iloc[0]
+            bypass_row_data = bypass_df.loc[bypass_df["record_id"] == mseed_stem].iloc[
+                0
+            ]
+            fmin_bypass_h = bypass_row_data[["fmin_000", "fmin_090"]].max()
+            fmin_bypass_v = bypass_row_data["fmin_ver"]
+            fmax_bypass_h = bypass_row_data[["fmax_000", "fmax_090"]].min()
+            fmax_bypass_v = bypass_row_data["fmax_ver"]
             fmin_h = fmin_h if np.isnan(fmin_bypass_h) else fmin_bypass_h
             fmin_v = fmin_v if np.isnan(fmin_bypass_v) else fmin_bypass_v
             fmax_h = fmax_h if np.isnan(fmax_bypass_h) else fmax_bypass_h

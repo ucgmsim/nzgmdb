@@ -96,70 +96,6 @@ def replace_cmt_data_on_event(
     return event_df.reset_index()
 
 
-def merge_reyners_catalogue_on_events(
-    event_df: pd.DataFrame,
-    reyners_catalogue_df: pd.DataFrame,
-):
-    """
-    Merge the Reyners catalogue data on the event data for relocations.
-
-    Parameters
-    ----------
-    event_df : pd.DataFrame
-        The event dataframe
-    reyners_catalogue_df : pd.DataFrame
-        The Reyners catalogue dataframe
-
-    Returns
-    -------
-    pd.DataFrame
-        The event dataframe with the Reyners Catalogue data merged
-    """
-    event_df = event_df.merge(
-        right=reyners_catalogue_df.loc[
-            :, ["evid", "lon", "lat", "depth", "loc_type", "loc_grid"]
-        ],
-        how="left",
-        on="evid",
-        suffixes=("", "_reyners"),
-    )
-
-    # Update the reloc column to 'reyners' if the event is in the Reyners Catalogue data
-    # and the latitude, longitude or depth did not change
-    event_df["reloc"] = np.where(
-        (
-            (event_df["lon"] != event_df["lon_reyners"])
-            | (event_df["lat"] != event_df["lat_reyners"])
-            | (event_df["depth"] != event_df["depth_reyners"])
-        )
-        & event_df["lon_reyners"].notna(),
-        "reyners",
-        "no",
-    )
-
-    # Update the event dataframe with the Reyners Catalogue data when not nan
-    event_df["lon"] = event_df["lon_reyners"].combine_first(event_df["lon"])
-    event_df["lat"] = event_df["lat_reyners"].combine_first(event_df["lat"])
-    event_df["depth"] = event_df["depth_reyners"].combine_first(event_df["depth"])
-    event_df["loc_type"] = event_df["loc_type_reyners"].combine_first(
-        event_df["loc_type"]
-    )
-    event_df["loc_grid"] = event_df["loc_grid_reyners"].combine_first(event_df["loc_grid"])
-
-    # Drop the Reyners Catalogue columns
-    event_df = event_df.drop(
-        columns=[
-            "lon_reyners",
-            "lat_reyners",
-            "depth_reyners",
-            "loc_type_reyners",
-            "loc_grid_reyners",
-        ]
-    )
-
-    return event_df
-
-
 def create_regions(
     fault_file: Path,
     d_s: float,
@@ -469,12 +405,6 @@ def add_tect_domain(
 
     # Replace the geonet CMT data on the event data
     event_df = replace_cmt_data_on_event(event_df, geonet_cmt_df)
-
-    # Merge in the Reyners Catalogue data for relocations
-    reyners_catalogue_df = pd.read_csv(
-        NZGMDB_DATA.fetch("reyners_relocations.csv"), dtype={"evid": str}
-    )
-    event_df = merge_reyners_catalogue_on_events(event_df, reyners_catalogue_df)
 
     # Merge the NZSMDB data
     event_df = merge_NZSMDB_flatfile_on_events(event_df)
