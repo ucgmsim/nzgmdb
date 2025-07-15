@@ -98,26 +98,38 @@ def process_single_mseed(
         return skipped_record
 
     # Get the GMC fmin and fmax values
-    fmin = None if gmc_rows is None or gmc_rows.empty else gmc_rows["fmin_mean"].max()
+    fmin_h = (
+        None
+        if gmc_rows is None or gmc_rows.empty
+        else gmc_rows[gmc_rows["component"].isin(["X", "Y"])]["fmin_mean"].max()
+    )
+    fmin_v = (
+        None
+        if gmc_rows is None or gmc_rows.empty
+        else gmc_rows[gmc_rows["component"] == "Z"]["fmin_mean"].iloc[0]
+    )
     fmax_rows = None if fmax_df is None else fmax_df[fmax_df["record_id"] == mseed_stem]
-    fmax = (
+    fmax_h = (
         None
         if fmax_df is None or fmax_rows.empty
-        else min(fmax_rows.loc[:, ["fmax_000", "fmax_090", "fmax_ver"]].values[0])
+        else min(fmax_rows.loc[:, ["fmax_000", "fmax_090"]].values[0])
+    )
+    fmax_v = (
+        None if fmax_df is None or fmax_rows.empty else fmax_rows["fmax_ver"].iloc[0]
     )
 
-    # Check if the record is in the bypass records (Only if there wasnt an existing fmin, fmax)
-    if bypass_df is not None and (fmin is None or fmax is None):
+    # Check if the record is in the bypass records
+    if bypass_df is not None:
         if mseed_stem in bypass_df["record_id"].values:
             bypass_row = bypass_df[bypass_df["record_id"] == mseed_stem]
-            fmin_bypass = max(
-                bypass_row.loc[:, ["fmin_000", "fmin_090", "fmin_ver"]].values[0]
-            )
-            fmax_bypass = min(
-                bypass_row.loc[:, ["fmax_000", "fmax_090", "fmax_ver"]].values[0]
-            )
-            fmin = None if np.isnan(fmin_bypass) else fmin_bypass
-            fmax = None if np.isnan(fmax_bypass) else fmax_bypass
+            fmin_bypass_h = max(bypass_row.loc[:, ["fmin_000", "fmin_090"]].values[0])
+            fmin_bypass_v = bypass_row["fmin_ver"].iloc[0]
+            fmax_bypass_h = min(bypass_row.loc[:, ["fmax_000", "fmax_090"]].values[0])
+            fmax_bypass_v = bypass_row["fmax_ver"].iloc[0]
+            fmin_h = fmin_h if np.isnan(fmin_bypass_h) else fmin_bypass_h
+            fmin_v = fmin_v if np.isnan(fmin_bypass_v) else fmin_bypass_v
+            fmax_h = fmax_h if np.isnan(fmax_bypass_h) else fmax_bypass_h
+            fmax_v = fmax_v if np.isnan(fmax_bypass_v) else fmax_bypass_v
 
     # Perform high and lowcut processing
     try:
@@ -125,7 +137,9 @@ def process_single_mseed(
             acc_bb_000,
             acc_bb_090,
             acc_bb_ver,
-        ) = waveform_manipulation.high_and_low_cut_processing(mseed, dt, fmin, fmax)
+        ) = waveform_manipulation.high_and_low_cut_processing(
+            mseed, dt, fmin_h, fmin_v, fmax_h, fmax_v
+        )
     except custom_errors.InvalidTraceLengthError:
         skipped_record_dict = {
             "record_id": mseed_stem,

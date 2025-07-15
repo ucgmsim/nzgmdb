@@ -308,7 +308,8 @@ def filter_fmin(
     catalog: pd.DataFrame, fmin_max: float, bypass_records: np.ndarray = None
 ):
     """
-    Filter the catalog based on the fmin_max value
+    Filter the catalog based on the fmin max value for the fmin_X and fmin_Y.
+    (Horizontal components only, vertical component is not considered)
 
     Parameters
     ----------
@@ -327,7 +328,9 @@ def filter_fmin(
         The skipped records
     """
     # Find records that have too high of a fmin_max value
-    fmin_max_filter = catalog[catalog["fmin_max"] > fmin_max]
+    fmin_max_filter = catalog[
+        catalog[["fmin_X", "fmin_Y"]].apply(max, axis=1) > fmin_max
+    ]
 
     # Remove the bypass records if they exist
     if bypass_records is not None:

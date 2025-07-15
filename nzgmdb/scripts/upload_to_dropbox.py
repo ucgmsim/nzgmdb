@@ -351,7 +351,7 @@ def download_dropbox_archive(
         (f"{dropbox_version_dir}/{flatfiles_zip}", zip_dir, flatfiles_dir),
         (
             f"{dropbox_version_dir}/{pre_flatfiles_zip}",
-            zip_dir,
+            zip_dir / pre_flatfiles_zip,
             flatfiles_dir,
         ),
         # (
@@ -359,8 +359,8 @@ def download_dropbox_archive(
         #     zip_dir,
         #     snr_fas_dir,
         # ),
-        (f"{dropbox_version_dir}/{quality_zip}", zip_dir, quality_dir),
-        (f"{dropbox_version_dir}/{skipped_zip}", zip_dir, flatfiles_dir),
+        (f"{dropbox_version_dir}/{quality_zip}", zip_dir / quality_dir, quality_dir),
+        (f"{dropbox_version_dir}/{skipped_zip}", zip_dir / quality_dir, flatfiles_dir),
     ]
 
     # Gather the list of waveform zip files from Dropbox
