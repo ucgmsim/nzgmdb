@@ -178,12 +178,22 @@ def main(
     # snr_fas_zip = zip_files(snr_files, output_dir, f"snr_fas_{version}")
 
     # Upload everything to Dropbox
+    failed_files = upload_zip_to_dropbox(flatfiles_zip, dropbox_version_dir)
+    failed_files.append(upload_zip_to_dropbox(skipped_zip, dropbox_version_dir))
+    failed_files.append(upload_zip_to_dropbox(pre_flatfiles_zip, dropbox_version_dir))
+    # failed_files.append(upload_zip_to_dropbox(snr_fas_zip, dropbox_version_dir))
+
     dropbox_waveforms_path = f"{dropbox_version_dir}/waveforms"
     # Upload waveform year zips
     with mp.Pool(n_procs) as pool:
-        failed_files = pool.starmap(
-            upload_zip_to_dropbox,
-            [(zip_file, dropbox_waveforms_path) for zip_file in waveforms_zip_files],
+        failed_files.extend(
+            pool.starmap(
+                upload_zip_to_dropbox,
+                [
+                    (zip_file, dropbox_waveforms_path)
+                    for zip_file in waveforms_zip_files
+                ],
+            )
         )
     # Upload event zips
     for year, event_zips in event_zips.items():
@@ -195,11 +205,6 @@ def main(
                     [(zip_file, dropbox_year_path) for zip_file in event_zips],
                 )
             )
-
-    failed_files.append(upload_zip_to_dropbox(flatfiles_zip, dropbox_version_dir))
-    failed_files.append(upload_zip_to_dropbox(skipped_zip, dropbox_version_dir))
-    failed_files.append(upload_zip_to_dropbox(pre_flatfiles_zip, dropbox_version_dir))
-    # failed_files.append(upload_zip_to_dropbox(snr_fas_zip, dropbox_version_dir))
 
     # Remove any None values from the failed_files list
     failed_files = [f for f in failed_files if f is not None]
