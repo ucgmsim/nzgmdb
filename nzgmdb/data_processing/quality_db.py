@@ -255,14 +255,15 @@ def filter_fmax(
     catalog: pd.DataFrame, fmax_min: float, bypass_records: np.ndarray = None
 ):
     """
-    Filter the catalog based on the fmax_min value
+    Filter the catalog based on the fmax_min value for the fmax_X and fmax_Y.
+    (Horizontal components only, vertical component is not considered)
 
     Parameters
     ----------
     catalog : pd.DataFrame
         The catalog dataframe to filter
     fmax_min : float
-        The minimum fmax value to filter on
+        The minimum fmax value to filter on horizontal components
     bypass_records : np.ndarray, optional
         The records to bypass the quality checks
 
@@ -274,9 +275,7 @@ def filter_fmax(
         The skipped records
     """
     # Find fmax_min
-    catalog.loc[:, "fmax_min"] = catalog[["fmax_X", "fmax_Y", "fmax_Z"]].apply(
-        min, axis=1
-    )
+    catalog.loc[:, "fmax_min"] = catalog[["fmax_X", "fmax_Y"]].apply(min, axis=1)
 
     # Find records that have too low of a fmax_min value
     fmax_min_filter = catalog[catalog["fmax_min"] < fmax_min]
@@ -316,7 +315,7 @@ def filter_fmin(
     catalog : pd.DataFrame
         The catalog dataframe to filter
     fmin_max : float
-        The maximum fmin value to filter on
+        The maximum fmin value to filter on horizontal components
     bypass_records : np.ndarray, optional
         The records to bypass the quality checks
 
