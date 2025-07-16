@@ -150,7 +150,7 @@ def main(
     # flatfiles_zip = zip_files(flatfiles, output_dir, f"flatfiles_{version}")
 
     # Check if there is a quality_db directory and zip it
-    # quality_db_dir = input_dir / "quality_db"
+    quality_db_dir = input_dir / "quality_db"
     # if quality_db_dir.exists():
     #     quality_db_files = list(quality_db_dir.rglob("*.csv"))
     #     quality_db_zip = zip_files(
