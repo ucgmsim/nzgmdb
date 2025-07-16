@@ -38,9 +38,9 @@ def zip_files(file_list: list, output_dir: Path, zip_name: str):
         The path to the zip file
     """
     zip_filename = output_dir / f"{zip_name}.zip"
-    with zipfile.ZipFile(zip_filename, "w", zipfile.ZIP_DEFLATED) as zipf:
-        for file_path in file_list:
-            zipf.write(file_path, arcname=file_path.name)
+    # with zipfile.ZipFile(zip_filename, "w", zipfile.ZIP_DEFLATED) as zipf:
+    #     for file_path in file_list:
+    #         zipf.write(file_path, arcname=file_path.name)
     return zip_filename  # Return zip file path for later use
 
 
@@ -146,19 +146,19 @@ def main(
         event_zips[year_folder.name] = year_event_zips
 
     # 2) Zip flatfiles_{ver}.zip
-    flatfiles = [flatfiles_dir / file for file in file_structure.FlatfileNames]
-    flatfiles_zip = zip_files(flatfiles, output_dir, f"flatfiles_{version}")
+    # flatfiles = [flatfiles_dir / file for file in file_structure.FlatfileNames]
+    # flatfiles_zip = zip_files(flatfiles, output_dir, f"flatfiles_{version}")
 
     # Check if there is a quality_db directory and zip it
-    quality_db_dir = input_dir / "quality_db"
-    if quality_db_dir.exists():
-        quality_db_files = list(quality_db_dir.rglob("*.csv"))
-        quality_db_zip = zip_files(
-            quality_db_files, output_dir, f"quality_flatfiles_{version}"
-        )
-
-        # Upload quality_db zip to Dropbox
-        upload_zip_to_dropbox(quality_db_zip, dropbox_version_dir)
+    # quality_db_dir = input_dir / "quality_db"
+    # if quality_db_dir.exists():
+    #     quality_db_files = list(quality_db_dir.rglob("*.csv"))
+    #     quality_db_zip = zip_files(
+    #         quality_db_files, output_dir, f"quality_flatfiles_{version}"
+    #     )
+    #
+    #     # Upload quality_db zip to Dropbox
+    #     upload_zip_to_dropbox(quality_db_zip, dropbox_version_dir)
 
     # 3) Zip skipped_{ver}.zip
     skipped_files = [
@@ -178,7 +178,8 @@ def main(
     # snr_fas_zip = zip_files(snr_files, output_dir, f"snr_fas_{version}")
 
     # Upload everything to Dropbox
-    failed_files = upload_zip_to_dropbox(flatfiles_zip, dropbox_version_dir)
+    failed_files = []
+    # failed_files.append(upload_zip_to_dropbox(flatfiles_zip, dropbox_version_dir))
     failed_files.append(upload_zip_to_dropbox(skipped_zip, dropbox_version_dir))
     failed_files.append(upload_zip_to_dropbox(pre_flatfiles_zip, dropbox_version_dir))
     # failed_files.append(upload_zip_to_dropbox(snr_fas_zip, dropbox_version_dir))
