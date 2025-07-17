@@ -255,14 +255,15 @@ def filter_fmax(
     catalog: pd.DataFrame, fmax_min: float, bypass_records: np.ndarray = None
 ):
     """
-    Filter the catalog based on the fmax_min value
+    Filter the catalog based on the fmax_min value for the fmax_X and fmax_Y.
+    (Horizontal components only, vertical component is not considered)
 
     Parameters
     ----------
     catalog : pd.DataFrame
         The catalog dataframe to filter
     fmax_min : float
-        The minimum fmax value to filter on
+        The minimum fmax value to filter on horizontal components
     bypass_records : np.ndarray, optional
         The records to bypass the quality checks
 
@@ -274,9 +275,7 @@ def filter_fmax(
         The skipped records
     """
     # Find fmax_min
-    catalog.loc[:, "fmax_min"] = catalog[["fmax_X", "fmax_Y", "fmax_Z"]].apply(
-        min, axis=1
-    )
+    catalog.loc[:, "fmax_min"] = catalog[["fmax_X", "fmax_Y"]].apply(min, axis=1)
 
     # Find records that have too low of a fmax_min value
     fmax_min_filter = catalog[catalog["fmax_min"] < fmax_min]
@@ -308,14 +307,15 @@ def filter_fmin(
     catalog: pd.DataFrame, fmin_max: float, bypass_records: np.ndarray = None
 ):
     """
-    Filter the catalog based on the fmin_max value
+    Filter the catalog based on the fmin max value for the fmin_X and fmin_Y.
+    (Horizontal components only, vertical component is not considered)
 
     Parameters
     ----------
     catalog : pd.DataFrame
         The catalog dataframe to filter
     fmin_max : float
-        The maximum fmin value to filter on
+        The maximum fmin value to filter on horizontal components
     bypass_records : np.ndarray, optional
         The records to bypass the quality checks
 
@@ -327,7 +327,7 @@ def filter_fmin(
         The skipped records
     """
     # Find records that have too high of a fmin_max value
-    fmin_max_filter = catalog[catalog["fmin_max"] > fmin_max]
+    fmin_max_filter = catalog[catalog[["fmin_X", "fmin_Y"]].max(axis=1) > fmin_max]
 
     # Remove the bypass records if they exist
     if bypass_records is not None:

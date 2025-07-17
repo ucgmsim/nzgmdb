@@ -521,10 +521,12 @@ def merge_flatfiles(main_dir: Path, bypass_records_ffp: Path = None):
         gm_im_df_flat[col] = gm_im_df_flat[col].fillna(default_fmin)
 
     # Add in colunms for fmin_max and fmin_highpass
-    gm_im_df_flat["fmin_max"] = gm_im_df_flat[["fmin_X", "fmin_Y", "fmin_Z"]].apply(
-        max, axis=1
-    )
-    gm_im_df_flat["HPF"] = gm_im_df_flat["fmin_max"] / 1.25
+    gm_im_df_flat["fmin_max_h"] = gm_im_df_flat[["fmin_X", "fmin_Y"]].max(axis=1)
+    gm_im_df_flat["HPF_h"] = gm_im_df_flat["fmin_max_h"] / 1.25
+    gm_im_df_flat["HPF_v"] = gm_im_df_flat["fmin_Z"] / 1.25
+
+    gm_im_df_flat["LPF_h"] = gm_im_df_flat[["fmax_X", "fmax_Y"]].min(axis=1)
+    gm_im_df_flat["LPF_v"] = gm_im_df_flat["fmax_Z"]
 
     # Sort the rows
     gm_im_df_flat = gm_im_df_flat.sort_values(["datetime", "sta", "component"])
@@ -608,8 +610,10 @@ def merge_flatfiles(main_dir: Path, bypass_records_ffp: Path = None):
             "fmin_Z",
             "fmax_Z",
             "multi_Z",
-            "fmin_max",
-            "HPF",
+            "HPF_h",
+            "HPF_v",
+            "LPF_h",
+            "LPF_v",
             "aftershock_flag_crjb0",
             "cluster_flag_crjb0",
             "aftershock_flag_crjb2",
