@@ -147,7 +147,6 @@ Additional output files are generated in the `flatfiles/` directory:
   - "Failed to find Ko matrix"  
   - "Noise was less than 1 second"
   - "P-wave arrival not found"
-  - "Waveform processing failed due to insufficient waveform bounds"
 
 ---
 
