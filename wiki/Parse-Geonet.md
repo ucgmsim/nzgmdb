@@ -86,7 +86,8 @@ The preferred magnitude selection follows a hierarchical approach:
 
 For each earthquake, stations are selected within a distance-dependent radius:
 
-- **Distance calculation:** Based on the `Mw_rrup.txt` lookup table, 3.5 (96km) -> 8.0 (1055km)
+- **Distance calculation:** Based on the `Mw_rrup.txt` lookup table
+![](images/mw_rrup.png)
 - **Interpolation:** Uses cubic interpolation between magnitude and distance values
 - **Radius conversion:** Converts distance to degrees using ObsPy's geodetic functions
 - **Station filtering:** Uses ObsPy inventory selection with latitude, longitude, and maximum radius
@@ -112,6 +113,9 @@ The waveform download window is determined using seismic travel time models and 
 - **Start time:** P-wave arrival minus `min_time_difference: 15` seconds
 - **End time:** S-wave arrival + Ds × `ds_multiplier: 2`, also ensures a minimum duration
 - **Minimum duration:** Controlled by `min_time_difference` to ensure adequate waveform length
+
+Example with a synthetic waveform to illustrate the window:
+![](images/waveform_extraction_window.png)
 
 ### 🔹 Waveform Data Retrieval
 
