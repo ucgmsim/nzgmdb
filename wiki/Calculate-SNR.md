@@ -66,9 +66,12 @@ The system retrieves P-wave arrival times (tp) from the phase arrival table by m
 The core SNR calculation follows these steps:
 
 #### Signal and Noise Separation
-- **Signal window**: Data after P-wave arrival time (tp)
-- **Noise window**: Data before P-wave arrival time (tp)
+- **Signal window**: Data from (tp - tp_extra) to end of record, where tp_extra is calculated as approximately 1/19th of the post-tp data length
+- **Buffer protection**: The tp_extra buffer ensures that tapering applied to the signal window does not affect the critical P-wave arrival point where the signal typically shows a sharp amplitude increase
+- **Noise window**: Data from start of record to P-wave arrival time (tp)
 - **Quality check**: Noise duration must be ≥ 1 second (records skipped otherwise)
+
+![](images/snr_waveform_plot.png)
 
 #### Signal Processing
 1. Apply **Tukey taper** (5% alpha) to both signal and noise windows separately
@@ -160,41 +163,4 @@ The SNR calculation utilizes functions from both the `nzgmdb` and `IM_calculatio
 - **`IM.snr_calculation.calculate_snr()`**: Core SNR algorithm implementation  
 - **`IM.ims.fourier_amplitude_spectra()`**: FAS computation with Konno-Ohmachi smoothing
 
-### 🔹 Parallel Processing
-
-The pipeline supports parallel processing with configurable core counts:
-- **Local**: 3 cores (default)
-- **Mantle**: 5 cores  
-- **Hypocentre**: 18 cores
-
-Processing is batched to handle large datasets efficiently while managing memory usage.
-
-### 🔹 Error Handling
-
-The system implements robust error handling for common failure modes:
-- Missing inventory data for instrument response removal
-- Insufficient noise duration (< 1 second)
-- Missing or invalid P-wave arrival times
-- Corrupted or incomplete waveform data
-- Missing Konno-Ohmachi smoothing matrices
-
----
-
-## ⚡ Performance Considerations
-
-- **Frequency Vector**: The 389-point frequency vector balances resolution with computational efficiency
-- **Smoothing**: Konno-Ohmachi smoothing reduces spectral noise but increases processing time
-- **Memory Management**: Large datasets are processed in batches to prevent memory overflow
-- **I/O Optimization**: Parallel processing is configured to balance CPU utilization with disk I/O
-
----
-
-## 🔗 Related Steps
-
-**Upstream Dependencies:**
-- [Parse Geonet](https://github.com/ucgmsim/nzgmdb/wiki/Parse-Geonet) - Provides raw MSEED waveform data
-- [Phase Arrival](https://github.com/ucgmsim/nzgmdb/wiki/Phase-Arrival) - Supplies P-wave arrival times
-
-**Downstream Usage:**
-- [Calculate Fmax](https://github.com/ucgmsim/nzgmdb/wiki/Calculate-Fmax) - Uses SNR data to determine maximum usable frequency
-- [GMC](https://github.com/ucgmsim/nzgmdb/wiki/GMC) - Utilizes SNR for ground motion classification
+Processing is batched to handle large datasets efficiently while managing memory usage and allow for checkpointing if failures occur over large amount of records.
