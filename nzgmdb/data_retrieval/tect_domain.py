@@ -142,6 +142,9 @@ def merge_reyners_catalogue_on_events(
         suffixes=("", "_reyners"),
     )
 
+    # Deal with duplications
+    event_df = event_df.drop_duplicates(subset="evid", keep="first")
+
     # Update the reloc column to 'reyners' if the event is in the Reyners Catalogue data
     # and the latitude, longitude or depth did not change
     event_df["reloc"] = np.where(
@@ -155,16 +158,15 @@ def merge_reyners_catalogue_on_events(
         "no",
     )
 
-    # Update the event dataframe with the Reyners Catalogue data when not nan
-    event_df["lon"] = event_df["lon_reyners"].combine_first(event_df["lon"])
-    event_df["lat"] = event_df["lat_reyners"].combine_first(event_df["lat"])
-    event_df["depth"] = event_df["depth_reyners"].combine_first(event_df["depth"])
-    event_df["loc_type"] = event_df["loc_type_reyners"].combine_first(
-        event_df["loc_type"]
-    )
-    event_df["loc_grid"] = event_df["loc_grid_reyners"].combine_first(
-        event_df["loc_grid"]
-    )
+    # Create mask for rows where reloc is 'reyners'
+    mask = event_df["reloc"] == "reyners"
+
+    # Update only where reloc is 'reyners'
+    event_df.loc[mask, "lon"] = event_df.loc[mask, "lon_reyners"]
+    event_df.loc[mask, "lat"] = event_df.loc[mask, "lat_reyners"]
+    event_df.loc[mask, "depth"] = event_df.loc[mask, "depth_reyners"]
+    event_df.loc[mask, "loc_type"] = event_df.loc[mask, "loc_type_reyners"]
+    event_df.loc[mask, "loc_grid"] = event_df.loc[mask, "loc_grid_reyners"]
 
     # Drop the Reyners Catalogue columns
     event_df = event_df.drop(
@@ -491,7 +493,6 @@ def add_tect_domain(
     reyners_catalogue_df = pd.read_csv(
         NZGMDB_DATA.fetch("reyners_relocations.csv"), dtype={"evid": str}
     )
-    breakpoint()
     event_df = merge_reyners_catalogue_on_events(event_df, reyners_catalogue_df)
 
     # Replace the geonet CMT data on the event data (override the reyners relocations)
@@ -536,5 +537,4 @@ def add_tect_domain(
     domain_df = find_domain_from_shapes(merged_df, shapes)
 
     # Save the data
-    breakpoint()
     domain_df.to_csv(out_ffp, index=False)
