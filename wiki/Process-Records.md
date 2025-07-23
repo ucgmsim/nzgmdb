@@ -1,70 +1,175 @@
-Filters records based on GMC results and performs wave processing to turn mseeds into text files
+# 🔄 Process Records
 
-# Prerequisites
-- GMC
-- Parse Geonet (mseed files from FDSN Client)
+This step in the NZGMDB pipeline performs advanced waveform processing to convert MSEED files into ASCII text files suitable for downstream intensity measure calculations.
 
-# Process
+---
 
-The following is done for every mseed file in the waveforms / mseed folder:
+## 🚀 Entry Point
 
-A quick check is done that there are all 3 components (this was a previous bug that should be fixed, will observe)
+To process records and convert MSEED files to ASCII format, run the following Python script:
 
-Initial pre_processing (Same as what is written in Calculate-SNR) is then performed and processing is skipped if the Inventory failed to fetch or failed to remove sensitivity
-
-fmax and fmin values are then extracted from the gmc and fmax dataframes
-For fmin the max fmin_mean value is taken (max across all 3 components)
-fmax is the min of all 3 components
-
-If these values are not found then for the fmin, lowcut is set to 0.05 and if fmax is missing then the highcut is set to 1 / (2.5 * dt)
-If these values are not found then the fmin lowcut is set to 0.05. Similarly, if fmax is missing then the highcut is set to 1 / (2.5 * dt)
-
-Then the 000, 090 and ver components are selected from the initial processed mseed (rotated)
-Tries to grab NE if not then tries XY and if not then skips record
-
-Then applies the following for processing:
-(Performs the Acc(t) for the public pathway)
-
-![](images/processing.png)
-
-Example of some of the processing
-```python
-    # butter bandpass filter - order of 4 fs = 1 / dt
-    acc_bb_000 = butter_bandpass_filter(acc_000, lowcut, highcut, fs, order)
-
-    # Remove zero padding
-    mseed.trim(mseed[0].stats.starttime, mseed[0].stats.endtime)
-
-    # Calculate velocity 
-    vel_000 = integrate.cumtrapz(y=acc_bb_000, dx=dt, initial=0.0) * g / 10.0
-
-    # Calculate displacement 
-    disp_000 = integrate.cumtrapz(y=vel_000, dx=dt, initial=0.0)
-
-    # Fit a six-order polynomial 
-    coeff_000 = np.polyfit(np.arange(len(disp_000)), disp_000, poly_order)
-
-    # Find the 2nd derivative of the coefficients 
-    coeff_000_2nd = np.polyder(coeff_000, 2)
-
-    # generate polynomial from the coefficients
-    poly_000 = np.polyval(coeff_000_2nd, np.arange(len(acc_bb_000)))
-
-    # Subtract the polynomial from the original acc series
-    acc_bb_000 -= poly_000
+```bash
+python -m nzgmdb.scripts.run_nzgmdb process-records <main_dir>
 ```
-Example of raw mseed data vs the output of the processing
 
-Raw Mseed:
+- **<main_dir>** is the top-level output directory where NZGMDB stores its results.
 
-![](images/raw.png)
+Example:
+```bash
+python -m nzgmdb.scripts.run_nzgmdb process-records nzgmdb_output/
+```
 
-Processed Waveform:
+Optional parameters include:
+- `--n-procs`: Number of processes to use for parallel processing (default: 1)
+- `--bypass-records-ffp`: Path to bypass records file for custom fmin/fmax values
 
-![](images/processed.png)
+This will process MSEED files and create ASCII outputs in:
 
-Code can be found [here](https://github.com/ucgmsim/nzgmdb/blob/d020c6e32a76c156c1c58ded49ca7f4c76ee0f5d/nzgmdb/data_processing/process_observed.py#L13)
+```bash
+nzgmdb_output/waveforms/year/event_id/processed/evid_station_channel_location.000
+nzgmdb_output/waveforms/year/event_id/processed/evid_station_channel_location.090  
+nzgmdb_output/waveforms/year/event_id/processed/evid_station_channel_location.ver
+```
 
+---
 
-# Output
-If all checks are successfully passed, saves as individual component files named the same as the mseed but with the extensions of .000 .090 and .ver in the waveforms directory but under "processed".
+## 📋 Prerequisites
+
+The Process Records step requires the following inputs from previous pipeline steps:
+- **[Parse Geonet](https://github.com/ucgmsim/nzgmdb/wiki/Parse-Geonet)** (generates MSEED files in the waveforms directory)
+- **[Calculate Fmax](https://github.com/ucgmsim/nzgmdb/wiki/Calculate-Fmax)** (provides maximum usable frequency values)
+- **[GMC](https://github.com/ucgmsim/nzgmdb/wiki/GMC)** (provides minimum frequency and quality classification scores)
+
+---
+
+## ⚙️ Process
+
+### 🔹 Record Frequency Filtering Extraction
+
+This step extracts frequency bounds from the `gmc_predictions.csv` and `fmax.csv` files, which are essential for filtering waveforms. It supports Horizontal/Vertical-specific frequency extraction and allows for custom overrides via a bypass records file.
+
+**1. Fmin Extraction**
+- Retrieves GMC predictions from `gmc_predictions.csv`
+- **Component-specific fmin extraction**:
+  - `fmin_h`: Maximum `fmin_mean` value from horizontal components (X, Y)
+  - `fmin_v`: `fmin_mean` value from vertical component (Z)
+
+**2. Fmax Extraction**
+- Loads Fmax values from `fmax.csv` 
+- **Component-specific fmax extraction**:
+  - `fmax_h`: Minimum Fmax from horizontal components (000, 090)
+  - `fmax_v`: Fmax value from vertical component (ver)
+- Ensures frequency band validity for processing
+
+**3. Bypass Records Support**
+- Optionally loads custom frequency bounds from bypass records file
+- Overrides GMC/Fmax values with user-specified component-specific fmin/fmax when provided
+- Handles NaN values appropriately during override process
+
+### 🔹 Waveform Processing Pipeline
+
+Each MSEED file undergoes a comprehensive processing workflow:
+
+#### Initial Preprocessing
+1. **Component Validation** - Ensures all 3 components (000, 090, ver) are present
+2. **Demean and Detrend** - Remove offset and linear trends
+3. **Taper Application** - Apply 5% Tukey taper to both ends
+4. **Zero Padding** - Add 5 seconds of zeros at start and end
+5. **Inventory Response Removal** - Remove instrument sensitivity using station metadata
+6. **Component Rotation** - Rotate horizontal components to North-East-Vertical (NEZ)
+7. **Gravity Normalization** - Divide acceleration data by gravitational constant (9.81 m/s²)
+
+#### Advanced Signal Processing
+1. **Component-Specific Bandpass Filtering** 
+   - **Horizontal Components (000, 090)**: Apply Butterworth bandpass filter using `fmin_h/1.25` to `fmax_h`
+   - **Vertical Component (ver)**: Apply Butterworth bandpass filter using `fmin_v/1.25` to `fmax_v`
+   - **Frequency Scaling**: fmin values are divided by 1.25 to ensure fmin is actually T-useable
+   - **Fallback Values**: Uses `low_cut_default` (0.04 Hz) if fmin unavailable, `1/(2.5*dt)` if fmax unavailable
+2. **Zero Padding Removal** - Trim zero-padded sections after filtering
+3. **Integration to Velocity** - Calculate velocity via numerical integration
+4. **Integration to Displacement** - Calculate displacement via double integration
+5. **Polynomial Detrending** - Fit 6th-order polynomial to displacement
+6. **Baseline Correction** - Subtract 2nd derivative of polynomial from original acceleration
+
+#### Quality Assurance
+- **Differentiation Check** - Verify successful velocity/displacement calculations
+- **Component-Specific Filter Validation** - Ensure `fmin_h < fmax_h` and `fmin_v < fmax_v` for valid frequency bands
+- **Component Consistency** - Process all components with their respective optimal parameters
+
+### 🔹 Configuration Parameters
+
+Key configuration values from `config.yaml`:
+
+| Parameter | Default Value | Description |
+|-----------|---------------|-------------|
+| `taper_fraction` | 0.05 | Fraction for Tukey taper application |
+| `zero_padding_time` | 5 | Zero padding duration (seconds) |
+| `g` | 9.81 | Gravitational acceleration (m/s²) |
+| `order_default` | 4 | Butterworth filter order |
+| `poly_order_default` | 6 | Polynomial detrending order |
+| `low_cut_default` | 0.04 | Default low-cut frequency if fmin unavailable |
+
+---
+
+## 📦 Output
+
+### 🔹 Processed Waveform Files
+
+The primary output consists of ASCII text files stored in the directory structure:
+```
+waveforms/
+├── year/
+│   └── event_id/
+│       └── processed/
+│           ├── evid_station_channel_location.000  # North component
+│           ├── evid_station_channel_location.090  # East component  
+│           └── evid_station_channel_location.ver  # Vertical component
+```
+
+Each ASCII file contains:
+- **Header Line**: Metadata including station, channel, sampling rate, number of points
+- **Data Lines**: One acceleration value per line in m/s² units
+- **Format**: Plain text with consistent decimal precision
+
+### 🔹 Metadata Files
+
+Additional output files are generated in the `flatfiles/` directory:
+
+- **`processed_records_skipped.csv`**: Contains failed records with detailed failure reasons:
+  - "File did not contain 3 components"
+  - "Failed to find Inventory information"  
+  - "Failed to remove sensitivity"
+  - "Failed to rotate the data"
+  - "Unable to differentiate record"
+  - "Lowcut frequency greater than highcut frequency" (component-specific)
+
+---
+
+## 🔧 Technical Implementation
+
+### 🔹 Core Processing Functions
+
+The record processing utilizes functions from the `nzgmdb.data_processing` module:
+
+- **`process_observed.process_single_mseed()`**: Main processing function for individual MSEED files
+- **`waveform_manipulation.initial_preprocessing()`**: Handles basic waveform preprocessing
+- **`waveform_manipulation.high_and_low_cut_processing()`**: Performs advanced frequency filtering and baseline correction
+- **`waveform_manipulation.butter_bandpass_filter()`**: Applies Butterworth bandpass filtering
+
+---
+
+## ⚠️ Important Notes
+
+- **Quality Control**: Records failing any processing step are logged but don't halt pipeline execution
+- **Component-Specific Frequency Validation**: The step ensures `fmin_h < fmax_h` and `fmin_v < fmax_v`; invalid ranges result in record skipping
+- **Component Dependency**: All three components must be present and successfully processed for record inclusion
+- **Component Split Filtering**: Different frequency bounds for horizontal vs vertical components
+
+---
+
+## 🔗 Related Steps
+
+- **Previous**: [GMC](GMC.md) - Provides fmin values and quality scores for record filtering
+- **Previous**: [Calculate Fmax](Calculate-Fmax.md) - Provides maximum usable frequency bounds
+- **Next**: [IM Calculation](IM-Calculation.md) - Uses processed ASCII files for intensity measure computation
+- **Related**: [Parse Geonet](Parse-Geonet.md) - Provides raw MSEED files for processing
