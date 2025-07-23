@@ -186,7 +186,12 @@ def butter_bandpass_filter(
 
 
 def high_and_low_cut_processing(
-    mseed: Stream, dt: float, fmin: float = None, fmax: float = None
+    mseed: Stream,
+    dt: float,
+    fmin_h: float = None,
+    fmin_v: float = None,
+    fmax_h: float = None,
+    fmax_v: float = None,
 ):
     """
     Process the waveform data by using the highcut and lowcut for the butter bandpass filter
@@ -203,11 +208,17 @@ def high_and_low_cut_processing(
         The waveform data
     dt : float
         The time step of the data
-    fmin : float (optional)
-        The minimum frequency to cut off at
+    fmin_h : float (optional)
+        The minimum frequency to use for bandpass filtering for horizontal components
         When not provided will use the default value in the config
-    fmax : float (optional)
-        The maximum frequency to cut off at
+    fmin_v : float (optional)
+        The minimum frequency to use for bandpass filtering for the vertical component
+        When not provided will use the default value in the config
+    fmax_h : float (optional)
+        The maximum frequency to use for bandpass filtering for horizontal components
+        When not provided will use 1 / (2.5 * dt)
+    fmax_v : float (optional)
+        The maximum frequency to use for bandpass filtering for the vertical component
         When not provided will use 1 / (2.5 * dt)
 
     Returns
@@ -236,14 +247,20 @@ def high_and_low_cut_processing(
     order = config.get_value("order_default")
     poly_order = config.get_value("poly_order_default")
 
-    # Determine the high and low cut frequencies
-    highcut = fmax or 1 / (2.5 * dt)
-    lowcut = config.get_value("low_cut_default") if fmin is None else fmin / 1.25
+    # Determine the high and low cut frequencies for both horizontal and vertical components
+    highcut_h = fmax_h or 1 / (2.5 * dt)
+    highcut_v = fmax_v or 1 / (2.5 * dt)
+    lowcut_h = config.get_value("low_cut_default") if fmin_h is None else fmin_h / 1.25
+    lowcut_v = config.get_value("low_cut_default") if fmin_v is None else fmin_v / 1.25
 
     # Check if the lowcut is greater than the highcut
-    if lowcut >= highcut:
+    if lowcut_h >= highcut_h:
         raise custom_errors.LowcutHighcutError(
-            f"Lowcut frequency {lowcut} is greater than the highcut frequency {highcut}"
+            f"Lowcut frequency {lowcut_h} is greater than the highcut frequency {highcut_h}"
+        )
+    if lowcut_v >= highcut_v:
+        raise custom_errors.LowcutHighcutError(
+            f"Lowcut frequency {lowcut_v} is greater than the highcut frequency {highcut_v}"
         )
 
     # Set fs
@@ -265,9 +282,9 @@ def high_and_low_cut_processing(
     acc_ver = mseed.select(channel="*Z")[0]
 
     # Apply the bandpass filter
-    acc_bb_000 = butter_bandpass_filter(acc_000, lowcut, highcut, fs, order)
-    acc_bb_090 = butter_bandpass_filter(acc_090, lowcut, highcut, fs, order)
-    acc_bb_ver = butter_bandpass_filter(acc_ver, lowcut, highcut, fs, order)
+    acc_bb_000 = butter_bandpass_filter(acc_000, lowcut_h, highcut_h, fs, order)
+    acc_bb_090 = butter_bandpass_filter(acc_090, lowcut_h, highcut_h, fs, order)
+    acc_bb_ver = butter_bandpass_filter(acc_ver, lowcut_v, highcut_v, fs, order)
 
     # Remove Zero padding
     for tr in mseed:

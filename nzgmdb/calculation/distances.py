@@ -369,7 +369,6 @@ def get_nodal_plane_info(
         nodal_plane_info["hyp_dip"] = dip_idx / (ndip - 1)
         nodal_plane_info["plane_index"] = plane_index
 
-
     elif event_id in modified_cmt_df.PublicID.values:
         # Event is in the modified CMT data
         nodal_plane_info["f_type"] = "cmt"
@@ -869,7 +868,7 @@ def compute_ravg_distance_vectorized(
     for i in range(n_segments):
         TL, TR, BR, BL = seg_corners[:, :, i].T
         height = perpendicular_height(TL, TR, BR)
-        n_steps = np.ceil(height / vertical_step)
+        n_steps = int(np.ceil(height / vertical_step))
         left_deltas = (BL - TL) / n_steps
         right_deltas = (BR - TR) / n_steps
         seg_start = TL + left_deltas * 0.5
