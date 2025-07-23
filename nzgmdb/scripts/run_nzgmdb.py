@@ -1023,7 +1023,7 @@ def run_full_nzgmdb(
     im_n_procs = (
         n_procs if machine is None else config.get_n_procs(machine, cfg.WorkflowStep.IM)
     )
-    # run_im_calculation(main_dir, ko_matrix_path, im_dir, im_n_procs, checkpoint)
+    run_im_calculation(main_dir, ko_matrix_path, im_dir, im_n_procs, checkpoint)
 
     # Merge IM results
     if not (
