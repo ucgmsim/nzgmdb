@@ -521,11 +521,11 @@ def merge_flatfiles(main_dir: Path, bypass_records_ffp: Path = None):
         gm_im_df_flat[col] = gm_im_df_flat[col].fillna(default_fmin)
 
     # Add in colunms for fmin_max and fmin_highpass
-    gm_im_df_flat["fmin_max_h"] = gm_im_df_flat[["fmin_X", "fmin_Y"]].apply(max, axis=1)
+    gm_im_df_flat["fmin_max_h"] = gm_im_df_flat[["fmin_X", "fmin_Y"]].max(axis=1)
     gm_im_df_flat["HPF_h"] = gm_im_df_flat["fmin_max_h"] / 1.25
     gm_im_df_flat["HPF_v"] = gm_im_df_flat["fmin_Z"] / 1.25
 
-    gm_im_df_flat["LPF_h"] = gm_im_df_flat[["fmax_X", "fmax_Y"]].apply(min, axis=1)
+    gm_im_df_flat["LPF_h"] = gm_im_df_flat[["fmax_X", "fmax_Y"]].min(axis=1)
     gm_im_df_flat["LPF_v"] = gm_im_df_flat["fmax_Z"]
 
     # Sort the rows

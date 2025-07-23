@@ -327,9 +327,7 @@ def filter_fmin(
         The skipped records
     """
     # Find records that have too high of a fmin_max value
-    fmin_max_filter = catalog[
-        catalog[["fmin_X", "fmin_Y"]].apply(max, axis=1) > fmin_max
-    ]
+    fmin_max_filter = catalog[catalog[["fmin_X", "fmin_Y"]].max(axis=1) > fmin_max]
 
     # Remove the bypass records if they exist
     if bypass_records is not None:
