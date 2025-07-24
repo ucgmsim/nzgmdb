@@ -27,7 +27,7 @@ Optional parameters include:
 ## 📋 Prerequisites
 
 The Calculate Distances step requires the following inputs from previous pipeline steps:
-- **[Merge IM Results](Merge-IM-Results.md)** - Provides the merged intensity measure data with event-station pairs
+- **[Merge IM Results](Merge-IM-Results.md)** - Provides the merged intensity measure data with event-station pairs (This is to optimize the distance calculation with only the even-station pairs that actually have processed results)
 
 ---
 
@@ -84,7 +84,7 @@ CCLD provides 5 different categories for nodal plane determination, each designe
 - Randomly samples area, aspect ratio, and hypocenter locations
 
 **Category C**: Two nodal plane solutions, no preference
-- 50/50 random selection between planes in each simulation
+- 50/50 random selection between nodal planes in each simulation
 - Randomly samples area, aspect ratio, and hypocenter locations
 
 **Category D**: Single nodal plane with uncertainty
@@ -102,6 +102,7 @@ CCLD provides 5 different categories for nodal plane determination, each designe
 The NZGMDB uses 3 CCLD categories (A, C, and D) mapped to the available event information:
 
 ![CCLD Event Mapping](images/ccld_events.png)
+
 *Mapping of NZGMDB event categories to CCLD methods*
 
 #### Tectonic Type Mapping
@@ -109,25 +110,25 @@ The NZGMDB uses 3 CCLD categories (A, C, and D) mapped to the available event in
 The NZGMDB's 5 tectonic types are mapped to CCLD's 3 tectonic regimes:
 
 ![Tectonic Mapping](images/tect_mapping_ccld.png)
+
 *Mapping between NZGMDB and CCLD tectonic classifications*
 
 ### 🔹 Nodal Plane Determination
 
 The system determines the correct nodal plane through the following hierarchy:
 
-1. **Check SRF Files**: If event ID matches pre-existing SRF files (Christchurch Feb 2011, Darfield, Kaikoura 2016):
+1. **Check SRF Files**: If event ID matches pre-existing SRF files (Christchurch Feb 2011, Darfield, Kaikoura 2016, etc.):
    - Load SRF file directly
    - Extract nodal plane parameters and SRF points
-   - Calculate weighted average of strike, dip, rake based on slip distribution
+   - Calculate weighted average of strike, dip, rake based on plane areas
 
-2. **Check Modified CMT Solutions**: Search "GeoNet_CMT_solutions_20201129_PreferredNodalPlane_v1.csv":
+2. **Check Modified CMT Solutions** (Custom review for most likely nodal plane):
    - Use predetermined preferred nodal plane
    - Extract strike, dip, rake values
    - Apply CCLD Method A
 
-3. **Check Standard CMT Solutions**: Search standard GeoNet CMT catalog:
-   - If 2 nodal planes available → Apply CCLD Method C
-   - If 1 nodal plane available → Apply CCLD Method D
+3. **Check Standard CMT Solutions**: Search GeoNet CMT catalog:
+   - Apply CCLD Method C with both nodal planes
 
 4. **Use Domain Default**: For events without CMT solutions:
    - Apply tectonic domain-specific strike, dip, rake values
@@ -186,43 +187,82 @@ The main output is a comprehensive CSV file containing distance metrics for ever
 
 **File Location**: `flatfiles/propagation_table.csv`
 
-**Key Columns**:
-| Column | Description | Units |
-|--------|-------------|-------|
-| `evid` | Event identifier | - |
-| `station` | Station code | - |
-| `rrup` | Closest distance to rupture | km |
-| `rjb` | Joyner-Boore distance | km |
-| `rx` | Distance perpendicular to strike | km |
-| `ry` | Distance parallel to strike | km |
-| `r_epis` | Epicentral distance | km |
-| `r_hyps` | Hypocentral distance | km |
-| `azs` | Source-to-site azimuth | degrees |
-| `b_azs` | Back azimuth | degrees |
-| `tvz_length` | Path length through Taupo VZ | km |
-| `boundary_dists_rjb` | Distance to Taupo VZ boundary | km |
+**Key Columns**
+
+| Column                | Description                         | Units    |
+|-----------------------|-------------------------------------|----------|
+| `evid`                | Event identifier                    | -        |
+| `station`             | Station code                        | -        |
+| `rrup`                | Closest distance to rupture         | km       |
+| `rjb`                 | Joyner-Boore distance               | km       |
+| `rx`                  | Distance perpendicular to strike    | km       |
+| `ry`                  | Distance parallel to strike         | km       |
+| `r_epis`              | Epicentral distance                 | km       |
+| `r_hyps`              | Hypocentral distance                | km       |
+| `azs`                 | Source-to-site azimuth              | degrees  |
+| `b_azs`               | Back azimuth                        | degrees  |
+| `tvz_length`          | Path length through Taupo VZ        | km       |
+| `boundary_dists_rjb`  | Distance to Taupo VZ boundary       | km       |
+
 
 ### 🔹 Enhanced Earthquake Source Table
 Additional fault parameters are merged into the earthquake source table:
 
-**New Columns Added**:
-| Column | Description | Units |
-|--------|-------------|-------|
-| `strike` | Fault strike angle | degrees |
-| `dip` | Fault dip angle | degrees |
-| `rake` | Fault rake angle | degrees |
-| `f_length` | Fault length along strike | km |
-| `f_width` | Fault width down dip | km |
-| `f_type` | Source of fault geometry | - |
-| `z_tor` | Depth to top of rupture | km |
-| `z_bor` | Depth to bottom of rupture | km |
+**New Columns Added**
 
-**Fault Type Classifications**:
+| Column     | Description                 | Units   |
+|------------|-----------------------------|---------|
+| `strike`   | Fault strike angle          | degrees |
+| `dip`      | Fault dip angle             | degrees |
+| `rake`     | Fault rake angle            | degrees |
+| `f_length` | Fault length along strike   | km      |
+| `f_width`  | Fault width down dip        | km      |
+| `f_type`   | Source of fault geometry    | -       |
+| `z_tor`    | Depth to top of rupture     | km      |
+| `z_bor`    | Depth to bottom of rupture  | km      |
+
+
+**Fault Type (f_type) Classifications**:
 - `ff`: Finite fault (from SRF file)
-- `geonet_rm`: GeoNet rapid moment tensor
 - `cmt`: Centroid moment tensor (preferred plane)
 - `cmt_unc`: CMT with uncertainty (two planes)
 - `domain`: Tectonic domain default values
+
+### 🔹 Geometry Source Table
+
+Additional geometry information is stored in a separate table for each of the planes used in the distance calculations (Some Faults like the FF Models have multiple planes):
+
+**Geometry Output Columns**
+
+| Column            | Description                                     | Units    |
+|-------------------|-------------------------------------------------|----------|
+| `evid`            | Event identifier                                | -        |
+| `plane_id`        | Identifier for fault plane (starting from 1)    | -        |
+| `f_type`          | Source of fault geometry                        | -        |
+| `strike`          | Fault strike angle                              | degrees  |
+| `dip`             | Fault dip angle                                 | degrees  |
+| `rake`            | Fault rake angle                                | degrees  |
+| `f_length`        | Fault length along strike                       | km       |
+| `f_width`         | Fault width down dip                            | km       |
+| `z_tor`           | Depth to top of rupture                         | km       |
+| `z_bor`           | Depth to bottom of rupture                      | km       |
+| `hyp_lat`         | Hypocenter latitude                             | degrees  |
+| `hyp_lon`         | Hypocenter longitude                            | degrees  |
+| `hyp_strike`      | Strike of hypocenter plane (if applicable)      | degrees  |
+| `hyp_dip`         | Dip of hypocenter plane (if applicable)         | degrees  |
+| `corner_0_lat`    | Latitude of top-left corner of fault plane      | degrees  |
+| `corner_0_lon`    | Longitude of top-left corner of fault plane     | degrees  |
+| `corner_0_depth`  | Depth of top-left corner                        | km       |
+| `corner_1_lat`    | Latitude of top-right corner of fault plane     | degrees  |
+| `corner_1_lon`    | Longitude of top-right corner of fault plane    | degrees  |
+| `corner_1_depth`  | Depth of top-right corner                       | km       |
+| `corner_2_lat`    | Latitude of bottom-right corner of fault plane  | degrees  |
+| `corner_2_lon`    | Longitude of bottom-right corner of fault plane | degrees  |
+| `corner_2_depth`  | Depth of bottom-right corner                    | km       |
+| `corner_3_lat`    | Latitude of bottom-left corner of fault plane   | degrees  |
+| `corner_3_lon`    | Longitude of bottom-left corner of fault plane  | degrees  |
+| `corner_3_depth`  | Depth of bottom-left corner                     | km       |
+
 
 ---
 
