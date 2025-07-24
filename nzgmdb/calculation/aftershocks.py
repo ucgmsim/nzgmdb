@@ -187,7 +187,7 @@ def calculate_crjb(
     rupture_poly: Polygon, boundary_points: MultiPoint, centroids: np.ndarray
 ) -> np.ndarray:
     """
-    Calculates closest Rupture-to-Just Beyond (CRJB) distance for given earthquake centroids.
+    Calculates centroid Joyner-Boore (CRJB) distance for given earthquake centroids.
 
     Parameters
     ----------
@@ -234,7 +234,7 @@ def abwd_crjb(
 ) -> tuple[np.ndarray, np.ndarray]:
     """
     Identifies earthquake clusters using spatial and temporal windows.
-    Following the Abrahamson & Woodell 2014 and 2018 Distance-Window with Closest Rupture-to-Just Beyond (CRJB).
+    Following the Abrahamson & Woodell 2014 and 2018 Distance-Window with centroid Joyner-Boore distance (CRJB).
 
     Parameters
     ----------
@@ -267,7 +267,7 @@ def abwd_crjb(
     # Define time window based on GardnerKnopoff
     sw_time = np.power(10.0, 0.032 * catalogue_pd.mag + 2.7389) / days_in_year
 
-    # Adjust the space window for M > 6.5
+    # Adjust the space window for M < 6.5
     sw_time[catalogue_pd.mag < 6.5] = (
         np.power(10.0, 0.5409 * catalogue_pd.mag[catalogue_pd.mag < 6.5] - 0.547)
         / days_in_year

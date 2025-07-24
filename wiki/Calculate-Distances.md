@@ -292,5 +292,5 @@ Additional geometry information is stored in a separate table for each of the pl
 ## 🔗 Related Steps
 
 - **Previous**: [Merge IM Results](Merge-IM-Results.md) - Provides the event-station pairs requiring distance calculations
-- **Next**: [Merge Flatfiles](Merge-Flatfiles.md) - Combines distance data with intensity measures for final output
+- **Next**: [Merge Aftershocks](Merge-Aftershocks.md) - Merges aftershock classifications and cluster labels into the earthquake source table
 - **Related**: [Add Tectonic Domain](Add-Tectonic-Domain.md) - Provides tectonic classifications used in CCLD method selection
