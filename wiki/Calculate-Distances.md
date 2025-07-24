@@ -1,103 +1,257 @@
-Determines correct nodal plane, calculates rrup values for propagation table
+# 📐 Calculate Distances
 
-# Prerequisites
+This step determines the correct nodal plane information for each earthquake and calculates rupture distance (rrup) values for the propagation table. The implementation uses both Finite Fault models (SRF files) and the CCLD method to generate appropriate fault geometries for distance calculations.
 
-- Merged IM data
+---
 
-# Process
+## 🚀 Entry Point
 
-For every event in the NZGMDB an SRF is generated to compute rrup distances.
-The SRF is generated different ways based on the information available for the event.
+To calculate distances between earthquake sources and stations, run the following Python script:
 
-Events from the NZGMDB fall under 4 Categories.
+```bash
+python -m nzgmdb.scripts.run_nzgmdb calculate-distances <main_dir>
+```
 
-- FF: Finite Fault (We directly have an SRF generated for this)
-- CMT: Centroid Moment Tensor (We have a preferred nodal plane for this)
-- CMT_UNC: Centroid Moment Tensor with Uncertainty (We have 2 Nodal Plane Solutions)
-- Domain: General Domain (We have no nodal plane information, except for the general domain strike, dip and rake)
+- **<main_dir>** is the top-level output directory where NZGMDB stores its results.
 
-For Finite Faults we can use the SRF directly, but for the other methods we utilise a method used by NGA-West3 called CCLD which is explained below and how we map our other 3 categories to their approaches.
+Example:
+```bash
+python -m nzgmdb.scripts.run_nzgmdb calculate-distances nzgmdb_output/
+```
 
-## CCLD Method
+Optional parameters include:
+- `--n-procs`: Number of processes to use for parallel calculation (default: 1)
 
-### Magnitude Scaling Relations
+---
 
-CCLD implements branching with different magnitude scaling relations to determine the area, aspect ratio, length and width of a nodal plane.
-The models used for each tectonic type are described in the image below:
+## 📋 Prerequisites
+
+The Calculate Distances step requires the following inputs from previous pipeline steps:
+- **[Merge IM Results](Merge-IM-Results.md)** - Provides the merged intensity measure data with event-station pairs
+
+---
+
+## ⚙️ Process
+
+### 🔹 Event Categorization
+
+For every event in the NZGMDB, a Rupture Plane is generated to compute rrup distances. Events are classified into four categories based on available information:
+
+- **FF (Finite Fault)**: Events with directly available SRF files (e.g., Christchurch Feb 2011, Darfield, Kaikoura 2016) Total of 10
+- **CMT (Centroid Moment Tensor)**: Events with a preferred nodal plane solution
+- **CMT_UNC (CMT with Uncertainty)**: Events with two nodal plane solutions
+- **Domain**: Events with only general tectonic domain information (strike, dip, rake)
+
+![Finite Fault Model (SRF)](images/chch_ff.jpg)
+*Example of a Finite Fault model for the Christchurch Feb 2011 Earthquake used for distance calculations*
+
+### 🔹 CCLD Method
+
+For events without direct SRF files, the NZGMDB utilizes the **(CCLD)** method, originally developed for NGA-West3, to determine optimal fault plane geometries.
+
+#### Magnitude Scaling Relations
+
+CCLD implements branching with different magnitude scaling relations to determine the area, aspect ratio, length and width of a nodal plane. The models used for each tectonic type are:
 
 ![CCLD Models](images/ccld_models.png)
+*Magnitude scaling relation models used by CCLD for different earthquake types*
 
-### Calculation for selected Plane
+#### CCLD Calculation Process
 
 CCLD uses the following method to calculate the selected nodal plane for an event:
 
-- Generate a grid of pseudo-stations around the fault plane
-- Generate Nr simulations of fault planes and calculate rrup distances between the plane and every "station"
-- Finds the optimal nodal plane that minimizes the following expression:
+1. **Generate pseudo-station grid** around the fault plane
+2. **Run Nr simulations** of fault planes and calculate rrup distances between each plane and every pseudo-station
+3. **Find optimal nodal plane** that minimizes the following expression:
+
 ![CCLD Equation](images/ccld_eq.png)
+*Mathematical expression used to optimize nodal plane selection*
 
-Below is an image that shows an example of pseudo-stations distributed around the fault plane that is then used in the calculation to find the selected nodal plane.
+The pseudo-stations are distributed in a radial pattern around the fault to ensure comprehensive distance sampling:
 
-![CCLD Example](images/ccld_stations.png)
+![CCLD Pseudo-stations](images/ccld_stations.png)
+*Example of pseudo-stations distributed around fault plane for CCLD calculation*
 
-### Categories
-CCLD has 5 different categories for getting the nodal Plane which are meant to be used differently depending on the information you have available to you.
+#### CCLD Categories
 
-Category A and B both use the same method for getting the nodal plane and are meant to be used if there is 1 nodal plane that is preferred between 2 possible, A uses the first plane and B uses the second plane.
-This method keeps the strike, dip and rake values the same as the preferred nodal plane, but the area, aspect ratio and hypocentre locations are randomly selected from the distributions.
-
-Category C if you have 2 nodal plane solutions but neither is preferred. In this case in each simulation a coin is flipped 50/50 for which plane is selected but, still the area, aspect ratio and hypocentre locations are randomly selected from the distributions.
-
-Category D is used if you have just 1 nodal plane solution but there is uncertainty in the strike, dip and rake values. In this case the strike is adjusted in each simulation by ±30 degrees, dip by ±10 degrees and rake is used to determine the rupture mechanism. The area, aspect ratio and hypocentre locations are also randomly selected from the distributions.
-
-Category E is used when you have 0 nodal plane information and so the strike, dip and rake are randomly selected from the distributions as well as the area, aspect ratio and hypocentre locations.
-
-Below is an image that shows an illustration of the different methods.
+CCLD provides 5 different categories for nodal plane determination, each designed for different levels of available information:
 
 ![CCLD Methods](images/ccld_methods.png)
+*Illustration of different CCLD methods for various data availability scenarios*
 
-### Mappings to CCLD
+**Category A & B**: Use preferred nodal plane (A = first plane, B = second plane)
+- Maintains fixed strike, dip, and rake values
+- Randomly samples area, aspect ratio, and hypocenter locations
 
-In the NZGMDB we make use of 3 categories (A, C and D). Below is an image that shows the mapping of each event category to the CCLD method.
+**Category C**: Two nodal plane solutions, no preference
+- 50/50 random selection between planes in each simulation
+- Randomly samples area, aspect ratio, and hypocenter locations
 
-![CCLD Mapping](images/ccld_events.png)
+**Category D**: Single nodal plane with uncertainty
+- Strike adjusted by ±30°, dip by ±10° in each simulation
+- Rake determines rupture mechanism
+- Randomly samples area, aspect ratio, and hypocenter locations
 
-There also is a tectonic type mapping to CCLD. The NZGMDB has 5 tectonic types and CCLD has 3. To map them we did the following shown in the image below.
+**Category E**: No nodal plane information
+- All parameters (strike, dip, rake, area, aspect ratio, hypocenter) randomly sampled
 
-![CCLD Mapping](images/tect_mapping_ccld.png)
+### 🔹 NZGMDB Implementation
 
-## SRF points to rrup
-From this if the srf points are not already provided from the srf files then a grid of points are generated using the length and width and the strike and dip values.
+#### Event Category Mapping
 
-Once srf points are guaranteed then the rrup values are calculated for each station and the event and stored in a dataframe.
-This also includes rjb and then rx and ry are calculated using the closest points on the srf to the station.
+The NZGMDB uses 3 CCLD categories (A, C, and D) mapped to the available event information:
 
-A few other distance metrics are calculated such as 
-- r_epis
-- r_hyps
-- azs
-- b_azs
-- tvz_length
-- boundary_dists_rjb
+![CCLD Event Mapping](images/ccld_events.png)
+*Mapping of NZGMDB event categories to CCLD methods*
 
-Where tvz_length and boundary_dists_rjb are dealing with the volcanic zone region information.
-# Output
+#### Tectonic Type Mapping
 
-All of this data is added to a propagation dataframe which is then saved as a csv file which contains every event and site pair.
-Extra event data such as strike, dip, rake, f_length, f_width, f_type, z_tor and z_bor are added to the earthquake source table based on results done during this calculation.
+The NZGMDB's 5 tectonic types are mapped to CCLD's 3 tectonic regimes:
 
+![Tectonic Mapping](images/tect_mapping_ccld.png)
+*Mapping between NZGMDB and CCLD tectonic classifications*
 
-## Determines the correct nodal plane
-To determine the correct nodal plane (strike, dip and rake), the following is done for every event:
+### 🔹 Nodal Plane Determination
 
-- Checks if the event id is within the set of srf files that define specific earthquakes such as Christchurch Feb 2011 and Darfield as well as Kaikoura 2016.
-If the event id is within this set then it loads the srf files and gets the nodal plane information as well as the srf points from the srf directly and then moves on to the rrup calculations.
+The system determines the correct nodal plane through the following hierarchy:
 
-- Otherwise it checks the modified CMT solutions file "GeoNet_CMT_solutions_20201129_PreferredNodalPlane_v1.csv" as these have been
-previously determined for the 1st nodal plane being correct and so strike dip and rake are extracted from this file.
+1. **Check SRF Files**: If event ID matches pre-existing SRF files (Christchurch Feb 2011, Darfield, Kaikoura 2016):
+   - Load SRF file directly
+   - Extract nodal plane parameters and SRF points
+   - Calculate weighted average of strike, dip, rake based on slip distribution
 
-- If the event is in neither of these then it checks the general CMT solutions file which is fetched directly from Geonet's GitHub repo.
-A function called mech_rot is then applied which checks which nodal plane is as close to the region specific strike as possible and then selects that nodal plane for strike dip and rake.
-The code for this function can be found [here](https://github.com/ucgmsim/nzgmdb/blob/2fa80fa0917989c1103ed0a1e4821be7bb8f0e73/nzgmdb/calculation/distances.py#L61).
+2. **Check Modified CMT Solutions**: Search "GeoNet_CMT_solutions_20201129_PreferredNodalPlane_v1.csv":
+   - Use predetermined preferred nodal plane
+   - Extract strike, dip, rake values
+   - Apply CCLD Method A
 
-- If still the event is in none of these then the general domain strike dip and rake is used which is determined by this file "focal_mech_tectonic_domain_v1.csv"
+3. **Check Standard CMT Solutions**: Search standard GeoNet CMT catalog:
+   - If 2 nodal planes available → Apply CCLD Method C
+   - If 1 nodal plane available → Apply CCLD Method D
+
+4. **Use Domain Default**: For events without CMT solutions:
+   - Apply tectonic domain-specific strike, dip, rake values
+   - Use CCLD Method D with domain parameters
+
+### 🔹 Distance Calculations
+
+Once fault geometry is established, the system calculates multiple distance metrics:
+
+#### Primary Distance Metrics
+- **rrup**: Closest distance to rupture surface (km)
+- **rjb**: Joyner-Boore distance (closest distance to surface projection of rupture, km)
+- **rx**: Distance measured perpendicular to fault strike (km)
+- **ry**: Distance measured parallel to fault strike (km)
+
+#### Additional Distance Metrics
+- **r_epis**: Epicentral distance (km)
+- **r_hyps**: Hypocentral distance (km)
+- **azs**: Source-to-site azimuth (degrees)
+- **b_azs**: Back azimuth (degrees)
+
+#### Volcanic Zone Metrics
+- **tvz_length**: Length of ray path through Taupo Volcanic Zone (km)
+- **boundary_dists_rjb**: Distance from station to Taupo Volcanic Zone boundary (km)
+
+### 🔹 SRF Point Generation
+
+For events without pre-existing SRF files:
+
+1. **Generate coordinate mesh** using fault length, width, strike, and dip
+2. **Create SRF points** at specified resolution (configurable via `points_per_km`)
+3. **Apply corner coordinates** from CCLD-determined fault geometry
+
+---
+
+## ⚙️ Configuration Parameters
+
+Key parameters from `config.yaml` that control distance calculations:
+
+### 🔹 Coordinate Systems
+- `ll_num`: WGS84 coordinate system identifier
+- `nztm_num`: NZTM coordinate system identifier
+
+### 🔹 Fault Discretization
+- `points_per_km`: Resolution for SRF point generation (default: typically 2-4 points/km)
+
+### 🔹 External Data Sources
+- `cmt_url`: URL for GeoNet CMT solutions catalog
+
+---
+
+## 📦 Output
+
+### 🔹 Propagation Table
+The main output is a comprehensive CSV file containing distance metrics for every event-station pair:
+
+**File Location**: `flatfiles/propagation_table.csv`
+
+**Key Columns**:
+| Column | Description | Units |
+|--------|-------------|-------|
+| `evid` | Event identifier | - |
+| `station` | Station code | - |
+| `rrup` | Closest distance to rupture | km |
+| `rjb` | Joyner-Boore distance | km |
+| `rx` | Distance perpendicular to strike | km |
+| `ry` | Distance parallel to strike | km |
+| `r_epis` | Epicentral distance | km |
+| `r_hyps` | Hypocentral distance | km |
+| `azs` | Source-to-site azimuth | degrees |
+| `b_azs` | Back azimuth | degrees |
+| `tvz_length` | Path length through Taupo VZ | km |
+| `boundary_dists_rjb` | Distance to Taupo VZ boundary | km |
+
+### 🔹 Enhanced Earthquake Source Table
+Additional fault parameters are merged into the earthquake source table:
+
+**New Columns Added**:
+| Column | Description | Units |
+|--------|-------------|-------|
+| `strike` | Fault strike angle | degrees |
+| `dip` | Fault dip angle | degrees |
+| `rake` | Fault rake angle | degrees |
+| `f_length` | Fault length along strike | km |
+| `f_width` | Fault width down dip | km |
+| `f_type` | Source of fault geometry | - |
+| `z_tor` | Depth to top of rupture | km |
+| `z_bor` | Depth to bottom of rupture | km |
+
+**Fault Type Classifications**:
+- `ff`: Finite fault (from SRF file)
+- `geonet_rm`: GeoNet rapid moment tensor
+- `cmt`: Centroid moment tensor (preferred plane)
+- `cmt_unc`: CMT with uncertainty (two planes)
+- `domain`: Tectonic domain default values
+
+---
+
+## 🔧 Performance Optimization
+
+### 🔹 Parallel Processing
+- Distance calculations are parallelized by event
+- Use `--n-procs` parameter to optimize for available CPU cores
+- Memory usage scales with number of simultaneous events processed
+
+### 🔹 Computational Efficiency
+- Vectorized distance calculations using NumPy
+- Optimized triangle-to-point distance algorithms for complex fault geometries
+- Efficient spatial queries using Shapely geometric operations
+
+---
+
+## ⚠️ Important Notes
+
+- **Data Quality**: Distance accuracy depends on the quality of available nodal plane information
+- **CCLD Uncertainty**: For events using CCLD methods, distances incorporate inherent uncertainties from the simulation process
+- **Coordinate Systems**: All calculations performed in NZTM projection for accuracy within New Zealand
+- **Volcanic Zone**: Special handling for paths crossing the Taupo Volcanic Zone affects regional GMPEs
+
+---
+
+## 🔗 Related Steps
+
+- **Previous**: [Merge IM Results](Merge-IM-Results.md) - Provides the event-station pairs requiring distance calculations
+- **Next**: [Merge Flatfiles](Merge-Flatfiles.md) - Combines distance data with intensity measures for final output
+- **Related**: [Add Tectonic Domain](Add-Tectonic-Domain.md) - Provides tectonic classifications used in CCLD method selection
+- **Related**: [IM Calculation](IM-Calculation.md) - Uses distance metrics for intensity measure computation
