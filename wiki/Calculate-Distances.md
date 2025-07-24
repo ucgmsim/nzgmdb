@@ -232,6 +232,8 @@ Additional fault parameters are merged into the earthquake source table:
 
 Additional geometry information is stored in a separate table for each of the planes used in the distance calculations (Some Faults like the FF Models have multiple planes):
 
+**File Location**: `flatfiles/earthquake_source_geometry.csv`
+
 **Geometry Output Columns**
 
 | Column            | Description                                     | Units    |
@@ -271,7 +273,6 @@ Additional geometry information is stored in a separate table for each of the pl
 ### 🔹 Parallel Processing
 - Distance calculations are parallelized by event
 - Use `--n-procs` parameter to optimize for available CPU cores
-- Memory usage scales with number of simultaneous events processed
 
 ### 🔹 Computational Efficiency
 - Vectorized distance calculations using NumPy
@@ -283,9 +284,8 @@ Additional geometry information is stored in a separate table for each of the pl
 ## ⚠️ Important Notes
 
 - **Data Quality**: Distance accuracy depends on the quality of available nodal plane information
-- **CCLD Uncertainty**: For events using CCLD methods, distances incorporate inherent uncertainties from the simulation process
+- **CCLD Uncertainty**: For events using CCLD method C, between each run, the nodal planes are randomly selected, which introduces variability in the results each time the distances are calculated
 - **Coordinate Systems**: All calculations performed in NZTM projection for accuracy within New Zealand
-- **Volcanic Zone**: Special handling for paths crossing the Taupo Volcanic Zone affects regional GMPEs
 
 ---
 
@@ -294,4 +294,3 @@ Additional geometry information is stored in a separate table for each of the pl
 - **Previous**: [Merge IM Results](Merge-IM-Results.md) - Provides the event-station pairs requiring distance calculations
 - **Next**: [Merge Flatfiles](Merge-Flatfiles.md) - Combines distance data with intensity measures for final output
 - **Related**: [Add Tectonic Domain](Add-Tectonic-Domain.md) - Provides tectonic classifications used in CCLD method selection
-- **Related**: [IM Calculation](IM-Calculation.md) - Uses distance metrics for intensity measure computation
