@@ -2,9 +2,10 @@
 
 ## Version 4.3 - July 25 **2000-01-01 to 2024-12-31**
 * Sensitivity Fix (previously always taking first value not for actual datetime expected)
-* Big speed increase with custom n_procs per process
 * Add back Reyners Relocations for Domain (Non FF or CMT solution) Earthquakes
 * Seperation of fmin and fmax to horizontal and vertical components for filtering
+* 7 new Finite Fault Models added
+* Big speed increase with custom n_procs per process
 
 ---
 

@@ -90,3 +90,9 @@ Adds basin information to the site table dataframe by checking if station coordi
 | `Z2.5_ref`      | Reference for Z2.5 data source                               |
 | `site_domain_no`| Integer tectonic domain ID assigned from shapefile           |
 | `basin`         | Basin name assigned based on spatial polygon test            |
+
+---
+
+## 🔗 Related Steps
+
+- **Next**: [Parse GeoNet](Parse-Geonet.md) - Parses GeoNet data to extract waveform files and metadata

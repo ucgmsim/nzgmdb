@@ -278,3 +278,10 @@ Robust error handling ensures pipeline resilience:
 
 - **Processing time:** Large date ranges (years) may require significant processing time (~6hours)
 - **Network stability:** Poor network connections may cause increased retry attempts
+
+---
+
+## 🔗 Related Steps
+
+- **Previous**: [Fetching-Site-Table](Fetching-site-table.md) - Fetches and processes site metadata from GeoNet
+- **Next**: [Add Tectonic Domain](Add-Tectonic-Domain.md) - Assigns tectonic domain numbers to sites based on spatial intersection as well as tectonic type classification and relocations for some earthquakes

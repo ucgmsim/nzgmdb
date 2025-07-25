@@ -164,3 +164,10 @@ The SNR calculation utilizes functions from both the `nzgmdb` and `IM_calculatio
 - **`IM.ims.fourier_amplitude_spectra()`**: FAS computation with Konno-Ohmachi smoothing
 
 Processing is batched to handle large datasets efficiently while managing memory usage and allow for checkpointing if failures occur over large amount of records.
+
+---
+
+## 🔗 Related Steps
+
+- **Previous**: [Phase Arrival](Phase-Arrival.md) - Computes P-wave arrival times for SNR calculation
+- **Next**: [Calculate Fmax](Calculate-Fmax.md) - Computes maximum usable frequency (Fmax) from SNR and FAS data

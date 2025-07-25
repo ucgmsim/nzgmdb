@@ -120,3 +120,11 @@ The optional `bypass_records_ffp` parameter allows you to specify custom P-wave 
 - **PhaseNet environment**: Conda environment with PhaseNet package installed and configured
 - **Three-component data**: Records must contain vertical, north-south, and east-west components
 - **Earthquake source table**: Required for merging event datetime information (After Tectonic Domain Step)
+
+---
+
+## 🔗 Related Steps
+
+- **Previous**: [Add Tectonic Domain](Add-Tectonic-Domain.md) - Enhances earthquake source table with tectonic domain information
+- **Next**: [Calculate SNR](Calculate-SNR.md) - Uses the phase arrivals to calculate signal-to-noise ratios 
+- **Related**: [GMC](GMC.md) - Uses PhaseNet inputs for waveform classification and scoring
