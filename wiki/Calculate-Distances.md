@@ -189,20 +189,24 @@ The main output is a comprehensive CSV file containing distance metrics for ever
 
 **Key Columns**
 
-| Column                | Description                         | Units    |
-|-----------------------|-------------------------------------|----------|
-| `evid`                | Event identifier                    | -        |
-| `station`             | Station code                        | -        |
-| `rrup`                | Closest distance to rupture         | km       |
-| `rjb`                 | Joyner-Boore distance               | km       |
-| `rx`                  | Distance perpendicular to strike    | km       |
-| `ry`                  | Distance parallel to strike         | km       |
-| `r_epis`              | Epicentral distance                 | km       |
-| `r_hyps`              | Hypocentral distance                | km       |
-| `azs`                 | Source-to-site azimuth              | degrees  |
-| `b_azs`               | Back azimuth                        | degrees  |
-| `tvz_length`          | Path length through Taupo VZ        | km       |
-| `boundary_dists_rjb`  | Distance to Taupo VZ boundary       | km       |
+| Column   | Description                               | Units   |
+|----------|-------------------------------------------|---------|
+| `evid`   | Event identifier                          | -       |
+| `net`    | Network identifier                        | -       |
+| `sta`    | Station code                              | -       |
+| `r_epi`  | Epicentral distance                       | km      |
+| `r_hyp`  | Hypocentral distance                      | km      |
+| `r_jb`   | Joyner-Boore distance                     | km      |
+| `r_rup`  | Closest distance to rupture               | km      |
+| `r_avg`  | Average Closest distance to rupture plane | km      |
+| `r_x`    | Distance perpendicular to strike          | km      |
+| `r_y`    | Distance parallel to strike               | km      |
+| `r_tvz`  | Path length through Taupo VZ              | km      |
+| `r_xvf`  | Distance to Taupo VZ boundary             | km      |
+| `az`     | Source-to-site azimuth                    | degrees |
+| `b_az`   | Back azimuth                              | degrees |
+| `f_type` | Source of fault geometry                  | -       |
+| `reloc`  | Defines if earthquake was relocated       | -       |
 
 
 ### 🔹 Enhanced Earthquake Source Table
@@ -236,34 +240,34 @@ Additional geometry information is stored in a separate table for each of the pl
 
 **Geometry Output Columns**
 
-| Column            | Description                                     | Units    |
-|-------------------|-------------------------------------------------|----------|
-| `evid`            | Event identifier                                | -        |
-| `plane_id`        | Identifier for fault plane (starting from 1)    | -        |
-| `f_type`          | Source of fault geometry                        | -        |
-| `strike`          | Fault strike angle                              | degrees  |
-| `dip`             | Fault dip angle                                 | degrees  |
-| `rake`            | Fault rake angle                                | degrees  |
-| `f_length`        | Fault length along strike                       | km       |
-| `f_width`         | Fault width down dip                            | km       |
-| `z_tor`           | Depth to top of rupture                         | km       |
-| `z_bor`           | Depth to bottom of rupture                      | km       |
-| `hyp_lat`         | Hypocenter latitude                             | degrees  |
-| `hyp_lon`         | Hypocenter longitude                            | degrees  |
-| `hyp_strike`      | Strike of hypocenter plane (if applicable)      | degrees  |
-| `hyp_dip`         | Dip of hypocenter plane (if applicable)         | degrees  |
-| `corner_0_lat`    | Latitude of top-left corner of fault plane      | degrees  |
-| `corner_0_lon`    | Longitude of top-left corner of fault plane     | degrees  |
-| `corner_0_depth`  | Depth of top-left corner                        | km       |
-| `corner_1_lat`    | Latitude of top-right corner of fault plane     | degrees  |
-| `corner_1_lon`    | Longitude of top-right corner of fault plane    | degrees  |
-| `corner_1_depth`  | Depth of top-right corner                       | km       |
-| `corner_2_lat`    | Latitude of bottom-right corner of fault plane  | degrees  |
-| `corner_2_lon`    | Longitude of bottom-right corner of fault plane | degrees  |
-| `corner_2_depth`  | Depth of bottom-right corner                    | km       |
-| `corner_3_lat`    | Latitude of bottom-left corner of fault plane   | degrees  |
-| `corner_3_lon`    | Longitude of bottom-left corner of fault plane  | degrees  |
-| `corner_3_depth`  | Depth of bottom-left corner                     | km       |
+| Column            | Description                                     | Units   |
+|-------------------|-------------------------------------------------|---------|
+| `evid`            | Event identifier                                | -       |
+| `plane_id`        | Identifier for fault plane (starting from 1)    | -       |
+| `f_type`          | Source of fault geometry                        | -       |
+| `strike`          | Fault strike angle                              | degrees |
+| `dip`             | Fault dip angle                                 | degrees |
+| `rake`            | Fault rake angle                                | degrees |
+| `f_length`        | Fault length along strike                       | km      |
+| `f_width`         | Fault width down dip                            | km      |
+| `z_tor`           | Depth to top of rupture                         | km      |
+| `z_bor`           | Depth to bottom of rupture                      | km      |
+| `hyp_lat`         | Hypocenter latitude                             | degrees |
+| `hyp_lon`         | Hypocenter longitude                            | degrees |
+| `hyp_strike`      | Percentage of Hypocentre across Strike          | 0-1     |
+| `hyp_dip`         | Percentage of Hypocentre down Dip               | 0-1     |
+| `corner_0_lat`    | Latitude of top-left corner of fault plane      | degrees |
+| `corner_0_lon`    | Longitude of top-left corner of fault plane     | degrees |
+| `corner_0_depth`  | Depth of top-left corner                        | km      |
+| `corner_1_lat`    | Latitude of top-right corner of fault plane     | degrees |
+| `corner_1_lon`    | Longitude of top-right corner of fault plane    | degrees |
+| `corner_1_depth`  | Depth of top-right corner                       | km      |
+| `corner_2_lat`    | Latitude of bottom-right corner of fault plane  | degrees |
+| `corner_2_lon`    | Longitude of bottom-right corner of fault plane | degrees |
+| `corner_2_depth`  | Depth of bottom-right corner                    | km      |
+| `corner_3_lat`    | Latitude of bottom-left corner of fault plane   | degrees |
+| `corner_3_lon`    | Longitude of bottom-left corner of fault plane  | degrees |
+| `corner_3_depth`  | Depth of bottom-left corner                     | km      |
 
 
 ---
