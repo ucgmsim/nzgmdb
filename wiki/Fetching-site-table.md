@@ -78,7 +78,7 @@ Adds basin information to the site table dataframe by checking if station coordi
 | `T0`            | Fundamental site period                                      |
 | `T0_std`        | Standard deviation of T0                                     |
 | `Q_T0`          | Quality flag for T0                                          |
-| `D_T0`          | ?TODO?                                                       |
+| `D_T0`          | Data Source for T0                                           |
 | `T0_ref`        | Reference for T0 data source                                 |
 | `Z1.0`          | Basin depth to 1.0 km/s shear wave velocity (meters)         |
 | `Z1.0_std`      | Standard deviation of Z1.0                                   |
