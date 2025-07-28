@@ -1,6 +1,6 @@
 # 📊 Calculate Fmax
 
-This step computes the maximum usable frequency (Fmax) for each seismic record by analyzing Signal-to-Noise Ratio (SNR) data. The implementation is a Python conversion of an original MATLAB script, optimized for integration within the NZGMDB pipeline.
+This step computes the maximum usable frequency (Fmax) for each seismic record by analyzing Signal-to-Noise Ratio (SNR) data.
 
 ---
 
@@ -12,7 +12,7 @@ To calculate Fmax, run the following Python script:
 python -m nzgmdb.scripts.run_nzgmdb calc-fmax <main_dir>
 ```
 
-- **<main_dir>** is the top-level output directory where NZGMDB stores its results.
+- `<main_dir>` is the top-level output directory where NZGMDB stores its results.
 
 Example:
 ```bash
@@ -42,13 +42,8 @@ Optional parameters include:
 For each record in the SNR metadata table, the algorithm performs the following steps:
 
 **1. Calculate Scaled Nyquist Frequency**
-```python
-scaled_nyquist_freq = (
-    (1 / current_row["delta"].iloc[0])
-    * 0.5
-    * 0.8
-)
-```
+$$scaled f_s = \frac{1}{\delta} \cdot 0.5 \cdot 0.8$$
+Where ${\delta}$ is the time difference between each data point in the waveform.
 
 **2. Smooth SNR Values**
 - Applies a rolling window smoothing with a window size of 5 frequency points

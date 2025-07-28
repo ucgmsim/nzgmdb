@@ -13,7 +13,7 @@ To generate the site table, run the following Python script:
 python -m nzgmdb.scripts.run_nzgmdb generate-site-table-basin <main_dir>
 ```
 
-- **<main_dir>** is the top-level output directory where NZGMDB stores its results.
+- `<main_dir>` is the top-level output directory where NZGMDB stores its results.
 
 Example:
 ```bash
@@ -29,7 +29,7 @@ nzgmdb_output/flatfiles/site_table_basin.csv
 ## ⚙️ Process
 
 ### 🔹 Fetch Station Metadata
-- Uses ObsPy’s `FDSN_Client` to download station metadata from the GeoNet network, including:
+- Uses ObsPy’s [FDSN client](https://docs.obspy.org/packages/obspy.clients.fdsn.html) to download station metadata from the GeoNet network, including:
   - Network code
   - Station code
   - Latitude / Longitude
