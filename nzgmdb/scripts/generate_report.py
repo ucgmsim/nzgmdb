@@ -1323,6 +1323,157 @@ def generate_report(
     html_parts.append(f'<img src="data:image/png;base64,{img_base64}">')
     html_parts.append("</div>")
 
+    # Show Quality DB Skiped reasons and totals for records between full and quality
+    html_parts.append("<h2>Quality vs Full Statistics</h2>")
+    flatfile_dir = Path("/home/joel/local/gmdb/4p3/flatfiles")
+    quality_skipped_records = pd.read_csv(
+        flatfile_dir / file_structure.SkippedRecordFilenames.QUALITY_SKIPPED_RECORDS
+    )
+    full_rotd50 = pd.read_csv(
+        flatfile_dir / file_structure.FlatfileNames.GROUND_MOTION_IM_ROTD50_FLAT,
+        dtype={"evid": str},
+    )
+    quality_rodt50 = pd.read_csv(
+        nzgmdb_new_ffp,
+        dtype={"evid": str},
+    )
+
+    total_records_f = len(full_rotd50)
+    unique_events_f = full_rotd50["evid"].nunique()
+    unique_sites_f = full_rotd50["sta"].nunique()
+
+    html_parts.append(f"<h2>Full Database</h2>")
+    html_parts.append("<ul>")
+    html_parts.append(f"<li>Total records: {total_records_f}</li>")
+    html_parts.append(f"<li>Unique events: {unique_events_f}</li>")
+    html_parts.append(f"<li>Unique sites: {unique_sites_f}</li>")
+    html_parts.append("</ul>")
+
+    total_records = len(quality_rodt50)
+    unique_events = quality_rodt50["evid"].nunique()
+    unique_sites = quality_rodt50["sta"].nunique()
+
+    html_parts.append(f"<h2>Quality Database</h2>")
+    html_parts.append("<ul>")
+    html_parts.append(f"<li>Total records: {total_records}</li>")
+    html_parts.append(f"<li>Unique events: {unique_events}</li>")
+    html_parts.append(f"<li>Unique sites: {unique_sites}</li>")
+    html_parts.append("</ul>")
+
+    html_parts.append("<h2>Quality DB Skipped Records</h2>")
+
+    # Create a list of the errors and the number of times they occur
+    errors = list(quality_skipped_records["reason"].unique())
+    values = [
+        len(quality_skipped_records[quality_skipped_records["reason"] == error])
+        for error in errors
+    ]
+
+    # Total up all the errors
+    total_errors = sum(values)
+
+    # Get the extra unknown errors
+    unknown_errors = len(quality_skipped_records) - total_errors
+    # Add the unknown errors to the dictionary
+    errors.append("missing")
+    values.append(unknown_errors)
+
+    # Create the pie chart with matplotlib
+    fig = plot_pie_chart_1p(
+        errors,
+        values,
+        "Quality Skipped Reasons",
+    )
+
+    # Convert to base64
+    buf = BytesIO()
+    fig.savefig(buf, format="png", bbox_inches="tight")
+    plt.close(fig)
+    buf.seek(0)
+    img_base64 = base64.b64encode(buf.read()).decode("utf-8")
+    # Embed in HTML
+    html_parts.append("<div class='fig-single'>")
+    html_parts.append(f'<img src="data:image/png;base64,{img_base64}">')
+    html_parts.append("</div>")
+
+    html_parts.append("<h2>Pipeline Skipped Records</h2>")
+    skipped_files = [
+        flatfile_dir / file_structure.SkippedRecordFilenames.GEONET_SKIPPED_RECORDS,
+        flatfile_dir
+        / file_structure.SkippedRecordFilenames.PHASE_ARRIVAL_SKIPPED_RECORDS,
+        flatfile_dir / file_structure.SkippedRecordFilenames.SNR_SKIPPED_RECORDS,
+        flatfile_dir / file_structure.SkippedRecordFilenames.FMAX_SKIPPED_RECORDS,
+        flatfile_dir / file_structure.SkippedRecordFilenames.PROCESSING_SKIPPED_RECORDS,
+    ]
+    accepted_lengths = [
+        len(
+            pd.read_csv(
+                flatfile_dir
+                / file_structure.PreFlatfileNames.STATION_MAGNITUDE_TABLE_GEONET
+            )
+        )
+        / 3,  # 1 record per 3 components
+        len(
+            pd.read_csv(
+                flatfile_dir / file_structure.PreFlatfileNames.PHASE_ARRIVAL_TABLE
+            )
+        ),
+        len(pd.read_csv(flatfile_dir / file_structure.FlatfileNames.SNR_METADATA)),
+        len(pd.read_csv(flatfile_dir / file_structure.FlatfileNames.FMAX)),
+        len(full_rotd50),
+    ]
+    titles = [
+        "Geonet Skipped Records",
+        "Phase Arrival Skipped Records",
+        "SNR Skipped Records",
+        "Fmax Skipped Records",
+        "Processing Skipped Records",
+    ]
+    rename_col_dict = {
+        "mseed_file": "record_id",
+        "skipped_records": "record_id",
+    }
+    for i, skipped_file in enumerate(skipped_files):
+        skipped_records = pd.read_csv(skipped_file)
+        skipped_records = skipped_records.rename(columns=rename_col_dict)
+        # Create a list of the errors and the number of times they occur
+        errors = list(skipped_records["reason"].unique())
+        values = [
+            len(skipped_records[skipped_records["reason"] == error]) for error in errors
+        ]
+
+        # Total up all the errors
+        total_errors = sum(values)
+
+        # Get the extra unknown errors
+        unknown_errors = len(skipped_records) - total_errors
+
+        # Add the accepted lengths to the values
+        values.append(accepted_lengths[i])
+        errors.append("Accepted")
+
+        # Add the unknown errors to the dictionary
+        errors.append("missing")
+        values.append(unknown_errors)
+
+        # Create the pie chart with matplotlib
+        fig = plot_pie_chart_1p(
+            errors,
+            values,
+            titles[i],
+        )
+
+        # Convert to base64
+        buf = BytesIO()
+        fig.savefig(buf, format="png", bbox_inches="tight")
+        plt.close(fig)
+        buf.seek(0)
+        img_base64 = base64.b64encode(buf.read()).decode("utf-8")
+        # Embed in HTML
+        html_parts.append("<div class='fig-single'>")
+        html_parts.append(f'<img src="data:image/png;base64,{img_base64}">')
+        html_parts.append("</div>")
+
     # Add Important Dataset Comparisons
     html_parts.append("<h2>Important Dataset Comparisons</h2>")
     html_parts.append("<div class='fig-single'>")
@@ -1397,11 +1548,11 @@ def generate_report(
     html_parts.append("<h2>Skipped Reasons</h2>")
 
     # Show skipped reasons for each dataset
-    skipped_records_dir = Path("/home/joel/local/gmdb/4p3/flatfiles")
+
     skipped_files = [
-        skipped_records_dir / "quality_skipped_records.csv",
-        skipped_records_dir / "processing_skipped_records.csv",
-        skipped_records_dir / "geonet_skipped_records.csv",
+        flatfile_dir / "quality_skipped_records.csv",
+        flatfile_dir / "processing_skipped_records.csv",
+        flatfile_dir / "geonet_skipped_records.csv",
     ]
     rename_col_dict = {
         "mseed_file": "record_id",
@@ -1488,23 +1639,27 @@ def generate_report(
 
     # Add f_type Comparison
     img_base64 = compare_column_barplot(
-        old_obs_data.record_df,
-        new_obs_data.record_df,
+        full_rotd50,
+        quality_rodt50,
         column="f_type",
         x_label="Fault Type",
         title="Fault Type Comparison",
+        old_label="Full NZGMDB",
+        new_label="Quality NZGMDB",
     )
     html_parts.append("<div class='fig-single'>")
     html_parts.append(f'<img src="data:image/png;base64,{img_base64}">')
     html_parts.append("</div>")
 
-    # Add reloc Comparison
+    # # Add reloc Comparison
     img_base64 = compare_column_barplot(
-        old_obs_data.record_df,
-        new_obs_data.record_df,
+        full_rotd50,
+        quality_rodt50,
         column="reloc",
         x_label="Relocation",
         title="Relocation Comparison",
+        old_label="Full NZGMDB",
+        new_label="Quality NZGMDB",
     )
     html_parts.append("<div class='fig-single'>")
     html_parts.append(f'<img src="data:image/png;base64,{img_base64}">')
