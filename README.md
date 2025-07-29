@@ -7,7 +7,7 @@
 - Extract seismic waveforms  
 - Perform signal processing  
 - Generate intensity measures (IMs)  
-- Produce standardized flatfiles for analysis
+- Produce standardised flatfiles for analysis
 
 This tool is designed for researchers working with strong motion records.
 

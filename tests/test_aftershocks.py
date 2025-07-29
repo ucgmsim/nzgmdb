@@ -15,9 +15,9 @@ def square_from_center(lat: float, lon: float, size: float = 2.0):
     Parameters
     ----------
     lat : float
-        Latitude of the center point.
+        Latitude of the centre point.
     lon : float
-        Longitude of the center point.
+        Longitude of the centre point.
     size : float
         Size of the square in km. Default is 2.0 km.
 
@@ -29,7 +29,7 @@ def square_from_center(lat: float, lon: float, size: float = 2.0):
     # Half-dimensions
     half_size = size / 2.0
 
-    # Move from center to get corners using forward geodesic calculation
+    # Move from centre to get corners using forward geodesic calculation
     # Order: NW, NE, SE, SW
     # Latitude shifts: north/south (+/- half_size)
     # Longitude shifts: east/west (+/- half_size)
@@ -50,7 +50,7 @@ def square_from_center(lat: float, lon: float, size: float = 2.0):
 
 
 def test_abwd_crjb_with_mock_data():
-    # Example mini catalog
+    # Example mini catalogue
     data = {
         "datetime": pd.to_datetime(["2020-01-01", "2020-01-02", "2020-01-10"]),
         "mag": [6.6, 4.5, 4.2],

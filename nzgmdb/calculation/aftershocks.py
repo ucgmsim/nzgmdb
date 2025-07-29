@@ -239,7 +239,7 @@ def abwd_crjb(
     Parameters
     ----------
     catalogue_pd : pandas.DataFrame
-        Earthquake catalog with at least 'datetime' and 'mag' columns.
+        Earthquake catalogue with at least 'datetime' and 'mag' columns.
     rupture_area_poly : list
         List of rupture polygons (shapely.geometry.Polygon objects).
     crjb_cutoff : float

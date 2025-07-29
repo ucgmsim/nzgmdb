@@ -1,8 +1,8 @@
 # 🔍 Parse GeoNet
 
-This step in the NZGMDB pipeline combines earthquake catalog querying and waveform extraction in a single efficient process. Rather than separately querying the catalog and then downloading waveforms, this integrated approach fetches earthquake event data from GeoNet and immediately retrieves corresponding seismic waveforms for each event, creating the earthquake source table, station magnitude table, and downloading MSEED files for subsequent processing.
+This step in the NZGMDB pipeline combines earthquake catalogue querying and waveform extraction in a single efficient process. Rather than separately querying the catalogue and then downloading waveforms, this integrated approach fetches earthquake event data from GeoNet and immediately retrieves corresponding seismic waveforms for each event, creating the earthquake source table, station magnitude table, and downloading MSEED files for subsequent processing.
 
-**Key Efficiency:** By processing catalog data and waveform retrieval together this saves software processing time to get all of the results.
+**Key Efficiency:** By processing catalogue data and waveform retrieval together this saves software processing time to get all of the results.
 
 ---
 
@@ -84,7 +84,7 @@ The preferred magnitude selection follows a hierarchical approach:
 
 ### 🔹 Station Selection Within Radius
 
-For each earthquake, stations are selected within a distance-dependent radius:
+For each earthquake, stations are selected within a distance-dependant radius:
 
 - **Distance calculation:** Based on the `Mw_rrup.txt` lookup table
 ![](images/mw_rrup.png)
@@ -154,7 +154,7 @@ Some Stream objects require extra splitting for a single evid_station combinatio
 
 ### 🔹 Waveform File Management
 
-Successfully processed waveforms are saved in standardized format:
+Successfully processed waveforms are saved in standardised format:
 
 #### **File Naming Convention**
 ```
@@ -163,7 +163,7 @@ Successfully processed waveforms are saved in standardized format:
 
 #### **Directory Structure**
 - **Storage location:** `waveforms/` subdirectory
-- **Organization:** Hierarchical by year then event ID then mseed directory
+- **Organisation:** Hierarchical by year then event ID then mseed directory
 - **Format:** ObsPy Stream objects saved as MSEED files
 
 ### 🔹 Station Magnitude Processing
@@ -256,7 +256,7 @@ Records station-specific magnitude measurements:
 The pipeline implements efficient batch processing:
 - **Batch creation:** Events split into configurable batch sizes
 - **Progress tracking:** Processed batches tracked to enable checkpointing
-- **Parallel execution:** Multiprocessing support for improved performance
+- **Parallel execution:** Multiprocessing support for improved performance (can be adjusted to multiprocess over events and sites depending on the user's needs)
 
 ### 🔹 Error Recovery
 
@@ -265,12 +265,6 @@ Robust error handling ensures pipeline resilience:
 - **Partial failures:** Individual record failures don't stop batch processing
 - **Incomplete data:** Graceful handling of missing or corrupted data
 - **Resume capability:** Pipeline can resume from last successful batch
-
-### 🔹 Performance Optimization
-
-- **Multiprocessing:** Configurable process count for parallel execution
-- **Caching:** Efficient reuse of client connections and inventory data
-- **Batch sizing:** Optimized batch sizes balance memory usage and performance
 
 ---
 

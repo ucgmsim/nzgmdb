@@ -154,7 +154,7 @@ def run_for_single_event(
     # Get the event ID information
     event_id = event_dir.name
 
-    # Get the catalog information
+    # Get the catalogue information
     cat = client_NZ.get_events(eventid=event_id)
     event_cat = cat[0]
 

@@ -1,6 +1,6 @@
 # 🌋 Add Tectonic Domain
 
-This step in the NZGMDB pipeline enhances earthquake source metadata by adding tectonic classification and applying improved relocations. **This single step performs both relocations and tectonic mapping**, combining multiple earthquake catalog sources to produce the most accurate event locations and tectonic classifications.
+This step in the NZGMDB pipeline enhances earthquake source metadata by adding tectonic classification and applying improved relocations. **This single step performs both relocations and tectonic mapping**, combining multiple earthquake catalogue sources to produce the most accurate event locations and tectonic classifications.
 
 ---
 

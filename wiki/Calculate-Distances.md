@@ -27,13 +27,13 @@ Optional parameters include:
 ## 📋 Prerequisites
 
 The Calculate Distances step requires the following inputs from previous pipeline steps:
-- **[Merge IM Results](Merge-IM-Results.md)** - Provides the merged intensity measure data with event-station pairs (This is to optimize the distance calculation with only the even-station pairs that actually have processed results)
+- **[Merge IM Results](Merge-IM-Results.md)** - Provides the merged intensity measure data with event-station pairs (This is to optimise the distance calculation with only the even-station pairs that actually have processed results)
 
 ---
 
 ## ⚙️ Process
 
-### 🔹 Event Categorization
+### 🔹 Event optimised
 
 For every event in the NZGMDB, a rupture plane is generated to compute rrup distances. Events are classified into four categories based on available information:
 
@@ -47,7 +47,7 @@ For every event in the NZGMDB, a rupture plane is generated to compute rrup dist
 
 ### 🔹 CCLD Method
 
-For events without direct SRF files, the NZGMDB utilizes the [CCLD](https://zenodo.org/records/13380672) method, originally developed for NGA-West3, to determine optimal fault plane geometries.
+For events without direct SRF files, the NZGMDB utilises the [CCLD](https://zenodo.org/records/13380672) method, originally developed for NGA-West3, to determine optimal fault plane geometries.
 
 #### Magnitude Scaling Relations
 
@@ -74,7 +74,7 @@ CCLD uses the following method to calculate the selected nodal plane for an even
 
 1. **Generate pseudo-station grid** around the fault plane
 2. **Run Nr simulations** of fault planes and calculate rrup distances between each plane and every pseudo-station
-3. **Find optimal nodal plane** that minimizes the following expression:
+3. **Find optimal nodal plane** that minimises the following expression:
 
 
 $$\sum_{r=1,s=1}^{N_r} \sum_{s=1}^{N_s} (R_{RUP,median,s} - R_{RUP,r,s})^2,$$
@@ -94,19 +94,19 @@ CCLD provides 5 different categories for nodal plane determination, each designe
 
 **Category A & B**: Use preferred nodal plane (A = first plane, B = second plane)
 - Maintains fixed strike, dip, and rake values
-- Randomly samples area, aspect ratio, and hypocenter locations
+- Randomly samples area, aspect ratio, and hypocentre locations
 
 **Category C**: Two nodal plane solutions, no preference
 - 50/50 random selection between nodal planes in each simulation
-- Randomly samples area, aspect ratio, and hypocenter locations
+- Randomly samples area, aspect ratio, and hypocentre locations
 
 **Category D**: Single nodal plane with uncertainty
 - Strike adjusted by ±30°, dip by ±10° in each simulation
 - Rake determines rupture mechanism
-- Randomly samples area, aspect ratio, and hypocenter locations
+- Randomly samples area, aspect ratio, and hypocentre locations
 
 **Category E**: No nodal plane information
-- All parameters (strike, dip, rake, area, aspect ratio, hypocenter) randomly sampled
+- All parameters (strike, dip, rake, area, aspect ratio, hypocentre) randomly sampled
 
 ### 🔹 NZGMDB Implementation
 
@@ -195,7 +195,7 @@ The system determines the correct nodal plane through the following hierarchy:
    - Extract strike, dip, rake values
    - Apply CCLD Method A
 
-3. **Check Standard CMT Solutions**: Search GeoNet CMT catalog:
+3. **Check Standard CMT Solutions**: Search GeoNet CMT catalogue:
    - Apply CCLD Method C with both nodal planes
 
 4. **Use Domain Default**: For events without CMT solutions:
@@ -204,23 +204,24 @@ The system determines the correct nodal plane through the following hierarchy:
 
 ### 🔹 Distance Calculations
 
-Once fault geometry is established, the system calculates multiple distance metrics:
+Once fault geometry is established, the system calculates multiple distance metrics which are briefly summarised below, some more documentation / figures of these metrics can be found [here](https://pubs.geoscienceworld.org/eeri/earthquake-spectra/article/27/4/1219/586831/Estimating-Unknown-Input-Parameters-when).
 
 #### Primary Distance Metrics
-- **rrup**: Closest distance to rupture surface (km)
-- **rjb**: Joyner-Boore distance (closest distance to surface projection of rupture, km)
-- **rx**: Distance measured perpendicular to fault strike (km)
-- **ry**: Distance measured parallel to fault strike (km)
+- **r_rup**: Closest distance to rupture surface (km)
+- **r_jb**: Joyner-Boore distance (closest distance to surface projection of rupture, km)
+- **r_avg**: Average closest distance to all rupture plane areas (km)
+- **r_x**: Distance measured perpendicular to fault strike (km)
+- **r_y**: Distance measured parallel to fault strike (km)
 
 #### Additional Distance Metrics
-- **r_epis**: Epicentral distance (km)
-- **r_hyps**: Hypocentral distance (km)
-- **azs**: Source-to-site azimuth (degrees)
-- **b_azs**: Back azimuth (degrees)
+- **r_epi**: Epicentral distance (km)
+- **r_hyp**: Hypocentral distance (km)
+- **az**: Source-to-site azimuth (degrees)
+- **b_az**: Back azimuth (degrees)
 
 #### Volcanic Zone Metrics
-- **tvz_length**: Length of ray path through Taupo Volcanic Zone (km)
-- **boundary_dists_rjb**: Distance from station to Taupo Volcanic Zone boundary (km)
+- **r_tvz**: Length of ray path through Taupo Volcanic Zone (km)
+- **r_xvf**: Distance from station to Taupo Volcanic Zone boundary (km)
 
 ### 🔹 SRF Point Generation
 
@@ -240,11 +241,11 @@ Key parameters from `config.yaml` that control distance calculations:
 - `ll_num`: WGS84 coordinate system identifier
 - `nztm_num`: NZTM coordinate system identifier
 
-### 🔹 Fault Discretization
+### 🔹 Fault Discretisation
 - `points_per_km`: Resolution for SRF point generation (default: typically 2-4 points/km)
 
 ### 🔹 External Data Sources
-- `cmt_url`: URL for GeoNet CMT solutions catalog
+- `cmt_url`: URL for GeoNet CMT solutions catalogue
 
 ---
 
@@ -340,16 +341,14 @@ Additional geometry information is stored in a separate table for each of the pl
 
 ---
 
-## 🔧 Performance Optimization
+## 🔧 Performance Optimisation
 
 ### 🔹 Parallel Processing
-- Distance calculations are parallelized by event
-- Use `--n-procs` parameter to optimize for available CPU cores
+- Distance calculations are parallelised by event
+- Use `--n-procs` parameter to optimise for available CPU cores
 
 ### 🔹 Computational Efficiency
-- Vectorized distance calculations using NumPy
-- Optimized triangle-to-point distance algorithms for complex fault geometries
-- Efficient spatial queries using Shapely geometric operations
+- Vectorised distance calculations using NumPy
 
 ---
 

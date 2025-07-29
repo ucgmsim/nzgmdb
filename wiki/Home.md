@@ -84,7 +84,7 @@ Outputs a quality database flatfiles with all filtered records.
 ---
 
 ## ⚙️ Software Pipeline Execution
-While the flowchart provides a conceptual overview of the NZGMDB pipeline's data dependencies, the actual software implementation is optimized for performance and diverges slightly from this sequential structure.
+While the flowchart provides a conceptual overview of the NZGMDB pipeline's data dependencies, the actual software implementation is optimised for performance and diverges slightly from this sequential structure.
 
 The pipeline is therefore composed of subtasks that can be run independently. These subtasks are listed below, along with links to their detailed documentation to explain what parts of the site and event streams the task invloves.
 
@@ -109,12 +109,12 @@ The pipeline is therefore composed of subtasks that can be run independently. Th
 
 ## 🗂️ File Structure
 
-After a successful run of the NZGMDB pipeline, the output directory is organized into multiple top-level folders. Each contains files related to specific steps in the pipeline, following a consistent naming convention for ease of traceability and downstream analysis.
+After a successful run of the NZGMDB pipeline, the output directory is organised into multiple top-level folders. Each contains files related to specific steps in the pipeline, following a consistent naming convention for ease of traceability and downstream analysis.
 
 ### 📁 Top-Level Directories
 
 - **`flatfiles/`**  
-  Contains merged CSV outputs for ground motion intensity measures (IMs), component-specific results, supporting metadata, and skipped record logs. These files summarize the final data products and intermediate results from each pipeline stage.
+  Contains merged CSV outputs for ground motion intensity measures (IMs), component-specific results, supporting metadata, and skipped record logs. These files summarise the final data products and intermediate results from each pipeline stage.
 
   - **`earthquake_source_table.csv`**  
     Holds source metadata for each event.
@@ -239,7 +239,7 @@ After a successful run of the NZGMDB pipeline, the output directory is organized
     - **`station_magnitude_table.csv`**
 
 - **`waveforms/`**  
-  Includes both raw and processed waveform data for every event, organized by year and event ID. Under each `event_id/`, there are two subfolders mseed and processed. Below shows the structure of the `waveforms/` directory and naming conventions used for files:
+  Includes both raw and processed waveform data for every event, organised by year and event ID. Under each `event_id/`, there are two subfolders mseed and processed. Below shows the structure of the `waveforms/` directory and naming conventions used for files:
 
 ```
 waveforms/
@@ -260,7 +260,7 @@ waveforms/
 ```
 
 - **`IM/`**  
-Stores per-record intensity measure (IM) CSV files computed during the IM Calculation stage. Files are organized by event ID, with each folder containing intensity measure results for every record that has corresponding processed waveform data. The structure of the IM/ directory and the naming convention is shown below:
+Stores per-record intensity measure (IM) CSV files computed during the IM Calculation stage. Files are organised by event ID, with each folder containing intensity measure results for every record that has corresponding processed waveform data. The structure of the IM/ directory and the naming convention is shown below:
 
 ```
 IM/
@@ -271,7 +271,7 @@ IM/
 ```
 
 - **`snr_fas/`**  
-    Contains signal-to-noise ratio (SNR) and Fourier Amplitude Spectrum (FAS) calculations for each record. Files are organized first by year, then by event ID. Each file includes SNR and FAS data for a single waveform record.
+    Contains signal-to-noise ratio (SNR) and Fourier Amplitude Spectrum (FAS) calculations for each record. Files are organised first by year, then by event ID. Each file includes SNR and FAS data for a single waveform record.
 
 ```
 snr_fas/
@@ -305,7 +305,7 @@ gmc/
 ```
 
 - **`phase_arrival/`**  
-  Contains P and S-wave arrival picks derived using PhaseNet. The data is organized into batch folders (e.g., batch_0, batch_1, etc.) based on the number of processes used during execution. Each batch includes input record tracking, pick results, probability series data, and logs.
+  Contains P and S-wave arrival picks derived using PhaseNet. The data is organised into batch folders (e.g., batch_0, batch_1, etc.) based on the number of processes used during execution. Each batch includes input record tracking, pick results, probability series data, and logs.
 
 ```
 phase_arrival/

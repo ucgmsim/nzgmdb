@@ -69,7 +69,7 @@ Adds basin information to the site table dataframe by checking if station coordi
 | `sta`           | Station code identifier (e.g., "DCZ")                        |
 | `lat`           | Latitude of station location (WGS84)                         |
 | `lon`           | Longitude of station location (WGS84)                        |
-| `elev`          | Station elevation in meters                                  |
+| `elev`          | Station elevation in metres                                  |
 | `site_class`    | NZS1170 site classification (A is best, D is worst)          |
 | `Vs30`          | Shear wave velocity (Vs30) value in m/s                      |
 | `Vs30_std`      | Standard deviation of Vs30                                   |
@@ -80,11 +80,11 @@ Adds basin information to the site table dataframe by checking if station coordi
 | `Q_T0`          | Quality flag for T0                                          |
 | `D_T0`          | Data Source for T0                                           |
 | `T0_ref`        | Reference for T0 data source                                 |
-| `Z1.0`          | Basin depth to 1.0 km/s shear wave velocity (meters)         |
+| `Z1.0`          | Basin depth to 1.0 km/s shear wave velocity (metres)         |
 | `Z1.0_std`      | Standard deviation of Z1.0                                   |
 | `Q_Z1.0`        | Quality flag for Z1.0                                        |
 | `Z1.0_ref`      | Reference for Z1.0 data source                               |
-| `Z2.5`          | Basin depth to 2.5 km/s shear wave velocity (meters, scaled) |
+| `Z2.5`          | Basin depth to 2.5 km/s shear wave velocity (metres, scaled) |
 | `Z2.5_std`      | Standard deviation of Z2.5                                   |
 | `Q_Z2.5`        | Quality flag for Z2.5                                        |
 | `Z2.5_ref`      | Reference for Z2.5 data source                               |

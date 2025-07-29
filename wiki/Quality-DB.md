@@ -37,7 +37,7 @@ nzgmdb_output/flatfiles/quality_skipped_records.csv
 ## 📋 Prerequisites
 
 The Quality-DB step requires the following inputs from previous pipeline step:
-- **[Merge Flatfiles](Merge-Flatfiles.md)** - Provides the consolidated ground motion IM catalog and flatfiles to filter
+- **[Merge Flatfiles](Merge-Flatfiles.md)** - Provides the consolidated ground motion IM catalogue and flatfiles to filter
 
 ---
 
@@ -96,7 +96,7 @@ The filtering process follows a systematic 9-step approach:
 score_min: 0.5  # Minimum quality score threshold
 
 # Can be adjusted when calling apply_all_filters()
-catalog, skipped = apply_all_filters(catalog, clipped_records_ffp, 
+catalogue, skipped = apply_all_filters(catalogue, clipped_records_ffp, 
                                    score_min=0.7)  # Custom threshold
 ```
 
@@ -123,7 +123,7 @@ catalog, skipped = apply_all_filters(catalog, clipped_records_ffp,
 multi_max: 0.2  # Maximum multi-component inconsistency threshold
 
 # Runtime adjustment
-catalog, skipped = apply_all_filters(catalog, clipped_records_ffp,
+catalogue, skipped = apply_all_filters(catalogue, clipped_records_ffp,
                                    multi_max=0.15)  # Stricter filtering
 ```
 
@@ -150,7 +150,7 @@ catalog, skipped = apply_all_filters(catalog, clipped_records_ffp,
 fmax_min: 4.1  # Minimum maximum usable frequency (Hz)
 
 # Runtime adjustment for higher frequency applications
-catalog, skipped = apply_all_filters(catalog, clipped_records_ffp,
+catalogue, skipped = apply_all_filters(catalogue, clipped_records_ffp,
                                    fmax_min=8.0)  # Require higher frequencies
 ```
 ---
@@ -176,7 +176,7 @@ catalog, skipped = apply_all_filters(catalog, clipped_records_ffp,
 fmin_max: 2.0  # Maximum minimum usable frequency (Hz)
 
 # Runtime adjustment for low-frequency studies
-catalog, skipped = apply_all_filters(catalog, clipped_records_ffp,
+catalogue, skipped = apply_all_filters(catalogue, clipped_records_ffp,
                                    fmin_max=1.0)  # Require better low-frequency content
 ```
 
@@ -282,7 +282,7 @@ dist_clip_high: 645.0
 clip_threshold: 0.2
 ```
 
-### 🔹 Runtime Customization
+### 🔹 Runtime Customisation
 
 All filter thresholds can be adjusted when calling the function directly:
 
@@ -291,7 +291,7 @@ from nzgmdb.data_processing.quality_db import apply_all_filters
 
 # Custom filtering with stricter criteria
 filtered_catalog, skipped_records = apply_all_filters(
-    catalog=input_catalog,
+    catalogue=input_catalog,
     clipped_records_ffp=clipped_file_path,
     bypass_records=custom_bypass_list,
     score_min=0.7,      # Stricter quality requirement
@@ -317,14 +317,14 @@ The quality database creates filtered versions of all flatfiles, ensuring consis
 
 | File                                      | Description                                                                   |
 |-------------------------------------------|-------------------------------------------------------------------------------|
-| `ground_motion_im_rotd50_flat.csv`        | RotD50 filtered intensity measure catalog with quality metrics                |
-| `ground_motion_im_table_000_flat.csv`     | 000 component filtered intensity measure catalog with quality metrics         |
-| `ground_motion_im_table_090_flat.csv`     | 090 component filtered intensity measure catalog with quality metrics         |
-| `ground_motion_im_table_ver_flat.csv`     | Vertical component filtered intensity measure catalog with quality metrics  n |
-| `ground_motion_im_table_rotd0_flat.csv`   | RotD0 filtered intensity measure catalog with quality metrics                 |
-| `ground_motion_im_table_rotd100_flat.csv` | RotD100 filtered intensity measure catalog with quality metrics               |
-| `ground_motion_im_table_EAS_flat.csv`     | EAS filtered intensity measure catalog with quality metrics                   |
-| `ground_motion_im_table_geom_flat.csv`    | Geometric mean filtered intensity measure catalog with quality metrics        |
+| `ground_motion_im_rotd50_flat.csv`        | RotD50 filtered intensity measure catalogue with quality metrics                |
+| `ground_motion_im_table_000_flat.csv`     | 000 component filtered intensity measure catalogue with quality metrics         |
+| `ground_motion_im_table_090_flat.csv`     | 090 component filtered intensity measure catalogue with quality metrics         |
+| `ground_motion_im_table_ver_flat.csv`     | Vertical component filtered intensity measure catalogue with quality metrics  n |
+| `ground_motion_im_table_rotd0_flat.csv`   | RotD0 filtered intensity measure catalogue with quality metrics                 |
+| `ground_motion_im_table_rotd100_flat.csv` | RotD100 filtered intensity measure catalogue with quality metrics               |
+| `ground_motion_im_table_EAS_flat.csv`     | EAS filtered intensity measure catalogue with quality metrics                   |
+| `ground_motion_im_table_geom_flat.csv`    | Geometric mean filtered intensity measure catalogue with quality metrics        |
 | `earthquake_source_table.csv`             | Event source data for remaining records                                       |
 | `earthquake_source_geometry.csv`          | Fault geometry: strike, dip, rake, corner coordinates                         |
 | `site_table.csv`                          | Station metadata for sites with quality records                               |
@@ -350,7 +350,7 @@ The quality database creates filtered versions of all flatfiles, ensuring consis
 
 ### 🔹 Core Functions
 
-The Quality-DB step utilizes several key functions from the `quality_db.py` module:
+The Quality-DB step utilises several key functions from the `quality_db.py` module:
 
 - **`create_quality_db()`**: Main orchestration function
 - **`apply_all_filters()`**: Comprehensive filtering pipeline
@@ -362,7 +362,7 @@ The Quality-DB step utilizes several key functions from the `quality_db.py` modu
 - **`filter_missing_sta_info()`**: Station metadata validation
 - **`filter_ground_level_locations()`**: Location code filtering
 - **`apply_clipNet_filter()`**: Clipped record removal
-- **`filter_duplicate_channels()`**: Channel prioritization and deduplication
+- **`filter_duplicate_channels()`**: Channel prioritisation and deduplication
 
 ### 🔹 Bypass Record Integration
 
@@ -377,5 +377,5 @@ The bypass mechanism allows users to retain specific records that would otherwis
 
 ## 🔗 Related Steps
 
-- **Previous**: [Merge Flatfiles](Merge-Flatfiles.md) - Provides the consolidated IM catalog that serves as input for quality filtering
+- **Previous**: [Merge Flatfiles](Merge-Flatfiles.md) - Provides the consolidated IM catalogue that serves as input for quality filtering
 - **Optional**: [Upload to Dropbox](Upload-Dropbox.md) - Packages and uploads the all information for distribution

@@ -1,6 +1,6 @@
 # 🔗 Merge Flatfiles
 
-This step in the NZGMDB pipeline consolidates all individual flatfiles into final component-specific datasets while ensuring data consistency and removing filtered entries. **This critical step transforms the comprehensive intensity measure catalog into organized, analysis-ready flatfiles** that separate results by motion component and integrate metadata from earthquake source, site, and propagation tables.
+This step in the NZGMDB pipeline consolidates all individual flatfiles into final component-specific datasets while ensuring data consistency and removing filtered entries. **This critical step transforms the comprehensive intensity measure catalogue into organised, analysis-ready flatfiles** that separate results by motion component and integrate metadata from earthquake source, site, and propagation tables.
 
 ---
 
@@ -50,7 +50,7 @@ Ensures that only events and records that successfully passed all pipeline filte
 
 Splits the comprehensive ground_motion_im_catalogue into component-specific tables:
 
-**Component Organization:**
+**Component Organisation:**
 - **000**: North-South horizontal component
 - **090**: East-West horizontal component  
 - **ver**: Vertical component

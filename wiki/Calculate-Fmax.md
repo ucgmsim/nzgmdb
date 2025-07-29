@@ -47,7 +47,7 @@ Where ${\delta}$ is the time difference between each data point in the waveform.
 
 **2. Smooth SNR Values**
 - Applies a rolling window smoothing with a window size of 5 frequency points
-- Uses center-aligned averaging with a minimum of 1 observation per window
+- Uses centre-aligned averaging with a minimum of 1 observation per window
 - This reduces noise in the SNR frequency spectrum
 
 **3. Initial Quality Screening**
@@ -126,7 +126,7 @@ Key parameters from `config.yaml` that control Fmax calculation:
 
 ### 🔹 Smoothing Parameters
 - `window`: 5 (rolling window size for SNR smoothing)
-- `center`: True (center-aligned smoothing)
+- `centre`: True (centre-aligned smoothing)
 - `min_periods`: 1 (minimum observations per window)
 
 ---

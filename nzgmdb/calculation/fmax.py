@@ -162,7 +162,7 @@ def assess_snr_and_get_fmax(
 
     snr_smooth = snr.rolling(
         window=config.get_value("window"),
-        center=config.get_value("center"),
+        center=config.get_value("centre"),
         min_periods=config.get_value("min_periods"),
     ).mean()
 
