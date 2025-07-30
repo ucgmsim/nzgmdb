@@ -23,6 +23,7 @@ REGISTRY = {
     "TectonicDomains_Feb2021_8_NZTM.shx": "sha256:9ca42e270e5604f4740b3d99ea6a72daa75eaae0e6c6bda3c4e5c86a72369403",
     "TectonicDomains_Feb2021_8_NZTM.dbf": "sha256:534c644c5d4d6a08106752e2fe33894bc820645efa017e0137ef5b8d44e8200c",
     "tectonic_domain_polygon_points.csv": "sha256:a54c30a4e68bb078c6ce9d99bd30f902a9627d57fd39392b403064de61b1f1a4",
+    "sensitivity_ignore.csv": "sha256:2282de53c63be44fcd27d753969cacdd23b3b02bf053ffa481f97f2a517d2c7e",
 }
 
 URLS = {
@@ -46,6 +47,7 @@ URLS = {
     "3468575.srf": "https://www.dropbox.com/scl/fi/rt2xedggp3yt6jyvmgqmx/3468575.srf?rlkey=t06fswe8kr415k68kc6y58m32&st=2wemmuzx&dl=1",
     "3528839.srf": "https://www.dropbox.com/scl/fi/4cps30pfrt6vw8a2ih1jr/3528839.srf?rlkey=tssde379h8lfn6ql0n29fl7dx&st=u2jnxrsx&dl=1",
     "3631359.srf": "https://www.dropbox.com/scl/fi/g66sx9d30r2k2xs9kg977/3631359.srf?rlkey=ne7zplqwd1datludrae7a3b2o&st=idq88bbj&dl=1",
+    "sensitivity_ignore.csv": "https://www.dropbox.com/scl/fi/51nz3ia5bzbuvikajba28/sensitivity_ignore.csv?rlkey=9fj57vb5inwtxh68sqrmocth2&st=9r1r5vup&dl=1",
 }
 
 NZGMDB_DATA = pooch.create(

@@ -20,6 +20,7 @@ points_per_km: 10
 channel_codes:
   - HN?
   - BN?
+  - HH?
 # Mseed Variables
 vs30: 500
 min_time_difference: 15
@@ -100,3 +101,6 @@ crjb_cutoffs:
   - 2
   - 5
   - 10
+# Empirical Thresholds
+max_residual_threshold: 6
+mean_residual_threshold: 4
