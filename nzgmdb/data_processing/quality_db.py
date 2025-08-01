@@ -9,9 +9,9 @@ import pandas as pd
 
 from nzgmdb.management import config as cfg
 from nzgmdb.management import file_structure
-from nzgmdb.management.file_structure import FlatfileNames
 from nzgmdb.management.data_registry import NZGMDB_DATA
-from oq_wrapper import constants, estimations, wrapper
+from nzgmdb.management.file_structure import FlatfileNames
+from oq_wrapper import constants, wrapper
 
 
 def filter_flatfiles_on_catalouge(
@@ -657,27 +657,16 @@ def filter_empirical_predictions(
     # Order by record_id in the im_emp to match the order of catalogue
     im_emp = im_emp.set_index("record_id").loc[catalogue["record_id"]].reset_index()
 
+    # Compute the log-difference
     # Note: im_emp is already in logspace, so no need to convert it
-    # Mean total residual difference across pSA periods 0.01 - 10
-    catalogue["mean_residual"] = np.abs(
-        np.mean(
-            (
-                np.log(catalogue.loc[:, psa_cols_filtered])
-                - im_emp.loc[:, psa_cols_filtered]
-            ),
-            axis=1,
-        )
+    residual_diff = (
+        np.log(catalogue.loc[:, psa_cols_filtered]) - im_emp.loc[:, psa_cols_filtered]
     )
-    # Max total residual difference across pSA periods 0.01 - 10
+
+    # Calculate mean and max residuals using the precomputed difference
+    catalogue["mean_residual"] = np.abs(residual_diff.mean(axis=1))
     catalogue["max_residual"] = np.abs(
-        (
-            np.log(catalogue.loc[:, psa_cols_filtered])
-            - im_emp.loc[:, psa_cols_filtered]
-        ).max(axis=1)
-        - (
-            np.log(catalogue.loc[:, psa_cols_filtered])
-            - im_emp.loc[:, psa_cols_filtered]
-        ).min(axis=1)
+        residual_diff.max(axis=1) - residual_diff.min(axis=1)
     )
 
     # Obtain the thresholds from parameters or use defaults from the config
@@ -693,32 +682,36 @@ def filter_empirical_predictions(
         else max_residual_threshold
     )
 
-    # Filter for max_residual
-    max_filter = catalogue[catalogue["max_residual"] > max_residual_threshold]
-    if bypass_records is not None:
-        max_filter = max_filter[~max_filter["record_id"].isin(bypass_records)]
-    skipped_max = pd.DataFrame(
-        {
-            "record_id": max_filter["record_id"],
+    # Create filters based on the thresholds
+    filters = {
+        "max_residual": {
+            "threshold": max_residual_threshold,
             "reason": f"Empirical predictions max_residual exceeds threshold {max_residual_threshold}",
-        }
-    )
-
-    # Filter for mean_residual
-    mean_filter = catalogue[catalogue["mean_residual"] > mean_residual_threshold]
-    if bypass_records is not None:
-        mean_filter = mean_filter[~mean_filter["record_id"].isin(bypass_records)]
-    skipped_mean = pd.DataFrame(
-        {
-            "record_id": mean_filter["record_id"],
+        },
+        "mean_residual": {
+            "threshold": mean_residual_threshold,
             "reason": f"Empirical predictions mean_residual exceeds threshold {mean_residual_threshold}",
-        }
-    )
+        },
+    }
 
-    # Combine skipped records
-    skipped_records = pd.concat(
-        [skipped_max, skipped_mean], ignore_index=True
-    ).drop_duplicates("record_id")
+    # Apply the filters to the catalogue
+    skipped_list = []
+    for col, params in filters.items():
+        filt = catalogue[catalogue[col] > params["threshold"]]
+        if bypass_records is not None:
+            filt = filt[~filt["record_id"].isin(bypass_records)]
+        skipped = pd.DataFrame(
+            {
+                "record_id": filt["record_id"],
+                "reason": params["reason"],
+            }
+        )
+        skipped_list.append(skipped)
+
+    # Concatenate all skipped records
+    skipped_records = pd.concat(skipped_list, ignore_index=True).drop_duplicates(
+        "record_id"
+    )
 
     # Filter out all skipped records from catalogue
     catalogue = catalogue[~catalogue["record_id"].isin(skipped_records["record_id"])]
