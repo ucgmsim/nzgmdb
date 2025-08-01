@@ -524,6 +524,11 @@ def filter_troublesome_sensitivity(
     sensitivity_ignore["start_date"] = pd.to_datetime(sensitivity_ignore["start_date"])
     sensitivity_ignore["end_date"] = pd.to_datetime(sensitivity_ignore["end_date"])
 
+    # Ensure the dtypes are correct for merging
+    for col in ["sta", "chan", "loc"]:
+        catalogue[col] = catalogue[col].astype(str)
+        sensitivity_ignore[col] = sensitivity_ignore[col].astype(str)
+
     # Merge on sta, chan, loc to find records that have the same sta chan and loc
     # as the sensitivity ignore records
     merged = pd.merge(
@@ -717,6 +722,9 @@ def filter_empirical_predictions(
 
     # Filter out all skipped records from catalogue
     catalogue = catalogue[~catalogue["record_id"].isin(skipped_records["record_id"])]
+
+    # Drop the residual columns
+    catalogue = catalogue.drop(columns=["mean_residual", "max_residual"])
 
     return catalogue, skipped_records
 
@@ -922,14 +930,17 @@ def create_quality_db(
 ):
     """
     Create the quality database by running the following checks:
-    1) Check there are GMC predictions
-    2) Check against GMC predictions score mean
-    3) Check against GMC predictions multi mean
-    3) Check against GMC predictions fmax
-    5) Check against GMC predictions fmin
-    6) Ensure we use ground level locations
-    7) Filter out clipped records
-    8) Select which channel to use for duplicate HN, BN for the same evid / sta
+    1) Filter by presence of GMC predictions.
+    2) Filter by score mean.
+    3) Filter by multi mean.
+    4) Filter by fmax.
+    5) Filter by fmin.
+    6) Filter by missing station information.
+    7) Ensure only ground level locations are used.
+    8) Filter out clipped records.
+    9) Filter out troublesome sensitivity records.
+    10) Filter out records too far from empirical predictions.
+    11) Select the appropriate channel for duplicate HN/BN records for the same event/station.
 
     Parameters
     ----------

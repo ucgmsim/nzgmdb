@@ -122,7 +122,7 @@ Example with a synthetic waveform to illustrate the window:
 Waveforms are downloaded using the FDSN Client with specific constraints:
 
 #### **Channel Selection**
-- **Strong motion channels only:** `channel_codes: [HN?, BN?]` from configuration
+- **Channel Selection:** `channel_codes: [HN?, BN?, HH?]` from configuration, where HN and BN are Strong Motion channels and HH is Broadband
 - **Three-component data:** Horizontal (N-S, E-W) and vertical components
 
 #### **Error Handling**
