@@ -1,7 +1,8 @@
+from pathlib import Path
+
 import pandas as pd
 import pytest
 
-from pathlib import Path
 from nzgmdb.data_processing import quality_db
 
 
