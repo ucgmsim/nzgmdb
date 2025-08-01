@@ -151,11 +151,11 @@ def plot_pie_chart_1p(full_labels: list[str], full_sizes: list[int], title: str)
     ax.axis("equal")
 
     small_values_indices = [
-        i for i, size in enumerate(sizes) if size / total_records * 100 < 1
+        i for i, size in enumerate(sizes) if size / total_records * 100 < 5
     ]
     if small_values_indices:
         small_labels = [
-            labels[i] + f" <1% ({sizes[i]})" if sizes[i] != 0 else " (0%)"
+            labels[i] + f" <5% ({sizes[i]})" if sizes[i] != 0 else " (0%)"
             for i in small_values_indices
         ]
         small_colors = [colors[i] for i in small_values_indices]
@@ -1186,12 +1186,36 @@ def get_pSA_bias_residual_fig(
     return fig, ax1, ax2
 
 
+def skipped_records_pie_chart(skipped_df: pd.DataFrame, title: str) -> str:
+    """
+    Generate a pie chart showing the distribution of skipped records by reason.
+
+    Parameters
+    ----------
+    skipped_df : pd.DataFrame
+        DataFrame containing skipped records with a 'reason' column.
+    title : str
+        Title for the pie chart.
+    """
+    errors = list(skipped_df["reason"].unique())
+    values = [len(skipped_df[skipped_df["reason"] == error]) for error in errors]
+    total_errors = sum(values)
+    unknown_errors = len(skipped_df) - total_errors
+    errors.append("missing")
+    values.append(unknown_errors)
+    fig = plot_pie_chart_1p(errors, values, title)
+    buf = BytesIO()
+    fig.savefig(buf, format="png", bbox_inches="tight")
+    plt.close(fig)
+    buf.seek(0)
+    img_base64 = base64.b64encode(buf.read()).decode("utf-8")
+    return img_base64
+
+
 def generate_report(
     new_version_directory: Path,
     output_file: Path,
     compare_version_directory: Path | None = None,
-    new_version: NZGMDBVersion = None,
-    old_version: NZGMDBVersion = None,
 ):
     """
     Generate a HTML report comparing the new version of the database to a previous version.
@@ -1199,18 +1223,21 @@ def generate_report(
     Parameters
     ----------
     new_version_directory : Path
-        The directory containing the new version of the database.
+        The directory containing the new version of the database. Top Level directory, must contain the 'flatfiles' directory as well as the 'quality_db' directory.
+        Must have the skipped record files as well as the ground motion flat files.
     output_file : Path
         The file where the HTML report will be saved.
     compare_version_directory : Path | None
-        The directory containing the previous version of the database to compare against.
+        The Top Level directory containing the previous version of the database to compare against.
         If None, a summary of the new version will be generated instead and comparison plots will not be generated.
     """
     html_parts = []
+    html_parts.append(
+        f"<html><head><title>NZGMDB Comparison Report ({new_version_directory.stem}){f' vs {compare_version_directory.stem}' if compare_version_directory else ''}</title>"
+    )
     # Start of HTML
     html_parts.append(
         """
-    <html><head><title>NZGMDB Comparison Report</title>
     <style>
         .fig-grid {
             display: flex;
@@ -1237,110 +1264,145 @@ def generate_report(
     <h1>NZGMDB Comparison Report</h1>
     """
     )
-
-    # Load data from new version
-    nzgmdb_new_ffp = (
-        new_version_directory
-        / file_structure.FlatfileNames.GROUND_MOTION_IM_ROTD50_FLAT
+    # Define Directories
+    new_flatfiles_dir = file_structure.get_flatfile_dir(new_version_directory)
+    new_quality_dir = file_structure.get_quality_db_dir(new_version_directory)
+    old_flatifles_dir = (
+        file_structure.get_flatfile_dir(new_version_directory)
+        if compare_version_directory
+        else None
     )
-    nzgmdb_old_ffp = (
-        compare_version_directory
-        / file_structure.FlatfileNames.GROUND_MOTION_IM_ROTD50_FLAT
+    old_quality_dir = (
+        file_structure.get_quality_db_dir(new_version_directory)
+        if compare_version_directory
+        else None
+    )
+
+    # Load Ground Motion data
+    nzgmdb_full_new_ffp = (
+        new_flatfiles_dir / file_structure.FlatfileNames.GROUND_MOTION_IM_ROTD50_FLAT
+    )
+    nzgmdb_quality_new_ffp = (
+        new_quality_dir / file_structure.FlatfileNames.GROUND_MOTION_IM_ROTD50_FLAT
+    )
+    nzgmdb_full_old_ffp = (
+        (old_flatifles_dir / file_structure.FlatfileNames.GROUND_MOTION_IM_ROTD50_FLAT)
+        if compare_version_directory
+        else None
+    )
+    nzgmdb_quality_old_ffp = (
+        (old_quality_dir / file_structure.FlatfileNames.GROUND_MOTION_IM_ROTD50_FLAT)
+        if compare_version_directory
+        else None
+    )
+    full_new = pd.read_csv(nzgmdb_full_new_ffp, dtype={"evid": str})
+    quality_new = pd.read_csv(nzgmdb_quality_new_ffp, dtype={"evid": str})
+    full_old = (
+        pd.read_csv(nzgmdb_full_old_ffp, dtype={"evid": str})
+        if nzgmdb_full_old_ffp
+        else None
+    )
+    quality_old = (
+        pd.read_csv(nzgmdb_quality_old_ffp, dtype={"evid": str})
+        if nzgmdb_quality_old_ffp
+        else None
+    )
+
+    # Load the Skipped Records
+    new_quality_skipped = pd.read_csv(
+        new_flatfiles_dir
+        / file_structure.SkippedRecordFilenames.QUALITY_SKIPPED_RECORDS
+    )
+    old_quality_skipped = (
+        pd.read_csv(
+            old_flatifles_dir
+            / file_structure.SkippedRecordFilenames.QUALITY_SKIPPED_RECORDS
+        )
+        if compare_version_directory
+        else None
     )
 
     # Load new and compute empirical parameters
-    new_obs_data = load_obs_nzgmdb(nzgmdb_new_ffp, new_version)
-    new_emp_gm_params = compute_nzgmdb_emp_gm_params(new_obs_data)
-
-    # Compute residuals
-    new_emp_gm_params[PSA_KEYS] = np.log(
-        new_obs_data.record_df.loc[new_emp_gm_params.index, PSA_KEYS]
-    )
-    new_res = get_residuals(
-        new_emp_gm_params,
-        ims=PSA_KEYS,
-        pred_suffix="mean",
-        site_col="site_id",
-    )
-
-    new_bias = new_res[PSA_KEYS].mean(axis=0)
-    new_std = new_res[PSA_KEYS].std(axis=0)
-
-    # Load old and compute empirical parameters
-    old_obs_data = load_obs_nzgmdb(nzgmdb_old_ffp, old_version)
-    old_emp_gm_params = compute_nzgmdb_emp_gm_params(old_obs_data)
-
-    # Compute residuals
-    old_emp_gm_params[PSA_KEYS] = np.log(
-        old_obs_data.record_df.loc[old_emp_gm_params.index, PSA_KEYS]
-    )
-    old_res = get_residuals(
-        old_emp_gm_params,
-        ims=PSA_KEYS,
-        pred_suffix="mean",
-        site_col="site_id",
-    )
-
-    old_bias = old_res[PSA_KEYS].mean(axis=0)
-    old_std = old_res[PSA_KEYS].std(axis=0)
-
-    html_parts.append("<h2>New Version Summary</h2>")
-    html_parts.append("<div class='fig-single'>")
-
-    # Generate psa bias and residual figure
-    fig, ax1, ax2 = get_pSA_bias_residual_fig(std_y_axis_limits=(0, 1.25))
-
-    ax1.plot(
-        PERIODS,
-        old_bias,
-        label="Old NZGMDB",
-    )
-    ax1.plot(
-        PERIODS,
-        new_bias,
-        label="New NZGMDB",
-    )
-    ax1.legend()
-
-    ax2.plot(
-        PERIODS,
-        old_std,
-        label="Old NZGMDB",
-    )
-    ax2.plot(
-        PERIODS,
-        new_std,
-        label="New NZGMDB",
-    )
-
-    # Convert to base64
-    buf = BytesIO()
-    fig.savefig(buf, format="png", bbox_inches="tight")
-    plt.close(fig)
-    buf.seek(0)
-    img_base64 = base64.b64encode(buf.read()).decode("utf-8")
-    # Embed in HTML
-    html_parts.append(f'<img src="data:image/png;base64,{img_base64}">')
-    html_parts.append("</div>")
+    # new_obs_data = load_obs_nzgmdb(nzgmdb_new_ffp, new_version)
+    # new_emp_gm_params = compute_nzgmdb_emp_gm_params(new_obs_data)
+    #
+    # # Compute residuals
+    # new_emp_gm_params[PSA_KEYS] = np.log(
+    #     new_obs_data.record_df.loc[new_emp_gm_params.index, PSA_KEYS]
+    # )
+    # new_res = get_residuals(
+    #     new_emp_gm_params,
+    #     ims=PSA_KEYS,
+    #     pred_suffix="mean",
+    #     site_col="site_id",
+    # )
+    #
+    # new_bias = new_res[PSA_KEYS].mean(axis=0)
+    # new_std = new_res[PSA_KEYS].std(axis=0)
+    #
+    # # Load old and compute empirical parameters
+    # old_obs_data = load_obs_nzgmdb(nzgmdb_old_ffp, old_version)
+    # old_emp_gm_params = compute_nzgmdb_emp_gm_params(old_obs_data)
+    #
+    # # Compute residuals
+    # old_emp_gm_params[PSA_KEYS] = np.log(
+    #     old_obs_data.record_df.loc[old_emp_gm_params.index, PSA_KEYS]
+    # )
+    # old_res = get_residuals(
+    #     old_emp_gm_params,
+    #     ims=PSA_KEYS,
+    #     pred_suffix="mean",
+    #     site_col="site_id",
+    # )
+    #
+    # old_bias = old_res[PSA_KEYS].mean(axis=0)
+    # old_std = old_res[PSA_KEYS].std(axis=0)
+    #
+    # html_parts.append("<h2>New Version Summary</h2>")
+    # html_parts.append("<div class='fig-single'>")
+    #
+    # # Generate psa bias and residual figure
+    # fig, ax1, ax2 = get_pSA_bias_residual_fig(std_y_axis_limits=(0, 1.25))
+    #
+    # ax1.plot(
+    #     PERIODS,
+    #     old_bias,
+    #     label="Old NZGMDB",
+    # )
+    # ax1.plot(
+    #     PERIODS,
+    #     new_bias,
+    #     label="New NZGMDB",
+    # )
+    # ax1.legend()
+    #
+    # ax2.plot(
+    #     PERIODS,
+    #     old_std,
+    #     label="Old NZGMDB",
+    # )
+    # ax2.plot(
+    #     PERIODS,
+    #     new_std,
+    #     label="New NZGMDB",
+    # )
+    #
+    # # Convert to base64
+    # buf = BytesIO()
+    # fig.savefig(buf, format="png", bbox_inches="tight")
+    # plt.close(fig)
+    # buf.seek(0)
+    # img_base64 = base64.b64encode(buf.read()).decode("utf-8")
+    # # Embed in HTML
+    # html_parts.append(f'<img src="data:image/png;base64,{img_base64}">')
+    # html_parts.append("</div>")
 
     # Show Quality DB Skiped reasons and totals for records between full and quality
-    html_parts.append("<h2>Quality vs Full Statistics</h2>")
-    flatfile_dir = Path("/home/joel/local/gmdb/4p3/flatfiles")
-    quality_skipped_records = pd.read_csv(
-        flatfile_dir / file_structure.SkippedRecordFilenames.QUALITY_SKIPPED_RECORDS
-    )
-    full_rotd50 = pd.read_csv(
-        flatfile_dir / file_structure.FlatfileNames.GROUND_MOTION_IM_ROTD50_FLAT,
-        dtype={"evid": str},
-    )
-    quality_rodt50 = pd.read_csv(
-        nzgmdb_new_ffp,
-        dtype={"evid": str},
-    )
+    html_parts.append("<h2>New NZGMDB Quality vs Full Statistics</h2>")
 
-    total_records_f = len(full_rotd50)
-    unique_events_f = full_rotd50["evid"].nunique()
-    unique_sites_f = full_rotd50["sta"].nunique()
+    total_records_f = len(full_new)
+    unique_events_f = full_new["evid"].nunique()
+    unique_sites_f = full_new["sta"].nunique()
 
     html_parts.append(f"<h2>Full Database</h2>")
     html_parts.append("<ul>")
@@ -1349,9 +1411,9 @@ def generate_report(
     html_parts.append(f"<li>Unique sites: {unique_sites_f}</li>")
     html_parts.append("</ul>")
 
-    total_records = len(quality_rodt50)
-    unique_events = quality_rodt50["evid"].nunique()
-    unique_sites = quality_rodt50["sta"].nunique()
+    total_records = len(quality_new)
+    unique_events = quality_new["evid"].nunique()
+    unique_sites = quality_new["sta"].nunique()
 
     html_parts.append(f"<h2>Quality Database</h2>")
     html_parts.append("<ul>")
@@ -1360,68 +1422,119 @@ def generate_report(
     html_parts.append(f"<li>Unique sites: {unique_sites}</li>")
     html_parts.append("</ul>")
 
-    html_parts.append("<h2>Quality DB Skipped Records</h2>")
+    if compare_version_directory:
+        html_parts.append("<h2>Old NZGMDB Quality vs Full Statistics</h2>")
 
-    # Create a list of the errors and the number of times they occur
-    errors = list(quality_skipped_records["reason"].unique())
-    values = [
-        len(quality_skipped_records[quality_skipped_records["reason"] == error])
-        for error in errors
-    ]
+        total_records_f_old = len(full_old)
+        unique_events_f_old = full_old["evid"].nunique()
+        unique_sites_f_old = full_old["sta"].nunique()
 
-    # Total up all the errors
-    total_errors = sum(values)
+        html_parts.append(f"<h2>Full Database</h2>")
+        html_parts.append("<ul>")
+        html_parts.append(f"<li>Total records: {total_records_f_old}</li>")
+        html_parts.append(f"<li>Unique events: {unique_events_f_old}</li>")
+        html_parts.append(f"<li>Unique sites: {unique_sites_f_old}</li>")
+        html_parts.append("</ul>")
 
-    # Get the extra unknown errors
-    unknown_errors = len(quality_skipped_records) - total_errors
-    # Add the unknown errors to the dictionary
-    errors.append("missing")
-    values.append(unknown_errors)
+        total_records_old = len(quality_old)
+        unique_events_old = quality_old["evid"].nunique()
+        unique_sites_old = quality_old["sta"].nunique()
+        html_parts.append(f"<h2>Quality Database</h2>")
+        html_parts.append("<ul>")
+        html_parts.append(f"<li>Total records: {total_records_old}</li>")
+        html_parts.append(f"<li>Unique events: {unique_events_old}</li>")
+        html_parts.append(f"<li>Unique sites: {unique_sites_old}</li>")
+        html_parts.append("</ul>")
 
-    # Create the pie chart with matplotlib
-    fig = plot_pie_chart_1p(
-        errors,
-        values,
-        "Quality Skipped Reasons",
+    # Compare the reasons why records were skipped into the quality database
+    html_parts.append("<h2>New NZGMDB Quality DB Skipped Records</h2>")
+    img_base64 = skipped_records_pie_chart(
+        new_quality_skipped, "New NZGMDB Quality Skipped Reasons"
     )
-
-    # Convert to base64
-    buf = BytesIO()
-    fig.savefig(buf, format="png", bbox_inches="tight")
-    plt.close(fig)
-    buf.seek(0)
-    img_base64 = base64.b64encode(buf.read()).decode("utf-8")
-    # Embed in HTML
     html_parts.append("<div class='fig-single'>")
     html_parts.append(f'<img src="data:image/png;base64,{img_base64}">')
     html_parts.append("</div>")
 
+    if compare_version_directory:
+        html_parts.append("<h2>Old NZGMDB Quality DB Skipped Records</h2>")
+        img_base64 = skipped_records_pie_chart(
+            old_quality_skipped, "Old NZGMDB Quality Skipped Reasons"
+        )
+        html_parts.append("<div class='fig-single'>")
+        html_parts.append(f'<img src="data:image/png;base64,{img_base64}">')
+        html_parts.append("</div>")
+
     html_parts.append("<h2>Pipeline Skipped Records</h2>")
-    skipped_files = [
-        flatfile_dir / file_structure.SkippedRecordFilenames.GEONET_SKIPPED_RECORDS,
-        flatfile_dir
+    # Prepare skipped files and accepted lengths for both new and old
+    skipped_files_new = [
+        new_flatfiles_dir
+        / file_structure.SkippedRecordFilenames.GEONET_SKIPPED_RECORDS,
+        new_flatfiles_dir
         / file_structure.SkippedRecordFilenames.PHASE_ARRIVAL_SKIPPED_RECORDS,
-        flatfile_dir / file_structure.SkippedRecordFilenames.SNR_SKIPPED_RECORDS,
-        flatfile_dir / file_structure.SkippedRecordFilenames.FMAX_SKIPPED_RECORDS,
-        flatfile_dir / file_structure.SkippedRecordFilenames.PROCESSING_SKIPPED_RECORDS,
+        new_flatfiles_dir / file_structure.SkippedRecordFilenames.SNR_SKIPPED_RECORDS,
+        new_flatfiles_dir / file_structure.SkippedRecordFilenames.FMAX_SKIPPED_RECORDS,
+        new_flatfiles_dir
+        / file_structure.SkippedRecordFilenames.PROCESSING_SKIPPED_RECORDS,
     ]
-    accepted_lengths = [
+    skipped_files_old = (
+        [
+            old_flatifles_dir
+            / file_structure.SkippedRecordFilenames.GEONET_SKIPPED_RECORDS,
+            old_flatifles_dir
+            / file_structure.SkippedRecordFilenames.PHASE_ARRIVAL_SKIPPED_RECORDS,
+            old_flatifles_dir
+            / file_structure.SkippedRecordFilenames.SNR_SKIPPED_RECORDS,
+            old_flatifles_dir
+            / file_structure.SkippedRecordFilenames.FMAX_SKIPPED_RECORDS,
+            old_flatifles_dir
+            / file_structure.SkippedRecordFilenames.PROCESSING_SKIPPED_RECORDS,
+        ]
+        if compare_version_directory
+        else [None] * 5
+    )
+    accepted_lengths_new = [
         len(
             pd.read_csv(
-                flatfile_dir
+                new_flatfiles_dir
                 / file_structure.PreFlatfileNames.STATION_MAGNITUDE_TABLE_GEONET
             )
         )
-        / 3,  # 1 record per 3 components
+        / 3,
         len(
             pd.read_csv(
-                flatfile_dir / file_structure.PreFlatfileNames.PHASE_ARRIVAL_TABLE
+                new_flatfiles_dir / file_structure.PreFlatfileNames.PHASE_ARRIVAL_TABLE
             )
         ),
-        len(pd.read_csv(flatfile_dir / file_structure.FlatfileNames.SNR_METADATA)),
-        len(pd.read_csv(flatfile_dir / file_structure.FlatfileNames.FMAX)),
-        len(full_rotd50),
+        len(pd.read_csv(new_flatfiles_dir / file_structure.FlatfileNames.SNR_METADATA)),
+        len(pd.read_csv(new_flatfiles_dir / file_structure.FlatfileNames.FMAX)),
+        len(full_new),
     ]
+    accepted_lengths_old = (
+        [
+            len(
+                pd.read_csv(
+                    old_flatifles_dir
+                    / file_structure.PreFlatfileNames.STATION_MAGNITUDE_TABLE_GEONET
+                )
+            )
+            / 3,
+            len(
+                pd.read_csv(
+                    old_flatifles_dir
+                    / file_structure.PreFlatfileNames.PHASE_ARRIVAL_TABLE
+                )
+            ),
+            len(
+                pd.read_csv(
+                    old_flatifles_dir / file_structure.FlatfileNames.SNR_METADATA
+                )
+            ),
+            len(pd.read_csv(old_flatifles_dir / file_structure.FlatfileNames.FMAX)),
+            len(full_old),
+        ]
+        if compare_version_directory
+        else [None] * 5
+    )
     titles = [
         "Geonet Skipped Records",
         "Phase Arrival Skipped Records",
@@ -1433,46 +1546,57 @@ def generate_report(
         "mseed_file": "record_id",
         "skipped_records": "record_id",
     }
-    for i, skipped_file in enumerate(skipped_files):
+
+    for i in range(len(skipped_files_new)):
+        # New version
+        skipped_file = skipped_files_new[i]
         skipped_records = pd.read_csv(skipped_file)
         skipped_records = skipped_records.rename(columns=rename_col_dict)
-        # Create a list of the errors and the number of times they occur
         errors = list(skipped_records["reason"].unique())
         values = [
             len(skipped_records[skipped_records["reason"] == error]) for error in errors
         ]
-
-        # Total up all the errors
         total_errors = sum(values)
-
-        # Get the extra unknown errors
         unknown_errors = len(skipped_records) - total_errors
-
-        # Add the accepted lengths to the values
-        values.append(accepted_lengths[i])
+        values.append(accepted_lengths_new[i])
         errors.append("Accepted")
-
-        # Add the unknown errors to the dictionary
         errors.append("missing")
         values.append(unknown_errors)
-
-        # Create the pie chart with matplotlib
-        fig = plot_pie_chart_1p(
-            errors,
-            values,
-            titles[i],
-        )
-
-        # Convert to base64
+        fig = plot_pie_chart_1p(errors, values, f"New NZGMDB {titles[i]}")
         buf = BytesIO()
         fig.savefig(buf, format="png", bbox_inches="tight")
         plt.close(fig)
         buf.seek(0)
         img_base64 = base64.b64encode(buf.read()).decode("utf-8")
-        # Embed in HTML
         html_parts.append("<div class='fig-single'>")
         html_parts.append(f'<img src="data:image/png;base64,{img_base64}">')
         html_parts.append("</div>")
+
+        # Old version (if available)
+        if skipped_files_old[i] is not None:
+            skipped_file = skipped_files_old[i]
+            skipped_records = pd.read_csv(skipped_file)
+            skipped_records = skipped_records.rename(columns=rename_col_dict)
+            errors = list(skipped_records["reason"].unique())
+            values = [
+                len(skipped_records[skipped_records["reason"] == error])
+                for error in errors
+            ]
+            total_errors = sum(values)
+            unknown_errors = len(skipped_records) - total_errors
+            values.append(accepted_lengths_old[i])
+            errors.append("Accepted")
+            errors.append("missing")
+            values.append(unknown_errors)
+            fig = plot_pie_chart_1p(errors, values, f"Old NZGMDB {titles[i]}")
+            buf = BytesIO()
+            fig.savefig(buf, format="png", bbox_inches="tight")
+            plt.close(fig)
+            buf.seek(0)
+            img_base64 = base64.b64encode(buf.read()).decode("utf-8")
+            html_parts.append("<div class='fig-single'>")
+            html_parts.append(f'<img src="data:image/png;base64,{img_base64}">')
+            html_parts.append("</div>")
 
     # Add Important Dataset Comparisons
     html_parts.append("<h2>Important Dataset Comparisons</h2>")

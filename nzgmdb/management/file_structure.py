@@ -147,6 +147,23 @@ def get_flatfile_dir(main_dir: Path) -> Path:
     return main_dir / "flatfiles"
 
 
+def get_quality_db_dir(main_dir: Path) -> Path:
+    """
+    Get the directory for the quality database.
+
+    Parameters
+    ----------
+    main_dir : Path
+        The main directory of the NZGMDB results.
+
+    Returns
+    -------
+    Path
+        The directory where flatfiles in the quality database are stored.
+    """
+    return main_dir / "quality_db"
+
+
 def get_event_id_from_mseed(mseed_file: Path) -> str:
     """
     Extract the event ID from an mseed file.
