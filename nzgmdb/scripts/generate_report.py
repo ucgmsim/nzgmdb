@@ -1836,7 +1836,7 @@ def generate_report(
     img_base64 = compare_column_barplot(
         full_new_events,
         quality_new_events,
-        column="tect_type",
+        column="tect_class",
         x_label="Tectonic Type",
         title="New NZGMDB Tectonic Type Comparison",
     )
@@ -1844,7 +1844,7 @@ def generate_report(
         img_base64_old = compare_column_barplot(
             full_old_events,
             quality_old_events,
-            column="tect_type",
+            column="tect_class",
             x_label="Tectonic Type",
             title="Old NZGMDB Tectonic Type Comparison",
         )
@@ -1859,16 +1859,16 @@ def generate_report(
 
     # Add f_type Comparison
     img_base64 = compare_column_barplot(
-        full_rotd50,
-        quality_rotd50,
+        full_new_events,
+        quality_new_events,
         column="f_type",
         x_label="Fault Type",
         title="New NZGMDB Fault Type Comparison",
     )
     if compare_version_directory:
         img_base64_old = compare_column_barplot(
-            full_rotd50_old,
-            quality_rotd50_old,
+            full_old_events,
+            quality_old_events,
             column="f_type",
             x_label="Fault Type",
             title="Old NZGMDB Fault Type Comparison",
@@ -1884,16 +1884,16 @@ def generate_report(
 
     # Add reloc Comparison
     img_base64 = compare_column_barplot(
-        full_rotd50,
-        quality_rotd50,
+        full_new_events,
+        quality_new_events,
         column="reloc",
         x_label="Relocation",
         title="New NZGMDB Relocation Comparison",
     )
     if compare_version_directory:
         img_base64_old = compare_column_barplot(
-            full_rotd50_old,
-            quality_rotd50_old,
+            full_old_events,
+            quality_old_events,
             column="reloc",
             x_label="Relocation",
             title="Old NZGMDB Relocation Comparison",
