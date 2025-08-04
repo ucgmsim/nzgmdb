@@ -16,7 +16,7 @@ import matplotlib.gridspec as gridspec
 from matplotlib.patches import Patch
 
 import oq_wrapper as oqw
-from nzgmdb.management import file_structure
+from nzgmdb.management import file_structure, data_registry
 
 
 # constants.py
@@ -120,7 +120,7 @@ IMs = NON_PSA_IMs + PSA_KEYS
 def func(pct, allvals):
     absolute = round(pct / 100.0 * np.sum(allvals))
     normal = "{:.1f}%\n({:d})".format(pct, absolute)
-    return normal if pct > 1 else ""
+    return normal if pct > 5 else ""
 
 
 import matplotlib.pyplot as plt
@@ -132,7 +132,7 @@ def plot_pie_chart_1p(full_labels: list[str], full_sizes: list[int], title: str)
     sizes = [full_sizes[i] for i in non_zero_indices]
     total_records = sum(sizes)
     pie_labels = [
-        full_labels[i] if sizes[i] / total_records * 100 > 1 else ""
+        full_labels[i] if sizes[i] / total_records * 100 > 5 else ""
         for i in non_zero_indices
     ]
     labels = [full_labels[i] for i in non_zero_indices]
@@ -165,7 +165,7 @@ def plot_pie_chart_1p(full_labels: list[str], full_sizes: list[int], title: str)
         ]
         ax.legend(
             handles=legend_elements,
-            title="Categories < 1%",
+            title="Categories < 5%",
             bbox_to_anchor=(1, 0.8),
             loc="center left",
         )
@@ -1092,35 +1092,203 @@ def get_bias_residual_fig(
     return fig, ax1, ax2, ax3, ax4
 
 
+def important_set_figures(
+    quality_df: pd.DataFrame,
+    flatfiles_dir: Path,
+    important_set_names: list[str],
+    import_set_ffps: list[str],
+    label: str,
+):
+    """
+    Creates figures comparing the number of station and event pairs
+    and also the reasons for skipped records in the important sets from pie charts.
+
+    Parameters
+    ----------
+    quality_df: pd.DataFrame
+        DataFrame containing the quality information of the NZGMDB.
+    flatfiles_dir: Path
+        Directory containing the flat files for the skipped records.
+    important_set_names: list[str]
+        List of names for the important sets to be compared.
+    import_set_ffps: list[str]
+        List of file paths to the important sets to be compared.
+    label: str
+        Label for the figures, used in the title of the plots / legend.
+
+    Returns
+    -------
+    bar_img_base64: str
+        Base64 encoded string of the bar plot image.
+    pie_imgs_base64: list[str]
+        List of Base64 encoded strings of the pie chart images for each important set.
+    """
+
+    # Bar plot
+    in_nzgmdb = []
+    total_subset = []
+    missing_event_stations = []
+    for compare_set_ffp in import_set_ffps:
+        compare_set = pd.read_csv(
+            compare_set_ffp, dtype={"event_id": str, "stat_id": str}
+        )
+        quality_df["station_evid"] = quality_df["sta"] + "_" + quality_df["evid"]
+        compare_set["station_evid"] = (
+            compare_set["stat_id"] + "_" + compare_set["event_id"]
+        )
+        nzgmdb_set_station_evid = set(quality_df["station_evid"].unique())
+        compare_set_station_evid = set(compare_set["station_evid"].unique())
+        common_station_evid = list(
+            nzgmdb_set_station_evid.intersection(compare_set_station_evid)
+        )
+        in_nzgmdb.append(len(common_station_evid))
+        total_subset.append(len(compare_set_station_evid))
+        missing_event_stations.append(
+            compare_set_station_evid - nzgmdb_set_station_evid
+        )
+
+    fig, ax = plt.subplots(figsize=(14, 8), dpi=300)
+    X_axis = np.arange(len(important_set_names))
+    width = 0.75
+    in_nzgmdb_arr = np.array(in_nzgmdb)
+    missing_arr = np.array(total_subset) - in_nzgmdb_arr
+    ax.bar(X_axis, in_nzgmdb_arr, width, label=f"In {label}", color="blue")
+    ax.bar(
+        X_axis, missing_arr, width, label="Missing", bottom=in_nzgmdb_arr, color="red"
+    )
+    ax.set_xticks(X_axis)
+    ax.set_xticklabels(important_set_names)
+    ax.set_xlabel("Datasets")
+    ax.set_ylabel("Number of Station and Event Pairs")
+    ax.set_title(f"{label} Number of Station and Event Pairs in Each Dataset")
+    ax.legend()
+    for i, (x, y, m) in enumerate(zip(X_axis, in_nzgmdb_arr, missing_arr)):
+        ax.text(
+            x,
+            y + m + max(total_subset) * 0.01,
+            f"{int(m)} Missing Records",
+            ha="center",
+            va="bottom",
+            fontsize=12,
+            color="black",
+            fontweight="bold",
+        )
+    buf = BytesIO()
+    fig.savefig(buf, format="png", bbox_inches="tight")
+    plt.close(fig)
+    buf.seek(0)
+    bar_img_base64 = base64.b64encode(buf.read()).decode("utf-8")
+
+    # Pie charts for skipped reasons
+    skipped_files = [
+        flatfiles_dir / "quality_skipped_records.csv",
+        flatfiles_dir / "processing_skipped_records.csv",
+        flatfiles_dir / "geonet_skipped_records.csv",
+    ]
+    rename_col_dict = {"mseed_file": "record_id", "skipped_records": "record_id"}
+    pie_imgs_base64 = []
+    for i, missing_event_stations_set in enumerate(missing_event_stations):
+        cur_df = pd.DataFrame(columns=["station_evid", "reason"])
+        for skipped_file in skipped_files:
+            skipped_records = pd.read_csv(skipped_file)
+            skipped_records = skipped_records.rename(columns=rename_col_dict)
+            skipped_records["station_evid"] = skipped_records["record_id"].apply(
+                lambda x: x.split("_")[1] + "_" + x.split("_")[0]
+            )
+            for event_station in missing_event_stations_set:
+                sta_event_list = skipped_records["station_evid"].to_list()
+                if event_station in sta_event_list:
+                    cur_df = pd.concat(
+                        [
+                            cur_df,
+                            pd.DataFrame(
+                                {
+                                    "station_evid": [event_station],
+                                    "reason": [
+                                        skipped_records[
+                                            skipped_records["station_evid"]
+                                            == event_station
+                                        ]["reason"].values[0]
+                                    ],
+                                }
+                            ),
+                        ]
+                    )
+        errors = list(cur_df["reason"].unique())
+        values = [len(cur_df[cur_df["reason"] == error]) for error in errors]
+        total_errors = sum(values)
+        unknown_errors = len(cur_df) - total_errors
+        errors.append("missing")
+        values.append(unknown_errors)
+        fig = plot_pie_chart_1p(
+            errors, values, f"{label} {important_set_names[i]} Skipped Reasons"
+        )
+        buf = BytesIO()
+        fig.savefig(buf, format="png", bbox_inches="tight")
+        plt.close(fig)
+        buf.seek(0)
+        pie_imgs_base64.append(base64.b64encode(buf.read()).decode("utf-8"))
+
+    return bar_img_base64, pie_imgs_base64
+
+
 def compare_column_barplot(
-    old_df: pd.DataFrame,
-    new_df: pd.DataFrame,
+    full_df: pd.DataFrame,
+    quality_df: pd.DataFrame,
     column: str,
     x_label: str,
     title: str,
     figsize=(16, 6),
     dpi=300,
-    old_label="Old NZGMDB",
-    new_label="New NZGMDB",
     y_label="Number of Records",
 ):
-    # Count values for the column in both dataframes
-    old_count = old_df.groupby(column)[column].value_counts()
-    new_count = new_df.groupby(column)[column].value_counts()
+    # Get all unique categories
+    categories = sorted(
+        set(full_df[column].unique()) | set(quality_df[column].unique())
+    )
+    x = np.arange(len(categories))
+    width = 0.35
 
-    fig, (ax1, ax2) = plt.subplots(1, 2, figsize=figsize, dpi=dpi)
+    # Count values for each category
+    full_counts = full_df[column].value_counts().reindex(categories, fill_value=0)
+    quality_counts = quality_df[column].value_counts().reindex(categories, fill_value=0)
 
-    ax1.bar(old_count.index, old_count.values)
-    ax1.set_xlabel(x_label)
-    ax1.set_ylabel(y_label)
-    ax1.set_title(old_label)
+    fig, ax = plt.subplots(figsize=figsize, dpi=dpi)
+    bars1 = ax.bar(x - width / 2, full_counts.values, width, label="Full Database")
+    bars2 = ax.bar(
+        x + width / 2, quality_counts.values, width, label="Quality Database"
+    )
 
-    ax2.bar(new_count.index, new_count.values)
-    ax2.set_xlabel(x_label)
-    ax2.set_ylabel(y_label)
-    ax2.set_title(new_label)
+    # Annotate bars with counts in bold
+    for bar in bars1:
+        height = bar.get_height()
+        ax.text(
+            bar.get_x() + bar.get_width() / 2,
+            height + max(full_counts.max(), quality_counts.max()) * 0.01,
+            f"{int(height)}",
+            ha="center",
+            va="bottom",
+            fontsize=12,
+            fontweight="bold",
+        )
+    for bar in bars2:
+        height = bar.get_height()
+        ax.text(
+            bar.get_x() + bar.get_width() / 2,
+            height + max(full_counts.max(), quality_counts.max()) * 0.01,
+            f"{int(height)}",
+            ha="center",
+            va="bottom",
+            fontsize=12,
+            fontweight="bold",
+        )
 
-    fig.suptitle(title)
+    ax.set_xticks(x)
+    ax.set_xticklabels(categories, rotation=45, ha="right")
+    ax.set_xlabel(x_label)
+    ax.set_ylabel(y_label)
+    ax.set_title(title)
+    ax.legend()
     fig.tight_layout()
 
     buf = BytesIO()
@@ -1268,12 +1436,12 @@ def generate_report(
     new_flatfiles_dir = file_structure.get_flatfile_dir(new_version_directory)
     new_quality_dir = file_structure.get_quality_db_dir(new_version_directory)
     old_flatifles_dir = (
-        file_structure.get_flatfile_dir(new_version_directory)
+        file_structure.get_flatfile_dir(compare_version_directory)
         if compare_version_directory
         else None
     )
     old_quality_dir = (
-        file_structure.get_quality_db_dir(new_version_directory)
+        file_structure.get_quality_db_dir(compare_version_directory)
         if compare_version_directory
         else None
     )
@@ -1600,331 +1768,281 @@ def generate_report(
 
     # Add Important Dataset Comparisons
     html_parts.append("<h2>Important Dataset Comparisons</h2>")
-    html_parts.append("<div class='fig-single'>")
-
-    new_record_df = new_obs_data.record_df.copy(deep=True)
 
     important_set_names = ["lee_large", "lee_small", "brendon"]
     import_set_ffps = [
-        "/home/joel/local/gmdb/db_compare/db_data/lee_large.csv",
-        "/home/joel/local/gmdb/db_compare/db_data/lee_small.csv",
-        "/home/joel/local/gmdb/db_compare/db_data/brendon_set.csv",
+        data_registry.NZGMDB_DATA.fetch("lee_large.csv"),
+        data_registry.NZGMDB_DATA.fetch("lee_small.csv"),
+        data_registry.NZGMDB_DATA.fetch("brendon_set.csv"),
     ]
-    in_nzgmdb = []
-    total_subset = []
-    missing_event_stations = []
-    for compare_set_ffp in import_set_ffps:
-        compare_set = pd.read_csv(
-            compare_set_ffp, dtype={"event_id": str, "stat_id": str}
-        )
-        # See what station and evid pairings are in the nzgmdb set
-        new_record_df["station_evid"] = (
-            new_record_df["site_id"] + "_" + new_record_df["event_id"]
-        )
-        compare_set["station_evid"] = (
-            compare_set["stat_id"] + "_" + compare_set["event_id"]
-        )
-        nzgmdb_set_station_evid = set(new_record_df["station_evid"].unique())
-        compare_set_station_evid = set(compare_set["station_evid"].unique())
-        common_station_evid = list(
-            nzgmdb_set_station_evid.intersection(compare_set_station_evid)
-        )
 
-        in_nzgmdb.append(len(common_station_evid))
-        total_subset.append(len(compare_set_station_evid))
-        missing_event_stations.append(
-            compare_set_station_evid - nzgmdb_set_station_evid
-        )
-
-    # Make a bar plot to compare the number of station and evid pairs in each set
-    fig, ax = plt.subplots(figsize=(16, 6), dpi=300)
-    X_axis = np.arange(len(important_set_names))
-    width = 0.75
-
-    ax.bar(X_axis, in_nzgmdb, width, label="In New NZGMDB", color="blue")
-    ax.bar(
-        X_axis,
-        np.array(total_subset) - np.array(in_nzgmdb),
-        width,
-        label="Total Set",
-        bottom=in_nzgmdb,
-        color="red",
+    # For new
+    bar_img_base64_new, pie_imgs_base64_new = important_set_figures(
+        quality_new,
+        new_flatfiles_dir,
+        important_set_names,
+        import_set_ffps,
+        "New NZGMDB",
     )
 
-    ax.set_xticks(X_axis)
-    ax.set_xticklabels(important_set_names)
-    ax.set_xlabel("Datasets")
-    ax.set_ylabel("Number of Station and Evid Pairs")
-    ax.set_title("Number of Station and Evid Pairs in Each Dataset")
-    ax.legend()
-
-    # Convert to base64
-    buf = BytesIO()
-    fig.savefig(buf, format="png", bbox_inches="tight")
-    plt.close(fig)
-    buf.seek(0)
-    img_base64 = base64.b64encode(buf.read()).decode("utf-8")
-    # Embed in HTML
-    html_parts.append(f'<img src="data:image/png;base64,{img_base64}">')
-    html_parts.append("</div>")
-
-    # Add skipped reasons
-    html_parts.append("<h2>Skipped Reasons</h2>")
-
-    # Show skipped reasons for each dataset
-
-    skipped_files = [
-        flatfile_dir / "quality_skipped_records.csv",
-        flatfile_dir / "processing_skipped_records.csv",
-        flatfile_dir / "geonet_skipped_records.csv",
-    ]
-    rename_col_dict = {
-        "mseed_file": "record_id",
-        "skipped_records": "record_id",
-    }
-    skipped_reasons_sets = []
-
-    for missing_event_stations_set in missing_event_stations:
-        cur_df = pd.DataFrame(columns=["station_evid", "reason"])
-        for skipped_file in skipped_files:
-            skipped_records = pd.read_csv(skipped_file)
-            skipped_records = skipped_records.rename(columns=rename_col_dict)
-            skipped_records["station_evid"] = skipped_records["record_id"].apply(
-                lambda x: x.split("_")[1] + "_" + x.split("_")[0]
-            )
-            for event_station in missing_event_stations_set:
-                sta_event_list = skipped_records["station_evid"].to_list()
-                if event_station in sta_event_list:
-                    cur_df = pd.concat(
-                        [
-                            cur_df,
-                            pd.DataFrame(
-                                {
-                                    "station_evid": [event_station],
-                                    "reason": [
-                                        skipped_records[
-                                            skipped_records["station_evid"]
-                                            == event_station
-                                        ]["reason"].values[0]
-                                    ],
-                                }
-                            ),
-                        ]
-                    )
-        skipped_reasons_sets.append(cur_df)
-
-    # Make a pie chart per dataset of the reasons for the missing event and station pairs
-    for i, cur_df in enumerate(skipped_reasons_sets):
-        # Create a list of the errors and the number of times they occur
-        errors = list(cur_df["reason"].unique())
-        values = [len(cur_df[cur_df["reason"] == error]) for error in errors]
-
-        # Total up all the errors
-        total_errors = sum(values)
-
-        # Get the extra unknown errors
-        unknown_errors = len(cur_df) - total_errors
-        # Add the unknown errors to the dictionary
-        errors.append("missing")
-        values.append(unknown_errors)
-
-        # Create the pie chart with matplotlib
-        fig = plot_pie_chart_1p(
-            errors,
-            values,
-            f"{important_set_names[i]} Skipped Reasons",
+    # For old (if available)
+    if compare_version_directory:
+        bar_img_base64_old, pie_imgs_base64_old = important_set_figures(
+            quality_old,
+            old_flatifles_dir,
+            important_set_names,
+            import_set_ffps,
+            "Old NZGMDB",
         )
 
-        # Convert to base64
-        buf = BytesIO()
-        fig.savefig(buf, format="png", bbox_inches="tight")
-        plt.close(fig)
-        buf.seek(0)
-        img_base64 = base64.b64encode(buf.read()).decode("utf-8")
-        # Embed in HTML
-        html_parts.append("<div class='fig-single'>")
-        html_parts.append(f'<img src="data:image/png;base64,{img_base64}">')
+    if compare_version_directory:
+        html_parts.append("<div class='fig-grid'>")
+        html_parts.append(f'<img src="data:image/png;base64,{bar_img_base64_new}">')
+        html_parts.append(f'<img src="data:image/png;base64,{bar_img_base64_old}">')
         html_parts.append("</div>")
+        # Add skipped reasons
+        html_parts.append("<h2>Skipped Reasons</h2>")
+        for i, img in enumerate(pie_imgs_base64_old):
+            html_parts.append("<div class='fig-single'>")
+            html_parts.append(
+                f'<img src="data:image/png;base64,{pie_imgs_base64_new[i]}">'
+            )
+            html_parts.append("</div>")
+            html_parts.append("<div class='fig-single'>")
+            html_parts.append(f'<img src="data:image/png;base64,{img}">')
+            html_parts.append("</div>")
+    else:
+        html_parts.append("<div class='fig-single'>")
+        html_parts.append(f'<img src="data:image/png;base64,{bar_img_base64_new}">')
+        html_parts.append("</div>")
+        # Add skipped reasons
+        html_parts.append("<h2>Skipped Reasons</h2>")
+        for img in pie_imgs_base64_new:
+            html_parts.append("<div class='fig-single'>")
+            html_parts.append(f'<img src="data:image/png;base64,{img}">')
+            html_parts.append("</div>")
 
     # Add Category Column Comparisons
     html_parts.append("<h2>Category Column Comparisons</h2>")
 
+    # Make a subset unique to events
+    full_new_events = full_new.drop_duplicates(subset=["evid"])
+    quality_new_events = quality_new.drop_duplicates(subset=["evid"])
+    if compare_version_directory:
+        full_old_events = full_old.drop_duplicates(subset=["evid"])
+        quality_old_events = quality_old.drop_duplicates(subset=["evid"])
+
     # Add Tectonic Type Comparison
     img_base64 = compare_column_barplot(
-        old_obs_data.record_df,
-        new_obs_data.record_df,
+        full_new_events,
+        quality_new_events,
         column="tect_type",
         x_label="Tectonic Type",
-        title="Tectonic Type Comparison",
+        title="New NZGMDB Tectonic Type Comparison",
     )
-    html_parts.append("<div class='fig-single'>")
-    html_parts.append(f'<img src="data:image/png;base64,{img_base64}">')
-    html_parts.append("</div>")
+    if compare_version_directory:
+        img_base64_old = compare_column_barplot(
+            full_old_events,
+            quality_old_events,
+            column="tect_type",
+            x_label="Tectonic Type",
+            title="Old NZGMDB Tectonic Type Comparison",
+        )
+        html_parts.append("<div class='fig-grid'>")
+        html_parts.append(f'<img src="data:image/png;base64,{img_base64}">')
+        html_parts.append(f'<img src="data:image/png;base64,{img_base64_old}">')
+        html_parts.append("</div>")
+    else:
+        html_parts.append("<div class='fig-single'>")
+        html_parts.append(f'<img src="data:image/png;base64,{img_base64}">')
+        html_parts.append("</div>")
 
     # Add f_type Comparison
     img_base64 = compare_column_barplot(
         full_rotd50,
-        quality_rodt50,
+        quality_rotd50,
         column="f_type",
         x_label="Fault Type",
-        title="Fault Type Comparison",
-        old_label="Full NZGMDB",
-        new_label="Quality NZGMDB",
+        title="New NZGMDB Fault Type Comparison",
     )
-    html_parts.append("<div class='fig-single'>")
-    html_parts.append(f'<img src="data:image/png;base64,{img_base64}">')
-    html_parts.append("</div>")
+    if compare_version_directory:
+        img_base64_old = compare_column_barplot(
+            full_rotd50_old,
+            quality_rotd50_old,
+            column="f_type",
+            x_label="Fault Type",
+            title="Old NZGMDB Fault Type Comparison",
+        )
+        html_parts.append("<div class='fig-grid'>")
+        html_parts.append(f'<img src="data:image/png;base64,{img_base64}">')
+        html_parts.append(f'<img src="data:image/png;base64,{img_base64_old}">')
+        html_parts.append("</div>")
+    else:
+        html_parts.append("<div class='fig-single'>")
+        html_parts.append(f'<img src="data:image/png;base64,{img_base64}">')
+        html_parts.append("</div>")
 
-    # # Add reloc Comparison
+    # Add reloc Comparison
     img_base64 = compare_column_barplot(
         full_rotd50,
-        quality_rodt50,
+        quality_rotd50,
         column="reloc",
         x_label="Relocation",
-        title="Relocation Comparison",
-        old_label="Full NZGMDB",
-        new_label="Quality NZGMDB",
+        title="New NZGMDB Relocation Comparison",
     )
-    html_parts.append("<div class='fig-single'>")
-    html_parts.append(f'<img src="data:image/png;base64,{img_base64}">')
-    html_parts.append("</div>")
-
-    # Add psa count Comparison
-    html_parts.append("<h2>pSA Record Count Comparison</h2>")
-    html_parts.append('<div class="fig-single">')
-
-    # Generate fmin plots
-    old_record_count = (~old_obs_data.record_df[PSA_KEYS].isna()).sum(axis=0)
-    new_record_count = (~new_obs_data.record_df[PSA_KEYS].isna()).sum(axis=0)
-
-    fig, ax = plt.subplots(figsize=(16, 6), dpi=300)
-
-    ax.plot(
-        PERIODS,
-        old_record_count.loc[PSA_KEYS],
-        label="Old NZGMDB",
-    )
-    ax.plot(
-        PERIODS,
-        new_record_count.loc[PSA_KEYS],
-        label="New NZGMDB",
-    )
-
-    ax.set_xlabel("Period (s)")
-    ax.set_xscale("log")
-    ax.set_ylabel("Count")
-    ax.set_xlim(0.01, 10.0)
-    ax.legend()
-    ax.grid(linewidth=0.5, alpha=0.5, linestyle="--")
-
-    fig.tight_layout()
-
-    # Convert to base64
-    buf = BytesIO()
-    fig.savefig(buf, format="png", bbox_inches="tight")
-    plt.close(fig)
-    buf.seek(0)
-    img_base64 = base64.b64encode(buf.read()).decode("utf-8")
-    # Embed in HTML
-    html_parts.append(f'<img src="data:image/png;base64,{img_base64}">')
-    html_parts.append("</div>")
-
-    # Add IM Compare
-    html_parts.append("<h2>IM Comparison</h2>")
-    html_parts.append('<div class="fig-single">')
-
-    # IM Compare
-    shared_record_ids = np.intersect1d(
-        old_obs_data.record_df.index.values.astype(str),
-        new_obs_data.record_df.index.values.astype(str),
-    )
-
-    plot_ims = ["pSA_0.01", "pSA_0.1", "pSA_0.5", "pSA_1.0", "pSA_3.0", "pSA_10.0"]
-
-    fig, axs = get_fig_axes(len(plot_ims), 2, -1, ind_figsize=(8, 6), dpi=300)
-
-    for i, (cur_im, cur_ax) in enumerate(zip(plot_ims, axs)):
-        cur_old = old_obs_data.record_df.loc[shared_record_ids, cur_im]
-        cur_new = new_obs_data.record_df.loc[shared_record_ids, cur_im]
-
-        cur_max = max(cur_old.max(), cur_new.max())
-
-        cur_ax.scatter(cur_old, cur_new, s=1)
-        cur_ax.set_xlabel("Old NZGMDB")
-        cur_ax.set_ylabel("New NZGMDB")
-        cur_ax.set_title(cur_im)
-        cur_ax.plot(
-            [0, cur_max], [0, cur_max], color="black", linestyle="--", linewidth=0.5
+    if compare_version_directory:
+        img_base64_old = compare_column_barplot(
+            full_rotd50_old,
+            quality_rotd50_old,
+            column="reloc",
+            x_label="Relocation",
+            title="Old NZGMDB Relocation Comparison",
         )
-        cur_ax.set_xlim(0, cur_max)
-        cur_ax.set_ylim(0, cur_max)
-        cur_ax.grid(which="both", linewidth=0.5, alpha=0.5, linestyle="--")
-
-    # Convert to base64
-    buf = BytesIO()
-    fig.savefig(buf, format="png", bbox_inches="tight")
-    plt.close(fig)
-    buf.seek(0)
-    img_base64 = base64.b64encode(buf.read()).decode("utf-8")
-    # Embed in HTML
-    html_parts.append(f'<img src="data:image/png;base64,{img_base64}">')
-    html_parts.append("</div>")
-
-    html_parts.append(
-        """
-    <h2>GMM Input Comparison</h2>
-    <div class="fig-grid">
-    """
-    )
-    # GMM Input comparison
-    input_cols = [
-        "event_lat",
-        "event_lon",
-        "depth",
-        "mag",
-        "dip",
-        "rake",
-        "ztor",
-        "rjb",
-        "rrup",
-        "rx",
-        "vs30",
-        "z1p0",
-        "z2p5",
-    ]
-    # Generate figures and embed as base64
-    for i, col in enumerate(input_cols):
-        cur_x_data = old_obs_data.record_df.loc[shared_record_ids, col].values
-        cur_y_data = new_obs_data.record_df.loc[shared_record_ids, col].values
-        nan_mask = np.isnan(cur_x_data) | np.isnan(cur_y_data)
-        cur_x_data = cur_x_data[~nan_mask]
-        cur_y_data = cur_y_data[~nan_mask]
-        lims = (
-            np.quantile(cur_x_data, 0.01),
-            np.quantile(cur_x_data, 0.99),
-        )
-        fig, ax = plt.subplots(figsize=(8, 6), dpi=300)
-        ax.scatter(cur_x_data, cur_y_data, alpha=0.5, s=1)
-        ax.plot(lims, lims, color="k")
-        ax.set_xlabel("Old NZGMDB")
-        ax.set_ylabel("New NZGMDB")
-        ax.grid(linewidth=0.5, alpha=0.5, linestyle="--")
-        ax.set_xlim(lims)
-        ax.set_ylim(lims)
-        ax.set_aspect("equal")
-        ax.set_title(f"{col} - N: {len(cur_x_data)}")
-        fig.tight_layout()
-
-        # Convert to base64
-        buf = BytesIO()
-        fig.savefig(buf, format="png", bbox_inches="tight")
-        plt.close(fig)
-        buf.seek(0)
-        img_base64 = base64.b64encode(buf.read()).decode("utf-8")
-        # Embed in HTML
+        html_parts.append("<div class='fig-grid'>")
         html_parts.append(f'<img src="data:image/png;base64,{img_base64}">')
-    # End of Section
-    html_parts.append("</div>")
+        html_parts.append(f'<img src="data:image/png;base64,{img_base64_old}">')
+        html_parts.append("</div>")
+    else:
+        html_parts.append("<div class='fig-single'>")
+        html_parts.append(f'<img src="data:image/png;base64,{img_base64}">')
+        html_parts.append("</div>")
+    #
+    # # Add psa count Comparison
+    # html_parts.append("<h2>pSA Record Count Comparison</h2>")
+    # html_parts.append('<div class="fig-single">')
+    #
+    # # Generate fmin plots
+    # old_record_count = (~old_obs_data.record_df[PSA_KEYS].isna()).sum(axis=0)
+    # new_record_count = (~new_obs_data.record_df[PSA_KEYS].isna()).sum(axis=0)
+    #
+    # fig, ax = plt.subplots(figsize=(16, 6), dpi=300)
+    #
+    # ax.plot(
+    #     PERIODS,
+    #     old_record_count.loc[PSA_KEYS],
+    #     label="Old NZGMDB",
+    # )
+    # ax.plot(
+    #     PERIODS,
+    #     new_record_count.loc[PSA_KEYS],
+    #     label="New NZGMDB",
+    # )
+    #
+    # ax.set_xlabel("Period (s)")
+    # ax.set_xscale("log")
+    # ax.set_ylabel("Count")
+    # ax.set_xlim(0.01, 10.0)
+    # ax.legend()
+    # ax.grid(linewidth=0.5, alpha=0.5, linestyle="--")
+    #
+    # fig.tight_layout()
+    #
+    # # Convert to base64
+    # buf = BytesIO()
+    # fig.savefig(buf, format="png", bbox_inches="tight")
+    # plt.close(fig)
+    # buf.seek(0)
+    # img_base64 = base64.b64encode(buf.read()).decode("utf-8")
+    # # Embed in HTML
+    # html_parts.append(f'<img src="data:image/png;base64,{img_base64}">')
+    # html_parts.append("</div>")
+    #
+    # # Add IM Compare
+    # html_parts.append("<h2>IM Comparison</h2>")
+    # html_parts.append('<div class="fig-single">')
+    #
+    # # IM Compare
+    # shared_record_ids = np.intersect1d(
+    #     old_obs_data.record_df.index.values.astype(str),
+    #     new_obs_data.record_df.index.values.astype(str),
+    # )
+    #
+    # plot_ims = ["pSA_0.01", "pSA_0.1", "pSA_0.5", "pSA_1.0", "pSA_3.0", "pSA_10.0"]
+    #
+    # fig, axs = get_fig_axes(len(plot_ims), 2, -1, ind_figsize=(8, 6), dpi=300)
+    #
+    # for i, (cur_im, cur_ax) in enumerate(zip(plot_ims, axs)):
+    #     cur_old = old_obs_data.record_df.loc[shared_record_ids, cur_im]
+    #     cur_new = new_obs_data.record_df.loc[shared_record_ids, cur_im]
+    #
+    #     cur_max = max(cur_old.max(), cur_new.max())
+    #
+    #     cur_ax.scatter(cur_old, cur_new, s=1)
+    #     cur_ax.set_xlabel("Old NZGMDB")
+    #     cur_ax.set_ylabel("New NZGMDB")
+    #     cur_ax.set_title(cur_im)
+    #     cur_ax.plot(
+    #         [0, cur_max], [0, cur_max], color="black", linestyle="--", linewidth=0.5
+    #     )
+    #     cur_ax.set_xlim(0, cur_max)
+    #     cur_ax.set_ylim(0, cur_max)
+    #     cur_ax.grid(which="both", linewidth=0.5, alpha=0.5, linestyle="--")
+    #
+    # # Convert to base64
+    # buf = BytesIO()
+    # fig.savefig(buf, format="png", bbox_inches="tight")
+    # plt.close(fig)
+    # buf.seek(0)
+    # img_base64 = base64.b64encode(buf.read()).decode("utf-8")
+    # # Embed in HTML
+    # html_parts.append(f'<img src="data:image/png;base64,{img_base64}">')
+    # html_parts.append("</div>")
+    #
+    # html_parts.append(
+    #     """
+    # <h2>GMM Input Comparison</h2>
+    # <div class="fig-grid">
+    # """
+    # )
+    # # GMM Input comparison
+    # input_cols = [
+    #     "event_lat",
+    #     "event_lon",
+    #     "depth",
+    #     "mag",
+    #     "dip",
+    #     "rake",
+    #     "ztor",
+    #     "rjb",
+    #     "rrup",
+    #     "rx",
+    #     "vs30",
+    #     "z1p0",
+    #     "z2p5",
+    # ]
+    # # Generate figures and embed as base64
+    # for i, col in enumerate(input_cols):
+    #     cur_x_data = old_obs_data.record_df.loc[shared_record_ids, col].values
+    #     cur_y_data = new_obs_data.record_df.loc[shared_record_ids, col].values
+    #     nan_mask = np.isnan(cur_x_data) | np.isnan(cur_y_data)
+    #     cur_x_data = cur_x_data[~nan_mask]
+    #     cur_y_data = cur_y_data[~nan_mask]
+    #     lims = (
+    #         np.quantile(cur_x_data, 0.01),
+    #         np.quantile(cur_x_data, 0.99),
+    #     )
+    #     fig, ax = plt.subplots(figsize=(8, 6), dpi=300)
+    #     ax.scatter(cur_x_data, cur_y_data, alpha=0.5, s=1)
+    #     ax.plot(lims, lims, color="k")
+    #     ax.set_xlabel("Old NZGMDB")
+    #     ax.set_ylabel("New NZGMDB")
+    #     ax.grid(linewidth=0.5, alpha=0.5, linestyle="--")
+    #     ax.set_xlim(lims)
+    #     ax.set_ylim(lims)
+    #     ax.set_aspect("equal")
+    #     ax.set_title(f"{col} - N: {len(cur_x_data)}")
+    #     fig.tight_layout()
+    #
+    #     # Convert to base64
+    #     buf = BytesIO()
+    #     fig.savefig(buf, format="png", bbox_inches="tight")
+    #     plt.close(fig)
+    #     buf.seek(0)
+    #     img_base64 = base64.b64encode(buf.read()).decode("utf-8")
+    #     # Embed in HTML
+    #     html_parts.append(f'<img src="data:image/png;base64,{img_base64}">')
+    # # End of Section
+    # html_parts.append("</div>")
 
     html_parts.append("</body></html>")
     # Save report
@@ -1933,9 +2051,7 @@ def generate_report(
 
 
 generate_report(
-    Path("/home/joel/local/gmdb/4p3_mantle/quality_db"),
+    Path("/home/joel/local/gmdb/4p3_mantle"),
     Path("/home/joel/local/gmdb/4p3/report.html"),
-    Path("/home/joel/local/gmdb/4p3/quality_db"),
-    new_version=NZGMDBVersion.v4p3_final,
-    old_version=NZGMDBVersion.v4p3,
+    Path("/home/joel/local/gmdb/4p3_backup/4p3_backup"),
 )
