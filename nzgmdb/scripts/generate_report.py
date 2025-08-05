@@ -708,11 +708,16 @@ def skipped_records_pie_chart(skipped_df: pd.DataFrame, title: str) -> str:
 def mag_rrup_scatter(df1, df2, title1, title2):
     fig, axs = plt.subplots(1, 2, figsize=(14, 6), dpi=300, sharex=True)
 
+    # Compute shared y-axis limits
+    mag_min = min(df1["mag"].min() - 0.2, df2["mag"].min() - 0.2)
+    mag_max = max(df1["mag"].max() + 0.2, df2["mag"].max() + 0.2)
+
     axs[0].scatter(df1["r_rup"], df1["mag"], alpha=0.5, s=10)
     axs[0].set_xscale("log")
     axs[0].set_ylabel("Magnitude")
     axs[0].set_xlabel("Rrup (km)")
     axs[0].set_title(title1)
+    axs[0].set_ylim(mag_min, mag_max)
     axs[0].grid(True, which="both", ls="--", alpha=0.5)
 
     axs[1].scatter(df2["r_rup"], df2["mag"], alpha=0.5, s=10)
@@ -720,6 +725,7 @@ def mag_rrup_scatter(df1, df2, title1, title2):
     axs[1].set_xlabel("Rrup (km)")
     axs[1].set_ylabel("Magnitude")
     axs[1].set_title(title2)
+    axs[1].set_ylim(mag_min, mag_max)
     axs[1].grid(True, which="both", ls="--", alpha=0.5)
 
     plt.tight_layout()
@@ -1312,42 +1318,67 @@ def generate_report(
         html_parts.append("<div class='fig-single'>")
         html_parts.append(f'<img src="data:image/png;base64,{img_base64}">')
         html_parts.append("</div>")
-
-    # reloc Comparison
+    # Reloc Comparison by Fault Type
     if compare_version_directory:
-        img_base64_full = compare_column_barplot(
-            full_old_events,
-            full_new_events,
-            column="reloc",
-            x_label="Relocation",
-            title="Full NZGMDB Relocation Comparison",
-            bar_1_label="Old NZGMDB",
-            bar_2_label="New NZGMDB",
+        all_f_types = sorted(
+            set(full_old_events["f_type"].unique())
+            | set(full_new_events["f_type"].unique())
+            | set(quality_old_events["f_type"].unique())
+            | set(quality_new_events["f_type"].unique())
         )
-        img_base64_quality = compare_column_barplot(
-            quality_old_events,
-            quality_new_events,
-            column="reloc",
-            x_label="Relocation",
-            title="Quality NZGMDB Relocation Comparison",
-            bar_1_label="Old NZGMDB",
-            bar_2_label="New NZGMDB",
-        )
-        html_parts.append("<div class='fig-grid'>")
-        html_parts.append(f'<img src="data:image/png;base64,{img_base64_full}">')
-        html_parts.append(f'<img src="data:image/png;base64,{img_base64_quality}">')
-        html_parts.append("</div>")
+        for f_type in all_f_types:
+            full_old_sub = full_old_events[full_old_events["f_type"] == f_type]
+            full_new_sub = full_new_events[full_new_events["f_type"] == f_type]
+            quality_old_sub = quality_old_events[quality_old_events["f_type"] == f_type]
+            quality_new_sub = quality_new_events[quality_new_events["f_type"] == f_type]
+
+            img_base64_full = compare_column_barplot(
+                full_old_sub,
+                full_new_sub,
+                column="reloc",
+                x_label="Relocation",
+                title=f"Full NZGMDB Relocation Comparison ({f_type})",
+                bar_1_label="Old NZGMDB",
+                bar_2_label="New NZGMDB",
+            )
+            img_base64_quality = compare_column_barplot(
+                quality_old_sub,
+                quality_new_sub,
+                column="reloc",
+                x_label="Relocation",
+                title=f"Quality NZGMDB Relocation Comparison ({f_type})",
+                bar_1_label="Old NZGMDB",
+                bar_2_label="New NZGMDB",
+            )
+            html_parts.append(
+                f"<h3>Relocation Comparison for Fault Type: {f_type}</h3>"
+            )
+            html_parts.append("<div class='fig-grid'>")
+            html_parts.append(f'<img src="data:image/png;base64,{img_base64_full}">')
+            html_parts.append(f'<img src="data:image/png;base64,{img_base64_quality}">')
+            html_parts.append("</div>")
     else:
-        img_base64 = compare_column_barplot(
-            full_new_events,
-            quality_new_events,
-            column="reloc",
-            x_label="Relocation",
-            title="New NZGMDB Relocation Comparison",
+        all_f_types = sorted(
+            set(full_new_events["f_type"].unique())
+            | set(quality_new_events["f_type"].unique())
         )
-        html_parts.append("<div class='fig-single'>")
-        html_parts.append(f'<img src="data:image/png;base64,{img_base64}">')
-        html_parts.append("</div>")
+        for f_type in all_f_types:
+            full_new_sub = full_new_events[full_new_events["f_type"] == f_type]
+            quality_new_sub = quality_new_events[quality_new_events["f_type"] == f_type]
+
+            img_base64 = compare_column_barplot(
+                full_new_sub,
+                quality_new_sub,
+                column="reloc",
+                x_label="Relocation",
+                title=f"New NZGMDB Relocation Comparison ({f_type})",
+            )
+            html_parts.append(
+                f"<h3>Relocation Comparison for Fault Type: {f_type}</h3>"
+            )
+            html_parts.append("<div class='fig-single'>")
+            html_parts.append(f'<img src="data:image/png;base64,{img_base64}">')
+            html_parts.append("</div>")
 
     # Add psa count Comparison
     html_parts.append("<h2>Quality pSA Record Count Comparison</h2>")

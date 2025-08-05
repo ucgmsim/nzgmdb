@@ -659,6 +659,7 @@ def apply_all_filters(
             skipped_records_multi,
             skipped_records_fmax,
             skipped_records_fmin,
+            skipped_records_sta,
             skipped_records_ground,
             skipped_records_duplicate,
         ]
