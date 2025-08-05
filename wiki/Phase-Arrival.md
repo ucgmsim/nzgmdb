@@ -52,7 +52,7 @@ PhaseNet is a convolutional neural network that processes three-component seismi
 
 ### 🔹 Probability Series Storage
 - P and S wave probability time series are saved in HDF5 format (`prob_series.h5`)
-- Data is compressed using LZF compression and stored as float32 to optimize storage
+- Data is compressed using LZF compression and stored as float32 to optimise storage
 - Each record's probability series is stored in a separate group within the HDF5 file
 
 ### 🔹 Datetime Conversion

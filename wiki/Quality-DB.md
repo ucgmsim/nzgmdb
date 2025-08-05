@@ -37,7 +37,7 @@ nzgmdb_output/flatfiles/quality_skipped_records.csv
 ## 📋 Prerequisites
 
 The Quality-DB step requires the following inputs from previous pipeline step:
-- **[Merge Flatfiles](Merge-Flatfiles.md)** - Provides the consolidated ground motion IM catalog and flatfiles to filter
+- **[Merge Flatfiles](Merge-Flatfiles.md)** - Provides the consolidated ground motion IM catalogue and flatfiles to filter
 
 ---
 
@@ -96,7 +96,7 @@ The filtering process follows a systematic 9-step approach:
 score_min: 0.5  # Minimum quality score threshold
 
 # Can be adjusted when calling apply_all_filters()
-catalog, skipped = apply_all_filters(catalog, clipped_records_ffp, 
+catalogue, skipped = apply_all_filters(catalogue, clipped_records_ffp, 
                                    score_min=0.7)  # Custom threshold
 ```
 
@@ -123,7 +123,7 @@ catalog, skipped = apply_all_filters(catalog, clipped_records_ffp,
 multi_max: 0.2  # Maximum multi-component inconsistency threshold
 
 # Runtime adjustment
-catalog, skipped = apply_all_filters(catalog, clipped_records_ffp,
+catalogue, skipped = apply_all_filters(catalogue, clipped_records_ffp,
                                    multi_max=0.15)  # Stricter filtering
 ```
 
@@ -150,7 +150,7 @@ catalog, skipped = apply_all_filters(catalog, clipped_records_ffp,
 fmax_min: 4.1  # Minimum maximum usable frequency (Hz)
 
 # Runtime adjustment for higher frequency applications
-catalog, skipped = apply_all_filters(catalog, clipped_records_ffp,
+catalogue, skipped = apply_all_filters(catalogue, clipped_records_ffp,
                                    fmax_min=8.0)  # Require higher frequencies
 ```
 ---
@@ -176,7 +176,7 @@ catalog, skipped = apply_all_filters(catalog, clipped_records_ffp,
 fmin_max: 2.0  # Maximum minimum usable frequency (Hz)
 
 # Runtime adjustment for low-frequency studies
-catalog, skipped = apply_all_filters(catalog, clipped_records_ffp,
+catalogue, skipped = apply_all_filters(catalogue, clipped_records_ffp,
                                    fmin_max=1.0)  # Require better low-frequency content
 ```
 
@@ -234,34 +234,73 @@ clip_threshold: 0.2     # Threshold for clipping detection
 
 ---
 
-#### 9. Filter Duplicate Channels
+#### 9. Filter by Sensitivity Ignore List
 
-**Purpose**: Selects the most appropriate channel when multiple instruments record the same event at the same station.
+**Purpose**: Removes records known to be problematic in the BroadBand sensors, such as early deployments with potential calibration errors.
 
 **Implementation**:
-Creates unique `evid_sta` combinations and applies the following priority hierarchy for duplicate resolution:
+- Loads a pre-defined ignore list from `sensitivity_ignore.csv` in the data registry.
+- Matches records by `sta`, `chan`, `loc` and checks if their timestamp falls within the specified `start_date`–`end_date` range.
 
-**Note**: Currently only HN / BN Channels are extracted during the Waveform Extraction step, so this filter is only applied to these channels, but has future potential to be expanded to broadband channels.
+**Filtering Logic**:
+- Removes matching records unless they are part of the bypass list.
 
-**Priority Order**:
-1. **Bypass records** (highest priority - always retained)
-2. **HN channels** (Strong motion sensors, high frequency response)
-3. **BN channels** (Strong motion sensors, lower frequency response) 
-4. **HH channels** (Broadband sensors, higher priority)
-5. **All other channels** (Broadband sensors, lowest priority)
-
-**Selection Logic**:
-- Groups records by event ID and station combination
-- Identifies all duplicate groups (multiple channels for same event/station)
-- Assigns priority scores based on channel type
-- Retains the highest priority record from each group
-- Removes all other duplicates
-
-**Bypass**: Records in bypass list receive highest priority (priority = 0) and are always selected over other channels.
-
-**Adjustable Parameters**: The priority hierarchy is fixed but can be effectively overridden using the bypass records feature.
+**Bypass**: Records listed in the bypass list are not filtered, even if matched in the ignore file.
 
 ---
+
+#### 10. Filter by Empirical Prediction Residuals
+
+**Purpose**: Removes records with ground motion values significantly inconsistent with empirical ground motion prediction models.
+
+**Implementation**:
+- Uses the **Atkinson (2022)** GMM to compute predicted pSA values for records, based on magnitude, distance, Vs30, and other metadata.
+- Separates records into tectonic types (Interface, Slab, Crustal) for model application.
+- Computes:
+  - **Mean residual**: Mean total residual across pSA periods (0.01–10.0s)
+  - **Max residual**: Max total residual across pSA periods (0.01–10.0s)
+
+**Thresholds**:
+- `mean_residual_threshold` and `max_residual_threshold` can be set in the configuration file or passed explicitly to the function.
+
+**Filtering Logic**:
+- Records are removed if either:
+  - Mean residual exceeds the configured threshold, or
+  - Max residual exceeds the configured threshold
+- Records in the bypass list are not filtered regardless of their residuals.
+
+**Bypass**: All residual filters are skipped for records explicitly listed in the bypass array.
+
+**NZGMDB Configuration**:
+```yaml
+mean_residual_threshold: 4
+max_residual_threshold: 6
+```
+
+---
+
+#### 11. Filter Duplicate Channels
+
+**Purpose**: Retains the highest-priority record when multiple instruments record the same event at the same station.
+
+**Implementation**:
+- Combines event ID and station name into a unique `evid_sta` identifier.
+- Assigns priority levels to records based on channel type and bypass status.
+- Retains only the highest-priority channel per `evid_sta` group.
+
+**Channel Priority Order**:
+1. **Bypass records** (priority = 0)
+2. **HN channels** (Strong motion sensors, high frequency response) – priority = 1  
+3. **BN channels** (Strong motion sensors, lower frequency response) – priority = 2  
+4. **HH channels** (Broadband sensors, high frequency) – priority = 3  
+5. **All other channels** are discarded before selection.
+
+**Selection Logic**:
+- Bypass records are always kept regardless of channel type.
+- Within each group of duplicate records (same `evid_sta`), the record with the **lowest priority score** is retained.
+- Channels not in the HN, BN, or HH categories are excluded **prior** to duplicate resolution.
+
+**Bypass**: Records in bypass list override all priority rules.
 
 ### 🔹 Configuration Parameters
 
@@ -282,7 +321,7 @@ dist_clip_high: 645.0
 clip_threshold: 0.2
 ```
 
-### 🔹 Runtime Customization
+### 🔹 Runtime Customisation
 
 All filter thresholds can be adjusted when calling the function directly:
 
@@ -291,7 +330,7 @@ from nzgmdb.data_processing.quality_db import apply_all_filters
 
 # Custom filtering with stricter criteria
 filtered_catalog, skipped_records = apply_all_filters(
-    catalog=input_catalog,
+    catalogue=input_catalog,
     clipped_records_ffp=clipped_file_path,
     bypass_records=custom_bypass_list,
     score_min=0.7,      # Stricter quality requirement
@@ -317,14 +356,14 @@ The quality database creates filtered versions of all flatfiles, ensuring consis
 
 | File                                      | Description                                                                   |
 |-------------------------------------------|-------------------------------------------------------------------------------|
-| `ground_motion_im_rotd50_flat.csv`        | RotD50 filtered intensity measure catalog with quality metrics                |
-| `ground_motion_im_table_000_flat.csv`     | 000 component filtered intensity measure catalog with quality metrics         |
-| `ground_motion_im_table_090_flat.csv`     | 090 component filtered intensity measure catalog with quality metrics         |
-| `ground_motion_im_table_ver_flat.csv`     | Vertical component filtered intensity measure catalog with quality metrics  n |
-| `ground_motion_im_table_rotd0_flat.csv`   | RotD0 filtered intensity measure catalog with quality metrics                 |
-| `ground_motion_im_table_rotd100_flat.csv` | RotD100 filtered intensity measure catalog with quality metrics               |
-| `ground_motion_im_table_EAS_flat.csv`     | EAS filtered intensity measure catalog with quality metrics                   |
-| `ground_motion_im_table_geom_flat.csv`    | Geometric mean filtered intensity measure catalog with quality metrics        |
+| `ground_motion_im_rotd50_flat.csv`        | RotD50 filtered intensity measure catalogue with quality metrics                |
+| `ground_motion_im_table_000_flat.csv`     | 000 component filtered intensity measure catalogue with quality metrics         |
+| `ground_motion_im_table_090_flat.csv`     | 090 component filtered intensity measure catalogue with quality metrics         |
+| `ground_motion_im_table_ver_flat.csv`     | Vertical component filtered intensity measure catalogue with quality metrics  n |
+| `ground_motion_im_table_rotd0_flat.csv`   | RotD0 filtered intensity measure catalogue with quality metrics                 |
+| `ground_motion_im_table_rotd100_flat.csv` | RotD100 filtered intensity measure catalogue with quality metrics               |
+| `ground_motion_im_table_EAS_flat.csv`     | EAS filtered intensity measure catalogue with quality metrics                   |
+| `ground_motion_im_table_geom_flat.csv`    | Geometric mean filtered intensity measure catalogue with quality metrics        |
 | `earthquake_source_table.csv`             | Event source data for remaining records                                       |
 | `earthquake_source_geometry.csv`          | Fault geometry: strike, dip, rake, corner coordinates                         |
 | `site_table.csv`                          | Station metadata for sites with quality records                               |
@@ -350,7 +389,7 @@ The quality database creates filtered versions of all flatfiles, ensuring consis
 
 ### 🔹 Core Functions
 
-The Quality-DB step utilizes several key functions from the `quality_db.py` module:
+The Quality-DB step utilises several key functions from the `quality_db.py` module:
 
 - **`create_quality_db()`**: Main orchestration function
 - **`apply_all_filters()`**: Comprehensive filtering pipeline
@@ -362,7 +401,7 @@ The Quality-DB step utilizes several key functions from the `quality_db.py` modu
 - **`filter_missing_sta_info()`**: Station metadata validation
 - **`filter_ground_level_locations()`**: Location code filtering
 - **`apply_clipNet_filter()`**: Clipped record removal
-- **`filter_duplicate_channels()`**: Channel prioritization and deduplication
+- **`filter_duplicate_channels()`**: Channel prioritisation and deduplication
 
 ### 🔹 Bypass Record Integration
 
@@ -377,5 +416,5 @@ The bypass mechanism allows users to retain specific records that would otherwis
 
 ## 🔗 Related Steps
 
-- **Previous**: [Merge Flatfiles](Merge-Flatfiles.md) - Provides the consolidated IM catalog that serves as input for quality filtering
+- **Previous**: [Merge Flatfiles](Merge-Flatfiles.md) - Provides the consolidated IM catalogue that serves as input for quality filtering
 - **Optional**: [Upload to Dropbox](Upload-Dropbox.md) - Packages and uploads the all information for distribution

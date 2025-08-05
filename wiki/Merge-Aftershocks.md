@@ -19,7 +19,7 @@ Example:
 python -m nzgmdb.scripts.run_nzgmdb calculate-aftershocks nzgmdb_output/
 ```
 
-This will analyze the earthquake source table and generate aftershock classifications based on spatial and temporal proximity criteria.
+This will analyse the earthquake source table and generate aftershock classifications based on spatial and temporal proximity criteria.
 
 ---
 
@@ -46,7 +46,7 @@ For earthquakes with available Surface Rupture Format (SRF) files:
 #### **Corner-based Polygons (Fallback)**
 For earthquakes without SRF files:
 1. **Extract corner coordinates** from geometry table (corner_0 through corner_3)
-2. **Apply longitude normalization** using modulo 360 to handle negative values
+2. **Apply longitude normalisation** using modulo 360 to handle negative values
 3. **Create rectangular polygon** from corner points in WGS84 coordinates
 
 ### 🔹 ABWD-CRJB Classification Algorithm
@@ -97,7 +97,7 @@ Key configuration values from `config.yaml`:
 
 | Parameter | Default Values | Description |
 |-----------|----------------|-------------|
-| `crjb_cutoffs` | [0, 2, 5, 10] | Distance thresholds in kilometers for spatial clustering |
+| `crjb_cutoffs` | [0, 2, 5, 10] | Distance thresholds in kilometres for spatial clustering |
 | `ll_num` | 4326 | WGS84 coordinate system identifier |
 | `nztm_num` | 2193 | New Zealand Transverse Mercator projection |
 

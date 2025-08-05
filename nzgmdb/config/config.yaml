@@ -20,13 +20,14 @@ points_per_km: 10
 channel_codes:
   - HN?
   - BN?
+  - HH?
 # Mseed Variables
 vs30: 500
 min_time_difference: 15
 ds_multiplier: 2
 # GMProcess Variables
 gmprocess_url: https://earthquake.usgs.gov/fdsnws/event/1/query
-search_radius: 25 # In Kilometers
+search_radius: 25 # In kilometres
 mag_range: 1
 time_range: 360 # In Seconds
 # SNR
@@ -39,7 +40,7 @@ nyquist_freq_scaling_factor: 0.8 # multiplies the Nyquist frequency by this fact
 
 # fmax - smoothing data with rolling mean
 window: 5
-center: True
+centre: True
 min_periods: 1
 
 # fmax - initial screening
@@ -100,3 +101,6 @@ crjb_cutoffs:
   - 2
   - 5
   - 10
+# Empirical Thresholds
+max_residual_threshold: 6
+mean_residual_threshold: 4

@@ -39,9 +39,7 @@ The Calculate SNR step requires the following inputs from previous pipeline step
 
 ### 🔹 Common Frequency Vector
 
-All SNR calculations use a standardized common frequency vector defined as:
-- **Range**: 0.01318257 → 100 Hz  
-- **Points**: 389 logarithmically spaced frequencies
+All SNR calculations are performed using a vector of 389 frequencies logarithmically spaced between 0.01318257 Hz and 100 Hz.
 
 This ensures consistent frequency sampling across all records for downstream analysis.
 
@@ -54,7 +52,7 @@ Raw MSEED files undergo the following preprocessing steps:
 3. **Zero padding** - Add 5 seconds of zeros at start and end
 4. **Remove instrument response** - Apply sensitivity correction using station inventory
 5. **Rotate components** - Rotate horizontal components to North-East-Vertical (NEZ)
-6. **Gravity normalization** - Divide acceleration data by gravitational constant (9.81 m/s²)
+6. **Gravity normalisation** - Divide acceleration data by gravitational constant (9.81 m/s²)
 
 ⚠️ **Note:** Records are skipped if inventory information cannot be found for sensitivity removal.
 
@@ -81,17 +79,9 @@ The core SNR calculation follows these steps:
 5. Set values to **NaN** for frequencies above Nyquist frequency (sample_rate / 2)
 
 #### SNR Computation
-The final SNR is calculated using the formula:
-
-```python
-snr = (fas_signal / sqrt(signal_duration)) / (fas_noise / sqrt(noise_duration))
-```
-
-Where:
-- `fas_signal` = Fourier amplitude spectrum of signal portion
-- `fas_noise` = Fourier amplitude spectrum of noise portion  
-- `signal_duration` = Length of signal window in seconds
-- `noise_duration` = Length of noise window in seconds
+The final SNR is calculated using the formula
+$$\text{SNR} = \sqrt{\frac{D_n}{D_s}}\frac{\mathbf{f}_s}{\mathbf{f}_n},$$
+where $\mathbf{f}_s$ is the signal portion of the Fourier amplitude spectrum, the vector $\mathbf{f}_n$ is the signal noise, and the scalars $D_n$ and $D_s$ are signal and noise duration respectively in seconds.
 
 ### 🔹 Configuration Parameters
 
@@ -157,7 +147,7 @@ Additional output files are generated in the `flatfiles/` directory:
 
 ### 🔹 Core Functions
 
-The SNR calculation utilizes functions from both the `nzgmdb` and `IM_calculation` repositories:
+The SNR calculation utilises functions from both the `nzgmdb` and `IM_calculation` repositories:
 
 - **`nzgmdb.calculation.snr.compute_snr_for_single_mseed()`**: Main processing function for individual MSEED files
 - **`IM.snr_calculation.calculate_snr()`**: Core SNR algorithm implementation  

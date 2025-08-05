@@ -1,6 +1,6 @@
 # 🌋 Add Tectonic Domain
 
-This step in the NZGMDB pipeline enhances earthquake source metadata by adding tectonic classification and applying improved relocations. **This single step performs both relocations and tectonic mapping**, combining multiple earthquake catalog sources to produce the most accurate event locations and tectonic classifications.
+This step in the NZGMDB pipeline enhances earthquake source metadata by adding tectonic classification and applying improved relocations. **This single step performs both relocations and tectonic mapping**, combining multiple earthquake catalogue sources to produce the most accurate event locations and tectonic classifications.
 
 ---
 
@@ -13,7 +13,7 @@ python -m nzgmdb.scripts.run_nzgmdb merge-tect-domain <eq_source_ffp> <output_di
 ```
 
 **Parameters:**
-- **eq_source_ffp**: Path to the earthquake source table CSV file (from Parse Geonet step)
+- **eq_source_ffp**: Path to the earthquake source table CSV file (from [Parse Geonet](https://github.com/ucgmsim/nzgmdb/wiki/Parse-Geonet) step)
 - **output_dir**: Directory where the enhanced earthquake source table will be saved
 - **n-procs**: Number of processes to use for parallel computation (default: 1)
 
@@ -39,7 +39,7 @@ The Add Tectonic Domain step performs **four main functions** in sequence:
 ### 🔹 1. Event Relocations
 Relocations are applied from the Reyners Catalogue to improve location accuracy:
 
-**Reyners Catalogue Relocations**
+**[Reyners Catalogue Relocations](https://www.researchgate.net/publication/235997841_Tracking_repeated_subduction_of_the_Hikurangi_Plateau_beneath_New_Zealand)**
 - Merges relocations from the Reyners Catalogue for improved earthquake locations
 - Updates `lat`, `lon`, `depth`, `loc_type`, and `loc_grid` fields when better locations are available
 - Sets `reloc` field to "reyners" for successfully relocated events
@@ -130,14 +130,6 @@ The step uses several configuration parameters from `config.yaml`:
 - **cmt_url**: URL for GeoNet CMT solutions
 - **ll_num**: WGS84 coordinate system identifier
 - **nztm_num**: NZTM coordinate system identifier
-
----
-
-## ⚠️ Important Notes
-
-- **Parallel Processing**: The step is optimized for multiprocessing; use more cores for better performance
-- **Data Dependencies**: Requires active internet connection to fetch catalog data from configured URLs
-- **Coordinate Systems**: All spatial operations use NZTM projection for accuracy within New Zealand
 
 ---
 

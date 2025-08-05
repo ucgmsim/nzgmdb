@@ -72,7 +72,7 @@ The pipeline calculates the following intensity measures based on configuration 
 
 ### 🔹 Spectral Acceleration Periods
 
-The pSA calculations use **111 standardized periods** (in seconds):
+The pSA calculations use **111 standardised periods** (in seconds):
 
 ```
 0.010, 0.020, 0.022, 0.025, 0.029, 0.030, 0.032, 0.035, 0.036, 0.040,
@@ -113,10 +113,10 @@ IMs are calculated for multiple component orientations:
 
 ### 🔹 Parallel Processing
 
-The step utilizes multiprocessing for computational efficiency:
+The step utilises multiprocessing for computational efficiency:
 - Distributes IM calculations across available CPU cores
 - Processes multiple records simultaneously
-- Optimized memory usage for large waveform datasets
+- Optimised memory usage for large waveform datasets
 
 ---
 
@@ -246,7 +246,7 @@ The merge operation performs the following consolidation steps:
 - **Fmax Data**: Integrates maximum usable frequencies for each component
 - **Record Parsing**: Extracts event ID, station, channel, and location from record identifiers
 
-**3. Column Organization**
+**3. Column Organisation**
 Structures the final dataset with logical column ordering:
 ```
 record_id | evid | sta | loc | chan | component | 
@@ -261,7 +261,7 @@ score_mean_Z | fmin_mean_Z | fmax_mean_Z | multi_mean_Z |
 
 **`ground_motion_im_catalogue.csv`**
 
-The consolidated catalog contains:
+The consolidated catalogue contains:
 
 | Field Group | Description | Example Columns |
 |-------------|-------------|-----------------|
@@ -269,12 +269,12 @@ The consolidated catalog contains:
 | **Components** | Motion component type | `component` (000, 090, ver, rotd50, etc.) |
 | **Time-Domain IMs** | Peak and duration metrics | `PGA`, `PGV`, `CAV`, `AI`, `Ds575`, `Ds595` |
 | **Quality Metrics** | GMC and frequency data | `score_mean_X`, `fmin_mean_X`, `fmax_mean_X` |
-| **Spectral IMs** | Period-dependent response | `pSA_0.010`, `pSA_0.050`, `pSA_1.000` |
+| **Spectral IMs** | Period-dependant response | `pSA_0.010`, `pSA_0.050`, `pSA_1.000` |
 | **Frequency IMs** | Fourier amplitude data | `FAS_0.100`, `FAS_1.000`, `FAS_10.000` |
 
 ### 🔹 Integration Benefits
 
-- **Single Source**: Consolidates thousands of individual files into one analyzable dataset
+- **Single Source**: Consolidates thousands of individual files into one analysable dataset
 - **Metadata Enrichment**: Combines IM data with quality metrics and processing parameters
 
 
@@ -283,5 +283,5 @@ The consolidated catalog contains:
 ## 🔗 Related Steps
 
 - **Previous**: [Process Records](Process-Records.md) - Generates the processed waveform files required for IM calculation
-- **Next**: [Calculate Distances](Calculate-Distances.md) - Computes rupture distance metrics for the merged IM catalog
-- **Related**: [Merge Flatfiles](Merge-Flatfiles.md) - Further processes the IM catalog into component-specific flatfiles
+- **Next**: [Calculate Distances](Calculate-Distances.md) - Computes rupture distance metrics for the merged IM catalogue
+- **Related**: [Merge Flatfiles](Merge-Flatfiles.md) - Further processes the IM catalogue into component-specific flatfiles

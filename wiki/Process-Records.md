@@ -77,7 +77,7 @@ Each MSEED file undergoes a comprehensive processing workflow:
 4. **Zero Padding** - Add 5 seconds of zeros at start and end
 5. **Inventory Response Removal** - Remove instrument sensitivity using station metadata
 6. **Component Rotation** - Rotate horizontal components to North-East-Vertical (NEZ)
-7. **Gravity Normalization** - Divide acceleration data by gravitational constant (9.81 m/s²)
+7. **Gravity normalisation** - Divide acceleration data by gravitational constant (9.81 m/s²)
 
 #### Advanced Signal Processing
 1. **Component-Specific Bandpass Filtering** 
@@ -149,7 +149,7 @@ Additional output files are generated in the `flatfiles/` directory:
 
 ### 🔹 Core Processing Functions
 
-The record processing utilizes functions from the `nzgmdb.data_processing` module:
+The record processing utilises functions from the `nzgmdb.data_processing` module:
 
 - **`process_observed.process_single_mseed()`**: Main processing function for individual MSEED files
 - **`waveform_manipulation.initial_preprocessing()`**: Handles basic waveform preprocessing
@@ -160,9 +160,8 @@ The record processing utilizes functions from the `nzgmdb.data_processing` modul
 
 ## ⚠️ Important Notes
 
-- **Quality Control**: Records failing any processing step are logged but don't halt pipeline execution
-- **Component-Specific Frequency Validation**: The step ensures `fmin_h < fmax_h` and `fmin_v < fmax_v`; invalid ranges result in record skipping
 - **Component Dependency**: All three components must be present and successfully processed for record inclusion
+- **Component-Specific Frequency Validation**: The step ensures `fmin_h < fmax_h` and `fmin_v < fmax_v`; invalid ranges result in record skipping
 - **Component Split Filtering**: Different frequency bounds for horizontal vs vertical components
 
 ---

@@ -26,6 +26,7 @@ REGISTRY = {
     "brendon_set.csv": "sha256:a62d8c69f7f7bc6ccf0318a113a152befb35cfb21c56ab4806c58f24f221ce2e",
     "lee_large.csv": "sha256:e4077746552937cd0a48be723b0188d33d4a73c2364716f085c0cd55ab78ec58",
     "lee_small.csv": "sha256:b274bc99fcacb2747623f754b92d594c3b6729cfcfd0d046365ad3c6fba706c1",
+    "sensitivity_ignore.csv": "sha256:2282de53c63be44fcd27d753969cacdd23b3b02bf053ffa481f97f2a517d2c7e",
 }
 
 URLS = {
@@ -52,6 +53,7 @@ URLS = {
     "brendon_set.csv": "https://www.dropbox.com/scl/fi/7t3jv1pjtvhkadwd2bdrq/brendon_set.csv?rlkey=o65u8okmcdmgko133m20hjohl&st=egxi3hie&dl=1",
     "lee_large.csv": "https://www.dropbox.com/scl/fi/mvrank082ymdoyx9gd01a/lee_large.csv?rlkey=gbma92x0clykky7aibpdv0yaa&st=ahuelv65&dl=1",
     "lee_small.csv": "https://www.dropbox.com/scl/fi/o1ljfke9qoqgiv4md17ke/lee_small.csv?rlkey=6ojepz5j9snedep1zgi2x9t2s&st=a9qhbgfz&dl=1",
+    "sensitivity_ignore.csv": "https://www.dropbox.com/scl/fi/51nz3ia5bzbuvikajba28/sensitivity_ignore.csv?rlkey=9fj57vb5inwtxh68sqrmocth2&st=9r1r5vup&dl=1",
 }
 
 NZGMDB_DATA = pooch.create(

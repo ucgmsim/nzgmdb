@@ -56,7 +56,7 @@ The GMC step requires the following inputs from previous pipeline steps:
 
 ### 🔹 Batch Processing Setup
 
-The GMC processing is optimized for parallel execution:
+The GMC processing is optimised for parallel execution:
 
 1. **Locate MSEED Files** - Recursively finds all `.mseed` files in the waveform directory
 2. **Create Batches** - Splits files into even batches based on `n_procs` parameter

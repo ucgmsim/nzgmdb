@@ -1,6 +1,6 @@
 # 📤 Upload to Dropbox
 
-The final step in the NZGMDB pipeline that packages all generated files into organized ZIP archives and uploads them to a centralized Dropbox repository for distribution and long-term storage. This is however an optional step that should only be done for official release runs for the UCGMSIM team.
+The final step in the NZGMDB pipeline that packages all generated files into organised ZIP archives and uploads them to a centralised Dropbox repository for distribution and long-term storage. This is however an optional step that should only be done for official release runs for the UCGMSIM team.
 
 ---
 
@@ -113,16 +113,16 @@ The process creates several thematic ZIP archives:
 - Allows users to download specific events without entire year datasets
 - Structure: `waveforms/{year}/{event_id}.zip`
 
-**Content Organization:**
+**Content Organisation:**
 - **Raw Data**: Original MSEED files from GeoNet
 - **Processed Data**: ASCII waveform files (.000, .090, .ver components)
 
 ### 🔹 Upload Process
 
 **1. Parallel Upload Management**
-- Utilizes multiprocessing pools for concurrent uploads
+- Utilises multiprocessing pools for concurrent uploads
 - Configurable process count via `--n-procs` parameter
-- Optimized for large dataset transfers
+- Optimised for large dataset transfers
 
 **2. Upload Verification**
 - Each uploaded file undergoes size verification
@@ -238,12 +238,12 @@ The `download_dropbox_archive` function provides complete archive retrieval:
 
 **2. Automatic Extraction**
 - Extracts all archives to appropriate pipeline directories
-- Reconstructs waveform directory structure with proper event organization
+- Reconstructs waveform directory structure with proper event Organisation
 
-**3. Waveform Reorganization**
+**3. Waveform Reorganisation**
 - Automatically sorts waveform files by type (MSEED vs processed)
 - Creates proper event subdirectories (mseed/, processed/)
-- Maintains pipeline-compatible file organization
+- Maintains pipeline-compatible file Organisation
 
 ---
 
@@ -251,7 +251,6 @@ The `download_dropbox_archive` function provides complete archive retrieval:
 
 - **Optional Step**: Upload to Dropbox is not required for pipeline completion
 - **Large Datasets**: Upload times depend on data volume and network bandwidth
-- **Version Control**: Each upload creates a versioned directory for historical tracking
 - **Access Control**: Requires proper Dropbox API credentials and folder permissions
 - **Resume Capability**: Failed uploads can be resumed using the `upload_failed_files` function
 
