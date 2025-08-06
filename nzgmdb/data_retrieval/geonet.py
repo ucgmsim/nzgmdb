@@ -388,7 +388,7 @@ def fetch_sta_mag_line(
             stats = mseed[0].stats
             clipped_records.append(
                 [
-                    f"{event_id}_{stats.station}_{stats.channel}_{stats.location}",
+                    f"{event_id}_{stats.station}_{stats.channel[:2]}_{stats.location}",
                     "Clipped",
                 ]
             )
