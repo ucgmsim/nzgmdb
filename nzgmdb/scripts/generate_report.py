@@ -557,6 +557,127 @@ def important_set_figures(
     return bar_img_base64, pie_imgs_base64
 
 
+def single_column_barplot(
+    df: pd.DataFrame,
+    column: str,
+    x_label: str,
+    title: str,
+    figsize=(14, 8),
+    dpi=300,
+    y_label="Number of Records",
+    bar_label="Records",
+):
+    categories = sorted(df[column].unique())
+    counts = df[column].value_counts().reindex(categories, fill_value=0)
+    x = np.arange(len(categories))
+    width = 0.6
+
+    fig, ax = plt.subplots(figsize=figsize, dpi=dpi)
+    bars = ax.bar(x, counts.values, width, label=bar_label)
+
+    for bar in bars:
+        height = bar.get_height()
+        ax.text(
+            bar.get_x() + bar.get_width() / 2,
+            height + counts.max() * 0.01,
+            f"{int(height)}",
+            ha="center",
+            va="bottom",
+            fontsize=12,
+            fontweight="bold",
+        )
+
+    ax.set_xticks(x)
+    ax.set_xticklabels(categories, rotation=45, ha="right")
+    ax.set_xlabel(x_label)
+    ax.set_ylabel(y_label)
+    ax.set_title(title)
+    ax.legend()
+    fig.tight_layout()
+
+    buf = BytesIO()
+    fig.savefig(buf, format="png", bbox_inches="tight")
+    plt.close(fig)
+    buf.seek(0)
+    img_base64 = base64.b64encode(buf.read()).decode("utf-8")
+    return img_base64
+
+
+def double_barplot_bin_overlap(
+    df: pd.DataFrame,
+    column: str,
+    x_label: str,
+    title: str,
+    figsize=(14, 8),
+    dpi=300,
+    y_label="Number of Records",
+    bar_1_label="Total",
+    bar_2_label="Also in Other Bin",
+):
+    categories = sorted(df[column].unique())
+    total_counts = df[column].value_counts().reindex(categories, fill_value=0)
+
+    overlap_counts = []
+    for cat in categories:
+        mask = df[column] == cat
+        # Find records in this bin that also appear in any other bin
+        # (i.e., have the same record_id but in a different bin)
+        ids_in_bin = set(df.loc[mask, "record_id"])
+        ids_in_other_bins = set(df.loc[~mask, "record_id"])
+        overlap = ids_in_bin & ids_in_other_bins
+        overlap_counts.append(len(overlap))
+    overlap_counts = np.array(overlap_counts)
+
+    x = np.arange(len(categories))
+    width = 0.35
+
+    fig, ax = plt.subplots(figsize=figsize, dpi=dpi)
+    bars1 = ax.bar(
+        x - width / 2, total_counts.values, width, label=bar_1_label, color="blue"
+    )
+    bars2 = ax.bar(
+        x + width / 2, overlap_counts, width, label=bar_2_label, color="orange"
+    )
+
+    for bar in bars1:
+        height = bar.get_height()
+        ax.text(
+            bar.get_x() + bar.get_width() / 2,
+            height + 1,
+            f"{int(height)}",
+            ha="center",
+            va="bottom",
+            fontsize=12,
+            fontweight="bold",
+        )
+    for bar in bars2:
+        height = bar.get_height()
+        ax.text(
+            bar.get_x() + bar.get_width() / 2,
+            height + 1,
+            f"{int(height)}",
+            ha="center",
+            va="bottom",
+            fontsize=12,
+            fontweight="bold",
+        )
+
+    ax.set_xticks(x)
+    ax.set_xticklabels(categories, rotation=45, ha="right")
+    ax.set_xlabel(x_label)
+    ax.set_ylabel(y_label)
+    ax.set_title(title)
+    ax.legend()
+    fig.tight_layout()
+
+    buf = BytesIO()
+    fig.savefig(buf, format="png", bbox_inches="tight")
+    plt.close(fig)
+    buf.seek(0)
+    img_base64 = base64.b64encode(buf.read()).decode("utf-8")
+    return img_base64
+
+
 def compare_column_barplot(
     full_df: pd.DataFrame,
     quality_df: pd.DataFrame,
@@ -1034,7 +1155,8 @@ def generate_report(
     # Compare the reasons why records were skipped into the quality database
     html_parts.append("<h2>New NZGMDB Quality DB Skipped Records</h2>")
     img_base64 = skipped_records_pie_chart(
-        new_quality_skipped, "New NZGMDB Quality Skipped Reasons"
+        new_quality_skipped.drop_duplicates(subset="record_id"),
+        "New NZGMDB Quality Skipped Reasons",
     )
     html_parts.append("<div class='fig-single'>")
     html_parts.append(f'<img src="data:image/png;base64,{img_base64}">')
@@ -1043,11 +1165,50 @@ def generate_report(
     if compare_version_directory:
         html_parts.append("<h2>Old NZGMDB Quality DB Skipped Records</h2>")
         img_base64 = skipped_records_pie_chart(
-            old_quality_skipped, "Old NZGMDB Quality Skipped Reasons"
+            old_quality_skipped.drop_duplicates(subset="record_id"),
+            "Old NZGMDB Quality Skipped Reasons",
         )
         html_parts.append("<div class='fig-single'>")
         html_parts.append(f'<img src="data:image/png;base64,{img_base64}">')
         html_parts.append("</div>")
+
+    html_parts.append("<h2>All Quality metrics compared to Full Database</h2>")
+    # if compare_version_directory:
+    #     img_base64_quality = compare_column_barplot(
+    #         old_quality_skipped,
+    #         new_quality_skipped,
+    #         column="reason",
+    #         x_label="Skipped Reason",
+    #         title="Quality NZGMDB Skipped Reason Comparison",
+    #         bar_1_label="Old NZGMDB",
+    #         bar_2_label="New NZGMDB",
+    #     )
+    #     html_parts.append("<div class='fig-single'>")
+    #     html_parts.append(f'<img src="data:image/png;base64,{img_base64_quality}">')
+    #     html_parts.append("</div>")
+    # else:
+    #     img_base64 = single_column_barplot(
+    #         new_quality_skipped,
+    #         column="reason",
+    #         x_label="Skipped Reason",
+    #         title="New NZGMDB Skipped Reason Comparison",
+    #     )
+    #     html_parts.append("<div class='fig-single'>")
+    #     html_parts.append(f'<img src="data:image/png;base64,{img_base64}">')
+    #     html_parts.append("</div>")
+    # Remove any reason that is "Duplicate channels"
+    new_quality_skipped_adjusted = new_quality_skipped[
+        new_quality_skipped["reason"] != "Duplicate channels"
+    ]
+    img_base64 = double_barplot_bin_overlap(
+        new_quality_skipped_adjusted,
+        column="reason",
+        x_label="Skipped Reason",
+        title="New NZGMDB Skipped Reason Comparison",
+    )
+    html_parts.append("<div class='fig-single'>")
+    html_parts.append(f'<img src="data:image/png;base64,{img_base64}">')
+    html_parts.append("</div>")
 
     html_parts.append("<h2>Pipeline Skipped Records</h2>")
     # Prepare skipped files and accepted lengths for both new and old

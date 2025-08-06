@@ -657,9 +657,7 @@ def filter_empirical_predictions(
         skipped_list.append(skipped)
 
     # Concatenate all skipped records
-    skipped_records = pd.concat(skipped_list, ignore_index=True).drop_duplicates(
-        "record_id"
-    )
+    skipped_records = pd.concat(skipped_list, ignore_index=True)
 
     return skipped_records
 
@@ -782,42 +780,39 @@ def apply_all_filters(
     fmax_min = fmax_min if fmax_min is not None else config.get_value("fmax_min")
     fmin_max = fmin_max if fmin_max is not None else config.get_value("fmin_max")
 
-    # Filter by ground level locations
+    # Find ground level locations
     skipped_records_ground = filter_ground_level_locations(catalogue, bypass_records)
 
-    # Filter by has score mean
+    # Find has score mean
     skipped_records_has_score = filter_has_score_mean(catalogue, bypass_records)
 
-    # Filter by score mean
+    # Find score mean
     skipped_records_score = filter_score_mean(catalogue, score_min, bypass_records)
 
-    # Filter by multi mean
+    # Find multi mean
     skipped_records_multi = filter_multi_mean(catalogue, multi_max, bypass_records)
 
-    # Filter by fmax
+    # Find fmax
     skipped_records_fmax = filter_fmax(catalogue, fmax_min, bypass_records)
 
-    # Filter by fmin
+    # Find fmin
     skipped_records_fmin = filter_fmin(catalogue, fmin_max, bypass_records)
 
-    # Filter by missing station information
+    # Find missing station information
     skipped_records_sta = filter_missing_sta_info(catalogue, bypass_records)
 
-    # Filter by clipped records
+    # Find clipped records
     skipped_records_clipped = apply_clipNet_filter(
         catalogue, clipped_records_ffp, bypass_records
     )
 
-    # Filter by troublesome sensitivity records
-    # skipped_records_sensitivity = filter_troublesome_sensitivity(
-    #     catalogue, bypass_records
-    # )
-    #
-    # # Filter by empirical predictions
-    # skipped_records_empirical = filter_empirical_predictions(catalogue, bypass_records)
+    # Find troublesome sensitivity records
+    skipped_records_sensitivity = filter_troublesome_sensitivity(
+        catalogue, bypass_records
+    )
 
-    # Filter by duplicate channels
-    skipped_records_duplicate = filter_duplicate_channels(catalogue, bypass_records)
+    # Find empirical predictions
+    skipped_records_empirical = filter_empirical_predictions(catalogue, bypass_records)
 
     # Combine all the skipped records
     skipped_records = pd.concat(
@@ -830,14 +825,24 @@ def apply_all_filters(
             skipped_records_fmin,
             skipped_records_sta,
             skipped_records_clipped,
-            # skipped_records_sensitivity,
-            # skipped_records_empirical,
-            skipped_records_duplicate,
+            skipped_records_sensitivity,
+            skipped_records_empirical,
         ]
     )
 
-    # Filter out the multi_max records out of the catalogue
+    # Filter out the skipped records from the catalogue
     catalogue = catalogue[~catalogue["record_id"].isin(skipped_records["record_id"])]
+
+    # Find duplicate channels
+    skipped_records_duplicate = filter_duplicate_channels(catalogue, bypass_records)
+
+    # Filter out the duplicate channels from the catalogue
+    catalogue = catalogue[
+        ~catalogue["record_id"].isin(skipped_records_duplicate["record_id"])
+    ]
+
+    # Add the skipped records from duplicate channels
+    skipped_records = pd.concat([skipped_records, skipped_records_duplicate])
 
     # Clean up and ensure uniqueness
     assert len(catalogue["evid_sta"].unique()) == len(catalogue)
