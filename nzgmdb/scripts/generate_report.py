@@ -557,6 +557,67 @@ def important_set_figures(
     return bar_img_base64, pie_imgs_base64
 
 
+def skipped_reason_overlap_barplot(skipped_df: pd.DataFrame, title: str):
+    # Get all unique reasons
+    reasons = sorted(skipped_df["reason"].unique())
+    total_counts = skipped_df["reason"].value_counts().reindex(reasons, fill_value=0)
+
+    # For each reason, count how many record_ids also appear in another reason
+    overlap_counts = []
+    for reason in reasons:
+        ids_in_bin = set(skipped_df.loc[skipped_df["reason"] == reason, "record_id"])
+        ids_in_other_bins = set(
+            skipped_df.loc[skipped_df["reason"] != reason, "record_id"]
+        )
+        overlap = ids_in_bin & ids_in_other_bins
+        overlap_counts.append(len(overlap))
+    overlap_counts = np.array(overlap_counts)
+    non_overlap_counts = total_counts.values - overlap_counts
+
+    x = np.arange(len(reasons))
+    width = 0.75
+
+    fig, ax = plt.subplots(figsize=(14, 8), dpi=300)
+    ax.bar(
+        x,
+        overlap_counts,
+        width,
+        label="Other Reason",
+        color="blue",
+    )
+    ax.bar(
+        x,
+        non_overlap_counts,
+        width,
+        label="Unique to Reason",
+        color="red",
+        bottom=overlap_counts,
+    )
+
+    ax.set_xticks(x)
+    ax.set_xticklabels(reasons, rotation=45, ha="right")
+    ax.set_xlabel("Skipped Reason")
+    ax.set_ylabel("Number of Records")
+    ax.set_title(title)
+    ax.legend()
+    for i, (xv, y1, y2) in enumerate(zip(x, non_overlap_counts, overlap_counts)):
+        ax.text(
+            xv,
+            y1 + y2 + max(total_counts) * 0.01,
+            f"{int(y1 + y2)}",
+            ha="center",
+            va="bottom",
+            fontsize=12,
+            color="black",
+            fontweight="bold",
+        )
+    buf = BytesIO()
+    fig.savefig(buf, format="png", bbox_inches="tight")
+    plt.close(fig)
+    buf.seek(0)
+    return base64.b64encode(buf.read()).decode("utf-8")
+
+
 def single_column_barplot(
     df: pd.DataFrame,
     column: str,
@@ -1200,15 +1261,26 @@ def generate_report(
     new_quality_skipped_adjusted = new_quality_skipped[
         new_quality_skipped["reason"] != "Duplicate channels"
     ]
-    img_base64 = double_barplot_bin_overlap(
+    img_base64 = skipped_reason_overlap_barplot(
         new_quality_skipped_adjusted,
-        column="reason",
-        x_label="Skipped Reason",
         title="New NZGMDB Skipped Reason Comparison",
     )
     html_parts.append("<div class='fig-single'>")
     html_parts.append(f'<img src="data:image/png;base64,{img_base64}">')
     html_parts.append("</div>")
+
+    # Remove any reason that is "Duplicate channels" for old quality skipped
+    if compare_version_directory:
+        old_quality_skipped_adjusted = old_quality_skipped[
+            old_quality_skipped["reason"] != "Duplicate channels"
+        ]
+        img_base64 = skipped_reason_overlap_barplot(
+            old_quality_skipped_adjusted,
+            title="Old NZGMDB Skipped Reason Comparison",
+        )
+        html_parts.append("<div class='fig-single'>")
+        html_parts.append(f'<img src="data:image/png;base64,{img_base64}">')
+        html_parts.append("</div>")
 
     html_parts.append("<h2>Pipeline Skipped Records</h2>")
     # Prepare skipped files and accepted lengths for both new and old
@@ -1549,7 +1621,7 @@ def generate_report(
 
     # Generate fmin plots
     if compare_version_directory:
-        filtered_quality_old = apply_fmin_filter_df(quality_old, pre_4p3=True)
+        filtered_quality_old = apply_fmin_filter_df(quality_old, pre_4p3=False)
         old_record_count = (~filtered_quality_old[PSA_KEYS].isna()).sum(axis=0)
         ax.plot(
             PERIODS,
@@ -1710,6 +1782,7 @@ def generate_report(
 
 generate_report(
     Path("/home/joel/local/gmdb/4p3_mantle"),
-    Path("/home/joel/local/gmdb/4p3/report.html"),
-    Path("/home/joel/local/gmdb/4p3_backup/4p3_backup"),
+    Path("/home/joel/local/gmdb/4p3/4p3_report.html"),
+    # Path("/home/joel/local/gmdb/4p3_backup/4p3_backup"),
+    Path("/home/joel/local/gmdb/4p3_mantle"),
 )
