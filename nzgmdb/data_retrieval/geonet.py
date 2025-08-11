@@ -253,6 +253,7 @@ def fetch_sta_mag_line(
     event_id: str,
     main_dir: Path,
     client_NZ: FDSN_Client,
+    client_IRIS: FDSN_Client,
     pref_mag: float,
     pref_mag_type: str,
     site_table: pd.DataFrame,
@@ -328,6 +329,7 @@ def fetch_sta_mag_line(
     st = creation.get_waveforms(
         preferred_origin,
         client_NZ,
+        client_IRIS,
         network.code,
         station.code,
         event_cat.preferred_magnitude().mag,
@@ -458,6 +460,7 @@ def fetch_event_data(
     event_id: str,
     main_dir: Path,
     client_NZ: FDSN_Client,
+    client_IRIS: FDSN_Client,
     inventory: Inventory,
     site_table: pd.DataFrame,
     mw_rrup_data: np.ndarray,
@@ -540,6 +543,7 @@ def fetch_event_data(
                         event_id=event_id,
                         main_dir=main_dir,
                         client_NZ=client_NZ,
+                        client_IRIS=client_IRIS,
                         pref_mag=event_line[7],
                         pref_mag_type=event_line[8],
                         site_table=site_table,
@@ -556,6 +560,7 @@ def fetch_event_data(
                     event_id,
                     main_dir,
                     client_NZ,
+                    client_IRIS,
                     event_line[7],
                     event_line[8],
                     site_table,
@@ -581,6 +586,7 @@ def process_batch(
     batch_index: int,
     main_dir: Path,
     client_NZ: FDSN_Client,
+    client_IRIS: FDSN_Client,
     inventory: Inventory,
     site_table: pd.DataFrame,
     mw_rrup_data: np.ndarray,
@@ -624,6 +630,7 @@ def process_batch(
                 event_id,
                 main_dir,
                 client_NZ,
+                client_IRIS,
                 inventory,
                 site_table,
                 mw_rrup_data,
@@ -640,6 +647,7 @@ def process_batch(
                     fetch_event_data,
                     main_dir=main_dir,
                     client_NZ=client_NZ,
+                    client_IRIS=client_IRIS,
                     inventory=inventory,
                     site_table=site_table,
                     mw_rrup_data=mw_rrup_data,
@@ -900,7 +908,74 @@ def parse_geonet_information(
     else:
         # Get Station Information from geonet clients
         client_NZ = FDSN_Client("GEONET")
-    inventory = client_NZ.get_stations(channel=channel_codes, level="response")
+    # inventory = client_NZ.get_stations(channel=channel_codes, level="response")
+
+    # For temporary arrays
+    network_interests = [
+        "1U",
+        "2B",
+        "2C",
+        "2L",
+        "2P",
+        "3C",
+        "4A",
+        "6F",
+        "6K",
+        "7D",
+        "7L",
+        "7S",
+        "8F",
+        "8I",
+        "9F",
+        "IU",
+        "NZ",
+        "QC",
+        "SY",
+        "X2",
+        "XA",
+        "XB",
+        "XH",
+        "XO",
+        "XQ",
+        "Y3",
+        "YA",
+        "YG",
+        "YH",
+        "YO",
+        "YR",
+        "Z1",
+        "Z8",
+        "ZT",
+        "ZU",
+        "ZX",
+        "ZX",
+    ]
+
+    # Define rough NZ bounding box (adjust as needed)
+    min_lat, max_lat = -49, -32.0
+    min_lon, max_lon = 165.0, -176.9
+
+    combined_inv = None
+    client_IRIS = FDSN_Client("IRIS")  # temp array networks are stored here
+
+    for net_code in network_interests:
+        try:
+            inv = client_IRIS.get_stations(
+                network=net_code,
+                level="station",
+                minlatitude=min_lat,
+                maxlatitude=max_lat,
+                minlongitude=min_lon,
+                maxlongitude=max_lon,
+            )
+            if combined_inv is None:
+                combined_inv = inv
+            else:
+                combined_inv += inv
+        except Exception as e:
+            print(f"Failed to fetch {net_code}: {e}")
+
+    inventory = combined_inv
 
     # Get the rrup data
     mw_rrup_data = np.loadtxt(NZGMDB_DATA.fetch("Mw_rrup.txt"))
@@ -927,6 +1002,7 @@ def parse_geonet_information(
                 index,
                 main_dir,
                 client_NZ,
+                client_IRIS,
                 inventory,
                 site_table,
                 mw_rrup_data,

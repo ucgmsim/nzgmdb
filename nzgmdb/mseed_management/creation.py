@@ -30,6 +30,7 @@ from oq_wrapper import constants, estimations, wrapper
 def get_waveforms(
     preferred_origin: Origin,
     client: FDSN_Client,
+    client_IRIS: FDSN_Client,
     net: str,
     sta: str,
     mag: float,
@@ -145,7 +146,7 @@ def get_waveforms(
         try:
             with warnings.catch_warnings():
                 warnings.filterwarnings("ignore", category=UserWarning)
-                st = client.get_waveforms(
+                st = client_IRIS.get_waveforms(
                     net,
                     sta,
                     location,
