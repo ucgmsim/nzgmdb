@@ -24,7 +24,7 @@ channel_codes:
 # Mseed Variables
 vs30: 500
 min_time_difference: 15
-ds_multiplier: 2
+ds_multiplier: 2.5
 # GMProcess Variables
 gmprocess_url: https://earthquake.usgs.gov/fdsnws/event/1/query
 search_radius: 25 # In kilometres
