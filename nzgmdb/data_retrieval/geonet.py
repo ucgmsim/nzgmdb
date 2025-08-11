@@ -315,14 +315,14 @@ def fetch_sta_mag_line(
     )
     r_epi = dist / 1000
     ev_depth = preferred_origin.depth / 1000
-    r_hyp = ((r_epi) ** 2 + (ev_depth + station.elevation) ** 2) ** 0.5
+    r_hyp = ((r_epi) ** 2 + (ev_depth + station.elevation / 1000) ** 2) ** 0.5
 
     # Get the vs30 value
-    site_vs30_row = site_table.loc[
-        (site_table["net"] == network.code) & (site_table["sta"] == station.code),
-        "Vs30",
+    site_row = site_table.loc[
+        (site_table["net"] == network.code) & (site_table["sta"] == station.code), :
     ]
-    vs30 = None if site_vs30_row.empty else site_vs30_row.values[0]
+    vs30 = None if site_row.empty else site_row["Vs30"].values[0]
+    z1p0 = None if site_row.empty else site_row["Z1.0"].values[0] / 1000
 
     # Get the waveforms
     st = creation.get_waveforms(
@@ -334,6 +334,7 @@ def fetch_sta_mag_line(
         r_hyp,
         r_epi,
         vs30,
+        z1p0,
         only_record_ids,
     )
     # Check that data was found

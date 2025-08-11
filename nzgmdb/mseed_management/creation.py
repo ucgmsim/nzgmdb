@@ -36,6 +36,7 @@ def get_waveforms(
     rrup: float,
     r_epi: float,
     vs30: float = None,
+    z1p0: float = None,
     only_record_ids: list[str] = None,
 ):
     """
@@ -60,6 +61,8 @@ def get_waveforms(
         The epicentral distance to the event
     vs30 : float, optional
         The Vs30 value for the station, by default sets to config value
+    z1p0 : float, optional
+        The Z1.0 value for the station, by default sets to estimation from the chiou_young_08 model
     only_record_ids : list[str], optional
         A list of record ids to get the waveforms for, by default None
 
@@ -71,7 +74,7 @@ def get_waveforms(
     config = cfg.Config()
     vs30 = config.get_value("vs30") if vs30 is None else vs30
     rake = 90  # Assume strike-slip for now
-    z1p0 = estimations.chiou_young_08_calc_z1p0(vs30)
+    z1p0 = estimations.chiou_young_08_calc_z1p0(vs30) if z1p0 is None else z1p0
     # Predict significant duration time from Afshari and Stewart (2016)
     input_df = pd.DataFrame(
         {
@@ -88,7 +91,8 @@ def get_waveforms(
         input_df,
         "Ds595",
     )
-    ds = np.exp(result_df["Ds595_mean"].values[0])
+    ds_mean = np.exp(result_df["Ds595_mean"].values[0])
+    ds_std = np.exp(3 * result_df["Ds595_std_Total"].values[0])
 
     deg = kilometers2degrees(r_epi)
 
@@ -98,12 +102,12 @@ def get_waveforms(
     p_arrivals = model.get_travel_times(
         source_depth_in_km=preferred_origin.depth / 1000,
         distance_in_degree=deg,
-        phase_list=["ttp"],
+        phase_list=["P", "p", "Pn", "Pg", "Pb"],
     )
     s_arrivals = model.get_travel_times(
         source_depth_in_km=preferred_origin.depth / 1000,
         distance_in_degree=deg,
-        phase_list=["tts"],
+        phase_list=["P", "p", "Pn", "Pg", "Pb"],
     )
     ptime_est = (
         preferred_origin.time + p_arrivals[0].time
@@ -114,11 +118,13 @@ def get_waveforms(
     min_time_difference = config.get_value("min_time_difference")
     ds_multiplier = config.get_value("ds_multiplier")
     start_time = ptime_est - min_time_difference
-    end_time = stime_est + (
-        min_time_difference
-        if stime_est + ds * ds_multiplier - ptime_est < min_time_difference
-        else ds * ds_multiplier
-    )
+    # end_time = stime_est + (
+    #     min_time_difference
+    #     if stime_est + ds_mean * ds_multiplier - ptime_est < min_time_difference
+    #     else ds_mean * ds_multiplier
+    # )
+    # # end_time = ptime_est + ds_mean + ds_std
+    end_time = ptime_est + ds_mean * ds_multiplier
     channel_codes = ",".join(config.get_value("channel_codes"))
     location = "*"
 
