@@ -149,9 +149,9 @@ def merge_reyners_catalogue_on_events(
     # and the latitude, longitude or depth did not change
     event_df["reloc"] = np.where(
         (
-            (event_df["lon"] != event_df["lon_reyners"])
-            | (event_df["lat"] != event_df["lat_reyners"])
-            | (event_df["depth"] != event_df["depth_reyners"])
+            (~np.isclose(event_df["lon"], event_df["lon_reyners"]))
+            | (~np.isclose(event_df["lat"], event_df["lat_reyners"]))
+            | (~np.isclose(event_df["depth"], event_df["depth_reyners"]))
         )
         & event_df["lon_reyners"].notna(),
         "reyners",
@@ -484,10 +484,8 @@ def add_tect_domain(
 
     # Read the geonet CMT and event data
     config = cfg.Config()
-    geonet_cmt_df = pd.read_csv(
-        config.get_value("cmt_url"), low_memory=False, dtype={"evid": str}
-    )
-    event_df = pd.read_csv(event_csv_ffp, low_memory=False, dtype={"evid": str})
+    geonet_cmt_df = pd.read_csv(config.get_value("cmt_url"), dtype={"evid": str})
+    event_df = pd.read_csv(event_csv_ffp, dtype={"evid": str})
 
     # Merge in the Reyners Catalogue data for relocations
     reyners_catalogue_df = pd.read_csv(
