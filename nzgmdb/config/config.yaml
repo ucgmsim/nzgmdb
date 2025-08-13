@@ -23,7 +23,7 @@ channel_codes:
   - HH?
 # Mseed Variables
 vs30: 500
-min_time_difference: 15
+pre_event_time_difference: 15
 ds_multiplier: 2.5
 # GMProcess Variables
 gmprocess_url: https://earthquake.usgs.gov/fdsnws/event/1/query

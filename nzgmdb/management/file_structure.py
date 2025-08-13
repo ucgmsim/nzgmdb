@@ -14,7 +14,8 @@ class PreFlatfileNames(StrEnum):
     """
 
     EARTHQUAKE_SOURCE_TABLE_GEONET = "earthquake_source_table_geonet.csv"
-    STATION_MAGNITUDE_TABLE_GEONET = "station_magnitude_table_geonet.csv"
+    STATION_EXTRACTION_TABLE_GEONET = "station_extraction_table_geonet.csv"
+    STATION_MAGNITUDE_TABLE_EXTRACTION = "station_magnitude_table_geonet.csv"
     EARTHQUAKE_SOURCE_TABLE_TECTONIC = "earthquake_source_table_tectonic.csv"
     EARTHQUAKE_SOURCE_TABLE_DISTANCES = "earthquake_source_table_distances.csv"
     EARTHQUAKE_SOURCE_TABLE_AFTERSHOCKS = "earthquake_source_table_aftershocks.csv"
@@ -55,7 +56,7 @@ class SkippedRecordFilenames(StrEnum):
     Filenames of files that keep track of records that were skipped during the NZGMDB pipeline.
     """
 
-    GEONET_SKIPPED_RECORDS = "geonet_skipped_records.csv"
+    EXTRACTION_SKIPPED_RECORDS = "extraction_skipped_records.csv"
     CLIPPED_RECORDS = "clipped_records.csv"
     IM_CALC_SKIPPED_RECORDS = "im_calc_skipped_records.csv"
     MISSING_SITES = "missing_sites.csv"
