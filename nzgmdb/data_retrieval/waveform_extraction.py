@@ -412,6 +412,10 @@ def extract_waveforms(
     station_extraction_table = pd.read_csv(
         station_extraction_table_ffp, dtype={"evid": str}
     )
+    # Convert the p_time_est column to datetime
+    station_extraction_table["ptime_est"] = pd.to_datetime(
+        station_extraction_table["ptime_est"]
+    )
     only_record_ids = (
         None if only_record_ids_ffp is None else pd.read_csv(only_record_ids_ffp)
     )
@@ -425,14 +429,15 @@ def extract_waveforms(
     processed_files = [f for f in batch_dir.iterdir() if f.is_file()]
     processed_suffixes = set(int(f.stem.split("_")[-1]) for f in processed_files)
 
-    # Create batches from the number of rows in the station extraction table
-    batches = np.array_split(
-        len(station_extraction_table),
+    # Split the DataFrame index into batches
+    index_batches = np.array_split(
+        station_extraction_table.index,
         np.ceil(len(station_extraction_table) / batch_size),
     )
 
-    for batch_index, batch in enumerate(batches):
+    for batch_index, batch_indices in enumerate(index_batches):
         if batch_index not in processed_suffixes:
+            batch_rows = station_extraction_table.loc[batch_indices]
             with mp.Pool(n_procs) as pool:
                 results = pool.map(
                     functools.partial(
@@ -441,7 +446,7 @@ def extract_waveforms(
                         client=client_NZ,
                         only_record_ids=only_record_ids,
                     ),
-                    station_extraction_table.itertuples(index=False),
+                    (row for _, row in batch_rows.iterrows()),
                 )
 
             # Extract the results

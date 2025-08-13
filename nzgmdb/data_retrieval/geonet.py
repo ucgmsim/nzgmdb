@@ -2,6 +2,7 @@
 Functions to manage Geonet Data
 """
 
+import contextlib
 import datetime
 import functools
 import io
@@ -332,11 +333,12 @@ def fetch_sta_extraction(
     model = TauPyModel(model="iasp91")
 
     # Estimate arrival times for P and S phases
-    p_arrivals = model.get_travel_times(
-        source_depth_in_km=preferred_origin.depth / 1000,
-        distance_in_degree=deg,
-        phase_list=["P", "p", "Pn", "Pg", "Pb"],
-    )
+    with contextlib.redirect_stderr(io.StringIO()):
+        p_arrivals = model.get_travel_times(
+            source_depth_in_km=preferred_origin.depth / 1000,
+            distance_in_degree=deg,
+            phase_list=["P", "p", "Pn", "Pg", "Pb"],
+        )
     # Estimated earliest P arrival time from taup
     ptime_est = preferred_origin.time + p_arrivals[0].time
 
@@ -353,7 +355,7 @@ def fetch_sta_extraction(
             "z1p0": [z1p0],
             "ds_mean": [ds_mean],
             "ds_std": [ds_std],
-            "phase": [p_arrivals[0].phase],
+            "phase": [p_arrivals[0].name],
             "ptime_est": [ptime_est],
         }
     )
@@ -550,7 +552,7 @@ def process_batch(
         ) = result
         if finished_event_data is not None:
             event_data.append(finished_event_data)
-            station_extraction_data.append(station_extraction_data)
+            station_extraction_data.append(finished_sta_extraction_data)
 
     # Create the output directory for the batch files
     flatfile_dir = file_structure.get_flatfile_dir(main_dir)

@@ -106,10 +106,7 @@ def extract_waveforms(
     ] = None,
     batch_size: Annotated[
         int,
-        typer.Option(
-            help="The batch size for how many extracted waveforms to process before checkpointing",
-            default=1000,
-        ),
+        typer.Option(),
     ] = 1000,
 ):
     """
@@ -194,7 +191,6 @@ def make_phase_arrival_table(
     bypass_records_ffp: Annotated[
         Path,
         typer.Option(
-            help="The full file path to the bypass records file for custom p_wave_ix values",
             exists=True,
             dir_okay=False,
         ),
@@ -940,7 +936,7 @@ def run_full_nzgmdb(
         checkpoint
         and (
             flatfile_dir
-            / file_structure.PreFlatfileNames.STATION_EXTRACTION_TABLE_GEONET
+            / file_structure.PreFlatfileNames.STATION_MAGNITUDE_TABLE_EXTRACTION
         ).exists()
     ):
         print("Extracting waveforms")
