@@ -35,6 +35,7 @@ class FlatfileNames(StrEnum):
     EARTHQUAKE_SOURCE_TABLE = "earthquake_source_table.csv"
     EARTHQUAKE_SOURCE_GEOMETRY = "earthquake_source_geometry.csv"
     STATION_MAGNITUDE_TABLE = "station_magnitude_table.csv"
+    STATION_EXTRACTION_TABLE = "station_extraction_table.csv"
     SITE_TABLE = "site_table.csv"
     PHASE_ARRIVAL_TABLE = "phase_arrival_table.csv"
     PROPAGATION_TABLE = "propagation_path_table.csv"
@@ -57,6 +58,7 @@ class SkippedRecordFilenames(StrEnum):
     """
 
     EXTRACTION_SKIPPED_RECORDS = "extraction_skipped_records.csv"
+    MULTI_TRACE_ISSUE_RECORDS = "multi_trace_issue_records.csv"
     CLIPPED_RECORDS = "clipped_records.csv"
     IM_CALC_SKIPPED_RECORDS = "im_calc_skipped_records.csv"
     MISSING_SITES = "missing_sites.csv"

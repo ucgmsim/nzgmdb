@@ -2,7 +2,6 @@
 Functions to manage Geonet Data
 """
 
-import contextlib
 import datetime
 import functools
 import io
@@ -37,6 +36,8 @@ class EventData(NamedTuple):
     """The full event line with all metadata."""
     station_extraction_table: pd.DataFrame
     """The station extraction table with all metadata for wavefrom extraction."""
+    skipped_records: pd.DataFrame
+    """The skipped records with reasons for skipping a record"""
 
 
 def get_max_magnitude(magnitudes: list[Magnitude], mag_type: str):
@@ -278,6 +279,8 @@ def fetch_sta_extraction(
     -------
     pd.DataFrame
         The station extraction table with the data for the station
+    pd.DataFrame
+        The skipped reasons if the station has an issue getting a phase arrival
     """
     config = cfg.Config()
 
@@ -332,35 +335,52 @@ def fetch_sta_extraction(
 
     model = TauPyModel(model="iasp91")
 
-    # Estimate arrival times for P and S phases
-    with contextlib.redirect_stderr(io.StringIO()):
+    # Esitimate the P-wave travel time
+    # Loop through the priority phase list to find the first available P-wave arrival
+    priority_phase_list = config.get_value("priority_phase_list")
+    p_arrivals = []
+    for phase_list in priority_phase_list:
         p_arrivals = model.get_travel_times(
             source_depth_in_km=preferred_origin.depth / 1000,
             distance_in_degree=deg,
-            phase_list=["P", "p", "Pn", "Pg", "Pb"],
+            phase_list=phase_list,
         )
-    # Estimated earliest P arrival time from taup
-    ptime_est = preferred_origin.time + p_arrivals[0].time
+        if p_arrivals:
+            break
 
-    # Create the station_extraction_table
-    station_extraction_table = pd.DataFrame(
-        {
-            "net": [network.code],
-            "sta": [station.code],
-            "evid": [event_id],
-            "mag": [pref_mag],
-            "pref_mag_type": [pref_mag_type],
-            "r_hyp": [r_hyp],
-            "vs30": [vs30],
-            "z1p0": [z1p0],
-            "ds_mean": [ds_mean],
-            "ds_std": [ds_std],
-            "phase": [p_arrivals[0].name],
-            "ptime_est": [ptime_est],
-        }
-    )
+    if p_arrivals:
+        ptime_est = preferred_origin.time + p_arrivals[0].time
 
-    return station_extraction_table
+        # Create the station_extraction_table
+        station_extraction_table = pd.DataFrame(
+            {
+                "net": [network.code],
+                "sta": [station.code],
+                "evid": [event_id],
+                "mag": [pref_mag],
+                "pref_mag_type": [pref_mag_type],
+                "r_hyp": [r_hyp],
+                "vs30": [vs30],
+                "z1p0": [z1p0],
+                "ds_mean": [ds_mean],
+                "ds_std": [ds_std],
+                "phase": [p_arrivals[0].name],
+                "ptime_est": [ptime_est],
+            }
+        )
+
+        return station_extraction_table, pd.DataFrame()
+    else:
+        print(
+            f"No phase arrivals found for {network.code}.{station.code} at event {event_id}"
+        )
+        skipped_reason = pd.DataFrame(
+            {
+                "record_id": [f"{event_id}_{station.code}"],
+                "skipped_reason": [f"No P-wave arrival found"],
+            }
+        )
+        return pd.DataFrame(), skipped_reason
 
 
 def fetch_event_data(
@@ -406,6 +426,8 @@ def fetch_event_data(
 
     # Get the event line
     event_line = fetch_event_line(event_cat, event_id)
+    station_extraction_table = pd.DataFrame()
+    skipped_records = pd.DataFrame()
 
     if event_line is not None:
 
@@ -463,12 +485,14 @@ def fetch_event_data(
             ]
 
         # Concat the results for the station extraction table
-        station_extraction_table = pd.concat(results, ignore_index=True)
+        if results:
+            station_extraction_results, skipped_records = zip(*results)
+            station_extraction_table = pd.concat(
+                station_extraction_results, ignore_index=True
+            )
+            skipped_records = pd.concat(skipped_records, ignore_index=True)
 
-    else:
-        station_extraction_table = None
-
-    return EventData(event_line, station_extraction_table)
+    return EventData(event_line, station_extraction_table, skipped_records)
 
 
 def process_batch(
@@ -544,15 +568,17 @@ def process_batch(
             )
 
     # Extract the results
-    event_data, station_extraction_data = [], []
+    event_data, station_extraction_data, skipped_records = [], [], []
     for result in results:
         (
             finished_event_data,
             finished_sta_extraction_data,
+            finished_skipped_records,
         ) = result
         if finished_event_data is not None:
             event_data.append(finished_event_data)
             station_extraction_data.append(finished_sta_extraction_data)
+            skipped_records.append(finished_skipped_records)
 
     # Create the output directory for the batch files
     flatfile_dir = file_structure.get_flatfile_dir(main_dir)
@@ -594,6 +620,14 @@ def process_batch(
         # Save the station extraction table
         station_extraction_df.to_csv(
             batch_dir / f"station_extraction_table_{batch_index}.csv", index=False
+        )
+
+    if skipped_records:
+        # Combine the skipped records dataframes
+        skipped_records_df = pd.concat(skipped_records, ignore_index=True)
+        # Save the skipped records table
+        skipped_records_df.to_csv(
+            batch_dir / f"skipped_records_table_{batch_index}.csv", index=False
         )
 
 
@@ -733,6 +767,10 @@ def parse_geonet_information(
         if not only_event_ids:
             # Get the earthquake data
             geonet = download_earthquake_data(start_date, end_date)
+            # geonet = pd.read_csv(
+            #     "/home/joel/local/gmdb/waveform_window/4p4_window/events_around_large_subset/events_around.csv",
+            #     dtype={"publicid": str},
+            # )
 
             # Get all event ids
             event_ids = geonet.publicid.unique().astype(str)
@@ -788,6 +826,7 @@ def parse_geonet_information(
     # Combine all the event and station_extraction dataframes
     event_dfs = []
     station_extraction_dfs = []
+    skipped_records_dfs = []
 
     for file in batch_dir.iterdir():
         if "earthquake_source_table" in file.stem:
@@ -800,6 +839,12 @@ def parse_geonet_information(
                 station_extraction_dfs.append(pd.read_csv(file))
             except EmptyDataError:
                 print(f"Warning: {file} is empty or has no valid columns to parse.")
+        elif "skipped_records_table" in file.stem:
+            try:
+                skipped_records_dfs.append(pd.read_csv(file))
+            except EmptyDataError:
+                print(f"Warning: {file} is empty or has no valid columns to parse.")
+                skipped_records_dfs.append(pd.DataFrame())
 
     if not station_extraction_dfs:
         raise custom_errors.NoStationsError(
@@ -808,6 +853,7 @@ def parse_geonet_information(
 
     event_df = pd.concat(event_dfs, ignore_index=True)
     station_extraction_table = pd.concat(station_extraction_dfs, ignore_index=True)
+    skipped_records = pd.concat(skipped_records_dfs, ignore_index=True)
 
     # Save the dataframes
     event_df.to_csv(
@@ -816,5 +862,9 @@ def parse_geonet_information(
     )
     station_extraction_table.to_csv(
         flatfile_dir / file_structure.PreFlatfileNames.STATION_EXTRACTION_TABLE_GEONET,
+        index=False,
+    )
+    skipped_records.to_csv(
+        flatfile_dir / file_structure.SkippedRecordFilenames.EXTRACTION_SKIPPED_RECORDS,
         index=False,
     )
