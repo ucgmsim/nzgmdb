@@ -35,7 +35,7 @@ def filter_flatfiles_on_catalouge(
         FlatfileNames.EARTHQUAKE_SOURCE_GEOMETRY,
         FlatfileNames.FMAX,
         FlatfileNames.STATION_MAGNITUDE_TABLE,
-        # FlatfileNames.STATION_EXTRACTION_TABLE,
+        FlatfileNames.STATION_EXTRACTION_TABLE,
         FlatfileNames.SITE_TABLE,
         FlatfileNames.PHASE_ARRIVAL_TABLE,
         FlatfileNames.PROPAGATION_TABLE,
@@ -890,7 +890,7 @@ def create_quality_db(
         The file path to the records that will bypass the quality checks
     """
     # Make the quality db directory
-    output_dir = main_dir / "quality_db_testing"
+    output_dir = main_dir / "quality_db"
     output_dir.mkdir(exist_ok=True)
 
     # Load the ground motion im catalogue

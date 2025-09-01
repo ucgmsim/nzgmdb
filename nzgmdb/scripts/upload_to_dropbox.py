@@ -323,10 +323,15 @@ def upload_failed_files(
 def download_dropbox_archive(
     output_dir: Annotated[Path, typer.Argument(exists=True)],
     version: Annotated[str, typer.Argument()],
+    ignore_flatfiles: Annotated[bool, typer.Option()] = False,
+    ignore_waveforms: Annotated[bool, typer.Option()] = False,
+    ignore_snrfas: Annotated[bool, typer.Option()] = False,
+    ignore_quality: Annotated[bool, typer.Option()] = False,
 ) -> None:
     """
     Download the NZGMDB archive from Dropbox.
     And extract the contents into the output directory, setup for a NZGMDB pipeline run.
+    Default is to download everything, but can ignore specific sections.
 
     Parameters
     ----------
@@ -351,56 +356,69 @@ def download_dropbox_archive(
     waveform_dir = file_structure.get_waveform_dir(output_dir)
     quality_dir = output_dir / "quality_db"
     zip_dir = output_dir / "zips"
-    # Make the dirs
-    flatfiles_dir.mkdir(exist_ok=True)
-    snr_fas_dir.mkdir(exist_ok=True)
-    waveform_dir.mkdir(exist_ok=True)
-    quality_dir.mkdir(exist_ok=True)
     zip_dir.mkdir(exist_ok=True)
 
-    # List of (dropbox_zip_path, local_zip_path, extract_dir)
-    zips_to_download = [
-        (
-            f"{dropbox_version_dir}/{flatfiles_zip}",
-            zip_dir / flatfiles_zip,
-            flatfiles_dir,
-        ),
-        (
-            f"{dropbox_version_dir}/{pre_flatfiles_zip}",
-            zip_dir / pre_flatfiles_zip,
-            flatfiles_dir,
-        ),
-        (
-            f"{dropbox_version_dir}/{snr_fas_zip}",
-            zip_dir / snr_fas_zip,
-            snr_fas_dir,
-        ),
-        (f"{dropbox_version_dir}/{quality_zip}", zip_dir / quality_zip, quality_dir),
-        (f"{dropbox_version_dir}/{skipped_zip}", zip_dir / skipped_zip, flatfiles_dir),
-    ]
-
-    # Gather the list of waveform zip files from Dropbox
-    dropbox_waveforms_dir = f"{DROPBOX_PATH}/{version}/waveforms"
-    result = subprocess.run(
-        ["rclone", "lsf", dropbox_waveforms_dir],
-        shell=False,
-        capture_output=True,
-        text=True,
-    )
-    waveform_files = [
-        line.strip()
-        for line in result.stdout.splitlines()
-        if line.strip().endswith(".zip")
-    ]
-
-    # Add waveform zips
-    for wf_zip in waveform_files:
-        dropbox_zip_path = f"{dropbox_waveforms_dir}/{wf_zip}"
-        local_extract_path = output_dir / "waveforms" / wf_zip.split(".")[0]
-        local_extract_path.mkdir(parents=True, exist_ok=True)
-        zips_to_download.append(
-            (dropbox_zip_path, zip_dir / wf_zip, local_extract_path)
+    # Create list of zips to download
+    zips_to_download = []
+    if not ignore_flatfiles:
+        flatfiles_dir.mkdir(exist_ok=True)
+        zips_to_download.extend(
+            [
+                (
+                    f"{dropbox_version_dir}/{flatfiles_zip}",
+                    zip_dir / flatfiles_zip,
+                    flatfiles_dir,
+                ),
+                (
+                    f"{dropbox_version_dir}/{pre_flatfiles_zip}",
+                    zip_dir / pre_flatfiles_zip,
+                    flatfiles_dir,
+                ),
+                (
+                    f"{dropbox_version_dir}/{skipped_zip}",
+                    zip_dir / skipped_zip,
+                    flatfiles_dir,
+                ),
+            ]
         )
+    if not ignore_snrfas:
+        snr_fas_dir.mkdir(exist_ok=True)
+        zips_to_download.append(
+            (f"{dropbox_version_dir}/{snr_fas_zip}", zip_dir / snr_fas_zip, snr_fas_dir)
+        )
+    if not ignore_quality:
+        quality_dir.mkdir(exist_ok=True)
+        zips_to_download.append(
+            (f"{dropbox_version_dir}/{quality_zip}", zip_dir / quality_zip, quality_dir)
+        )
+
+    # Gather waveform zips if not ignored
+    if not ignore_waveforms:
+        waveform_dir.mkdir(exist_ok=True)
+        dropbox_waveforms_dir = f"{DROPBOX_PATH}/{version}/waveforms"
+        result = subprocess.run(
+            ["rclone", "lsf", dropbox_waveforms_dir],
+            shell=False,
+            capture_output=True,
+            text=True,
+        )
+        waveform_files = [
+            line.strip()
+            for line in result.stdout.splitlines()
+            if line.strip().endswith(".zip")
+        ]
+
+        # Add waveform zips
+        for wf_zip in waveform_files:
+            dropbox_zip_path = f"{dropbox_waveforms_dir}/{wf_zip}"
+            local_extract_path = output_dir / "waveforms" / wf_zip.split(".")[0]
+            local_extract_path.mkdir(parents=True, exist_ok=True)
+            zips_to_download.append(
+                (dropbox_zip_path, zip_dir / wf_zip, local_extract_path)
+            )
+
+    # Ensure there is something to download
+    assert len(zips_to_download) > 0, "No zips to download."
 
     # Download and extract all zips
     for dropbox_zip, local_zip, extract_dir in zips_to_download:
@@ -421,21 +439,22 @@ def download_dropbox_archive(
         except Exception as e:  # noqa: BLE001
             print(f"Failed to extract {local_zip}: {e}")
 
-    # Manage the waveforms data structure
-    for year_dir in waveform_dir.iterdir():
-        for file in year_dir.iterdir():
-            if file.is_file():
-                event_name = file.name.split("_")[0]
-                event_dir = year_dir / event_name
-                mseed_dir = event_dir / "mseed"
-                processed_dir = event_dir / "processed"
-                mseed_dir.mkdir(parents=True, exist_ok=True)
-                processed_dir.mkdir(parents=True, exist_ok=True)
+    # Manage the waveforms data structure if not ignored
+    if not ignore_waveforms:
+        for year_dir in waveform_dir.iterdir():
+            for file in year_dir.iterdir():
+                if file.is_file():
+                    event_name = file.name.split("_")[0]
+                    event_dir = year_dir / event_name
+                    mseed_dir = event_dir / "mseed"
+                    processed_dir = event_dir / "processed"
+                    mseed_dir.mkdir(parents=True, exist_ok=True)
+                    processed_dir.mkdir(parents=True, exist_ok=True)
 
-                if file.suffix == ".mseed":
-                    shutil.move(str(file), str(mseed_dir / file.name))
-                elif file.suffix in [".000", ".090", ".ver"]:
-                    shutil.move(str(file), str(processed_dir / file.name))
+                    if file.suffix == ".mseed":
+                        shutil.move(str(file), str(mseed_dir / file.name))
+                    elif file.suffix in [".000", ".090", ".ver"]:
+                        shutil.move(str(file), str(processed_dir / file.name))
 
 
 if __name__ == "__main__":

@@ -8,13 +8,12 @@ import itertools
 import multiprocessing as mp
 import time
 import warnings
-from collections.abc import Iterable
 from datetime import datetime
 from pathlib import Path
 
 import numpy as np
 import pandas as pd
-from obspy import Stream, UTCDateTime
+from obspy import Stream, Trace, UTCDateTime
 from obspy.clients.fdsn import Client as FDSN_Client
 from obspy.clients.fdsn.header import (
     FDSNNoDataException,
@@ -102,7 +101,48 @@ def get_inital_stream(
     return st
 
 
-def perform_ai_selection(st: Stream, ptime_est: UTCDateTime, ds_mean: float, ds_std: float):
+def get_arias_intensity_norm(
+    trace: Trace,
+):
+    """
+    Calculate the normalized Arias intensity from a trace object.
+
+    Parameters
+    ----------
+    trace : Trace
+        The trace object containing the waveform data
+
+    Returns
+    -------
+    Ia_norm : np.ndarray
+        The normalized Arias intensity as a 2D array with time and normalized intensity values
+    """
+    g = 9.81
+    dt = trace.stats.delta
+    npts = trace.stats.npts
+
+    t = np.linspace(0, (npts - 1) * dt, npts)
+    a = trace.data  # acceleration in m/s^2
+
+    a_sq = a**2.0
+    Ia_1col = np.zeros(npts)
+
+    for i in range(1, npts):
+        Ia_1col[i] = Ia_1col[i - 1] + np.pi / (2 * g) * a_sq[i - 1] * dt
+
+    Ia_peak = float(Ia_1col[-1])
+    if Ia_peak == 0:
+        Ia_norm_1col = np.zeros_like(Ia_1col)
+    else:
+        Ia_norm_1col = Ia_1col / Ia_peak
+    Ia_norm = np.column_stack((t, Ia_norm_1col))
+
+    return Ia_1col, Ia_norm
+
+
+def perform_ai_selection(
+    st: Stream, ptime_est: UTCDateTime, ds_mean: float, ds_std: float
+):
     """
     Calculates the Arias Intensity for each trace for every channel over the time period of
     ptime_est to ptime_est + ds595 + 1std and selects the best 3 traces based on the highest
@@ -123,21 +163,72 @@ def perform_ai_selection(st: Stream, ptime_est: UTCDateTime, ds_mean: float, ds_
     -------
     Stream
         A cleaned stream object containing only the best 3 traces based on Arias Intensity.
+    int
+        The index of the selected trace in the original stream. None if there was an issue.
+    bool
+        A boolean indicating if there was an issue with the selection process. (Groups did not agree)
     """
-    # Calculate Arias Intensity for each trace
-    ai_values = {}
-    for tr in st:
-        ai = filtering.calculate_arias_intensity(tr, ptime_est)
-        ai_values[tr.id] = ai
+    # Copy the stream
+    st_copy = st.copy()
+    # Detrend the mseed
+    st_copy.detrend("demean")
+    st_copy.detrend("linear")
+    # Filter the mseed (If using a lower frequency sensor e.g. BN then you will get a warning, however it will still filter and makes no difference so we ignore the warning)
+    warnings.filterwarnings(
+        "ignore",
+        message="Selected high corner frequency*",
+        category=UserWarning,
+        module="obspy.signal.filter",
+    )
+    st_copy.filter("bandpass", freqmin=0.1, freqmax=40)
 
-    # Sort traces by Arias Intensity in descending order
-    sorted_traces = sorted(ai_values.items(), key=lambda item: item[1], reverse=True)
+    # Get the unique ending channel ids
+    unique_channel_endings = list(set([tr.stats.channel[-1] for tr in st_copy]))
+    trace_indexs = []
+    traces = []
+    loc = st_copy[0].stats.location
+    chan = st_copy[0].stats.channel[:2]
 
-    # Select the top 3 traces
-    selected_trace_ids = [trace_id for trace_id, _ in sorted_traces[:3]]
-    selected_stream = st.select(id=",".join(selected_trace_ids))
+    for unique_channel_ending in unique_channel_endings:
+        # We need to group together each component with the same ending channel str e.g. HN1 the 1
+        group = st_copy.select(
+            location=loc,
+            channel=f"{chan}{unique_channel_ending}",
+        )
+        # For each trace compute the AI and keep the highest
+        for i, tr in enumerate(group):
+            # Trim the trace to ptime_est to ptime_est + ds595 + 1std
+            ds_end_time = np.exp(ds_mean) * np.exp(ds_std)
+            tr_copy = tr.copy()
+            tr_copy.trim(ptime_est, ptime_est + ds_end_time, pad=True, fill_value=0)
+            # Get the IA and IA_norm
+            Ia, _ = get_arias_intensity_norm(tr_copy)
+            if i == 0:
+                Ia_max = Ia[-1]
+                Ia_max_index = 0
+            else:
+                if Ia[-1] > Ia_max:
+                    Ia_max = Ia[-1]
+                    Ia_max_index = i
+        trace_indexs.append(Ia_max_index)
+        # Grab the original trace from the st and group to get the correct trace
+        group_original = st.select(
+            location=loc,
+            channel=f"{chan}{unique_channel_ending}",
+        )
+        traces.append(group_original[Ia_max_index])
+    # Check all the groups agree
+    if len(set(trace_indexs)) == 1:
+        # We combine the traces into a new stream
+        st = Stream(traces=traces)
+        trace_index = trace_indexs[0]
+        issue = False
+    else:
+        # Raise an issue here as the groups do not agree
+        issue = True
+        trace_index = None
 
-    return selected_stream
+    return st, trace_index, issue
 
 
 def select_horizontal_pair(values: list[str]):
@@ -237,17 +328,22 @@ def check_trace_issues(st: Stream, record_id: str, station_extraction_row: pd.Se
     investigation_end_time = ptime_est + ds_end_time
 
     # Make a copy of the traces to check for data in the investigation window
-    st_check = st.copy()
-    st_check.trim(investigation_start_time, investigation_end_time)
-    if len(st_check) == 0 or all([tr.stats.npts == 0 for tr in st_check]):
+    main_intensity_check = st.copy()
+    main_intensity_check.trim(ptime_est, investigation_end_time)
+    if len(main_intensity_check) == 0 or all(
+        [tr.stats.npts == 0 for tr in main_intensity_check]
+    ):
+        # This means we have an emtpy stream
         skipped_record = pd.DataFrame(
             {
                 "record_id": [record_id],
-                "reason": ["No data from noise to ds595 + 1std"],
+                "reason": ["No data from ptime_est to ds595 + 1std"],
             }
         )
         return None, skipped_record, raised_issues
 
+    st_check = st.copy()
+    st_check.trim(investigation_start_time, investigation_end_time)
     # Perform a check to see if there is any offset in the traces missing data between noise and ds595 + 1std
     # Group traces by channel into separate arrays
     channel_traces = {}
@@ -446,20 +542,129 @@ def check_trace_issues(st: Stream, record_id: str, station_extraction_row: pd.Se
                     )
 
     if len(st) > 3:
+        found_small_gap = False
+        # Add extra checks for small trace gaps (20 data points)
+        for channel, traces in channel_traces.items():
+            if len(traces) > 1:
+                for i in range(len(traces) - 1):
+                    gap = traces[i + 1].stats.starttime - traces[i].stats.endtime
+                    if gap <= 20 * (1 / traces[i].stats.sampling_rate):
+                        # We have a small gap
+                        # Categorise the gaps into noise, main_intensity, tail
+                        gap_start = traces[i].stats.endtime
+                        gap_end = traces[i + 1].stats.starttime
+                        if gap_start < ptime_est:
+                            category = "noise"
+                        elif (
+                            gap_start >= ptime_est and gap_end <= investigation_end_time
+                        ):
+                            category = "main_intensity"
+                        else:
+                            category = "tail"
+                        raised_issues.append(
+                            pd.DataFrame(
+                                {
+                                    "record_id": [record_id],
+                                    "reason": [
+                                        f"Found small gap during {category} section of waveform"
+                                    ],
+                                }
+                            )
+                        )
+                        found_small_gap = True
+                        break  # Only need to find one small gap to raise the issue
+            if found_small_gap:
+                break
+
+        # Add check for changes in the timesteps
+        # Also categorise the gaps into noise, main_intensity, tail
+        found_timestep_change = False
+        if len(st) > 3:
+            for channel, traces in channel_traces.items():
+                if len(traces) > 1:
+                    for i in range(len(traces) - 1):
+                        first_tr_end = traces[i].stats.endtime
+                        second_tr_start = traces[i + 1].stats.starttime
+                        # Check if the traces are still aligned with delta
+                        difference_time = second_tr_start - first_tr_end
+                        # Check if the difference_time is divisible by the delta
+                        delta_diff = difference_time % traces[i].stats.delta
+                        if not (
+                            np.isclose(delta_diff, 0)
+                            or np.isclose(delta_diff, traces[i].stats.delta)
+                        ):
+                            # We have a change in timestep between traces
+                            if second_tr_start < ptime_est:
+                                category = "noise"
+                            elif (
+                                second_tr_start >= ptime_est
+                                and second_tr_start <= investigation_end_time
+                            ):
+                                category = "main_intensity"
+                            else:
+                                category = "tail"
+                            raised_issues.append(
+                                pd.DataFrame(
+                                    {
+                                        "record_id": [record_id],
+                                        "reason": [
+                                            f"Found change in timestep during {category} section of waveform"
+                                        ],
+                                    }
+                                )
+                            )
+                            found_timestep_change = True
+                            break
+                if found_timestep_change:
+                    break
+
         # This is now a basic multi-trace problem with no extreme issues
         # Utilise Arias-Intensity to select the best 3 traces
-        st_preffered =
-
-        # If still greater than 3 traces then skip due to an edge case we haven't managed
-        skipped_record = pd.DataFrame(
-            {
-                "record_id": [record_id],
-                "reason": [
-                    "More than 3 traces after managing multi-trace issues, edge case not managed"
-                ],
-            }
+        st_preffered, index_selected, issue = perform_ai_selection(
+            st, ptime_est, ds_mean, ds_std
         )
-        return None, skipped_record, raised_issues
+
+        if issue:
+            skipped_record = pd.DataFrame(
+                {
+                    "record_id": [record_id],
+                    "reason": [
+                        "Could not agree on best traces using Arias Intensity selection"
+                    ],
+                }
+            )
+            return None, skipped_record, raised_issues
+
+        if len(st_preffered) > 3:
+            skipped_record = pd.DataFrame(
+                {
+                    "record_id": [record_id],
+                    "reason": [
+                        "More than 3 traces after Arias Intensity selection, edge case not managed"
+                    ],
+                }
+            )
+            return None, skipped_record, raised_issues
+        else:
+            st = st_preffered
+            raised_issues.append(
+                pd.DataFrame(
+                    {
+                        "record_id": [record_id],
+                        "reason": [
+                            "Reduced to 3 traces using Arias Intensity selection"
+                        ],
+                    }
+                )
+            )
+            raised_issues.append(
+                pd.DataFrame(
+                    {
+                        "record_id": [record_id],
+                        "reason": [f"Selected trace: {index_selected+1}"],
+                    }
+                )
+            )
 
     # Ensure traces all have the same length
     starttime_trim = max([tr.stats.starttime for tr in st])
@@ -469,9 +674,7 @@ def check_trace_issues(st: Stream, record_id: str, station_extraction_row: pd.Se
         skipped_record = pd.DataFrame(
             {
                 "record_id": [record_id],
-                "reason": [
-                    "Start time after end time when trimming to common length"
-                ],
+                "reason": ["Start time after end time when trimming to common length"],
             }
         )
         return None, skipped_record, raised_issues
@@ -592,7 +795,11 @@ def extract_station_info(
 
     # Check that data was found
     if st is None:
-        skipped_records.append([f"{event_id}_{station}", "No Waveform Data"])
+        skipped_records.append(
+            pd.DataFrame(
+                {"record_id": [f"{event_id}_{station}"], "reason": ["No Waveform Data"]}
+            )
+        )
         return sta_mag_line, skipped_records, clipped_records
 
     # Get the unique channels (Using first 2 keys) and locations
@@ -612,12 +819,11 @@ def extract_station_info(
 
         multi_trace_issues.extend(issues)
         # Add to the skipped records if any were raised
-        if skipped:
+        if skipped is not None:
             skipped_records.append(skipped)
             continue
         else:
             mseeds.append(st_revised)
-
 
     # Get the station magnitudes
     station_magnitudes = [
@@ -632,19 +838,27 @@ def extract_station_info(
             if all([np.allclose(tr.data, 0) for tr in mseed]):
                 stats = mseed[0].stats
                 skipped_records.append(
-                    [
-                        f"{event_id}_{stats.station}_{stats.channel}_{stats.location}",
-                        "All 0's",
-                    ]
+                    pd.DataFrame(
+                        {
+                            "record_id": [
+                                f"{event_id}_{stats.station}_{stats.channel}_{stats.location}"
+                            ],
+                            "reason": ["All 0's"],
+                        }
+                    )
                 )
                 continue
         except TypeError:
             stats = mseed[0].stats
             skipped_records.append(
-                [
-                    f"{event_id}_{stats.station}_{stats.channel}_{stats.location}",
-                    "TypeError when checking for all 0's",
-                ]
+                pd.DataFrame(
+                    {
+                        "record_id": [
+                            f"{event_id}_{stats.station}_{stats.channel}_{stats.location}"
+                        ],
+                        "reason": ["TypeError when checking for all 0's"],
+                    }
+                )
             )
 
         # Calculate clip to determine if the record should be dropped
@@ -809,7 +1023,12 @@ def extract_waveforms(
                 )
 
             # Extract the results
-            sta_mag_data, skipped_records, clipped_records, multi_trace_issues = [], [], [], []
+            sta_mag_data, skipped_records, clipped_records, multi_trace_issues = (
+                [],
+                [],
+                [],
+                [],
+            )
             for result in results:
                 (
                     finished_sta_mag_data,
@@ -848,9 +1067,7 @@ def extract_waveforms(
 
             if len(skipped_records) > 0:
                 # Create the skipped records df
-                skipped_records_df = pd.DataFrame(
-                    skipped_records, columns=["skipped_records", "reason"]
-                )
+                skipped_records_df = pd.concat(skipped_records)
             else:
                 skipped_records_df = pd.DataFrame()
 

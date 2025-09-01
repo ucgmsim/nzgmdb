@@ -1,8 +1,8 @@
 # 🔍 Parse GeoNet
 
-This step in the NZGMDB pipeline combines earthquake catalogue querying and waveform extraction in a single efficient process. Rather than separately querying the catalogue and then downloading waveforms, this integrated approach fetches earthquake event data from GeoNet and immediately retrieves corresponding seismic waveforms for each event, creating the earthquake source table, station magnitude table, and downloading MSEED files for subsequent processing.
+This step in the NZGMDB pipeline queries the GeoNet earthquake catalogue to extract earthquake metadata and create the earthquake source table.
+Also provided as an output because of this step is the station extraction table which contains the information used to create the start and end time selections for the waveforms.
 
-**Key Efficiency:** By processing catalogue data and waveform retrieval together this saves software processing time to get all of the results.
 
 ---
 
@@ -35,9 +35,8 @@ python -m nzgmdb.scripts.run_nzgmdb parse-geonet nzgmdb_output/ 2020-01-01 2020-
 
 This will create several output files in the flatfiles directory:
 - `earthquake_source_table.csv`
-- `station_magnitude_table.csv`
+- `station_extraction_table.csv`
 - `geonet_skipped_records.csv`
-- `geonet_clipped_records.csv`
 
 ---
 
@@ -93,92 +92,23 @@ For each earthquake, stations are selected within a distance-dependant radius:
 - **Station filtering:** Uses ObsPy inventory selection with latitude, longitude, and maximum radius
 - **Channel filtering:** Restricted to strong motion channels (`channel_codes: [HN?, BN?]`)
 
-### 🔹 Waveform Window Calculation
+### 🔹 Create Station Extraction Table
 
-The waveform download window is determined using seismic travel time models and configuration parameters:
+The station extraction table is generated with the following steps for every station-event pair within the defined radius:
 
-#### **Travel Time Estimation**
-- **P-wave arrival:** Calculated using TauPy iasp91 model
-- **S-wave arrival:** Calculated using TauPy iasp91 model
+- First we compute the r_hyp and r_epi distances (Distance from station to hypocentre and epicenter respectively).
+- We also grab the Vs30 and Z1.0 values from the site table for each station.
+- If the Vs30 values is not available, we assign a default value of 500 m/s.
+- If the Z1.0 value is not available, we estimate it using the Chiou-Young 2008 model from Vs30.
 
-#### **Duration (Ds) Calculation**
-- **Model:** Afshari and Stewart (2016) from OpenQuake
-- **Parameters:**
-  - Vs30 from site table (default: `vs30: 500` m/s if unavailable)
-  - Default rake value: 90°
-  - Magnitude from preferred magnitude
-  - Z1.0 estimated using Chiou-Young 2008 model from Vs30
+These inputs are used in the Afshari and Stewart (2016) model to estimate the Ds595 value and its standard deviation.
 
-#### **Window Definition**
-- **Start time:** P-wave arrival minus `min_time_difference: 15` seconds
-- **End time:** S-wave arrival + Ds × `ds_multiplier: 2`, also ensures a minimum duration
-- **Minimum duration:** Controlled by `min_time_difference` to ensure adequate waveform length
+Then we estimate the P-wave arrival time at each station using the TauPyModel `iasp91` with certain phases:
+- phase_list: ['P', 'p', 'Pn', 'Pg', 'Pb'] (Obtained from config.yaml)
 
-Example with a synthetic waveform to illustrate the window:
-![](images/waveform_extraction_window.png)
+This order is strictly followed when estimating the arrival time, meaning that if the first phase is not available, it will try the second phase and so on.
+If none of the phases are available, the station-event pair is skipped and recorded in the `geonet_skipped_records.csv` file.
 
-### 🔹 Waveform Data Retrieval
-
-Waveforms are downloaded using the FDSN Client with specific constraints:
-
-#### **Channel Selection**
-- **Channel Selection:** `channel_codes: [HN?, BN?, HH?]` from configuration, where HN and BN are Strong Motion channels and HH is Broadband
-- **Three-component data:** Horizontal (N-S, E-W) and vertical components
-
-#### **Error Handling**
-- **Incomplete reads:** Up to 3 retry attempts for network issues
-- **Missing data:** Graceful skipping when no data available
-- **File size errors:** Catches ObsPy errors for corrupted/small files that can't be processed
-- **Network timeouts:** Robust retry mechanism for network failures
-
-### 🔹 Waveform Quality Filtering
-
-Downloaded waveforms undergo quality assessment using ClipNet with configuration thresholds:
-
-#### **Clipping Detection**
-- **Method:** gmprocess ClipNet algorithm
-- **Threshold:** `clip_threshold: 0.2` from config.yaml
-- **Action:** Records exceeding threshold are flagged and skipped
-- **Magnitude bounds:** `mag_clip_low: 3.0`, `mag_clip_high: 8.8`
-- **Distance bounds:** `dist_clip_low: 0.0`, `dist_clip_high: 645.0`
-
-The output of this is saved to a `geonet_clipped_records.csv` file to be used during the quality_db step.
-
-#### **Component Splitting**
-
-Some Stream objects require extra splitting for a single evid_station combinations as there can be many different "locations" or "channels" for the same record.
-
-- **Processing:** Streams split into individual 3-component sets
-- **Validation:** Ensures complete three-component data
-- **Location codes:** Handles multiple location codes per station
-
-### 🔹 Waveform File Management
-
-Successfully processed waveforms are saved in standardised format:
-
-#### **File Naming Convention**
-```
-{event_id}_{station}_{channel}_{location}.mseed
-```
-
-#### **Directory Structure**
-- **Storage location:** `waveforms/` subdirectory
-- **Organisation:** Hierarchical by year then event ID then mseed directory
-- **Format:** ObsPy Stream objects saved as MSEED files
-
-### 🔹 Station Magnitude Processing
-
-For each station-event pair, magnitude information is extracted:
-
-#### **Magnitude Extraction Logic**
-1. **Primary attempt:** Match Z-channel with first 2 channel codes
-2. **Secondary attempt:** Use any channel matching first 2 codes
-3. **Fallback:** Set magnitude to None, type to preferred magnitude type
-
-#### **Amplitude Information**
-- **Amplitude values:** Extracted from event amplitude objects
-- **Units:** Preserved from original GeoNet data
-- **Quality flags:** Maintained for downstream processing
 
 ---
 
@@ -188,7 +118,7 @@ The Parse GeoNet step generates several key output files:
 
 ### 🔹 Earthquake Source Table (`earthquake_source_table.csv`)
 
-Contains comprehensive event metadata with the following columns:
+Contains event metadata with the following columns:
 
 | Column | Description |
 |--------|-------------|
@@ -212,40 +142,30 @@ Contains comprehensive event metadata with the following columns:
 | `std` | Location standard error |
 | `reloc` | Relocation flag ("no" by default) |
 
-### 🔹 Station Magnitude Table (`station_magnitude_table.csv`)
+### 🔹 Station Extraction Table (`station_extraction_table.csv`)
 
-Records station-specific magnitude measurements:
+Contains station-event pair metadata with the following columns:
 
-| Column | Description |
-|--------|-------------|
-| `mag_id` | Unique magnitude identifier |
-| `net` | Network code |
-| `sta` | Station code |
-| `loc` | Location code |
-| `chan` | Channel code |
-| `event_id` | Associated event identifier |
-| `sta_mag` | Station magnitude value |
-| `sta_mag_type` | Station magnitude type |
-| `sta_mag_method` | Magnitude calculation method |
-| `amp` | Amplitude measurement |
-| `amp_unit` | Amplitude units |
+| Column | Description                                    |
+|--------|------------------------------------------------|
+| `net` | Network                                        |
+| `sta` | Station                                        |
+| `evid` | Unique GeoNet event identifier                 |
+| `mag` | Preferred magnitude                            |
+| `mag_type` | Preferred magnitude type (ML, Mb, etc.)        |
+| `r_hyp` | Hypocentral distance (km)                      |
+| `vs30` | Vs30 value from site table                     |
+| `z1p0` | Z1.0 value from site table                     |
+| `ds_mean` | Ds595 estimate from Afshari and Stewart (2016) |
+| `ds_std` | Standard deviation of Ds595                    |
+| `phase` | Phase used in estimated arrival time           |
+| `ptime_est` | Estimated P-wave arrival time                  |
 
 ### 🔹 Processing Logs
 
 #### **Skipped Records (`geonet_skipped_records.csv`)**
-- Records that couldn't be processed due to data availability or technical issues
-- Includes record identifier and reason for skipping
-
-#### **Clipped Records (`geonet_clipped_records.csv`)**
-- Records flagged by ClipNet as having excessive clipping (above `clip_threshold: 0.2`)
-- Contains record identifier and clipping metrics
-
-### 🔹 MSEED Waveform Files
-
-- **Location:** `waveforms/` directory
-- **Format:** Standard MSEED format compatible with ObsPy
-- **Naming:** `{event_id}_{station}_{channel}_{location}.mseed`
-- **Content:** Three-component seismic waveforms ready for processing
+- Records that could not obtain a phase arrival estimate
+- Contains event ID, station, and reason for skipping
 
 ---
 
@@ -278,4 +198,5 @@ Robust error handling ensures pipeline resilience:
 ## 🔗 Related Steps
 
 - **Previous**: [Fetching-Site-Table](Fetching-site-table.md) - Fetches and processes site metadata from GeoNet
-- **Next**: [Add Tectonic Domain](Add-Tectonic-Domain.md) - Assigns tectonic domain numbers to sites based on spatial intersection as well as tectonic type classification and relocations for some earthquakes
+- **Next**: [Waveform-Extraction](Waveform-Extraction.md) - Extracts waveform data from GeoNet for selected events and stations
+- **Related**: [Add Tectonic Domain](Add-Tectonic-Domain.md) - Assigns tectonic domain numbers to sites based on spatial intersection as well as tectonic type classification and relocations for some earthquakes

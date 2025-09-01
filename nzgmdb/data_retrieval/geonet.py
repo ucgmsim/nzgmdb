@@ -377,7 +377,7 @@ def fetch_sta_extraction(
         skipped_reason = pd.DataFrame(
             {
                 "record_id": [f"{event_id}_{station.code}"],
-                "skipped_reason": [f"No P-wave arrival found"],
+                "skipped_reason": ["No P-wave arrival estimate found"],
             }
         )
         return pd.DataFrame(), skipped_reason
@@ -625,9 +625,9 @@ def process_batch(
     if skipped_records:
         # Combine the skipped records dataframes
         skipped_records_df = pd.concat(skipped_records, ignore_index=True)
-        # Save the skipped records table
+        # Save the skipped records
         skipped_records_df.to_csv(
-            batch_dir / f"skipped_records_table_{batch_index}.csv", index=False
+            batch_dir / f"skipped_records_{batch_index}.csv", index=False
         )
 
 
@@ -839,7 +839,7 @@ def parse_geonet_information(
                 station_extraction_dfs.append(pd.read_csv(file))
             except EmptyDataError:
                 print(f"Warning: {file} is empty or has no valid columns to parse.")
-        elif "skipped_records_table" in file.stem:
+        elif "skipped_records" in file.stem:
             try:
                 skipped_records_dfs.append(pd.read_csv(file))
             except EmptyDataError:
@@ -865,6 +865,6 @@ def parse_geonet_information(
         index=False,
     )
     skipped_records.to_csv(
-        flatfile_dir / file_structure.SkippedRecordFilenames.EXTRACTION_SKIPPED_RECORDS,
+        flatfile_dir / file_structure.SkippedRecordFilenames.GEONET_SKIPPED_RECORDS,
         index=False,
     )
