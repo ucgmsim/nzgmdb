@@ -105,7 +105,7 @@ def get_arias_intensity_norm(
     trace: Trace,
 ):
     """
-    Calculate the normalized Arias intensity from a trace object.
+    Calculate the Arias intensity from a trace object.
 
     Parameters
     ----------
@@ -114,30 +114,22 @@ def get_arias_intensity_norm(
 
     Returns
     -------
-    Ia_norm : np.ndarray
-        The normalized Arias intensity as a 2D array with time and normalized intensity values
+    Ia : np.ndarray
+        The Arias intensity as a 2D array with time and normalized intensity values
     """
     g = 9.81
     dt = trace.stats.delta
     npts = trace.stats.npts
 
-    t = np.linspace(0, (npts - 1) * dt, npts)
     a = trace.data  # acceleration in m/s^2
 
     a_sq = a**2.0
-    Ia_1col = np.zeros(npts)
+    Ia = np.zeros(npts)
 
     for i in range(1, npts):
-        Ia_1col[i] = Ia_1col[i - 1] + np.pi / (2 * g) * a_sq[i - 1] * dt
+        Ia[i] = Ia[i - 1] + np.pi / (2 * g) * a_sq[i - 1] * dt
 
-    Ia_peak = float(Ia_1col[-1])
-    if Ia_peak == 0:
-        Ia_norm_1col = np.zeros_like(Ia_1col)
-    else:
-        Ia_norm_1col = Ia_1col / Ia_peak
-    Ia_norm = np.column_stack((t, Ia_norm_1col))
-
-    return Ia_1col, Ia_norm
+    return Ia
 
 
 def perform_ai_selection(
@@ -202,7 +194,7 @@ def perform_ai_selection(
             tr_copy = tr.copy()
             tr_copy.trim(ptime_est, ptime_est + ds_end_time, pad=True, fill_value=0)
             # Get the IA and IA_norm
-            Ia, _ = get_arias_intensity_norm(tr_copy)
+            Ia = get_arias_intensity_norm(tr_copy)
             if i == 0:
                 Ia_max = Ia[-1]
                 Ia_max_index = 0
@@ -274,9 +266,17 @@ def select_horizontal_pair(values: list[str]):
 def check_trace_issues(st: Stream, record_id: str, station_extraction_row: pd.Series):
     """
     Checks for issues in the stream and manages them.
-    1. Check if all the sample rates are the same, if not resample with interpolation and raise issue
-    2. Check the final length of the traces, if greater than 3 then send to multi_trace_management
-    3. Ensure traces all have the same length, if not trim to the shortest length
+    1. Less than 3 traces -> Skip
+    2. Different sample rates -> Resample to highest sample rate
+    3. No data between starting noise -> ds595 * 1std -> Skip
+    4. Offset in traces missing data between noise and ds595 * 1std -> Skip
+    5. Multi-trace issue (still greater than 3 traces)
+        a. Multiple Horizontal channel pairs -> Select a pair or Skip
+        b. Overlapping data with different data -> Skip
+        c. Overlapping data with same data -> Keep longest trace for each channel
+        d. Small gaps (20 data points) -> Raise issue but keep
+        e. Changes in timesteps -> Raise issue but keep
+        f. Basic multi-trace problem -> Use Arias Intensity to select best 3 traces or Skip
 
     Parameters
     ----------
@@ -719,10 +719,11 @@ def get_station_window(
     # Get the config values
     config = cfg.Config()
     pre_event_time_difference = config.get_value("pre_event_time_difference")
+    ds_std_multiplier = config.get_value("ds_std_multiplier")
 
     start_time = ptime_est - pre_event_time_difference
     # Note: both ds_mean and ds_std are in logspace
-    end_time = ptime_est + np.exp(ds_mean) * np.exp(3 * ds_std)
+    end_time = ptime_est + np.exp(ds_mean) * np.exp(ds_std_multiplier * ds_std)
 
     return get_inital_stream(start_time, end_time, channel_codes, loc, client, net, sta)
 

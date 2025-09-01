@@ -96,15 +96,20 @@ For each earthquake, stations are selected within a distance-dependant radius:
 
 The station extraction table is generated with the following steps for every station-event pair within the defined radius:
 
-- First we compute the r_hyp and r_epi distances (Distance from station to hypocentre and epicenter respectively).
-- We also grab the Vs30 and Z1.0 values from the site table for each station.
-- If the Vs30 values is not available, we assign a default value of 500 m/s.
-- If the Z1.0 value is not available, we estimate it using the Chiou-Young 2008 model from Vs30.
+First we need to obtain the Ds595 mean and std from the Afshari and Stewart (2016) model.
 
-These inputs are used in the Afshari and Stewart (2016) model to estimate the Ds595 value and its standard deviation.
+#### **Duration (Ds) Calculation**
+- **Model:** Afshari and Stewart (2016) from OpenQuake
+- **Parameters:**
+  - Vs30 from site table (default: `vs30: 500` m/s if unavailable)
+  - Default rake value: 90°
+  - Magnitude from preferred magnitude
+  - Z1.0 from site table (default: estimated using Chiou-Young 2008 model from Vs30 if unavailable)
+  - r_hyp (hypocentral distance)
 
+#### **Phase Arrival Time Estimation**
 Then we estimate the P-wave arrival time at each station using the TauPyModel `iasp91` with certain phases:
-- phase_list: ['P', 'p', 'Pn', 'Pg', 'Pb'] (Obtained from config.yaml)
+- **phase_list**: ['P', 'p', 'Pn', 'Pg', 'Pb'] (Obtained from config.yaml)
 
 This order is strictly followed when estimating the arrival time, meaning that if the first phase is not available, it will try the second phase and so on.
 If none of the phases are available, the station-event pair is skipped and recorded in the `geonet_skipped_records.csv` file.
@@ -198,5 +203,5 @@ Robust error handling ensures pipeline resilience:
 ## 🔗 Related Steps
 
 - **Previous**: [Fetching-Site-Table](Fetching-site-table.md) - Fetches and processes site metadata from GeoNet
-- **Next**: [Waveform-Extraction](Waveform-Extraction.md) - Extracts waveform data from GeoNet for selected events and stations
+- **Next**: [Waveform-Extraction](Waveform-Extraction.md) - Extracts waveform data from the FDSN for selected events and stations
 - **Related**: [Add Tectonic Domain](Add-Tectonic-Domain.md) - Assigns tectonic domain numbers to sites based on spatial intersection as well as tectonic type classification and relocations for some earthquakes

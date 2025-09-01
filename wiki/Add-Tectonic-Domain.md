@@ -135,6 +135,6 @@ The step uses several configuration parameters from `config.yaml`:
 
 ## 🔗 Related Steps
 
-- **Previous**: [Parse Geonet](Parse-Geonet.md) - Provides the initial earthquake source table
-- **Next**: [Phase Arrival](Phase-Arrival.md) - Uses the enhanced event locations for wave arrival calculations
-- **Related**: [Calculate Distances](Calculate-Distances.md) - Uses tectonic classifications for distance calculations
+- **Previous**: [Waveform Extraction](Waveform-Extraction.md) - Extracts waveform data from the FDSN for selected events and stations
+- **Next**: [Phase Arrival](Phase-Arrival.md) - Uses PhaseNet to pick phase arrivals directly on waveforms
+- **Related**: [Calculate Distances](Calculate-Distances.md) - Uses tectonic classifications to assist distance calculations

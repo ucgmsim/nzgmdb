@@ -32,7 +32,7 @@ is_large_overlap: 0.5
 # Mseed Variables
 vs30: 500
 pre_event_time_difference: 15
-ds_multiplier: 2.5
+ds_std_multiplier: 3
 # GMProcess Variables
 gmprocess_url: https://earthquake.usgs.gov/fdsnws/event/1/query
 search_radius: 25 # In kilometres
