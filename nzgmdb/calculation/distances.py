@@ -154,13 +154,13 @@ def run_ccld_simulation(
         'dip_dist' : float
             The width of the fault down dip in km
         'hyp_lat' : float
-            The latitude of the hypocenter
+            The latitude of the hypocentre
         'hyp_lon' : float
-            The longitude of the hypocenter
+            The longitude of the hypocentre
         'hyp_strike' : float
-            The hypocenter along-strike position (0 - 1)
+            The hypocentre along-strike position (0 - 1)
         'hyp_dip' : float
-            The hypocenter down-dip position (0 - 1)
+            The hypocentre down-dip position (0 - 1)
     """
     ccdl_tect_class = ccldpy.TECTONIC_MAPPING[event_row.tect_class]
     # Extra check for undetermined tectonic class
@@ -430,7 +430,7 @@ def compute_distances_for_event(
     event_row : pd.Series
         The event row from the earthquake source table
     im_df : pd.DataFrame
-        The full IM data from the catalog
+        The full IM data from the catalogue
     station_df : pd.DataFrame
         The full station data
     modified_cmt_df : pd.DataFrame
@@ -530,7 +530,7 @@ def compute_distances_for_event(
         config = cfg.Config()
         points_per_km = config.get_value("points_per_km")
 
-        # Find the center of the plane based on the hypocentre location
+        # Find the centre of the plane based on the hypocentre location
         strike_direction = np.array(
             [np.cos(np.radians(strike)), np.sin(np.radians(strike))]
         )
@@ -813,7 +813,7 @@ def inverse_square_integral(
     sites: np.ndarray, p1: np.ndarray, p2: np.ndarray
 ) -> np.ndarray:
     """
-    Vectorized inverse square integral over a segment for multiple sites.
+    Vectorised inverse square integral over a segment for multiple sites.
 
     Parameters
     ----------
@@ -845,7 +845,7 @@ def compute_ravg_distance_vectorized(
     seg_corners: np.ndarray, sites: np.ndarray
 ) -> np.ndarray:
     """
-    Vectorized Ravg calculation for multiple site locations.
+    Vectorised Ravg calculation for multiple site locations.
 
     Parameters
     ----------

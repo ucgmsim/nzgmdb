@@ -92,26 +92,26 @@ def filter_flatfiles_on_catalouge(
         df_filtered.to_csv(final_output / file, index=False)
 
 
-def filter_has_score_mean(catalog: pd.DataFrame, bypass_records: np.ndarray = None):
+def filter_has_score_mean(catalogue: pd.DataFrame, bypass_records: np.ndarray = None):
     """
-    Filter the catalog based on if there is a score from GMC.
+    Filter the catalogue based on if there is a score from GMC.
 
     Parameters
     ----------
-    catalog : pd.DataFrame
-        The catalog dataframe to filter
+    catalogue : pd.DataFrame
+        The catalogue dataframe to filter
     bypass_records : np.ndarray, optional
         The records to bypass the quality
 
     Returns
     -------
     pd.DataFrame
-        The filtered catalog
+        The filtered catalogue
     pd.DataFrame
         The skipped records
     """
     # Find records that do not have a score value (is same across all components)
-    has_score_filter = catalog[catalog["score_X"].isna()]
+    has_score_filter = catalogue[catalogue["score_X"].isna()]
 
     # Remove the bypass records if they exist
     if bypass_records is not None:
@@ -127,26 +127,26 @@ def filter_has_score_mean(catalog: pd.DataFrame, bypass_records: np.ndarray = No
         }
     )
 
-    # Filter out the has_score records out of the catalog
-    catalog = catalog[~catalog["record_id"].isin(has_score_filter["record_id"])]
+    # Filter out the has_score records out of the catalogue
+    catalogue = catalogue[~catalogue["record_id"].isin(has_score_filter["record_id"])]
 
-    return catalog, skipped_records
+    return catalogue, skipped_records
 
 
 def filter_score_mean(
-    catalog: pd.DataFrame,
+    catalogue: pd.DataFrame,
     score_min: float,
     bypass_records: np.ndarray = None,
     include_z: bool = False,
 ):
     """
-    Filter the catalog based on the score_mean value from GMC.
+    Filter the catalogue based on the score_mean value from GMC.
     Only looks at X and Y components by default, can include Z.
 
     Parameters
     ----------
-    catalog : pd.DataFrame
-        The catalog dataframe to filter
+    catalogue : pd.DataFrame
+        The catalogue dataframe to filter
     score_min : float
         The minimum score value to filter on
     bypass_records : np.ndarray, optional
@@ -157,18 +157,18 @@ def filter_score_mean(
     Returns
     -------
     pd.DataFrame
-        The filtered catalog
+        The filtered catalogue
     pd.DataFrame
         The skipped records
     """
     # Find records that have too low of a score_X or score_Y value (or score_Z if include_z)
-    score_min_filter = catalog[
+    score_min_filter = catalogue[
         (
-            (catalog["score_X"] < score_min)
-            | (catalog["score_Y"] < score_min)
-            | (catalog["score_Z"] < score_min)
+            (catalogue["score_X"] < score_min)
+            | (catalogue["score_Y"] < score_min)
+            | (catalogue["score_Z"] < score_min)
             if include_z
-            else (catalog["score_X"] < score_min) | (catalog["score_Y"] < score_min)
+            else (catalogue["score_X"] < score_min) | (catalogue["score_Y"] < score_min)
         )
     ]
 
@@ -186,26 +186,26 @@ def filter_score_mean(
         }
     )
 
-    # Filter out the score_min records out of the catalog
-    catalog = catalog[~catalog["record_id"].isin(score_min_filter["record_id"])]
+    # Filter out the score_min records out of the catalogue
+    catalogue = catalogue[~catalogue["record_id"].isin(score_min_filter["record_id"])]
 
-    return catalog, skipped_records
+    return catalogue, skipped_records
 
 
 def filter_multi_mean(
-    catalog: pd.DataFrame,
+    catalogue: pd.DataFrame,
     multi_max: float,
     bypass_records: np.ndarray = None,
     include_z: bool = False,
 ):
     """
-    Filter the catalog based on the multi_mean value
+    Filter the catalogue based on the multi_mean value
     Only looks at X and Y components by default, can include Z.
 
     Parameters
     ----------
-    catalog : pd.DataFrame
-        The catalog dataframe to filter
+    catalogue : pd.DataFrame
+        The catalogue dataframe to filter
     multi_max : float
         The maximum multi_mean value to filter on
     bypass_records : np.ndarray, optional
@@ -216,18 +216,20 @@ def filter_multi_mean(
     Returns
     -------
     pd.DataFrame
-        The filtered catalog
+        The filtered catalogue
     pd.DataFrame
         The skipped records
     """
     # Find records that have too high of a multi_X or multi_Y or multi_Z value
-    multi_max_filter = catalog[
+    multi_max_filter = catalogue[
         (
-            (catalog["multi_X"] > multi_max)
-            | (catalog["multi_Y"] > multi_max)
-            | (catalog["multi_Z"] > multi_max)
+            (catalogue["multi_X"] > multi_max)
+            | (catalogue["multi_Y"] > multi_max)
+            | (catalogue["multi_Z"] > multi_max)
             if include_z
-            else ((catalog["multi_X"] > multi_max) | (catalog["multi_Y"] > multi_max))
+            else (
+                (catalogue["multi_X"] > multi_max) | (catalogue["multi_Y"] > multi_max)
+            )
         )
     ]
 
@@ -245,23 +247,23 @@ def filter_multi_mean(
         }
     )
 
-    # Filter out the multi_max records out of the catalog
-    catalog = catalog[~catalog["record_id"].isin(multi_max_filter["record_id"])]
+    # Filter out the multi_max records out of the catalogue
+    catalogue = catalogue[~catalogue["record_id"].isin(multi_max_filter["record_id"])]
 
-    return catalog, skipped_records
+    return catalogue, skipped_records
 
 
 def filter_fmax(
-    catalog: pd.DataFrame, fmax_min: float, bypass_records: np.ndarray = None
+    catalogue: pd.DataFrame, fmax_min: float, bypass_records: np.ndarray = None
 ):
     """
-    Filter the catalog based on the fmax_min value for the fmax_X and fmax_Y.
+    Filter the catalogue based on the fmax_min value for the fmax_X and fmax_Y.
     (Horizontal components only, vertical component is not considered)
 
     Parameters
     ----------
-    catalog : pd.DataFrame
-        The catalog dataframe to filter
+    catalogue : pd.DataFrame
+        The catalogue dataframe to filter
     fmax_min : float
         The minimum fmax value to filter on horizontal components
     bypass_records : np.ndarray, optional
@@ -270,15 +272,15 @@ def filter_fmax(
     Returns
     -------
     pd.DataFrame
-        The filtered catalog
+        The filtered catalogue
     pd.DataFrame
         The skipped records
     """
     # Find fmax_min
-    catalog.loc[:, "fmax_min"] = catalog[["fmax_X", "fmax_Y"]].apply(min, axis=1)
+    catalogue.loc[:, "fmax_min"] = catalogue[["fmax_X", "fmax_Y"]].apply(min, axis=1)
 
     # Find records that have too low of a fmax_min value
-    fmax_min_filter = catalog[catalog["fmax_min"] < fmax_min]
+    fmax_min_filter = catalogue[catalogue["fmax_min"] < fmax_min]
 
     # Remove the bypass records if they exist
     if bypass_records is not None:
@@ -294,26 +296,26 @@ def filter_fmax(
         }
     )
 
-    # Filter out the fmax_min records out of the catalog
-    catalog = catalog[~catalog["record_id"].isin(fmax_min_filter["record_id"])]
+    # Filter out the fmax_min records out of the catalogue
+    catalogue = catalogue[~catalogue["record_id"].isin(fmax_min_filter["record_id"])]
 
     # Remove the fmax_min column
-    catalog = catalog.drop(columns=["fmax_min"])
+    catalogue = catalogue.drop(columns=["fmax_min"])
 
-    return catalog, skipped_records
+    return catalogue, skipped_records
 
 
 def filter_fmin(
-    catalog: pd.DataFrame, fmin_max: float, bypass_records: np.ndarray = None
+    catalogue: pd.DataFrame, fmin_max: float, bypass_records: np.ndarray = None
 ):
     """
-    Filter the catalog based on the fmin max value for the fmin_X and fmin_Y.
+    Filter the catalogue based on the fmin max value for the fmin_X and fmin_Y.
     (Horizontal components only, vertical component is not considered)
 
     Parameters
     ----------
-    catalog : pd.DataFrame
-        The catalog dataframe to filter
+    catalogue : pd.DataFrame
+        The catalogue dataframe to filter
     fmin_max : float
         The maximum fmin value to filter on horizontal components
     bypass_records : np.ndarray, optional
@@ -322,12 +324,12 @@ def filter_fmin(
     Returns
     -------
     pd.DataFrame
-        The filtered catalog
+        The filtered catalogue
     pd.DataFrame
         The skipped records
     """
     # Find records that have too high of a fmin_max value
-    fmin_max_filter = catalog[catalog[["fmin_X", "fmin_Y"]].max(axis=1) > fmin_max]
+    fmin_max_filter = catalogue[catalogue[["fmin_X", "fmin_Y"]].max(axis=1) > fmin_max]
 
     # Remove the bypass records if they exist
     if bypass_records is not None:
@@ -343,34 +345,34 @@ def filter_fmin(
         }
     )
 
-    # Filter out the fmin_max records out of the catalog
-    catalog = catalog[~catalog["record_id"].isin(fmin_max_filter["record_id"])]
+    # Filter out the fmin_max records out of the catalogue
+    catalogue = catalogue[~catalogue["record_id"].isin(fmin_max_filter["record_id"])]
 
-    return catalog, skipped_records
+    return catalogue, skipped_records
 
 
 def filter_missing_sta_info(
-    catalog: pd.DataFrame, bypass_records: np.ndarray | None = None
+    catalogue: pd.DataFrame, bypass_records: np.ndarray | None = None
 ):
     """
-    Filter the catalog based on the missing station information
+    Filter the catalogue based on the missing station information
 
     Parameters
     ----------
-    catalog : pd.DataFrame
-        The catalog dataframe to filter
+    catalogue : pd.DataFrame
+        The catalogue dataframe to filter
     bypass_records : np.ndarray, optional
         The records to bypass the quality checks
 
     Returns
     -------
     pd.DataFrame
-        The filtered catalog
+        The filtered catalogue
     pd.DataFrame
         The skipped records
     """
     # Find records that are missing station information
-    missing_sta_filter = catalog[catalog["Vs30"].isna()]
+    missing_sta_filter = catalogue[catalogue["Vs30"].isna()]
 
     # Remove the bypass records if they exist
     if bypass_records is not None:
@@ -386,22 +388,22 @@ def filter_missing_sta_info(
         }
     )
 
-    # Filter out the missing_sta records out of the catalog
-    catalog = catalog[~catalog["record_id"].isin(missing_sta_filter["record_id"])]
+    # Filter out the missing_sta records out of the catalogue
+    catalogue = catalogue[~catalogue["record_id"].isin(missing_sta_filter["record_id"])]
 
-    return catalog, skipped_records
+    return catalogue, skipped_records
 
 
 def filter_ground_level_locations(
-    catalog: pd.DataFrame, bypass_records: np.ndarray = None
+    catalogue: pd.DataFrame, bypass_records: np.ndarray = None
 ):
     """
-    Filter the catalog based on the ground level locations
+    Filter the catalogue based on the ground level locations
 
     Parameters
     ----------
-    catalog : pd.DataFrame
-        The catalog dataframe to filter
+    catalogue : pd.DataFrame
+        The catalogue dataframe to filter
     bypass_records : np.ndarray, optional
         The records to bypass the quality checks
 
@@ -409,12 +411,12 @@ def filter_ground_level_locations(
     Returns
     -------
     pd.DataFrame
-        The filtered catalog
+        The filtered catalogue
     pd.DataFrame
         The skipped records
     """
     # Filter records that are not ground level
-    ground_level_filter = catalog[~catalog["is_ground_level"]]
+    ground_level_filter = catalogue[~catalogue["is_ground_level"]]
 
     # Remove the bypass records if they exist
     if bypass_records is not None:
@@ -430,25 +432,27 @@ def filter_ground_level_locations(
         }
     )
 
-    # Filter out the non ground_level records out of the catalog
-    catalog = catalog[~catalog["record_id"].isin(ground_level_filter["record_id"])]
+    # Filter out the non ground_level records out of the catalogue
+    catalogue = catalogue[
+        ~catalogue["record_id"].isin(ground_level_filter["record_id"])
+    ]
 
-    return catalog, skipped_records
+    return catalogue, skipped_records
 
 
 def apply_clipNet_filter(
-    catalog: pd.DataFrame,
+    catalogue: pd.DataFrame,
     clipped_records_ffp: Path,
     bypass_records: np.ndarray = None,
 ):
     """
-    Apply the ClipNet filter to the catalog
-    Removes the clipped records from the catalog and creates a skipped records dataframe
+    Apply the ClipNet filter to the catalogue
+    Removes the clipped records from the catalogue and creates a skipped records dataframe
 
     Parameters
     ----------
-    catalog : pd.DataFrame
-        The catalog dataframe to filter
+    catalogue : pd.DataFrame
+        The catalogue dataframe to filter
     clipped_records_ffp : Path
         The file path to the clipped records (created during the GeoNet processing)
     bypass_records : np.ndarray, optional
@@ -457,7 +461,7 @@ def apply_clipNet_filter(
     Returns
     -------
     pd.DataFrame
-        The filtered catalog
+        The filtered catalogue
     pd.DataFrame
         The skipped records
     """
@@ -465,7 +469,7 @@ def apply_clipNet_filter(
     try:
         clipped_records = pd.read_csv(clipped_records_ffp)
     except pd.errors.EmptyDataError:
-        return catalog, pd.DataFrame(columns=["record_id", "reason"])
+        return catalogue, pd.DataFrame(columns=["record_id", "reason"])
 
     # Remove the bypass records if they exist
     if bypass_records is not None:
@@ -481,15 +485,17 @@ def apply_clipNet_filter(
         }
     )
 
-    # Filter out the clipped records out of the catalog
-    catalog = catalog[~catalog["record_id"].isin(clipped_records["record_id"])]
+    # Filter out the clipped records out of the catalogue
+    catalogue = catalogue[~catalogue["record_id"].isin(clipped_records["record_id"])]
 
-    return catalog, skipped_records
+    return catalogue, skipped_records
 
 
-def filter_duplicate_channels(catalog: pd.DataFrame, bypass_records: np.ndarray = None):
+def filter_duplicate_channels(
+    catalogue: pd.DataFrame, bypass_records: np.ndarray = None
+):
     """
-    Filter the catalog by removing lower-priority duplicate channel records.
+    Filter the catalogue by removing lower-priority duplicate channel records.
 
     For each (evid, sta) combination that has multiple channel entries, the function
     keeps only one record based on the following priority:
@@ -504,24 +510,24 @@ def filter_duplicate_channels(catalog: pd.DataFrame, bypass_records: np.ndarray 
 
     Parameters
     ----------
-    catalog : pd.DataFrame
-        The catalog dataframe to filter
+    catalogue : pd.DataFrame
+        The catalogue dataframe to filter
     bypass_records : np.ndarray, optional
         The records to bypass the quality checks
 
     Returns
     -------
     pd.DataFrame
-        The filtered catalog
+        The filtered catalogue
     pd.DataFrame
         The skipped records
     """
     # Step 1: Create 'evid_sta' for grouping
-    catalog["evid_sta"] = catalog["evid"].astype(str) + "_" + catalog["sta"]
+    catalogue["evid_sta"] = catalogue["evid"].astype(str) + "_" + catalogue["sta"]
 
     # Step 2: Mark all duplicates
-    dup_mask = catalog["evid_sta"].duplicated(keep=False)
-    catalog_dups = catalog[dup_mask].copy()
+    dup_mask = catalogue["evid_sta"].duplicated(keep=False)
+    catalog_dups = catalogue[dup_mask].copy()
 
     # Step 3: Create bypass flag using record_id
     if bypass_records is None:
@@ -548,18 +554,18 @@ def filter_duplicate_channels(catalog: pd.DataFrame, bypass_records: np.ndarray 
         {"record_id": records_to_drop["record_id"], "reason": "Duplicate channels"}
     )
 
-    # Step 9: Remove skipped records from catalog
-    catalog = catalog[~catalog["record_id"].isin(records_to_drop["record_id"])]
+    # Step 9: Remove skipped records from catalogue
+    catalogue = catalogue[~catalogue["record_id"].isin(records_to_drop["record_id"])]
 
     # Step 10: Clean up and ensure uniqueness
-    assert len(catalog["evid_sta"].unique()) == len(catalog)
-    catalog = catalog.drop(columns=["evid_sta"])
+    assert len(catalogue["evid_sta"].unique()) == len(catalogue)
+    catalogue = catalogue.drop(columns=["evid_sta"])
 
-    return catalog, skipped_records
+    return catalogue, skipped_records
 
 
 def apply_all_filters(
-    catalog: pd.DataFrame,
+    catalogue: pd.DataFrame,
     clipped_records_ffp: Path,
     bypass_records: np.ndarray = None,
     score_min: float = None,
@@ -568,7 +574,7 @@ def apply_all_filters(
     fmin_max: float = None,
 ):
     """
-    Apply all the quality filters to the catalog.
+    Apply all the quality filters to the catalogue.
 
     This function performs the following filtering steps:
     1) Filter by presence of GMC predictions.
@@ -583,8 +589,8 @@ def apply_all_filters(
 
     Parameters
     ----------
-    catalog : pd.DataFrame
-        The catalog dataframe to filter.
+    catalogue : pd.DataFrame
+        The catalogue dataframe to filter.
     clipped_records_ffp : Path
         The file path to the clipped records (created during GeoNet processing).
     bypass_records : np.ndarray, optional
@@ -601,7 +607,7 @@ def apply_all_filters(
     Returns
     -------
     pd.DataFrame
-        The filtered catalog.
+        The filtered catalogue.
     pd.DataFrame
         The skipped records.
     """
@@ -615,40 +621,42 @@ def apply_all_filters(
     fmin_max = fmin_max if fmin_max is not None else config.get_value("fmin_max")
 
     # Filter by has score mean
-    catalog, skipped_records_has_score = filter_has_score_mean(catalog, bypass_records)
+    catalogue, skipped_records_has_score = filter_has_score_mean(
+        catalogue, bypass_records
+    )
 
     # Filter by score mean
-    catalog, skipped_records_score = filter_score_mean(
-        catalog, score_min, bypass_records
+    catalogue, skipped_records_score = filter_score_mean(
+        catalogue, score_min, bypass_records
     )
 
     # Filter by multi mean
-    catalog, skipped_records_multi = filter_multi_mean(
-        catalog, multi_max, bypass_records
+    catalogue, skipped_records_multi = filter_multi_mean(
+        catalogue, multi_max, bypass_records
     )
 
     # Filter by fmax
-    catalog, skipped_records_fmax = filter_fmax(catalog, fmax_min, bypass_records)
+    catalogue, skipped_records_fmax = filter_fmax(catalogue, fmax_min, bypass_records)
 
     # Filter by fmin
-    catalog, skipped_records_fmin = filter_fmin(catalog, fmin_max, bypass_records)
+    catalogue, skipped_records_fmin = filter_fmin(catalogue, fmin_max, bypass_records)
 
     # Filter by missing station information
-    catalog, skipped_records_sta = filter_missing_sta_info(catalog, bypass_records)
+    catalogue, skipped_records_sta = filter_missing_sta_info(catalogue, bypass_records)
 
     # Filter by ground level locations
-    catalog, skipped_records_ground = filter_ground_level_locations(
-        catalog, bypass_records
+    catalogue, skipped_records_ground = filter_ground_level_locations(
+        catalogue, bypass_records
     )
 
     # Filter by clipped records
-    catalog, skipped_records_clipped = apply_clipNet_filter(
-        catalog, clipped_records_ffp, bypass_records
+    catalogue, skipped_records_clipped = apply_clipNet_filter(
+        catalogue, clipped_records_ffp, bypass_records
     )
 
     # Filter by duplicate channels
-    catalog, skipped_records_duplicate = filter_duplicate_channels(
-        catalog, bypass_records
+    catalogue, skipped_records_duplicate = filter_duplicate_channels(
+        catalogue, bypass_records
     )
 
     # Combine all the skipped records
@@ -664,7 +672,7 @@ def apply_all_filters(
         ]
     )
 
-    return catalog, skipped_records
+    return catalogue, skipped_records
 
 
 def create_quality_db(
@@ -693,7 +701,7 @@ def create_quality_db(
     output_dir = main_dir / "quality_db"
     output_dir.mkdir(exist_ok=True)
 
-    # Load the ground motion im catalog
+    # Load the ground motion im catalogue
     flatfile_dir = file_structure.get_flatfile_dir(main_dir)
     gm_df = pd.read_csv(
         flatfile_dir / file_structure.FlatfileNames.GROUND_MOTION_IM_ROTD50_FLAT,

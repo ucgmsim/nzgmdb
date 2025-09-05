@@ -72,7 +72,7 @@ def fetch_event_line(event_cat: Event, event_id: str):
     Parameters
     ----------
     event_cat : Event
-        The event catalog to fetch the data from
+        The event catalogue to fetch the data from
     event_id : str
         The event id to add to the event line
 
@@ -91,7 +91,7 @@ def fetch_event_line(event_cat: Event, event_id: str):
     if preferred_origin is None:
         return None
 
-    # Extract basic info from the catalog
+    # Extract basic info from the catalogue
     ev_datetime = preferred_origin.time
     ev_lat = preferred_origin.latitude
     ev_lon = preferred_origin.longitude
@@ -210,7 +210,7 @@ def get_stations_within_radius(
     Parameters
     ----------
     event_cat : Event
-        The event catalog to fetch the event data from
+        The event catalogue to fetch the event data from
     mw_rrup_data : np.ndarray
         The Mw_rrup data to get the interpolation function to determine the max radius.
     inventory : Inventory
@@ -269,7 +269,7 @@ def fetch_sta_mag_line(
     network : Network
         The network of the station
     event_cat : Event
-        The event catalog to fetch the data from
+        The event catalogue to fetch the data from
     event_id : str
         The event id
     main_dir : Path
@@ -493,7 +493,7 @@ def fetch_event_data(
     EventData
         The parsed event data.
     """
-    # Get the catalog information
+    # Get the catalogue information
     cat = client_NZ.get_events(eventid=event_id)
     event_cat = cat[0]
 

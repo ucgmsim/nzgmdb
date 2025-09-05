@@ -1,86 +1,325 @@
 # Welcome to the NZGMDB WIKI
 
-This wiki will explain all the processes and steps of the pipeline in detail from start to finish.
+The present wikipage provides a detailed description of the pipeline used for the development of the New Zealand Ground Motion Database (NZGMDB), including its scientific background, the output file structure, and instructions for execution.
 
+# 🌐 NZGMDB Pipeline Overview
 
-# Overview
-The pipeline is split into many small subtasks which are described briefly below
-1. **[Fetching Site Table](https://github.com/ucgmsim/nzgmdb/wiki/Fetching-site-table)** (Gets all the sites in the NZ network domain + SNZO and gathers data such as Vs30 and basin info)
+The NZGMDB pipeline is split into two main concurrent tracks that handle:
+
+- **Site data, waveform processing and Intensity Measure calculations**
+- **Event metadata, aftershock and distance calculations**
+
+Both tracks converge to integrate the data into the full database, followed by quality filtering.
+
+Below is a breakdown of each stream and the merged steps.
+
+![](images/requirement_steps.png)
+
+---
+
+## 🏠 Site Information Stream
+
+### **Fetch Site Info**
+Gathers all stations in the NZ network, including Vs30 and basin metadata.
+
+### **Waveform Extraction**
+Downloads miniSEED (mseed) raw waveforms from GeoNet using the FDSN Client.
+
+### **Phase Arrival Detection**
+Estimate P and S-wave arrival times using PhaseNet.
+
+### **Signal-to-Noise Ratio (SNR)**
+Calculates SNR from waveforms.
+
+### **Fmax Calculation**
+Determines max frequency (Fmax) from SNR data.
+
+### **Ground Motion Classification (GMC)**
+Classifies records (machine learning-based) to generate Fmin and quality metadata.
+
+### **Process Waveforms**
+Applies waveform processing (de-trend, de-mean, taper, etc.) and converts MSEED to ascii.
+
+### **Intensity Measure (IM) Calculation**
+Computes the intensity measures from the processed waveforms (PSA, PGV, PGA, FAS, CAV5, CAV, AI, Significant Durations, etc.)
+
+---
+
+## 💥 Event Metadata Stream
+
+### **Query GeoNet Catalogue**
+Pulls event metadata and origin times.
+
+### **Relocations** *(internal step)*
+Refines event locations based on relocation studies.
+
+### **Classify Tectonic Type**
+Adds tectonic classification for each event.
+
+### **CCLD Calculation**
+Infer fault planes using the CCLD method.
+
+### **Compute Distances**
+Compute hypocentral, epicentral, and source-to-site distances using the fault geometries.
+
+### **Aftershock Classification**
+Determines whether an event is an aftershock.
+
+---
+
+## 🔁 Merged Processing Stream
+
+After both pipelines complete, the results are merged to perform the following:
+
+### **Merge Full Database**
+Combines all data into a unified database.
+
+### **Quality Filtering**
+Applies filtering rules to ensure only high-quality records are included.
+
+### **Generate Final Quality DB**
+Outputs a quality database flatfiles with all filtered records.
+
+---
+
+## ⚙️ Software Pipeline Execution
+While the flowchart provides a conceptual overview of the NZGMDB pipeline's data dependencies, the actual software implementation is optimised for performance and diverges slightly from this sequential structure.
+
+The pipeline is therefore composed of subtasks that can be run independently. These subtasks are listed below, along with links to their detailed documentation to explain what parts of the site and event streams the task invloves.
+
+### 🧩 Subtasks
+1. **[Fetching Site Table](https://github.com/ucgmsim/nzgmdb/wiki/Fetching-site-table)** (Gets all the sites in the NZ network domain and gathers their metadata, such as Vs30 and basin info)
 2. **[Parse Geonet](https://github.com/ucgmsim/nzgmdb/wiki/Parse-Geonet)** (Gets all mseed files from Geonet and starts the earthquake source table)
-3. **[Add Tectonic domain](https://github.com/ucgmsim/nzgmdb/wiki/Add-Tectonic-domain)** (Adds the tectonic type to the earthquake source table)
-4. **[Phase Arrival](https://github.com/ucgmsim/nzgmdb/wiki/Phase-Arrival)** (Generates the P and S Wave arrival times for records using a custom P wave picker and the inclusion of Geonet pick data)
-5. **[Calculate SNR](https://github.com/ucgmsim/nzgmdb/wiki/Calculate-SNR)** (Computes SNR and FAS Intensity Measure files)
+3. **[Add Tectonic domain](https://github.com/ucgmsim/nzgmdb/wiki/Add-Tectonic-domain)** (Adds the tectonic classification to the earthquake source table and handles relocations)
+4. **[Phase Arrival](https://github.com/ucgmsim/nzgmdb/wiki/Phase-Arrival)** (Estimates the P- and S-wave arrival times for records using PhaseNet)
+5. **[Calculate SNR](https://github.com/ucgmsim/nzgmdb/wiki/Calculate-SNR)** (Computes SNR and FAS files)
 6. **[Calculate Fmax](https://github.com/ucgmsim/nzgmdb/wiki/Calculate-Fmax)** (Computes Fmax from SNR data)
-7. **[GMC](https://github.com/ucgmsim/nzgmdb/wiki/GMC)** (Machine Learning Model to classify records and produce Fmin)
+7. **[GMC](https://github.com/ucgmsim/nzgmdb/wiki/GMC)** (Machine Learning Model to classify records and produce Fmin and quality metadata)
 8. **[Process records](https://github.com/ucgmsim/nzgmdb/wiki/Process-Records)** (Filters records based on GMC results and performs wave processing to turn mseeds into text files)
-9. **[IM Calculation](https://github.com/ucgmsim/nzgmdb/wiki/IM-Calculation)** (Performs Intensity Measure Calculations such as pSA etc.)
-10. **[Merge IM results](https://github.com/ucgmsim/nzgmdb/wiki/Merge-IM-Results)** (Merges all IM result files together and applies a Ds595 filter)
-11. **[Calculate Distances](https://github.com/ucgmsim/nzgmdb/wiki/Calculate-Distances)** (Determines correct nodal plane to calculate rrup values for the propagation table)
-12. **[Merge flatfiles](https://github.com/ucgmsim/nzgmdb/wiki/Merge-Flatfiles)** (Merges all flatfiles to ensure to remove filtered entries and split IM results per component into different flatfiles)
-13. **[Upload to Dropbox](https://github.com/ucgmsim/nzgmdb/wiki/Upload-Dropbox)** (Zips together the files that are generated by the NZGMDB and uploads them to a dropbox folder)
+9. **[IM Calculation](https://github.com/ucgmsim/nzgmdb/wiki/IM-Calculation)** (Performs Intensity Measure Calculations)
+10. **[Merge IM results](https://github.com/ucgmsim/nzgmdb/wiki/Merge-IM-Results)** (Merges all IM result files together)
+11. **[Calculate Distances](https://github.com/ucgmsim/nzgmdb/wiki/Calculate-Distances)** (Determines fault planes to calculate distance values for the propagation table)
+12. **[Merge Aftershocks](Merge-Aftershocks.md)** (Merges aftershock classification into the earthquake source table)
+13. **[Merge flatfiles](https://github.com/ucgmsim/nzgmdb/wiki/Merge-Flatfiles)** (Merges all flatfiles to ensure to remove filtered entries and split IM results per component into different flatfiles)
+14. **[Quality DB](Quality-DB.md)** (Applies filters and generates the final quality database flatfiles with all filtered records)
 
-The below flowchart shows visually the order of the pipeline steps which can be executed in order by calling one script.
+---
 
-```mermaid
-flowchart TD
-    A[Fetching Site Table] --> B[Parse Geonet]
-    B --> C[Add Tectonic Domain]
-    C --> D[Phase Arrival]
-    D --> E[Calculate SNR]
-    E --> F[Calculate Fmax]
-    F --> G[GMC]
-    G --> H[Process Records]
-    H --> I[IM Calc]
-    I --> J[Merge IM Results]
-    J --> K[Calculate Distances]
-    K --> L[Merge Flatfiles]
-    L --> M[Upload to Dropbox]
+## 🗂️ File Structure
+
+After a successful run of the NZGMDB pipeline, the output directory is organised into multiple top-level folders. Each contains files related to specific steps in the pipeline, following a consistent naming convention for ease of traceability and downstream analysis.
+
+### 📁 Top-Level Directories
+
+- **`flatfiles/`**  
+  Contains merged CSV outputs for ground motion intensity measures (IMs), component-specific results, supporting metadata, and skipped record logs. These files summarise the final data products and intermediate results from each pipeline stage.
+
+  - **`earthquake_source_table.csv`**  
+    Contains source metadata for each event.
+
+  - **`earthquake_source_geometry.csv`**  
+    Contains the fault geometry for each event, including strike, dip, rake, and full corner coordinates.
+
+  - **`fmax.csv`**  
+    Contains maximum frequency values per record and component (000, 090, ver).
+
+  - **`fmax_skipped_records.csv`**  
+    Lists records skipped during the fmax calculation stage.
+
+  - **`geonet_skipped_records.csv`**  
+    Records that were skipped during the GeoNet data fetching stage.
+
+  - **`gmc_predictions.csv`**  
+    Contains machine learning classification results, including score and Fmin per record/component.
+
+  - **`ground_motion_im_catalogue.csv`**  
+    Full catalogue of all IMs per record for components: 000, 090, ver, rotd0, rotd50, rotd100, EAS.
+
+  - **`ground_motion_im_table_000.csv`**  
+    IMs for component 000 only, per record.
+
+  - **`ground_motion_im_table_000_flat.csv`**  
+    Component 000 IMs with combined metadata: site, fmin, fmax, scores, source info.
+
+  - **`ground_motion_im_table_090.csv`**  
+    IMs for component 090 only, per record.
+
+  - **`ground_motion_im_table_090_flat.csv`**  
+    Component 090 IMs with combined metadata: site, fmin, fmax, scores, source info.
+
+  - **`ground_motion_im_table_ver.csv`**  
+    IMs for vertical component (ver) only, per record.
+
+  - **`ground_motion_im_table_ver_flat.csv`**  
+    Vertical component IMs with combined metadata: site, fmin, fmax, scores, source info.
+
+  - **`ground_motion_im_table_rotd0.csv`**
+    IMs for computed component rotd0 only, per record.
+
+  - **`ground_motion_im_table_rotd0_flat.csv`**  
+    IMs for computed component rotd0 only, with combined metadata: site, fmin, fmax, scores, source info.
+
+  - **`ground_motion_im_table_rotd50.csv`**  
+    IMs for computed component rotd50 only.
+
+  - **`ground_motion_im_table_rotd50_flat.csv`**  
+    RotD50 IMs with combined metadata: site, fmin, fmax, scores, source info.
+
+  - **`ground_motion_im_table_rotd100.csv`**  
+    IMs for computed component rotd100 only.
+
+  - **`ground_motion_im_table_rotd100_flat.csv`**  
+    RotD100 IMs with combined metadata: site, fmin, fmax, scores, source info.
+
+  - **`ground_motion_im_table_EAS.csv`**  
+    IMs for computed component EAS (For FAS) only.
+
+  - **`ground_motion_im_table_EAS_flat.csv`**
+  EAS IMs with combined metadata: site, fmin, fmax, scores, source info.
+
+  - **`IM_calc_skipped_records.csv`**  
+    Records skipped during the Intensity Measure calculation stage.
+
+  - **`missing_sites.csv`**  
+    Sites with missing metadata (e.g., Vs30, basin info) that will be filtered out in the quality database.
+
+  - **`phase_arrival_skipped_records.csv`**  
+    Records skipped during the Phase Arrival detection stage.
+
+  - **`phase_arrival_table.csv`**  
+    Contains P and S-wave pick data from PhaseNet.
+
+  - **`prob_series.h5`**  
+    HDF5 file containing full probability series data from PhaseNet for each record.
+
+  - **`processing_skipped_records.csv`**  
+    Records skipped during the waveform processing stage.
+
+  - **`propagation_path_table.csv`**  
+    Contains distance metrics (e.g., rrup, rjb, rx, ry) for each station-event pair.
+
+  - **`quality_skipped_records.csv`**  
+    Records that were filtered out during the quality control stage and the reason as to why.
+
+  - **`site_table.csv`**  
+    Site metadata (e.g., Vs30, Z values) including if the site is within a basin.
+
+  - **`snr_metadata.csv`**  
+    Metadata from SNR computation: Ds, Dn, delta, npts per record.
+
+  - **`snr_skipped_records.csv`**  
+    Records skipped during SNR calculation and the reason why.
+
+  - **`station_magnitude_table.csv`**  
+    Station magnitude values for each station-event-channel pair.
+  
+  - **`clipped_records.csv`**  
+    Records that were clipped by ClipNet during the fetch GeoNet data stage.
+
+- **`quality_db/`**  
+  Includes final cleaned, filtered flatfiles used as a deliverable database for ground motion analysis. This is a subset of the `flatfiles/` directory, containing only records that passed all quality checks. The files in this directory are ready for use in further research or engineering applications. The files that get included in this directory are:
+
+    - **`earthquake_source_table.csv`**
+    - **`earthquake_source_geometry.csv`**
+    - **`fmax.csv`**
+    - **`gmc_predictions.csv`**
+    - **`ground_motion_im_table_000_flat.csv`**
+    - **`ground_motion_im_table_090_flat.csv`**
+    - **`ground_motion_im_table_ver_flat.csv`**
+    - **`ground_motion_im_table_rotd0_flat.csv`**
+    - **`ground_motion_im_table_rotd50_flat.csv`**
+    - **`ground_motion_im_table_rotd100_flat.csv`**
+    - **`ground_motion_im_table_EAS_flat.csv`**
+    - **`phase_arrival_table.csv`**
+    - **`propagation_path_table.csv`**
+    - **`site_table.csv`**
+    - **`snr_metadata.csv`**
+    - **`station_magnitude_table.csv`**
+
+- **`waveforms/`**  
+  Includes both raw and processed waveform data for every event, organised by year and event ID. Under each `event_id/`, there are two subfolders mseed and processed. Below shows the structure of the `waveforms/` directory and naming conventions used for files:
+
+```
+waveforms/
+└── <year>/                        # e.g. 2022
+    └── <event_id>/                # e.g. 2022p002924
+        ├── mseed/
+        │   └── <event_id>_<station>_<channel>_<location>.mseed
+        │       # e.g. 2022p002924_DCZ_HN_20.mseed
+        │
+        └── processed/
+            ├── <event_id>_<station>_<channel>_<location>.000
+            ├── <event_id>_<station>_<channel>_<location>.090
+            └── <event_id>_<station>_<channel>_<location>.ver
+                # e.g.
+                # 2022p002924_DCZ_HN_20.000
+                # 2022p002924_DCZ_HN_20.090
+                # 2022p002924_DCZ_HN_20.ver
 ```
 
-# File Structure
-The section below explains the file structure of the current NZGMDB after a successful run of the pipeline. This will also go over filename conventions.
+- **`IM/`**  
+Stores per-record intensity measure (IM) CSV files computed during the IM Calculation stage. Files are organised by event ID, with each folder containing intensity measure results for every record that has corresponding processed waveform data. The structure of the IM/ directory and the naming convention is shown below:
 
-## Top Level
-The top level has 4 folders:
-1. **flatfiles** (This contains all the csv data files for all records as well as skipped record information)
-2. **IM** (Contains all the IM.csv files that are computed per record processed)
-3. **snr_fas** (Contains all the snr_fas.csv files computed per record where there is a phase arrival)
-4. **waveforms** (Holds all the mseed and text files for raw and processed records)
+```
+IM/
+└── <event_id>/                              # e.g. 2022p002924
+    ├── <event_id>_<station>_<channel>_<location>_IM.csv
+    │   # e.g. 2022p002924_DCZ_HN_20_IM.csv
+    ├── ...
+```
 
-![](images/file_structure.png)
+- **`snr_fas/`**  
+    Contains signal-to-noise ratio (SNR) and Fourier Amplitude Spectrum (FAS) calculations for each record. Files are organised first by year, then by event ID. Each file includes SNR and FAS data for a single waveform record.
 
-### Lower Levels
-The **IM**, **snr_fas** and **waveforms** directories have a structure that is very similar underneath.
-This is followed by a year folder such as "2022" and then an event folder which is the same as the evid such as "2022p002924".
+```
+snr_fas/
+└── <year>/                                  # e.g. 2022
+    └── <event_id>/                          # e.g. 2022p002924
+        ├── <event_id>_<station>_<channel>_<location>_snr_fas.csv
+        │   # e.g. 2022p002924_DCZ_HN_20_snr_fas.csv
+        ├── ...
+```
 
-After that it differs as **IM** stores IM.csv files in the event folder per record with the naming convention evid_station_channel_location_IM.csv for example "2022p002924_DCZ_HN_20_IM.csv".
+- **`gmc/`**  
+  Holds machine learning classification outputs, including Fmin values and quality scores for each waveform record. Files are grouped into batch folders (e.g., batch_0, batch_1, etc.) based on the number of parallel processes (n_procs) used during processing. Each batch folder contains the list of processed record IDs, extracted features, classification results, and corresponding logs.
 
-**snr_fas** is similar in which the same naming convention is used except with the suffix snr_fas.csv for example "2022p002924_DCZ_HN_20_snr_fas.csv" and are placed in the event directory too.
+```
+gmc/
+├── batch_0/
+│   ├── batch_0.txt                    # List of record IDs used in this batch
+│   ├── features_comp_X.csv            # Extracted features for X comp (Y and Z will be similar)
+│   ├── gmc_predictions.csv            # Final predictions with Fmin and quality scores
+│   ├── extract_features.log           # Log file for feature extraction
+│   └── predict.log                    # Log file for predictions
+│
+├── batch_1/
+│   ├── batch_1.txt
+│   ├── features_comp_X.csv
+│   ├── gmc_predictions.csv
+│   ├── extract_features.log
+│   └── predict.log
+│
+├── ...
+```
 
-For **waveforms** under the event directory you then get 2 folders, **mseed** and **processed** where **mseed** contains the raw record data for all 3 components in a obspy Stream format. Filenames in the **mseed** directory are the same as IM and snr_fas except the changed suffix for just the record id and the file extension being .mseed for example "2022p002924_DCZ_HN_20.mseed". Under **processed** for each record that passes processing will get 3 files for each component 000 090 and ver. These are now a replacement of the files extensions for example "2022p002924_DCZ_HN_20.000" 2022p002924_DCZ_HN_20.090" "2022p002924_DCZ_HN_20.ver" and are all text files containing waveform data
+- **`phase_arrival/`**  
+  Contains P and S-wave arrival picks derived using PhaseNet. The data is organised into batch folders (e.g., batch_0, batch_1, etc.) based on the number of processes used during execution. Each batch includes input record tracking, pick results, probability series data, and logs.
 
-**flatfiles** contains a bunch of csv files that will be breifly explained below
-1. **earthquake_source_table.csv** Holds all of the event source data for each event that has records in the final output for Intensity Measures that passed all processing.
-2. **fmax.csv** Holds the max frequency data per record per component 000, 090, ver
-3. **fmax_skipped_records.csv** Holds the records that were skipped during the fmax processing step of the pipeline
-4. **gmc_predictions.csv** Holds the score values and min frequency values for each record and component
-5. **ground_motion_im_catalogue.csv** Holds every Intensity Measure for every record and computed component 000, 090, ver, rotd50, rotd100
-6. **ground_motion_im_table_000.csv** Holds just the Intensity Measure information per record for just component 000
-7. **ground_motion_im_table_000_flat.csv** Holds the Intensity Measure information per record for just component 000 and includes a bunch of combined information such as site, fmin, fmax, score values and source info
-7. **ground_motion_im_table_090.csv** Holds just the Intensity Measure information per record for just component 090
-8. **ground_motion_im_table_090_flat.csv** Holds the Intensity Measure information per record for just component 090 and includes a bunch of combined information such as site, fmin, fmax, score values and source info
-9. **ground_motion_im_table_ver.csv** Holds just the Intensity Measure information per record for just component ver
-10. **ground_motion_im_table_ver_flat.csv** Holds the Intensity Measure information per record for just component ver and includes a bunch of combined information such as site, fmin, fmax, score values and source info
-11. **ground_motion_im_table_rodt50.csv** Holds just the Intensity Measure information per record for just component rodt50
-12. **ground_motion_im_table_rodt50_flat.csv** Holds the Intensity Measure information per record for just component rodt50 and includes a bunch of combined information such as site, fmin, fmax, score values and source info
-13. **ground_motion_im_table_rodt100.csv** Holds just the Intensity Measure information per record for just component rodt100
-14. **ground_motion_im_table_rodt100_flat.csv** Holds the Intensity Measure information per record for just component rodt100 and includes a bunch of combined information such as site, fmin, fmax, score values and source info
-15. **IM_calc_skipped_records.csv** Holds the records that were skipped during the IM Calculation processing step of the pipeline
-16. **IM_merge_skipped_records.csv** Holds the records that were skipped during the IM Merge processing step of the pipeline
-17. **phase_arrival_table.csv** Holds the phase arrival info for P and S waves from the custom p-wave picker and Geonet when not found in the custom picker
-18. **processing_skipped_records.csv** Holds the records that were skipped during the Processing step of the pipeline
-19. **propagation_path_table.csv** Stores that rrup, rjb, rx, ry values for each station and event pair
-20. **site_table_basin.csv** Stores all the site information such as vs30 and Z values and includes basin information
-21. **snr_metadata.csv** Stores all metadata during the snr calculation such as Ds, Dn and npts and delta per record.
-22. **snr_skipped_records.csv** Holds the records that were skipped during the SNR processing step of the pipeline
-23. **station_magnitude_table.csv** Holds every station magnitude data per event and site pair
+```
+phase_arrival/
+├── batch_0/
+│   ├── batch_0.txt                  # List of record IDs processed in this batch
+│   ├── phase_arrival_table.csv      # Final P and S-wave picks with metadata
+│   ├── prob_series.h5               # HDF5 file with full probability series from PhaseNet
+│   ├── run_phasenet.log             # Log file from PhaseNet run
+│   └── skipped_records.csv          # Records skipped and reasons why
+│
+├── batch_1/
+│   ├── batch_1.txt
+│   ├── phase_arrival_table.csv
+│   ├── prob_series.h5
+│   ├── run_phasenet.log
+│   └── skipped_records.csv
+│
+├── ...
+```

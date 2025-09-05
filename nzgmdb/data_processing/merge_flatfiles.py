@@ -411,7 +411,7 @@ def merge_flatfiles(main_dir: Path, bypass_records_ffp: Path = None):
         int | None
             The index of the row with the loc_elev value closest to 0, or None if all values are NaN
         """
-        # Filter out loc_elev values greater than 5 meters (In either direction)
+        # Filter out loc_elev values greater than 5 metres (In either direction)
         group = group[group["loc_elev"].abs() <= config.get_value("locations_max_elev")]
         if group["loc_elev"].isna().all():
             return None

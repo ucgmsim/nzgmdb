@@ -362,12 +362,12 @@ def ngasub2020_tectclass(
 
 def merge_tectclass(event_df: pd.DataFrame):
     """
-    Merge the tectonic classification data from the CMT and NGASUB with the event data
+    Merge the tectonic classification data from the NZSMDB with the event data
 
     Parameters
     ----------
     event_df : pd.DataFrame
-        The event dataframe which also includes the NGASUB tectonic class data
+        The event dataframe which also includes the NZSMDB tectonic class data
 
     Returns
     -------
