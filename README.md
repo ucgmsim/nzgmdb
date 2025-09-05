@@ -2,11 +2,10 @@
 
 ## 📌 Overview
 
-**NZGMDB** (New Zealand Ground Motion Database) is a set of tools that automates the full pipeline for generating a quality-assured ground motion database from New Zealand seismic events. It processes raw data from the GeoNet earthquake catalogue to:
-
+The **NZGMDB** (New Zealand Ground Motion Database) repository contains a set of tools that automates the full pipeline for generating a quality-assured ground motion database for New Zealand. It processes raw data downloaded from the Geonet FDSN client (https://www.geonet.org.nz/data/access/FDSN) and processes it using the following steps:
 - Extract seismic waveforms  
 - Perform signal processing  
-- Generate intensity measures (IMs)  
+- Calculate intensity measures (IMs)  
 - Produce standardised flatfiles for analysis
 
 This tool is designed for researchers working with strong motion records.
@@ -29,7 +28,7 @@ pip install -e .
 
 ### 2. Clone and Set Up `gm_classifier`
 
-`NZGMDB` depends on the [`gm_classifier`](https://github.com/ucgmsim/gm_classifier) repository, which performs:
+`NZGMDB` depends on the [`gm_classifier`](https://github.com/ucgmsim/gm_classifier) repository, for performing:
 
 - **P-wave arrival detection**
 - **Ground motion classification using machine learning**
@@ -50,10 +49,9 @@ Then follow the instructions in the gm_classifier repository to create two Conda
 
 Before running the full pipeline, ensure the following:
 
-- Your python environment with the `nzgmdb` package is installed
+- Your Python environment has the `nzgmdb` package is installed
 
-- You have generated **KO (Konno-Ohmachi) matrices**  
-  These are required by different steps in the NZGMDB pipeline and can be created using the tools in the `gm_classifier` repository, the readme in the 'gm_classifier' repository provides instructions on how to generate these matrices.
+- You have generated **KO (Konno-Ohmachi) matrices**. These are required by different steps in the NZGMDB pipeline and can be created using the tools in the `gm_classifier` repository. The readme in the `gm_classifier` repository provides instructions on how to generate these matrices.
 
 - You know the paths to:
   - The cloned `gm_classifier` directory
@@ -66,8 +64,8 @@ Before running the full pipeline, ensure the following:
 ## 🚀 Running the Pipeline
 
 To run the NZGMDB pipeline you can look in the scripts
-directory and locate run_nzgmdb.py. This script will contain all the
-functions to run the atuomated pipeline. You can run the entire automated pipeline
+directory and locate [run_nzgmdb.py](nzgmdb/scripts/run_nzgmdb.py). This script will contain all the
+functions to run the automated pipeline. You can run the entire automated pipeline
 by running the following command:
 
 ```bash
@@ -97,7 +95,7 @@ python scripts/run_nzgmdb.py run-full-nzgmdb \
 
 ### 📝 Additional Arguments
 
-There is also a bunch of extra arguments that can be passed to the script to control things such as event / site filtering or number of processes to use for the given system.
+There are also a variety of extra arguments that can be passed to the script, allowing control and modification of different steps, such as event / site filtering or the number of processes to use for the given system.
 For a full list of arguments and their descriptions, run:
 
 ```bash
