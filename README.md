@@ -50,7 +50,7 @@ Then follow the instructions in the gm_classifier repository to create two Conda
 
 Before running the full pipeline, ensure the following:
 
-- Your Python environment has the `nzgmdb` package is installed
+- Your Python environment has the `nzgmdb` package installed
 
 - You have generated **KO (Konno-Ohmachi) matrices**. These are required by different steps in the NZGMDB pipeline and can be created using the tools in the `gm_classifier` repository. The readme in the `gm_classifier` repository provides instructions on how to generate these matrices.
 
