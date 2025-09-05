@@ -10,7 +10,8 @@ The **NZGMDB** (New Zealand Ground Motion Database) repository contains a set of
 
 This tool is designed for researchers working with strong motion records.
 
-This codebase and documentation is currently up-to-date with the latest NZGMDB release **Version 4.3 (July 2025)**.
+This codebase and documentation is currently up-to-date with the latest NZGMDB release **Version 4.3 (September 2025)**.
+More information on the NZGMDB and the steps involved can be found on the [NZGMDB Wiki](https://github.com/ucgmsim/nzgmdb/wiki).
 
 ---
 
