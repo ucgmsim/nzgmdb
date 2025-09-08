@@ -1234,29 +1234,29 @@ def generate_report(
         html_parts.append("</div>")
 
     html_parts.append("<h2>All Quality metrics compared to Full Database</h2>")
-    # if compare_version_directory:
-    #     img_base64_quality = compare_column_barplot(
-    #         old_quality_skipped,
-    #         new_quality_skipped,
-    #         column="reason",
-    #         x_label="Skipped Reason",
-    #         title="Quality NZGMDB Skipped Reason Comparison",
-    #         bar_1_label="Old NZGMDB",
-    #         bar_2_label="New NZGMDB",
-    #     )
-    #     html_parts.append("<div class='fig-single'>")
-    #     html_parts.append(f'<img src="data:image/png;base64,{img_base64_quality}">')
-    #     html_parts.append("</div>")
-    # else:
-    #     img_base64 = single_column_barplot(
-    #         new_quality_skipped,
-    #         column="reason",
-    #         x_label="Skipped Reason",
-    #         title="New NZGMDB Skipped Reason Comparison",
-    #     )
-    #     html_parts.append("<div class='fig-single'>")
-    #     html_parts.append(f'<img src="data:image/png;base64,{img_base64}">')
-    #     html_parts.append("</div>")
+    if compare_version_directory:
+        img_base64_quality = compare_column_barplot(
+            old_quality_skipped,
+            new_quality_skipped,
+            column="reason",
+            x_label="Skipped Reason",
+            title="Quality NZGMDB Skipped Reason Comparison",
+            bar_1_label="Old NZGMDB",
+            bar_2_label="New NZGMDB",
+        )
+        html_parts.append("<div class='fig-single'>")
+        html_parts.append(f'<img src="data:image/png;base64,{img_base64_quality}">')
+        html_parts.append("</div>")
+    else:
+        img_base64 = single_column_barplot(
+            new_quality_skipped,
+            column="reason",
+            x_label="Skipped Reason",
+            title="New NZGMDB Skipped Reason Comparison",
+        )
+        html_parts.append("<div class='fig-single'>")
+        html_parts.append(f'<img src="data:image/png;base64,{img_base64}">')
+        html_parts.append("</div>")
     # Remove any reason that is "Duplicate channels"
     new_quality_skipped_adjusted = new_quality_skipped[
         new_quality_skipped["reason"] != "Duplicate channels"
@@ -1778,11 +1778,3 @@ def generate_report(
     # Save report
     with open(output_file, "w") as f:
         f.write("".join(html_parts))
-
-
-generate_report(
-    Path("/home/joel/local/gmdb/4p3_mantle"),
-    Path("/home/joel/local/gmdb/4p3/4p3_report.html"),
-    # Path("/home/joel/local/gmdb/4p3_backup/4p3_backup"),
-    Path("/home/joel/local/gmdb/4p3_mantle"),
-)
