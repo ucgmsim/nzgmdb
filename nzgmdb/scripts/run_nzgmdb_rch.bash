@@ -18,4 +18,4 @@ echo SCRATCH $SCRATCH
 module list
 echo =======================
 mkdir $SCRATCH/runs/test_run
-python run_nzgmdb.py generate-site-table-basin $SCRATCH/runs/test_run
+python $SCRATCH/code/nzgmdb/nzgmdb/scripts/run_nzgmdb.py generate-site-table-basin $SCRATCH/runs/test_run
