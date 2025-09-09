@@ -31,55 +31,35 @@ def get_gmc_errors(gmc_dir: Path):
     pd.DataFrame
         A dataframe containing the record_id and reason for each error.
     """
-    gmc_df = pd.DataFrame(columns=["record_id", "reason"])
+    error_records = []
     for batch_dir in gmc_dir.iterdir():
-        for file in batch_dir.iterdir():
-            if file.is_dir():
-                for error_file in file.iterdir():
-                    # If the name of the error file is unknown then count the number of times the string
-                    # --------------------------------------------------------
-                    if "unknown" in error_file.stem:
-                        # Read the txt file and count the number of lines -1
-                        with open(error_file, "r") as f:
-                            lines = f.readlines()
-                            for line in lines:
-                                # Check if the line contains an .mseed file
-                                if ".mseed" in line:
-                                    # Add the name of the file to the found list
-                                    gmc_df = pd.concat(
-                                        [
-                                            gmc_df,
-                                            pd.DataFrame(
-                                                {
-                                                    "record_id": [
-                                                        line.split(",")[0].split(".")[0]
-                                                    ],
-                                                    "reason": ["unknown"],
-                                                }
-                                            ),
-                                        ]
-                                    )
-                    else:
-                        # Read the txt file and count the number of lines -1
-                        with open(error_file, "r") as f:
-                            lines = f.readlines()
-                            for line in lines[1:]:
-                                # Add the name of the file to the found list
-                                gmc_df = pd.concat(
-                                    [
-                                        gmc_df,
-                                        pd.DataFrame(
-                                            {
-                                                "record_id": [
-                                                    line.rstrip().split(".")[0]
-                                                ],
-                                                "reason": [error_file.stem],
-                                            }
-                                        ),
-                                    ]
-                                )
+        if not batch_dir.is_dir():
+            continue
 
-    return gmc_df
+        for error_summary_dir in batch_dir.iterdir():
+            if not error_summary_dir.is_dir():
+                continue
+
+            for error_file in error_summary_dir.iterdir():
+                reason = error_file.stem
+                with open(error_file) as f:
+                    if "unknown" in reason:
+                        for line in f:
+                            if ".mseed" in line:
+                                record_id = line.split(",")[0].split(".")[0]
+                                error_records.append(
+                                    {"record_id": record_id, "reason": "unknown"}
+                                )
+                    else:
+                        # Skip header line
+                        next(f, None)
+                        for line in f:
+                            record_id = line.rstrip().split(".")[0]
+                            error_records.append(
+                                {"record_id": record_id, "reason": reason}
+                            )
+
+    return pd.DataFrame(error_records, columns=["record_id", "reason"])
 
 
 def process_batch(

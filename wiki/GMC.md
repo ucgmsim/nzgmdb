@@ -109,7 +109,7 @@ python <gm_classifier_dir>/gm_classifier/scripts/predict.py <gmc_dir> <predictio
 
 After all batches complete processing:
 1. **Combine Batch Results** - Merges `gmc_predictions.csv` from all batch directories
-2. **Collect Failed Records** - Gathers all failed records into a single dataframe for review
+2. **Collect Failed Records** - Gathers all failed record txt files into a single dataframe for review
 3. **Apply Bypass Records** - Incorporates any custom Fmin values from bypass file
 4. **Generate Final Output** - Creates consolidated `gmc_predictions.csv` in flatfiles directory
 
