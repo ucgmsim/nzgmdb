@@ -420,7 +420,7 @@ def apply_clipNet_filter(
     catalogue : pd.DataFrame
         The catalogue dataframe to filter
     clipped_records_ffp : Path
-        The file path to the clipped records (created during the GeoNet processing)
+        The file path to the clipped records (created during the Waveform Extraction processing)
     bypass_records : np.ndarray, optional
         The records to bypass the quality
 
@@ -435,6 +435,9 @@ def apply_clipNet_filter(
     except pd.errors.EmptyDataError:
         return catalogue, pd.DataFrame(columns=["record_id", "reason"])
 
+    # Filter the clipped records to the reason of "Clipped"
+    clipped_records = clipped_records[clipped_records["reason"] == "Clipped"]
+
     # Remove the bypass records if they exist
     if bypass_records is not None:
         clipped_records = clipped_records[
@@ -446,6 +449,55 @@ def apply_clipNet_filter(
         {
             "record_id": clipped_records["record_id"],
             "reason": "Clipped by ClipNet",
+        }
+    )
+
+    return skipped_records
+
+
+def apply_jerk_filter(
+    catalogue: pd.DataFrame,
+    clipped_records_ffp: Path,
+    bypass_records: np.ndarray = None,
+):
+    """
+    Apply the Jerk filter from ClipNet to the catalogue
+    Removes the Jerk records from the catalogue and creates a skipped records dataframe
+
+    Parameters
+    ----------
+    catalogue : pd.DataFrame
+        The catalogue dataframe to filter
+    clipped_records_ffp : Path
+        The file path to the clipped records (created during the Waveform Extraction processing)
+    bypass_records : np.ndarray, optional
+        The records to bypass the quality
+
+    Returns
+    -------
+    pd.DataFrame
+        The skipped records to filter out of the catalogue
+    """
+    # Read the clipped records
+    try:
+        clipped_records = pd.read_csv(clipped_records_ffp)
+    except pd.errors.EmptyDataError:
+        return catalogue, pd.DataFrame(columns=["record_id", "reason"])
+
+    # Filter the clipped records to the reason of "Jerk"
+    clipped_records = clipped_records[clipped_records["reason"] == "Jerk"]
+
+    # Remove the bypass records if they exist
+    if bypass_records is not None:
+        clipped_records = clipped_records[
+            ~clipped_records["record_id"].isin(bypass_records)
+        ]
+
+    # Create the skipped_records dataframe from clipped_records
+    skipped_records = pd.DataFrame(
+        {
+            "record_id": clipped_records["record_id"],
+            "reason": "ClipNet Jerk detected",
         }
     )
 
@@ -739,17 +791,18 @@ def apply_all_filters(
     Apply all the quality filters to the catalogue.
 
     This function performs the following filtering steps:
-    1) Ensure only ground level locations are used.
-    2) Filter by presence of GMC predictions.
-    3) Filter by score mean.
-    4) Filter by multi mean.
-    5) Filter by fmax.
-    6) Filter by fmin.
-    7) Filter by missing station information.
-    8) Filter out clipped records.
-    9) Filter out troublesome sensitivity records.
-    10) Filter out records too far from empirical predictions.
-    11) Select the appropriate channel for duplicate HN/BN records for the same event/station.
+    - Ensure only ground level locations are used.
+    - Filter by presence of GMC predictions.
+    - Filter by score mean.
+    - Filter by multi mean.
+    - Filter by fmax.
+    - Filter by fmin.
+    - Filter by missing station information.
+    - Filter out clipped records.
+    - Filter out jerk records.
+    - Filter out troublesome sensitivity records.
+    - Filter out records too far from empirical predictions.
+    - Select the appropriate channel for duplicate HN/BN records for the same event/station.
 
     Parameters
     ----------
@@ -810,6 +863,11 @@ def apply_all_filters(
         catalogue, clipped_records_ffp, bypass_records
     )
 
+    # Find jerk records
+    skipped_records_jerk = apply_jerk_filter(
+        catalogue, clipped_records_ffp, bypass_records
+    )
+
     # Find troublesome sensitivity records
     skipped_records_sensitivity = filter_troublesome_sensitivity(
         catalogue, bypass_records
@@ -829,6 +887,7 @@ def apply_all_filters(
             skipped_records_fmin,
             skipped_records_sta,
             skipped_records_clipped,
+            skipped_records_jerk,
             skipped_records_sensitivity,
             skipped_records_empirical,
         ]
@@ -870,17 +929,17 @@ def create_quality_db(
 ):
     """
     Create the quality database by running the following checks:
-    1) Filter by presence of GMC predictions.
-    2) Filter by score mean.
-    3) Filter by multi mean.
-    4) Filter by fmax.
-    5) Filter by fmin.
-    6) Filter by missing station information.
-    7) Ensure only ground level locations are used.
-    8) Filter out clipped records.
-    9) Filter out troublesome sensitivity records.
-    10) Filter out records too far from empirical predictions.
-    11) Select the appropriate channel for duplicate HN/BN records for the same event/station.
+    - Filter by presence of GMC predictions.
+    - Filter by score mean.
+    - Filter by multi mean.
+    - Filter by fmax.
+    - Filter by fmin.
+    - Filter by missing station information.
+    - Ensure only ground level locations are used.
+    - Filter out clipped records.
+    - Filter out troublesome sensitivity records.
+    - Filter out records too far from empirical predictions.
+    - Select the appropriate channel for duplicate HN/BN records for the same event/station.
 
     Parameters
     ----------

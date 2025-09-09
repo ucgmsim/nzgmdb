@@ -132,6 +132,20 @@ def test_apply_clipNet_filter(sample_catalogue: pd.DataFrame):
     assert "1493377_NELS_HN_20" in skipped["record_id"].values
 
 
+def test_jerk_filter(sample_catalogue: pd.DataFrame):
+    """
+    Test the apply_jerk_filter function.
+
+    Parameters
+    ----------
+    sample_catalogue : pd.DataFrame
+        A sample catalogue DataFrame to test the filtering function.
+    """
+    clipped_file = Path(__file__).parent / "clipped_testing.csv"
+    skipped = quality_db.apply_jerk_filter(sample_catalogue.copy(), clipped_file)
+    assert "1470798_TOZ_HH_10" in skipped["record_id"].values
+
+
 def test_filter_troublesome_sensitivity(sample_catalogue: pd.DataFrame):
     """
     Test the filter_troublesome_sensitivity function.

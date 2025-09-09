@@ -863,19 +863,30 @@ def extract_station_info(
             )
 
         # Calculate clip to determine if the record should be dropped
-        # clip = filtering.get_clip_probability(mag, r_hyp, mseed)
+        clip = filtering.get_clip_probability(mag, r_hyp, mseed)
 
-        # threshold = config.get_value("clip_threshold")
+        threshold = config.get_value("clip_threshold")
 
         # Check if the record should be dropped
-        # if clip > threshold:
-        #     stats = mseed[0].stats
-        #     clipped_records.append(
-        #         [
-        #             f"{event_id}_{stats.station}_{stats.channel[:2]}_{stats.location}",
-        #             "Clipped",
-        #         ]
-        #     )
+        if clip > threshold:
+            stats = mseed[0].stats
+            clipped_records.append(
+                [
+                    f"{event_id}_{stats.station}_{stats.channel[:2]}_{stats.location}",
+                    "Clipped",
+                ]
+            )
+
+        # Check for jerks
+        has_jerk = filtering.get_jerk(mseed)
+        if has_jerk:
+            stats = mseed[0].stats
+            clipped_records.append(
+                [
+                    f"{event_id}_{stats.station}_{stats.channel[:2]}_{stats.location}",
+                    "Jerk",
+                ]
+            )
 
         # Create the directory structure for the given event
         year = event_cat.origins[0].time.year

@@ -57,3 +57,37 @@ def get_clip_probability(event_mag: float, dist: float, mseed: Stream) -> float:
     # Get the clip probability
     clip_nnet = clipNet()
     return clip_nnet.evaluate(inputs)[0][0]
+
+
+def get_jerk(mseed: Stream) -> bool:
+    """
+    Calculate if the mseed has jerk that exceeds the threshold for any trace
+    that exceeds median_multiplier the median jerk.
+
+    Parameters
+    ----------
+    mseed : Stream
+        The mseed Stream object
+
+    Returns
+    -------
+    bool
+        True if the mseed has jerk in any trace, False otherwise
+    """
+    # Get the config values
+    config = cfg.Config()
+    point_thresh = config.get_value("point_thresh")
+    median_multiplier = config.get_value("median_multiplier")
+
+    # Check for jerk in each trace
+    for trace in mseed:
+        temp_tr = trace.copy()
+        temp_tr.differentiate()
+        temp_tr.differentiate()
+        abs_diff = np.abs(temp_tr.data)
+        median_multiplied = median_multiplier * np.median(abs_diff)
+        (i_jerk,) = np.where(abs_diff >= median_multiplied)
+        num_outliers = len(i_jerk)
+        if num_outliers > point_thresh:
+            return True
+    return False

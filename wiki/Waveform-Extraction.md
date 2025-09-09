@@ -78,13 +78,22 @@ Waveforms are downloaded using the FDSN Client with specific constraints:
 Downloaded waveforms undergo quality assessment using ClipNet with configuration thresholds:
 
 #### **Clipping Detection**
-- **Method:** gmprocess ClipNet algorithm
+- **Method:** gmprocess ClipNet Clipping algorithm
 - **Threshold:** `clip_threshold: 0.2` from config.yaml
 - **Action:** Records exceeding threshold are flagged and skipped
 - **Magnitude bounds:** `mag_clip_low: 3.0`, `mag_clip_high: 8.8`
 - **Distance bounds:** `dist_clip_low: 0.0`, `dist_clip_high: 645.0`
 
-The output of this is saved to a `clipped_records.csv` file to be used during the quality_db step.
+Also using ClipNet methods we test for Jerk in any of the Streams Traces above a certain threshold for a given number of points:
+
+#### **Jerk Detection**
+- **Method:** gmprocess ClipNet Jerk algorithm
+- **Point Threshold:** `point_thresh: 400` from config.yaml
+- **Median Multiplier:** `median_multiplier: 100` from config.yaml
+- **Action:** Records exceeding median jerk * median_multiplier threshold for greater than point_thresh are flagged and skipped
+
+The output of these are saved to a `clipped_records.csv` file to be used during the quality_db step.
+Clipped record shave a reason column of `Clipped` and records where Jerk was detected have a reason column of `Jerk`.
 
 #### **Component Splitting**
 
