@@ -567,14 +567,14 @@ def filter_troublesome_sensitivity(
 
 def filter_empirical_predictions(
     catalogue: pd.DataFrame,
-    bypass_records: np.ndarray = None,
-    mean_residual_threshold: float = None,
-    max_residual_threshold: float = None,
+    bypass_records: np.ndarray | None = None,
+    mean_residual_threshold: float | None = None,
+    max_residual_threshold: float | None = None,
 ):
     """
     This function checks the difference in empirical estimated values and the results from
     the catalogue. If the difference exceeds certain thresholds, the record is skipped.
-    Note: the empirical predictions are based on the Atkinson 2022 model for subduction interface and slab,
+    Note: the empirical predictions are based on the Atkinson 2022 model [0] for subduction interface and slab,
     and crustal for any other tectonic type.
 
     Parameters
@@ -594,6 +594,13 @@ def filter_empirical_predictions(
         The filtered catalogue
     pd.DataFrame
         The skipped records
+
+    References
+     ----------
+    [0] Atkinson GM. 2022. Backbone ground-motion models for crustal,
+        interface and slab earthquakes in New Zealand. Lower Hutt (NZ):
+        GNS Science. 61 p. (GNS Science report; 2022/11).
+        doi:10.21420/QMJ6-P189.
     """
     # Extract the periods from the catalogue 0.01 -> 10.0
     psa_cols = [col for col in catalogue.columns if col.startswith("pSA")]
