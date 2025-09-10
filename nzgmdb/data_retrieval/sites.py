@@ -13,8 +13,9 @@ from obspy.clients.fdsn import Client as FDSN_Client
 from nzgmdb.data_retrieval import tect_domain
 from nzgmdb.management.data_registry import NZGMDB_DATA
 from qcore import point_in_polygon
-from velocity_modelling import constants as vm_const
-from velocity_modelling.tools import basin_wiki
+
+# from velocity_modelling import constants as vm_const
+# from velocity_modelling.tools import basin_wiki
 
 
 def create_site_table_response() -> pd.DataFrame:
