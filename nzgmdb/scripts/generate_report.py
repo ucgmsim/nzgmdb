@@ -124,8 +124,9 @@ def format_percentage(pct: float, allvals: list[float]):
     Returns
     -------
     str
-        Formatted string for the pie chart label.
-        e.g. "12.5%\n(25)" or "" if percentage is less than 5%.
+        The formatted string for the pie chart label. For example,
+        ``"12.5%\\n(25)"``. Returns an empty string if the percentage
+        is less than 5%.
     """
     absolute = round(pct / 100.0 * np.sum(allvals))
     normal = f"{pct:.1f}%\n({absolute:d})"
@@ -240,22 +241,22 @@ def get_fig_axes(
 
     Parameters
     ----------
-    n_subplots: int
+    n_subplots : int
         The number of subplots.
-    n_cols: int
+    n_cols : int
         The number of columns.
         Set to -1 if n_rows is to be computed.
-    n_rows: int
+    n_rows : int
         The number of rows.
         Set to -1 if n_cols is to be computed.
-    ind_figsize: tuple[int, int]
+    ind_figsize : tuple[int, int]
         The individual figure size for each subplot
 
     Returns
     -------
-    fig: plt.Figure
+    fig : plt.Figure
         The figure object
-    axs: List[plt.Axes]
+    axs : List[plt.Axes]
         The axes objects
 
     Raises
