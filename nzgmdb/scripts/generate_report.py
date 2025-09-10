@@ -3,23 +3,23 @@ Generate a HTML report for the NZGMDB database comparing to a previous version /
 """
 
 import base64
+from collections.abc import Sequence
+from enum import StrEnum
 from io import BytesIO
 from pathlib import Path
-from collections.abc import Sequence
-from typing import Optional
 
-import pandas as pd
-import numpy as np
 import matplotlib.pyplot as plt
-from enum import StrEnum, Enum
-import matplotlib.gridspec as gridspec
+import numpy as np
+import pandas as pd
 from matplotlib.patches import Patch
 
 import oq_wrapper as oqw
-from nzgmdb.management import file_structure, data_registry
+from nzgmdb.management import data_registry, file_structure
 
 
 class TectonicType(StrEnum):
+    """Enum for tectonic classification."""
+
     CRUSTAL = "Crustal"
     SUBDUCTION_INTERFACE = "Interface"
     SUBDUCTION_SLAB = "Slab"
@@ -91,14 +91,46 @@ def apply_fmin_filter_df(df: pd.DataFrame, pre_4p3: bool = False) -> pd.DataFram
     return df
 
 
-# Define a function to display both percentage and absolute value
-def func(pct, allvals):
+def format_percentage(pct: float, allvals: list[float]):
+    """
+    Function to format pie chart labels with both percentage and absolute values.
+
+    Parameters
+    ----------
+    pct : float
+        The percentage value.
+    allvals : list[float]
+        The list of all values to compute the absolute value.
+
+    Returns
+    -------
+    str
+        Formatted string for the pie chart label.
+        e.g. "12.5%\n(25)" or "" if percentage is less than 5%.
+    """
     absolute = round(pct / 100.0 * np.sum(allvals))
-    normal = "{:.1f}%\n({:d})".format(pct, absolute)
+    normal = f"{pct:.1f}%\n({absolute:d})"
     return normal if pct > 5 else ""
 
 
-def plot_pie_chart_1p(full_labels: list[str], full_sizes: list[int], title: str):
+def plot_pie_chart(full_labels: list[str], full_sizes: list[int], title: str):
+    """
+    Plots a pie chart with the given labels and sizes.
+
+    Parameters
+    ----------
+    full_labels : list[str]
+        The labels for each category.
+    full_sizes : list[int]
+        The sizes for each category.
+    title : str
+        The title for the pie chart.
+
+    Returns
+    -------
+    fig : plt.Figure
+        The matplotlib figure object containing the pie chart.
+    """
     non_zero_indices = [i for i, size in enumerate(full_sizes) if size != 0]
     sizes = [full_sizes[i] for i in non_zero_indices]
     total_records = sum(sizes)
@@ -114,7 +146,7 @@ def plot_pie_chart_1p(full_labels: list[str], full_sizes: list[int], title: str)
         sizes,
         labels=pie_labels,
         colors=colors,
-        autopct=lambda pct: func(pct, sizes),
+        autopct=lambda pct: format_percentage(pct, sizes),
         startangle=270,
     )
 
@@ -545,7 +577,7 @@ def important_set_figures(
         unknown_errors = len(cur_df) - total_errors
         errors.append("missing")
         values.append(unknown_errors)
-        fig = plot_pie_chart_1p(
+        fig = plot_pie_chart(
             errors, values, f"{label} {important_set_names[i]} Skipped Reasons"
         )
         buf = BytesIO()
@@ -558,6 +590,21 @@ def important_set_figures(
 
 
 def skipped_reason_overlap_barplot(skipped_df: pd.DataFrame, title: str):
+    """
+    Generate a bar plot showing the overlap of skipped reasons.
+
+    Parameters
+    ----------
+    skipped_df : pd.DataFrame
+        DataFrame containing skipped records with 'record_id' and 'reason' columns.
+    title : str
+        Title for the bar plot.
+
+    Returns
+    -------
+    str
+        Base64 encoded string of the bar plot image.
+    """
     # Get all unique reasons
     reasons = sorted(skipped_df["reason"].unique())
     total_counts = skipped_df["reason"].value_counts().reindex(reasons, fill_value=0)
@@ -623,17 +670,38 @@ def single_column_barplot(
     column: str,
     x_label: str,
     title: str,
-    figsize=(14, 8),
-    dpi=300,
-    y_label="Number of Records",
-    bar_label="Records",
+    y_label: str = "Number of Records",
+    bar_label: str = "Records",
 ):
+    """
+    Generate a single column bar plot for the specified column in the DataFrame.
+
+    Parameters
+    ----------
+    df : pd.DataFrame
+        DataFrame containing the data to plot.
+    column : str
+        The column to plot.
+    x_label : str
+        Label for the x-axis.
+    title : str
+        Title for the bar plot.
+    y_label : str, optional
+        Label for the y-axis, by default "Number of Records".
+    bar_label : str, optional
+        Label for the bars in the legend, by default "Records".
+
+    Returns
+    -------
+    str
+        Base64 encoded string of the bar plot image.
+    """
     categories = sorted(df[column].unique())
     counts = df[column].value_counts().reindex(categories, fill_value=0)
     x = np.arange(len(categories))
     width = 0.6
 
-    fig, ax = plt.subplots(figsize=figsize, dpi=dpi)
+    fig, ax = plt.subplots(figsize=(14, 8), dpi=300)
     bars = ax.bar(x, counts.values, width, label=bar_label)
 
     for bar in bars:
@@ -664,93 +732,43 @@ def single_column_barplot(
     return img_base64
 
 
-def double_barplot_bin_overlap(
-    df: pd.DataFrame,
-    column: str,
-    x_label: str,
-    title: str,
-    figsize=(14, 8),
-    dpi=300,
-    y_label="Number of Records",
-    bar_1_label="Total",
-    bar_2_label="Also in Other Bin",
-):
-    categories = sorted(df[column].unique())
-    total_counts = df[column].value_counts().reindex(categories, fill_value=0)
-
-    overlap_counts = []
-    for cat in categories:
-        mask = df[column] == cat
-        # Find records in this bin that also appear in any other bin
-        # (i.e., have the same record_id but in a different bin)
-        ids_in_bin = set(df.loc[mask, "record_id"])
-        ids_in_other_bins = set(df.loc[~mask, "record_id"])
-        overlap = ids_in_bin & ids_in_other_bins
-        overlap_counts.append(len(overlap))
-    overlap_counts = np.array(overlap_counts)
-
-    x = np.arange(len(categories))
-    width = 0.35
-
-    fig, ax = plt.subplots(figsize=figsize, dpi=dpi)
-    bars1 = ax.bar(
-        x - width / 2, total_counts.values, width, label=bar_1_label, color="blue"
-    )
-    bars2 = ax.bar(
-        x + width / 2, overlap_counts, width, label=bar_2_label, color="orange"
-    )
-
-    for bar in bars1:
-        height = bar.get_height()
-        ax.text(
-            bar.get_x() + bar.get_width() / 2,
-            height + 1,
-            f"{int(height)}",
-            ha="center",
-            va="bottom",
-            fontsize=12,
-            fontweight="bold",
-        )
-    for bar in bars2:
-        height = bar.get_height()
-        ax.text(
-            bar.get_x() + bar.get_width() / 2,
-            height + 1,
-            f"{int(height)}",
-            ha="center",
-            va="bottom",
-            fontsize=12,
-            fontweight="bold",
-        )
-
-    ax.set_xticks(x)
-    ax.set_xticklabels(categories, rotation=45, ha="right")
-    ax.set_xlabel(x_label)
-    ax.set_ylabel(y_label)
-    ax.set_title(title)
-    ax.legend()
-    fig.tight_layout()
-
-    buf = BytesIO()
-    fig.savefig(buf, format="png", bbox_inches="tight")
-    plt.close(fig)
-    buf.seek(0)
-    img_base64 = base64.b64encode(buf.read()).decode("utf-8")
-    return img_base64
-
-
 def compare_column_barplot(
     full_df: pd.DataFrame,
     quality_df: pd.DataFrame,
     column: str,
     x_label: str,
     title: str,
-    figsize=(14, 8),
-    dpi=300,
-    y_label="Number of Records",
-    bar_1_label="Full Database",
-    bar_2_label="Quality Database",
+    y_label: str = "Number of Records",
+    bar_1_label: str = "Full Database",
+    bar_2_label: str = "Quality Database",
 ):
+    """
+    Generate a comparative bar plot for the specified column in two DataFrames.
+
+    Parameters
+    ----------
+    full_df : pd.DataFrame
+        DataFrame containing the full dataset.
+    quality_df : pd.DataFrame
+        DataFrame containing the quality dataset.
+    column : str
+        The column to plot.
+    x_label : str
+        Label for the x-axis.
+    title : str
+        Title for the bar plot.
+    y_label : str, optional
+        Label for the y-axis, by default "Number of Records".
+    bar_1_label : str, optional
+        Label for the first bar in the legend, by default "Full Database".
+    bar_2_label : str, optional
+        Label for the second bar in the legend, by default "Quality Database".
+
+    Returns
+    -------
+    str
+        Base64 encoded string of the bar plot image.
+    """
     # Get all unique categories
     categories = sorted(
         set(full_df[column].unique()) | set(quality_df[column].unique())
@@ -762,7 +780,7 @@ def compare_column_barplot(
     full_counts = full_df[column].value_counts().reindex(categories, fill_value=0)
     quality_counts = quality_df[column].value_counts().reindex(categories, fill_value=0)
 
-    fig, ax = plt.subplots(figsize=figsize, dpi=dpi)
+    fig, ax = plt.subplots(figsize=(14, 8), dpi=300)
     bars1 = ax.bar(x - width / 2, full_counts.values, width, label=bar_1_label)
     bars2 = ax.bar(x + width / 2, quality_counts.values, width, label=bar_2_label)
 
@@ -806,28 +824,9 @@ def compare_column_barplot(
     return img_base64
 
 
-def get_pSA_bias_residual_fig(
-    figsize: tuple[float, float] = (16, 6),
-    fig_dpi: int = 300,
-    left: float = 0.05,
-    right: float = 0.98,
-    top: float = 0.98,
-    bottom: float = 0.1,
-    main_wspace: float = 0.1,
-    bias_y_axis_limits: tuple[float, float] = (-1.0, 1.0),
-    std_y_axis_limits: tuple[float, float] = (0.0, 1.0),
-):
+def get_pSA_bias_residual_fig():
     """
     Create a figure for pSA bias and residual standard deviation plots.
-
-    Parameters
-    ----------
-    figsize : tuple of float, optional
-        Size of the figure.
-    bias_y_axis_limits : tuple of float, optional
-        Y-axis limits for the bias plot.
-    std_y_axis_limits : tuple of float, optional
-        Y-axis limits for the residual standard deviation plot.
 
     Returns
     -------
@@ -838,14 +837,15 @@ def get_pSA_bias_residual_fig(
     ax2 : matplotlib.axes.Axes
         Axis for the residual standard deviation plot.
     """
-    fig, (ax1, ax2) = plt.subplots(1, 2, figsize=figsize, dpi=fig_dpi)
+    std_y_axis_limits = (0, 1.25)
+    fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(16, 6), dpi=300)
 
     ax1.set_xlabel("Vibration Period, T(s)")
     ax1.set_ylabel("Model bias")
     ax1.grid(which="both", linewidth=0.5, alpha=0.5, linestyle="--")
     ax1.set_xscale("log")
     ax1.axhline(0, color="black", zorder=0)
-    ax1.set_ylim(*bias_y_axis_limits)
+    ax1.set_ylim(-1.0, 1.0)
     ax1.set_xlim(0.01, 10.0)
 
     ax2.set_xlabel("Vibration Period, T(s)")
@@ -855,9 +855,7 @@ def get_pSA_bias_residual_fig(
     ax2.set_ylim(*std_y_axis_limits)
     ax2.set_xlim(0.01, 10.0)
 
-    fig.subplots_adjust(
-        left=left, right=right, top=top, bottom=bottom, wspace=main_wspace
-    )
+    fig.subplots_adjust(left=0.05, right=0.98, top=0.98, bottom=0.1, wspace=0.1)
     return fig, ax1, ax2
 
 
@@ -878,7 +876,7 @@ def skipped_records_pie_chart(skipped_df: pd.DataFrame, title: str) -> str:
     unknown_errors = len(skipped_df) - total_errors
     errors.append("missing")
     values.append(unknown_errors)
-    fig = plot_pie_chart_1p(errors, values, title)
+    fig = plot_pie_chart(errors, values, title)
     buf = BytesIO()
     fig.savefig(buf, format="png", bbox_inches="tight")
     plt.close(fig)
@@ -887,7 +885,28 @@ def skipped_records_pie_chart(skipped_df: pd.DataFrame, title: str) -> str:
     return img_base64
 
 
-def mag_rrup_scatter(df1, df2, title1, title2):
+def mag_rrup_scatter(
+    df1: pd.DataFrame, df2: pd.DataFrame, title1: str, title2: str
+) -> str:
+    """
+    Generate a side-by-side scatter plot comparing magnitude vs. Rrup for two datasets.
+
+    Parameters
+    ----------
+    df1 : pd.DataFrame
+        First dataset containing 'mag' and 'r_rup' columns.
+    df2 : pd.DataFrame
+        Second dataset containing 'mag' and 'r_rup' columns.
+    title1 : str
+        Title for the first subplot.
+    title2 : str
+        Title for the second subplot.
+
+    Returns
+    -------
+    str
+        Base64 encoded string of the scatter plot image.
+    """
     fig, axs = plt.subplots(1, 2, figsize=(14, 6), dpi=300, sharex=True)
 
     # Compute shared y-axis limits
@@ -1066,7 +1085,7 @@ def generate_report(
     html_parts.append("<div class='fig-single'>")
 
     # Generate psa bias and residual figure
-    fig, ax1, ax2 = get_pSA_bias_residual_fig(std_y_axis_limits=(0, 1.25))
+    fig, ax1, ax2 = get_pSA_bias_residual_fig()
 
     if compare_version_directory:
         ax1.plot(
@@ -1110,7 +1129,7 @@ def generate_report(
     unique_events_f = full_new["evid"].nunique()
     unique_sites_f = full_new["sta"].nunique()
 
-    html_parts.append(f"<h2>Full Database</h2>")
+    html_parts.append("<h2>Full Database</h2>")
     html_parts.append("<ul>")
     html_parts.append(f"<li>Total records: {total_records_f}</li>")
     html_parts.append(f"<li>Unique events: {unique_events_f}</li>")
@@ -1121,7 +1140,7 @@ def generate_report(
     unique_events = quality_new["evid"].nunique()
     unique_sites = quality_new["sta"].nunique()
 
-    html_parts.append(f"<h2>Quality Database</h2>")
+    html_parts.append("<h2>Quality Database</h2>")
     html_parts.append("<ul>")
     html_parts.append(f"<li>Total records: {total_records}</li>")
     html_parts.append(f"<li>Unique events: {unique_events}</li>")
@@ -1135,7 +1154,7 @@ def generate_report(
         unique_events_f_old = full_old["evid"].nunique()
         unique_sites_f_old = full_old["sta"].nunique()
 
-        html_parts.append(f"<h2>Full Database</h2>")
+        html_parts.append("<h2>Full Database</h2>")
         html_parts.append("<ul>")
         html_parts.append(f"<li>Total records: {total_records_f_old}</li>")
         html_parts.append(f"<li>Unique events: {unique_events_f_old}</li>")
@@ -1145,7 +1164,7 @@ def generate_report(
         total_records_old = len(quality_old)
         unique_events_old = quality_old["evid"].nunique()
         unique_sites_old = quality_old["sta"].nunique()
-        html_parts.append(f"<h2>Quality Database</h2>")
+        html_parts.append("<h2>Quality Database</h2>")
         html_parts.append("<ul>")
         html_parts.append(f"<li>Total records: {total_records_old}</li>")
         html_parts.append(f"<li>Unique events: {unique_events_old}</li>")
@@ -1380,7 +1399,7 @@ def generate_report(
         errors.append("Accepted")
         errors.append("missing")
         values.append(unknown_errors)
-        fig = plot_pie_chart_1p(errors, values, f"New NZGMDB {titles[i]}")
+        fig = plot_pie_chart(errors, values, f"New NZGMDB {titles[i]}")
         buf = BytesIO()
         fig.savefig(buf, format="png", bbox_inches="tight")
         plt.close(fig)
@@ -1406,7 +1425,7 @@ def generate_report(
             errors.append("Accepted")
             errors.append("missing")
             values.append(unknown_errors)
-            fig = plot_pie_chart_1p(errors, values, f"Old NZGMDB {titles[i]}")
+            fig = plot_pie_chart(errors, values, f"Old NZGMDB {titles[i]}")
             buf = BytesIO()
             fig.savefig(buf, format="png", bbox_inches="tight")
             plt.close(fig)
