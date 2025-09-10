@@ -7,14 +7,19 @@ from collections.abc import Sequence
 from enum import StrEnum
 from io import BytesIO
 from pathlib import Path
+from typing import Annotated
 
 import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
+import typer
 from matplotlib.patches import Patch
 
 import oq_wrapper as oqw
 from nzgmdb.management import data_registry, file_structure
+from qcore import cli
+
+app = typer.Typer(pretty_exceptions_enable=False)
 
 
 class TectonicType(StrEnum):
@@ -78,7 +83,21 @@ PSA_KEYS = [f"pSA_{x}" for x in PERIODS]
 
 
 def apply_fmin_filter_df(df: pd.DataFrame, pre_4p3: bool = False) -> pd.DataFrame:
-    """Applies fmin filtering to pSA columns in a DataFrame."""
+    """
+    Applies fmin filtering to pSA columns in a DataFrame.
+
+    Parameters
+    ----------
+    df : pd.DataFrame
+        DataFrame containing pSA columns and HPF/HPF_h columns.
+    pre_4p3 : bool, optional
+        If True, uses the HPF column for filtering (for versions before 4.3).
+
+    Returns
+    -------
+    pd.DataFrame
+        DataFrame with pSA values set to NaN where the period exceeds the max usable period.
+    """
     if pre_4p3:
         # Use just the HPF
         max_usable_period = 1 / df["HPF"] * 1.25
@@ -128,7 +147,7 @@ def plot_pie_chart(full_labels: list[str], full_sizes: list[int], title: str):
 
     Returns
     -------
-    fig : plt.Figure
+    plt.Figure
         The matplotlib figure object containing the pie chart.
     """
     non_zero_indices = [i for i, size in enumerate(full_sizes) if size != 0]
@@ -176,33 +195,23 @@ def plot_pie_chart(full_labels: list[str], full_sizes: list[int], title: str):
     return fig
 
 
-def numpy_str_join(sep: str, *arrays: str | Sequence[str]) -> np.ndarray[str]:
+def numpy_str_join(sep: str, *arrays: str | Sequence[str]) -> np.ndarray:
     """
-    Joins multiple string arrays together using the specified separator.
-    Also support joining of string values, or a combination of both.
+    Join multiple string arrays together using the specified separator.
+
+    Supports joining string scalars, string arrays, or a combination of both.
 
     Parameters
     ----------
-    sep: str
-        The separator to use
-    arrays: string value or string arrays
-        The arrays (or string values) to join together
+    sep : str
+        The separator to use.
+    *arrays : str or sequence of str
+        String scalars or string arrays to join together.
 
     Returns
     -------
-    np.ndarray
-        The joined string array
-
-    Examples
-    --------
-    Example 1: Joining two arrays
-    >>> numpy_str_join("_", ["a", "b"], ["c", "d"])
-    array(['a_c', 'b_d'], dtype='<U3')
-
-    Example 2: Combination of string value and arrays
-    >>> arr1 = np.array(["a", "b"])
-    >>> numpy_str_join("_", arr1, "c", ["d", "e"])
-    array(['a_c_d', 'b_c_e'], dtype='<U5')
+    numpy.ndarray
+        The joined array.
     """
     result = arrays[0]
     for cur_array in arrays[1:]:
@@ -217,7 +226,6 @@ def get_fig_axes(
     n_cols: int,
     n_rows: int,
     ind_figsize: tuple[int, int],
-    dpi: int | None = None,
 ):
     """
     Given the number of desired subplots, and either the desired
@@ -234,13 +242,13 @@ def get_fig_axes(
     ----------
     n_subplots: int
         The number of subplots.
-    n_cols:
+    n_cols: int
         The number of columns.
         Set to -1 if n_rows is to be computed.
-    n_rows:
+    n_rows: int
         The number of rows.
         Set to -1 if n_cols is to be computed.
-    ind_figsize:
+    ind_figsize: tuple[int, int]
         The individual figure size for each subplot
 
     Returns
@@ -254,22 +262,6 @@ def get_fig_axes(
     ------
     ValueError
         If both n_cols and n_rows are specified
-
-    Examples
-    --------
-    >>> fig, axs = get_fig_axes(4, 2, -1, (5, 5))
-    >>> len(axs)
-    4
-    >>> fig, axs = get_fig_axes(5, -1, 2, (5, 5))
-    >>> len(axs)
-    6
-    >>> fig, axs = get_fig_axes(5, -1, -1, (5, 5))
-    Traceback (most recent call last):
-        ...
-    ValueError: One of n_cols/n_rows must be specified
-    >>> fig, axs = get_fig_axes(6, 2, 3, (5, 5))
-    >>>len(axs)
-    6
     """
 
     if n_cols == -1 or n_rows == -1:
@@ -281,7 +273,7 @@ def get_fig_axes(
             raise ValueError("One of n_cols/n_rows must be specified")
 
     figsize = (n_cols * ind_figsize[0], n_rows * ind_figsize[1])
-    fig, axs = plt.subplots(n_rows, n_cols, figsize=figsize, dpi=dpi)
+    fig, axs = plt.subplots(n_rows, n_cols, figsize=figsize, dpi=300)
 
     if n_subplots == 1:
         axs = (axs,)
@@ -313,12 +305,12 @@ def compute_nzgmdb_emp_gm_params(obs_data: pd.DataFrame):
 
     Parameters
     ----------
-    obs_data: pd.DataFrame
+    obs_data : pd.DataFrame
         DataFrame containing the observed data, event and site information.
 
     Returns
     -------
-    result_df: DataFrame
+    pd.DataFrame
         The empirical GMM parameters for PGA
         and the default set of pSA periods
     """
@@ -355,8 +347,11 @@ def _compute_emp_gm_params(rupture_df: pd.DataFrame, periods: Sequence[float]):
         Columns z1pt0 and z2pt5 have to be in kilometres.
     periods : Sequence[float]
         List of periods for which pSA is to be computed.
-    output_ffp : Path
-        Output file path.
+
+    Returns
+    -------
+    pd.DataFrame
+        DataFrame containing the computed empirical GM parameters.
     """
     ### Constants
     GMM_MAPPING = {
@@ -434,7 +429,23 @@ def get_residuals(
     ims: Sequence[str] = PSA_KEYS,
     pred_suffix: str = "pred",
 ):
-    """Computes the residual between the observed and predicted IMs for each scenario"""
+    """
+    Computes the residual between the observed and predicted IMs for each scenario.
+
+    Parameters
+    ----------
+    results : pd.DataFrame
+        DataFrame containing observed and predicted IMs.
+    ims : Sequence[str], optional
+        List of IMs to compute residuals for, by default PSA_KEYS.
+    pred_suffix : str, optional
+        Suffix for the predicted IM columns, by default "pred".
+
+    Returns
+    -------
+    pd.DataFrame
+        DataFrame containing the residuals for each IM, along with evid and sta columns.
+    """
     pred_im_keys = numpy_str_join("_", ims, pred_suffix)
     res_df = pd.DataFrame(
         data=results.loc[:, ims].values - results.loc[:, pred_im_keys].values,
@@ -462,22 +473,22 @@ def important_set_figures(
 
     Parameters
     ----------
-    quality_df: pd.DataFrame
+    quality_df : pd.DataFrame
         DataFrame containing the quality information of the NZGMDB.
-    flatfiles_dir: Path
+    flatfiles_dir : Path
         Directory containing the flat files for the skipped records.
-    important_set_names: list[str]
+    important_set_names : list[str]
         List of names for the important sets to be compared.
-    import_set_ffps: list[str]
+    import_set_ffps : list[str]
         List of file paths to the important sets to be compared.
-    label: str
+    label : str
         Label for the figures, used in the title of the plots / legend.
 
     Returns
     -------
-    bar_img_base64: str
+    bar_img_base64 : str
         Base64 encoded string of the bar plot image.
-    pie_imgs_base64: list[str]
+    pie_imgs_base64 : list[str]
         List of Base64 encoded strings of the pie chart images for each important set.
     """
 
@@ -869,6 +880,11 @@ def skipped_records_pie_chart(skipped_df: pd.DataFrame, title: str) -> str:
         DataFrame containing skipped records with a 'reason' column.
     title : str
         Title for the pie chart.
+
+    Returns
+    -------
+    str
+        Base64 encoded string of the pie chart image.
     """
     errors = list(skipped_df["reason"].unique())
     values = [len(skipped_df[skipped_df["reason"] == error]) for error in errors]
@@ -937,10 +953,26 @@ def mag_rrup_scatter(
     return base64.b64encode(buf.read()).decode("utf-8")
 
 
+@cli.from_docstring(app)
 def generate_report(
-    new_version_directory: Path,
-    output_file: Path,
-    compare_version_directory: Path | None = None,
+    new_version_directory: Annotated[
+        Path,
+        typer.Argument(
+            exists=True,
+            file_okay=False,
+        ),
+    ],
+    output_file: Annotated[
+        Path,
+        typer.Argument(),
+    ],
+    compare_version_directory: Annotated[
+        Path,
+        typer.Option(
+            exists=True,
+            file_okay=False,
+        ),
+    ] = None,
 ):
     """
     Generate a HTML report comparing the new version of the database to a previous version.
@@ -1699,7 +1731,7 @@ def generate_report(
         "pSA_10.0",
     ]
 
-    fig, axs = get_fig_axes(len(plot_ims), 2, -1, ind_figsize=(8, 6), dpi=300)
+    fig, axs = get_fig_axes(len(plot_ims), 2, -1, ind_figsize=(8, 6))
 
     for i, (cur_im, cur_ax) in enumerate(zip(plot_ims, axs)):
         cur_old = quality_old_record_index.loc[shared_record_ids, cur_im]
