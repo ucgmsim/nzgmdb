@@ -1,3 +1,7 @@
+"""
+Convert a DataFrame of records and corresponding ascii files to PEER AT2 files.
+"""
+
 from datetime import datetime
 from pathlib import Path
 from typing import Annotated
