@@ -9,7 +9,9 @@ import pandas as pd
 
 from nzgmdb.management import config as cfg
 from nzgmdb.management import file_structure
+from nzgmdb.management.data_registry import NZGMDB_DATA
 from nzgmdb.management.file_structure import FlatfileNames
+from oq_wrapper import constants, wrapper
 
 
 def filter_flatfiles_on_catalouge(
@@ -491,6 +493,242 @@ def apply_clipNet_filter(
     return catalogue, skipped_records
 
 
+def filter_troublesome_sensitivity(
+    catalogue: pd.DataFrame, bypass_records: np.ndarray = None
+):
+    """
+    Filter the catalogue by removing records that are known to be troublesome for sensitivity analysis.
+
+    This function removes records that have been identified as problematic for sensitivity analysis,
+    such as those with incorrect values assigned during first deployment of broadband instruments.
+
+    Parameters
+    ----------
+    catalogue : pd.DataFrame
+        The catalogue dataframe to filter
+    bypass_records : np.ndarray, optional
+        The records to bypass the quality checks
+
+    Returns
+    -------
+    pd.DataFrame
+        The filtered catalogue
+    pd.DataFrame
+        The skipped records
+    """
+    # Load the sensitivity ignore file from the data registry
+    sensitivity_ignore = pd.read_csv(NZGMDB_DATA.fetch("sensitivity_ignore.csv"))
+
+    # Ensure datetime columns are in datetime format
+    catalogue["datetime"] = pd.to_datetime(catalogue["datetime"])
+    sensitivity_ignore["start_date"] = pd.to_datetime(sensitivity_ignore["start_date"])
+    sensitivity_ignore["end_date"] = pd.to_datetime(sensitivity_ignore["end_date"])
+
+    # Ensure the dtypes are correct for merging
+    for col in ["sta", "chan", "loc"]:
+        catalogue[col] = catalogue[col].astype(str)
+        sensitivity_ignore[col] = sensitivity_ignore[col].astype(str)
+
+    # Merge on sta, chan, loc to find records that have the same sta chan and loc
+    # as the sensitivity ignore records
+    merged = pd.merge(
+        catalogue,
+        sensitivity_ignore,
+        on=["sta", "chan", "loc"],
+        how="inner",
+        suffixes=("", "_ignore"),
+    )
+
+    # Filter where catalogue datetime is within the ignore period
+    sensitivity_filter = merged[
+        (merged["datetime"] >= merged["start_date"])
+        & (merged["datetime"] <= merged["end_date"])
+    ]
+
+    # Remove the bypass records if they exist
+    if bypass_records is not None:
+        sensitivity_filter = sensitivity_filter[
+            ~sensitivity_filter["record_id"].isin(bypass_records)
+        ]
+
+    # Create the skipped_records dataframe from sensitivity_filter
+    skipped_records = pd.DataFrame(
+        {
+            "record_id": sensitivity_filter["record_id"],
+            "reason": "Troublesome sensitivity record",
+        }
+    )
+
+    # Filter out the sensitivity records out of the catalogue
+    catalogue = catalogue[~catalogue["record_id"].isin(sensitivity_filter["record_id"])]
+
+    return catalogue, skipped_records
+
+
+def filter_empirical_predictions(
+    catalogue: pd.DataFrame,
+    bypass_records: np.ndarray | None = None,
+    mean_residual_threshold: float | None = None,
+    max_residual_threshold: float | None = None,
+):
+    """
+    This function checks the difference in empirical estimated values and the results from
+    the catalogue. If the difference exceeds certain thresholds, the record is skipped.
+    Note: the empirical predictions are based on the Atkinson 2022 model [0] for subduction interface and slab,
+    and crustal for any other tectonic type.
+
+    Parameters
+    ----------
+    catalogue : pd.DataFrame
+        The catalogue dataframe to filter
+    bypass_records : np.ndarray, optional
+        The records to bypass the quality checks
+    mean_residual_threshold : float, optional
+        The threshold for the mean residual difference, by default grabs from the config
+    max_residual_threshold : float, optional
+        The threshold for the max residual difference, by default grabs from the config
+
+    Returns
+    -------
+    pd.DataFrame
+        The filtered catalogue
+    pd.DataFrame
+        The skipped records
+
+    References
+     ----------
+    [0] Atkinson GM. 2022. Backbone ground-motion models for crustal,
+        interface and slab earthquakes in New Zealand. Lower Hutt (NZ):
+        GNS Science. 61 p. (GNS Science report; 2022/11).
+        doi:10.21420/QMJ6-P189.
+    """
+    # Extract the periods from the catalogue 0.01 -> 10.0
+    psa_cols = [col for col in catalogue.columns if col.startswith("pSA")]
+    # Extract numeric values and filter between 0.01 and 10.0
+    psa_periods = [
+        float(col.split("_")[1])
+        for col in psa_cols
+        if 0.01 <= float(col.split("_")[1]) <= 10.0
+    ]
+    # Get the filtered column names for comparison
+    psa_cols_filtered = [f"pSA_{num}" for num in psa_periods]
+
+    # Split the catalogue into different tectonic types
+    interface_catalogue = catalogue[catalogue["tect_class"] == "Interface"]
+    slab_catalogue = catalogue[catalogue["tect_class"] == "Slab"]
+    # Classify any other tectonic types as crustal
+    crustal_catalogue = catalogue[~catalogue["tect_class"].isin(["Interface", "Slab"])]
+
+    # For each tectonic type, run the empirical predictions
+    to_run = {
+        constants.TectType.SUBDUCTION_INTERFACE: interface_catalogue,
+        constants.TectType.SUBDUCTION_SLAB: slab_catalogue,
+        constants.TectType.ACTIVE_SHALLOW: crustal_catalogue,
+    }
+
+    im_emp = []
+
+    for tect_type, tect_catalogue in to_run.items():
+        # Grab the Empirical predictions from the catalogue, based on Atkinson 2022
+        input_df = pd.DataFrame(
+            {
+                "mag": tect_catalogue["mag"],
+                "rrup": tect_catalogue["r_rup"],
+                "vs30": tect_catalogue["Vs30"],
+                "z1pt0": tect_catalogue["Z1.0"] / 1000,  # Convert to km
+                "backarc": [False] * len(tect_catalogue),
+            }
+        )
+        result_df = wrapper.run_gmm(
+            constants.GMM.A_22,
+            tect_type,
+            input_df,
+            "pSA",
+            periods=psa_periods,
+        )
+
+        # Extract all results that have _mean at the end of the column name and rename them to remove the _mean
+        im_emp_tect_type = result_df.filter(like="_mean").rename(
+            columns=lambda x: x.replace("_mean", "")
+        )
+
+        # Add the record_id to the empirical predictions
+        im_emp_tect_type["record_id"] = tect_catalogue["record_id"].values
+
+        # Append the empirical predictions to the list
+        im_emp.append(im_emp_tect_type)
+
+    # Concatenate the empirical predictions for all tectonic types
+    im_emp = pd.concat(im_emp, ignore_index=True)
+
+    # Order by record_id in the im_emp to match the order of catalogue
+    im_emp = im_emp.set_index("record_id").loc[catalogue["record_id"]].reset_index()
+
+    # Compute the log-difference
+    # Note: im_emp is already in logspace, so no need to convert it
+    residual_diff = (
+        np.log(catalogue.loc[:, psa_cols_filtered]) - im_emp.loc[:, psa_cols_filtered]
+    )
+
+    # Calculate mean and max residuals using the precomputed difference
+    catalogue["mean_residual"] = np.abs(residual_diff.mean(axis=1))
+    catalogue["max_residual"] = np.abs(
+        residual_diff.max(axis=1) - residual_diff.min(axis=1)
+    )
+
+    # Obtain the thresholds from parameters or use defaults from the config
+    config = cfg.Config()
+    mean_residual_threshold = (
+        config.get_value("mean_residual_threshold")
+        if mean_residual_threshold is None
+        else mean_residual_threshold
+    )
+    max_residual_threshold = (
+        config.get_value("max_residual_threshold")
+        if max_residual_threshold is None
+        else max_residual_threshold
+    )
+
+    # Create filters based on the thresholds
+    filters = {
+        "max_residual": {
+            "threshold": max_residual_threshold,
+            "reason": f"Empirical predictions max_residual exceeds threshold {max_residual_threshold}",
+        },
+        "mean_residual": {
+            "threshold": mean_residual_threshold,
+            "reason": f"Empirical predictions mean_residual exceeds threshold {mean_residual_threshold}",
+        },
+    }
+
+    # Apply the filters to the catalogue
+    skipped_list = []
+    for col, params in filters.items():
+        filt = catalogue[catalogue[col] > params["threshold"]]
+        if bypass_records is not None:
+            filt = filt[~filt["record_id"].isin(bypass_records)]
+        skipped = pd.DataFrame(
+            {
+                "record_id": filt["record_id"],
+                "reason": params["reason"],
+            }
+        )
+        skipped_list.append(skipped)
+
+    # Concatenate all skipped records
+    skipped_records = pd.concat(skipped_list, ignore_index=True).drop_duplicates(
+        "record_id"
+    )
+
+    # Filter out all skipped records from catalogue
+    catalogue = catalogue[~catalogue["record_id"].isin(skipped_records["record_id"])]
+
+    # Drop the residual columns
+    catalogue = catalogue.drop(columns=["mean_residual", "max_residual"])
+
+    return catalogue, skipped_records
+
+
 def filter_duplicate_channels(
     catalogue: pd.DataFrame, bypass_records: np.ndarray = None
 ):
@@ -502,8 +740,7 @@ def filter_duplicate_channels(
     1. Records listed in `bypass_records` (highest priority)
     2. HN channels (Strong motion, high frequency)
     3. BN channels (Strong motion, lower frequency)
-    4. HH channels (Broadband, higher priority channel)
-    5. All other channels (Broadband, lowest priority)
+    4. HH channels (Broadband, high frequency)
 
     If multiple records have the same priority, the first one encountered is kept.
     All other duplicates are removed and returned in the skipped records.
@@ -525,41 +762,38 @@ def filter_duplicate_channels(
     # Step 1: Create 'evid_sta' for grouping
     catalogue["evid_sta"] = catalogue["evid"].astype(str) + "_" + catalogue["sta"]
 
-    # Step 2: Mark all duplicates
-    dup_mask = catalogue["evid_sta"].duplicated(keep=False)
-    catalog_dups = catalogue[dup_mask].copy()
-
-    # Step 3: Create bypass flag using record_id
+    # Step 2: Create bypass flag using record_id
     if bypass_records is None:
         bypass_records = []
-    catalog_dups["bypass"] = catalog_dups["record_id"].isin(bypass_records)
+    catalogue["bypass"] = catalogue["record_id"].isin(bypass_records)
 
-    # Step 4: Define priority levels
+    # Step 3: Define priority levels
     priority = {"HN": 1, "BN": 2, "HH": 3}
-    catalog_dups["chan_priority"] = catalog_dups["chan"].map(priority).fillna(4)
+    catalogue["chan_priority"] = catalogue["chan"].map(priority).fillna(4)
+    # Step 4: Override priority for bypass records
+    catalogue.loc[catalogue["bypass"], "chan_priority"] = 0
 
-    # Step 5: Override priority for bypass records
-    catalog_dups.loc[catalog_dups["bypass"], "chan_priority"] = 0
+    # Step 5: Sort by priority and select top-priority row per group
+    catalog_sorted = catalogue.sort_values(by=["evid_sta", "chan_priority"])
+    # Remove records with priority 4 (not HN, BN, HH)
+    catalog_sorted = catalog_sorted[catalog_sorted["chan_priority"] < 4]
+    best_dups = catalog_sorted.groupby("evid_sta", as_index=False).nth(0)
 
-    # Step 6: Sort by priority and select top-priority row per group
-    catalog_dups_sorted = catalog_dups.sort_values(by=["evid_sta", "chan_priority"])
-    best_dups = catalog_dups_sorted.groupby("evid_sta", as_index=False).nth(0)
-
-    # Step 7: Identify which records to drop (the non-best ones)
+    # Step 6: Identify which records to drop (the non-best ones)
     records_to_keep = best_dups["record_id"]
-    records_to_drop = catalog_dups[~catalog_dups["record_id"].isin(records_to_keep)]
+    records_to_drop = catalogue[~catalogue["record_id"].isin(records_to_keep)]
 
-    # Step 8: Prepare skipped_records
+    # Step 7: Prepare skipped_records
     skipped_records = pd.DataFrame(
         {"record_id": records_to_drop["record_id"], "reason": "Duplicate channels"}
     )
 
-    # Step 9: Remove skipped records from catalogue
+    # Step 8: Remove skipped records from catalogue
     catalogue = catalogue[~catalogue["record_id"].isin(records_to_drop["record_id"])]
 
-    # Step 10: Clean up and ensure uniqueness
+    # Step 9: Clean up and ensure uniqueness
     assert len(catalogue["evid_sta"].unique()) == len(catalogue)
-    catalogue = catalogue.drop(columns=["evid_sta"])
+    catalogue = catalogue.drop(columns=["evid_sta", "bypass", "chan_priority"])
 
     return catalogue, skipped_records
 
@@ -582,10 +816,12 @@ def apply_all_filters(
     3) Filter by multi mean.
     4) Filter by fmax.
     5) Filter by fmin.
-    6) Filter by missing station information
+    6) Filter by missing station information.
     7) Ensure only ground level locations are used.
     8) Filter out clipped records.
-    9) Select the appropriate channel for duplicate HN/BN records for the same event/station.
+    9) Filter out troublesome sensitivity records.
+    10) Filter out records too far from empirical predictions.
+    11) Select the appropriate channel for duplicate HN/BN records for the same event/station.
 
     Parameters
     ----------
@@ -654,6 +890,16 @@ def apply_all_filters(
         catalogue, clipped_records_ffp, bypass_records
     )
 
+    # Filter by troublesome sensitivity records
+    catalogue, skipped_records_sensitivity = filter_troublesome_sensitivity(
+        catalogue, bypass_records
+    )
+
+    # Filter by empirical predictions
+    catalogue, skipped_records_empirical = filter_empirical_predictions(
+        catalogue, bypass_records
+    )
+
     # Filter by duplicate channels
     catalogue, skipped_records_duplicate = filter_duplicate_channels(
         catalogue, bypass_records
@@ -668,6 +914,9 @@ def apply_all_filters(
             skipped_records_fmax,
             skipped_records_fmin,
             skipped_records_ground,
+            skipped_records_clipped,
+            skipped_records_sensitivity,
+            skipped_records_empirical,
             skipped_records_duplicate,
         ]
     )
@@ -681,14 +930,17 @@ def create_quality_db(
 ):
     """
     Create the quality database by running the following checks:
-    1) Check there are GMC predictions
-    2) Check against GMC predictions score mean
-    3) Check against GMC predictions multi mean
-    3) Check against GMC predictions fmax
-    5) Check against GMC predictions fmin
-    6) Ensure we use ground level locations
-    7) Filter out clipped records
-    8) Select which channel to use for duplicate HN, BN for the same evid / sta
+    1) Filter by presence of GMC predictions.
+    2) Filter by score mean.
+    3) Filter by multi mean.
+    4) Filter by fmax.
+    5) Filter by fmin.
+    6) Filter by missing station information.
+    7) Ensure only ground level locations are used.
+    8) Filter out clipped records.
+    9) Filter out troublesome sensitivity records.
+    10) Filter out records too far from empirical predictions.
+    11) Select the appropriate channel for duplicate HN/BN records for the same event/station.
 
     Parameters
     ----------

@@ -234,34 +234,73 @@ clip_threshold: 0.2     # Threshold for clipping detection
 
 ---
 
-#### 9. Filter Duplicate Channels
+#### 9. Filter by Sensitivity Ignore List
 
-**Purpose**: Selects the most appropriate channel when multiple instruments record the same event at the same station.
+**Purpose**: Removes records known to be problematic in the BroadBand sensors, such as early deployments with potential calibration errors.
 
 **Implementation**:
-Creates unique `evid_sta` combinations and applies the following priority hierarchy for duplicate resolution:
+- Loads a pre-defined ignore list from `sensitivity_ignore.csv` in the data registry.
+- Matches records by `sta`, `chan`, `loc` and checks if their timestamp falls within the specified `start_date`–`end_date` range.
 
-**Note**: Currently only HN / BN Channels are extracted during the Waveform Extraction step, so this filter is only applied to these channels, but has future potential to be expanded to broadband channels.
+**Filtering Logic**:
+- Removes matching records unless they are part of the bypass list.
 
-**Priority Order**:
-1. **Bypass records** (highest priority - always retained)
-2. **HN channels** (Strong motion sensors, high frequency response)
-3. **BN channels** (Strong motion sensors, lower frequency response) 
-4. **HH channels** (Broadband sensors, higher priority)
-5. **All other channels** (Broadband sensors, lowest priority)
-
-**Selection Logic**:
-- Groups records by event ID and station combination
-- Identifies all duplicate groups (multiple channels for same event/station)
-- Assigns priority scores based on channel type
-- Retains the highest priority record from each group
-- Removes all other duplicates
-
-**Bypass**: Records in bypass list receive highest priority (priority = 0) and are always selected over other channels.
-
-**Adjustable Parameters**: The priority hierarchy is fixed but can be effectively overridden using the bypass records feature.
+**Bypass**: Records listed in the bypass list are not filtered, even if matched in the ignore file.
 
 ---
+
+#### 10. Filter by Empirical Prediction Residuals
+
+**Purpose**: Removes records with ground motion values significantly inconsistent with empirical ground motion prediction models.
+
+**Implementation**:
+- Uses the **Atkinson (2022)** GMM to compute predicted pSA values for records, based on magnitude, distance, Vs30, and other metadata.
+- Separates records into tectonic types (Interface, Slab, Crustal) for model application.
+- Computes:
+  - **Mean residual**: Mean total residual across pSA periods (0.01–10.0s)
+  - **Max residual**: Max total residual across pSA periods (0.01–10.0s)
+
+**Thresholds**:
+- `mean_residual_threshold` and `max_residual_threshold` can be set in the configuration file or passed explicitly to the function.
+
+**Filtering Logic**:
+- Records are removed if either:
+  - Mean residual exceeds the configured threshold, or
+  - Max residual exceeds the configured threshold
+- Records in the bypass list are not filtered regardless of their residuals.
+
+**Bypass**: All residual filters are skipped for records explicitly listed in the bypass array.
+
+**NZGMDB Configuration**:
+```yaml
+mean_residual_threshold: 4
+max_residual_threshold: 6
+```
+
+---
+
+#### 11. Filter Duplicate Channels
+
+**Purpose**: Retains the highest-priority record when multiple instruments record the same event at the same station.
+
+**Implementation**:
+- Combines event ID and station name into a unique `evid_sta` identifier.
+- Assigns priority levels to records based on channel type and bypass status.
+- Retains only the highest-priority channel per `evid_sta` group.
+
+**Channel Priority Order**:
+1. **Bypass records** (priority = 0)
+2. **HN channels** (Strong motion sensors, high frequency response) – priority = 1  
+3. **BN channels** (Strong motion sensors, lower frequency response) – priority = 2  
+4. **HH channels** (Broadband sensors, high frequency) – priority = 3  
+5. **All other channels** are discarded before selection.
+
+**Selection Logic**:
+- Bypass records are always kept regardless of channel type.
+- Within each group of duplicate records (same `evid_sta`), the record with the **lowest priority score** is retained.
+- Channels not in the HN, BN, or HH categories are excluded **prior** to duplicate resolution.
+
+**Bypass**: Records in bypass list override all priority rules.
 
 ### 🔹 Configuration Parameters
 
