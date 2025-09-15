@@ -110,7 +110,7 @@ def run_phase_net(
     return p_wave_ix, s_wave_ix
 
 
-def process_mseed(mseed_file: Path, h5_ffp: Path):
+def process_mseed(mseed_file: Path, h5_ffp: Path, bypass_row: pd.Series = None):
     """
     Process an mseed file and return the phase arrival data.
 
@@ -120,6 +120,8 @@ def process_mseed(mseed_file: Path, h5_ffp: Path):
         Path to the mseed file.
     h5_ffp : Path
         Path to the HDF5 file to save the probability series.
+    bypass_row : pd.Series, optional
+        A row from the bypass file with known p and s wave datetimes, by default None
 
     Returns
     -------
@@ -261,8 +263,27 @@ def process_mseed(mseed_file: Path, h5_ffp: Path):
     start_time = tr1.stats.starttime
     end_time = tr1.stats.endtime
     times = np.linspace(start_time.timestamp, end_time.timestamp, tr1.stats.npts)
-    p_wave_datetime = UTCDateTime(times[p_wave_ix])
-    s_wave_datetime = UTCDateTime(times[s_wave_ix])
+
+    if bypass_row is not None:
+        p_wave_val = bypass_row["p_wave_time"].values[0]
+        s_wave_val = bypass_row["s_wave_time"].values[0]
+
+        if p_wave_val is not None and not pd.isna(p_wave_val):
+            p_wave_datetime = UTCDateTime(p_wave_val)
+            p_wave_ix = int((p_wave_datetime - start_time) * tr1.stats.sampling_rate)
+            p_prob = 1.0
+        else:
+            p_wave_datetime = UTCDateTime(times[p_wave_ix])
+
+        if s_wave_val is not None and not pd.isna(s_wave_val):
+            s_wave_datetime = UTCDateTime(s_wave_val)
+            s_wave_ix = int((s_wave_datetime - start_time) * tr1.stats.sampling_rate)
+            s_prob = 1.0
+        else:
+            s_wave_datetime = UTCDateTime(times[s_wave_ix])
+    else:
+        p_wave_datetime = UTCDateTime(times[p_wave_ix])
+        s_wave_datetime = UTCDateTime(times[s_wave_ix])
 
     return (
         pd.DataFrame(
@@ -280,7 +301,7 @@ def process_mseed(mseed_file: Path, h5_ffp: Path):
     )
 
 
-def run_phasenet(mseed_files_ffp: Path, output_dir: Path):
+def run_phasenet(mseed_files_ffp: Path, output_dir: Path, bypass_ffp: Path = None):
     """
     Run PhaseNet on the mseed files.
 
@@ -290,6 +311,8 @@ def run_phasenet(mseed_files_ffp: Path, output_dir: Path):
         Full File path to a list of mseed full file paths to process.
     output_dir : Path
         Output directory for skipped records and phase arrival information.
+    bypass_ffp : Path, optional
+        Optional bypass file path with known p and s wave datetimes, by default None
     """
     # Read the .txt for the mseed files to process
     mseed_files = mseed_files_ffp.read_text().splitlines()
@@ -298,11 +321,21 @@ def run_phasenet(mseed_files_ffp: Path, output_dir: Path):
     phase_arrival_table = []
     h5_ffp = output_dir / "prob_series.h5"
 
+    if bypass_ffp is not None:
+        # Read the bypass file
+        bypass_df = pd.read_csv(bypass_ffp)
+
     # Process each mseed file
     for mseed_file in mseed_files:
         mseed_file = mseed_file.strip()
         mseed_file = Path(mseed_file)
-        phase_arrival, skipped_record = process_mseed(mseed_file, h5_ffp)
+        if bypass_ffp is not None:
+            bypass_row = bypass_df[bypass_df["record_id"] == mseed_file.stem]
+            if bypass_row.empty:
+                bypass_row = None
+        else:
+            bypass_row = None
+        phase_arrival, skipped_record = process_mseed(mseed_file, h5_ffp, bypass_row)
         if phase_arrival is not None:
             phase_arrival_table.append(phase_arrival)
         if skipped_record is not None:
@@ -341,5 +374,11 @@ if __name__ == "__main__":
         type=Path,
         help="Output directory for skipped records and phase arrival information.",
     )
+    parser.add_argument(
+        "--bypass_ffp",
+        type=Path,
+        help="Optional bypass file path with known p and s wave datetimes.",
+        default=None,
+    )
     args = parser.parse_args()
-    run_phasenet(args.mseed_files_ffp, args.output_dir)
+    run_phasenet(args.mseed_files_ffp, args.output_dir, args.bypass_ffp)
