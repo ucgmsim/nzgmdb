@@ -821,7 +821,7 @@ def run_full_nzgmdb(
         The start date to filter the earthquake data.
     end_date : datetime
         The end date to filter the earthquake data.
-    nzcvm_data_ffp: Path
+    nzcvm_data_ffp : Path
         The full file path to the nzcvm_data repository that stores the basin information.
     gm_classifier_dir : Path
         Directory for gm_classifier.

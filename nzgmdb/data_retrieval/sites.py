@@ -6,7 +6,6 @@ Geonet metadata summary information.
 from pathlib import Path
 
 import fiona
-import numpy as np
 import pandas as pd
 from obspy.clients.fdsn import Client as FDSN_Client
 
@@ -14,7 +13,7 @@ from nzgmdb.data_retrieval import tect_domain
 from nzgmdb.management import config as cfg
 from nzgmdb.management.data_registry import NZGMDB_DATA
 from qcore import point_in_polygon
-from velocity_modelling import registry, constants
+from velocity_modelling import registry
 
 
 def create_site_table_response() -> pd.DataFrame:
@@ -136,7 +135,7 @@ def add_site_basins(site_df: pd.DataFrame, nzcvm_data_ffp: Path) -> pd.DataFrame
     site_df : pd.DataFrame
         The site table dataframe with at least the columns 'lon' and 'lat'
         Ideally and in most cases, this dataframe should be the output of create_site_table_response
-    nzcvm_data_ffp: Path
+    nzcvm_data_ffp : Path
         The full file path to the nzcvm_data repository that stores the basin information
 
     Returns
