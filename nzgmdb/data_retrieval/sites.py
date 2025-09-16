@@ -11,10 +11,10 @@ import pandas as pd
 from obspy.clients.fdsn import Client as FDSN_Client
 
 from nzgmdb.data_retrieval import tect_domain
+from nzgmdb.management import config as cfg
 from nzgmdb.management.data_registry import NZGMDB_DATA
 from qcore import point_in_polygon
-from velocity_modelling import constants as vm_const
-from velocity_modelling.tools import basin_wiki
+from velocity_modelling import registry, constants
 
 
 def create_site_table_response() -> pd.DataFrame:
@@ -127,7 +127,7 @@ def create_site_table_response() -> pd.DataFrame:
     return site_df
 
 
-def add_site_basins(site_df: pd.DataFrame) -> pd.DataFrame:
+def add_site_basins(site_df: pd.DataFrame, nzcvm_data_ffp: Path) -> pd.DataFrame:
     """
     Add the site basins to the site table
 
@@ -136,6 +136,8 @@ def add_site_basins(site_df: pd.DataFrame) -> pd.DataFrame:
     site_df : pd.DataFrame
         The site table dataframe with at least the columns 'lon' and 'lat'
         Ideally and in most cases, this dataframe should be the output of create_site_table_response
+    nzcvm_data_ffp: Path
+        The full file path to the nzcvm_data repository that stores the basin information
 
     Returns
     -------
@@ -146,21 +148,35 @@ def add_site_basins(site_df: pd.DataFrame) -> pd.DataFrame:
     ll_points = site_df[["lon", "lat"]].values
     site_df["basin"] = None
 
-    basin_versions = basin_wiki._get_basin_versions(vm_const.NZCVM_REGISTRY_PATH)
+    # Get the NZCVM version
+    config = cfg.Config()
+    nzcvm_version = config.get_value("nzcvm_version")
 
-    for basin_name, versions in basin_versions.items():
-        # Make sure to grab the latest version of the basin
-        latest_version = max(versions, key=lambda x: x["version_tuple"])
-        basin_data = latest_version["data"]
+    # Create the CVMRegistry object
+    cvm_registry = registry.CVMRegistry(nzcvm_version, nzcvm_data_ffp)
 
-        # Load the basin outline
-        boundaries = basin_data.get("boundaries", [])
-        basin_outline = np.loadtxt(f"{vm_const.DATA_ROOT}/{boundaries[0]}")
+    # Make a new basin_dist from the registry
+    basin_dict = {
+        basin["name"].split("_")[0]: basin["boundaries"]
+        for basin in cvm_registry.registry["basin"]
+    }
 
-        # Find sites within basin
-        is_inside_basin = point_in_polygon.is_inside_postgis_parallel(
-            ll_points, basin_outline
-        )
-        site_df.loc[is_inside_basin, "basin"] = basin_name
+    for basin in cvm_registry.global_params["basins"]:
+        # Get the basin name
+        basin_name = basin.split("_")[0]
+
+        # Get the boundaries
+        boundaries = basin_dict[basin_name]
+        for boundary in boundaries:
+            basin_outline = cvm_registry.load_basin_boundary(boundary)
+
+            # Find sites within basin
+            is_inside_basin = point_in_polygon.is_inside_postgis_parallel(
+                ll_points, basin_outline
+            )
+            site_df.loc[is_inside_basin, "basin"] = basin_name
+
+    # Add the nzcvm_version column
+    site_df["nzcvm_version"] = nzcvm_version
 
     return site_df

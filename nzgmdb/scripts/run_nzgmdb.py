@@ -485,6 +485,13 @@ def generate_site_table_basin(
             file_okay=False,
         ),
     ],
+    nzcvm_data_ffp: Annotated[
+        Path,
+        typer.Argument(
+            exists=True,
+            file_okay=False,
+        ),
+    ],
 ):
     """
     Generate the site table basin flatfile.
@@ -495,6 +502,8 @@ def generate_site_table_basin(
     ----------
     main_dir : Path
         The main directory of the NZGMDB results (Highest level directory).
+    nzcvm_data_ffp : Path
+        The full file path to the nzcvm_data repository that stores the basin information.
     """
     main_dir.mkdir(parents=True, exist_ok=True)
     # Generate the site basin flatfile
@@ -502,7 +511,7 @@ def generate_site_table_basin(
     flatfile_dir.mkdir(parents=True, exist_ok=True)
 
     site_df = sites.create_site_table_response()
-    site_df = sites.add_site_basins(site_df)
+    site_df = sites.add_site_basins(site_df, nzcvm_data_ffp)
 
     site_df.to_csv(
         flatfile_dir / file_structure.PreFlatfileNames.SITE_TABLE, index=False
@@ -693,6 +702,13 @@ def run_full_nzgmdb(
         datetime,
         typer.Argument(),
     ],
+    nzcvm_data_ffp: Annotated[
+        Path,
+        typer.Argument(
+            exists=True,
+            file_okay=False,
+        ),
+    ],
     gm_classifier_dir: Annotated[
         Path,
         typer.Argument(),
@@ -805,6 +821,8 @@ def run_full_nzgmdb(
         The start date to filter the earthquake data.
     end_date : datetime
         The end date to filter the earthquake data.
+    nzcvm_data_ffp: Path
+        The full file path to the nzcvm_data repository that stores the basin information.
     gm_classifier_dir : Path
         Directory for gm_classifier.
     conda_sh : Path
@@ -853,7 +871,7 @@ def run_full_nzgmdb(
         and (flatfile_dir / file_structure.PreFlatfileNames.SITE_TABLE).exists()
     ):
         print("Generating site table basin flatfile")
-        generate_site_table_basin(main_dir)
+        generate_site_table_basin(main_dir, nzcvm_data_ffp)
 
     # Fetch the Geonet data
     if not (

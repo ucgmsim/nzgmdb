@@ -25,6 +25,8 @@ channel_codes:
 vs30: 500
 min_time_difference: 15
 ds_multiplier: 2
+# Velocity Modelling
+nzcvm_version: "2.09"
 # GMProcess Variables
 gmprocess_url: https://earthquake.usgs.gov/fdsnws/event/1/query
 search_radius: 25 # In kilometres
