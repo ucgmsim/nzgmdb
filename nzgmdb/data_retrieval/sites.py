@@ -150,9 +150,11 @@ def add_site_basins(site_df: pd.DataFrame, nzcvm_data_ffp: Path) -> pd.DataFrame
     # Get the NZCVM version
     config = cfg.Config()
     nzcvm_version = config.get_value("nzcvm_version")
+    priority_basins = config.get_value("priority_basins")
 
     # Create the CVMRegistry object
-    cvm_registry = registry.CVMRegistry(nzcvm_version, nzcvm_data_ffp)
+    registry_path = nzcvm_data_ffp / "nzcvm_registry.yaml"
+    cvm_registry = registry.CVMRegistry(nzcvm_version, nzcvm_data_ffp, registry_path)
 
     # Make a new basin_dist from the registry
     basin_dict = {
@@ -173,7 +175,14 @@ def add_site_basins(site_df: pd.DataFrame, nzcvm_data_ffp: Path) -> pd.DataFrame
             is_inside_basin = point_in_polygon.is_inside_postgis_parallel(
                 ll_points, basin_outline
             )
-            site_df.loc[is_inside_basin, "basin"] = basin_name
+            # Ensure we only update the basin of a site if it either doesn't have a basin or is in a priority basin
+            mask_has_basin = site_df["basin"].notna()
+            mask_priority = mask_has_basin & (basin_name in priority_basins)
+            mask_no_basin = ~mask_has_basin
+            mask_update = (
+                is_inside_basin & mask_no_basin | mask_priority & is_inside_basin
+            )
+            site_df.loc[mask_update, "basin"] = basin_name
 
     # Add the nzcvm_version column
     site_df["nzcvm_version"] = nzcvm_version

@@ -27,6 +27,10 @@ min_time_difference: 15
 ds_multiplier: 2
 # Velocity Modelling
 nzcvm_version: "2.09"
+priority_basins:
+  - Canterbury
+  - Wellington
+  - Southland
 # GMProcess Variables
 gmprocess_url: https://earthquake.usgs.gov/fdsnws/event/1/query
 search_radius: 25 # In kilometres
