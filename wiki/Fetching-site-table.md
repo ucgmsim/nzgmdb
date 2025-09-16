@@ -56,8 +56,15 @@ Adds basin information to the site table dataframe by checking if station coordi
 
 - Loads the config specified version of basin outlines from the velocity modelling repository. Default is `2.09`.
 - Uses a spatial point-in-polygon test to assign the basin name to sites located within basin boundaries.
+- Sometimes basins can have overlaps in the boundaries, in these cases a priority list is used set in the config file to decide which basin name should be top priority. By default this is:
+  1. Canterbury
+  2. Wellington
+  3. Southland
 - Adds a new column `basin` to the input dataframe.
 - Adds a new column `nzcvm_version` to indicate the version of basin outlines used.
+
+Below is an example of the basin outlines used (version `2.09`):
+![Basin Outlines](images/v2p09_all_basins.png)
 
 ---
 
