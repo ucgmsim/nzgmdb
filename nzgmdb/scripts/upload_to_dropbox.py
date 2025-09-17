@@ -178,7 +178,8 @@ def main(
     snr_fas_zip = zip_files(snr_files, output_dir, f"snr_fas_{version}")
 
     # Upload everything to Dropbox
-    failed_files = upload_zip_to_dropbox(flatfiles_zip, dropbox_version_dir)
+    failed_files = []
+    failed_files.append(upload_zip_to_dropbox(flatfiles_zip, dropbox_version_dir))
     failed_files.append(upload_zip_to_dropbox(skipped_zip, dropbox_version_dir))
     failed_files.append(upload_zip_to_dropbox(pre_flatfiles_zip, dropbox_version_dir))
     failed_files.append(upload_zip_to_dropbox(snr_fas_zip, dropbox_version_dir))

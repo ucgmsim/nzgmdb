@@ -76,24 +76,110 @@ def replace_cmt_data_on_event(
     """
     # Manage index and column renaming
     cmt_df = cmt_df.rename(
-        columns={"Mw": "mag", "Latitude": "lat", "Longitude": "lon", "CD": "depth"}
-    ).set_index("PublicID")
+        columns={
+            "Mw": "mag",
+            "Latitude": "lat",
+            "Longitude": "lon",
+            "CD": "depth",
+            "PublicID": "evid",
+        }
+    )
 
-    # Get the intersection of indices (evid and PublicID)
-    common_ids = event_df.index.intersection(cmt_df.index)
+    # Merge on evid
+    event_df = event_df.merge(
+        right=cmt_df[["evid", "mag", "lat", "lon", "depth"]],
+        how="left",
+        on="evid",
+        suffixes=("", "_cmt"),
+    )
 
-    # Update values in event df from the CMT data where the evid is the same
-    event_df.loc[common_ids, ["mag", "lat", "lon", "depth"]] = cmt_df.loc[
-        common_ids, ["mag", "lat", "lon", "depth"]
-    ]
-    event_df.loc[common_ids, ["mag_type", "mag_method", "loc_type", "loc_grid"]] = (
+    # Update the event dataframe with the CMT data when not nan
+    event_df["mag"] = event_df["mag_cmt"].combine_first(event_df["mag"])
+    event_df["lat"] = event_df["lat_cmt"].combine_first(event_df["lat"])
+    event_df["lon"] = event_df["lon_cmt"].combine_first(event_df["lon"])
+    event_df["depth"] = event_df["depth_cmt"].combine_first(event_df["depth"])
+
+    # Set CMT-specific columns where CMT data was used
+    # Also ensure that reloc is set to 'no' for CMT events
+    mask = event_df["mag_cmt"].notna()
+    event_df.loc[mask, ["mag_type", "mag_method", "loc_type", "loc_grid", "reloc"]] = (
         "Mw",
         "CMT",
         "CMT",
         "CMT",
+        "no",
     )
 
-    return event_df.reset_index()
+    # Drop the CMT columns
+    event_df = event_df.drop(columns=["mag_cmt", "lat_cmt", "lon_cmt", "depth_cmt"])
+
+    return event_df
+
+
+def merge_reyners_catalogue_on_events(
+    event_df: pd.DataFrame,
+    reyners_catalogue_df: pd.DataFrame,
+):
+    """
+    Merge the Reyners catalogue data on the event data for relocations.
+
+    Parameters
+    ----------
+    event_df : pd.DataFrame
+        The event dataframe
+    reyners_catalogue_df : pd.DataFrame
+        The Reyners catalogue dataframe
+
+    Returns
+    -------
+    pd.DataFrame
+        The event dataframe with the Reyners Catalogue data merged
+    """
+    event_df = event_df.merge(
+        right=reyners_catalogue_df,
+        how="left",
+        on="evid",
+        suffixes=("", "_reyners"),
+    )
+
+    # Deal with duplications
+    event_df = event_df.drop_duplicates(subset="evid", keep="first")
+
+    # Update the reloc column to 'reyners' if the event is in the Reyners Catalogue data
+    # and the latitude, longitude or depth did not change
+    event_df["reloc"] = np.where(
+        (
+            (~np.isclose(event_df["lon"], event_df["lon_reyners"]))
+            | (~np.isclose(event_df["lat"], event_df["lat_reyners"]))
+            | (~np.isclose(event_df["depth"], event_df["depth_reyners"]))
+        )
+        & event_df["lon_reyners"].notna(),
+        "reyners",
+        "no",
+    )
+
+    # Create mask for rows where reloc is 'reyners'
+    mask = event_df["reloc"] == "reyners"
+
+    # Update only where reloc is 'reyners'
+    event_df.loc[mask, "lon"] = event_df.loc[mask, "lon_reyners"]
+    event_df.loc[mask, "lat"] = event_df.loc[mask, "lat_reyners"]
+    event_df.loc[mask, "depth"] = event_df.loc[mask, "depth_reyners"]
+    event_df.loc[mask, "loc_type"] = event_df.loc[mask, "loc_type_reyners"]
+    event_df.loc[mask, "loc_grid"] = event_df.loc[mask, "loc_grid_reyners"]
+
+    # Drop the Reyners Catalogue columns
+    event_df = event_df.drop(
+        columns=[
+            "lon_reyners",
+            "lat_reyners",
+            "depth_reyners",
+            "loc_type_reyners",
+            "loc_grid_reyners",
+        ]
+    )
+
+    return event_df
 
 
 def create_regions(
@@ -398,12 +484,16 @@ def add_tect_domain(
 
     # Read the geonet CMT and event data
     config = cfg.Config()
-    geonet_cmt_df = pd.read_csv(config.get_value("cmt_url"), low_memory=False)
-    event_df = pd.read_csv(
-        event_csv_ffp, low_memory=False, dtype={"evid": str}, index_col="evid"
-    )
+    geonet_cmt_df = pd.read_csv(config.get_value("cmt_url"), dtype={"evid": str})
+    event_df = pd.read_csv(event_csv_ffp, dtype={"evid": str})
 
-    # Replace the geonet CMT data on the event data
+    # Merge in the Reyners Catalogue data for relocations
+    reyners_catalogue_df = pd.read_csv(
+        NZGMDB_DATA.fetch("reyners_relocations.csv"), dtype={"evid": str}
+    )
+    event_df = merge_reyners_catalogue_on_events(event_df, reyners_catalogue_df)
+
+    # Replace the geonet CMT data on the event data (override the reyners relocations)
     event_df = replace_cmt_data_on_event(event_df, geonet_cmt_df)
 
     # Merge the NZSMDB data

@@ -2,16 +2,16 @@
 
 ## 📌 Overview
 
-**NZGMDB** (New Zealand Ground Motion Database) is a set of tools that automates the full pipeline for generating a quality-assured ground motion database from New Zealand seismic events. It processes raw data from the GeoNet earthquake catalogue to:
-
+The **NZGMDB** (New Zealand Ground Motion Database) repository contains a set of tools that automates the full pipeline for generating a quality-assured ground motion database for New Zealand. It processes raw data downloaded from the Geonet FDSN client (https://www.geonet.org.nz/data/access/FDSN) and processes it using the following steps:
 - Extract seismic waveforms  
 - Perform signal processing  
-- Generate intensity measures (IMs)  
+- Calculate intensity measures (IMs)  
 - Produce standardised flatfiles for analysis
 
 This tool is designed for researchers working with strong motion records.
 
-This codebase and documentation is currently up-to-date with the latest NZGMDB release **Version 4.3 (July 2025)**.
+This codebase and documentation is currently up-to-date with the latest NZGMDB release **Version 4.3 (September 2025)**.
+More information on the NZGMDB and the steps involved can be found on the [NZGMDB Wiki](https://github.com/ucgmsim/nzgmdb/wiki).
 
 ---
 
@@ -29,7 +29,7 @@ pip install -e .
 
 ### 2. Clone and Set Up `gm_classifier`
 
-`NZGMDB` depends on the [`gm_classifier`](https://github.com/ucgmsim/gm_classifier) repository, which performs:
+`NZGMDB` depends on the [`gm_classifier`](https://github.com/ucgmsim/gm_classifier) repository, for performing:
 
 - **P-wave arrival detection**
 - **Ground motion classification using machine learning**
@@ -46,17 +46,32 @@ Then follow the instructions in the gm_classifier repository to create two Conda
 
 - **gmc_predict**: For feature classification
 
+### 3. Grab the NZCVM Basin data
+
+The NZGMDB pipeline requires basin outlines from the `nzcvm_data` repository to assign basin names to stations.
+
+To fetch the data, run the following in the NZGMDB activated environment:
+
+```bash
+nzcvm-data-helper ensure --no-full --path /path/to/nzcvm_data
+```
+
+The `--no-full` flag ensures that large files are skipped, as they are not needed for NZGMDB.
+As we just need the basin outlines, this is sufficient.
+The `--path` argument specifies where to clone the repository.
+This is useful if you want to keep the data in a specific location and the location is used as an argument when running the pipeline.
+
 ## ✅ Pre-requisites
 
 Before running the full pipeline, ensure the following:
 
-- Your python environment with the `nzgmdb` package is installed
+- Your Python environment has the `nzgmdb` package installed
 
-- You have generated **KO (Konno-Ohmachi) matrices**  
-  These are required by different steps in the NZGMDB pipeline and can be created using the tools in the `gm_classifier` repository, the readme in the 'gm_classifier' repository provides instructions on how to generate these matrices.
+- You have generated **KO (Konno-Ohmachi) matrices**. These are required by different steps in the NZGMDB pipeline and can be created using the tools in the `gm_classifier` repository. The readme in the `gm_classifier` repository provides instructions on how to generate these matrices.
 
 - You know the paths to:
   - The cloned `gm_classifier` directory
+  - The `nzcvm_data` directory
   - Your `conda.sh` initialization script
   - The directory containing the generated KO matrices
   - Your two Conda environments:
@@ -66,8 +81,8 @@ Before running the full pipeline, ensure the following:
 ## 🚀 Running the Pipeline
 
 To run the NZGMDB pipeline you can look in the scripts
-directory and locate run_nzgmdb.py. This script will contain all the
-functions to run the atuomated pipeline. You can run the entire automated pipeline
+directory and locate [run_nzgmdb.py](nzgmdb/scripts/run_nzgmdb.py). This script will contain all the
+functions to run the automated pipeline. You can run the entire automated pipeline
 by running the following command:
 
 ```bash
@@ -75,6 +90,7 @@ python scripts/run_nzgmdb.py run-full-nzgmdb \
   /output_dir \
   2000-01-01 \
   2024-12-31 \
+  /path/to/nzcvm_data \
   /path/to/gm_classifier \
   /path/to/conda.sh \
   "conda activate gmc_features" \
@@ -89,6 +105,7 @@ python scripts/run_nzgmdb.py run-full-nzgmdb \
 | `/output_dir`                   | Output directory for processed results                                      |
 | `2000-01-01`                    | Start date for event selection                                              |
 | `2024-12-31`                    | End date for event selection                                                |
+| `/path/to/nzcvm_data`           | Path to the cloned `nzcvm_data` repository                                  |
 | `/path/to/gm_classifier`        | Path to the cloned `gm_classifier` repository                               |
 | `/path/to/conda.sh`             | Path to the Conda initialization script (e.g., `/opt/anaconda3/etc/profile.d/conda.sh`) |
 | `"conda activate gmc_features"` | Command to activate the feature extraction environment                      |
@@ -97,7 +114,7 @@ python scripts/run_nzgmdb.py run-full-nzgmdb \
 
 ### 📝 Additional Arguments
 
-There is also a bunch of extra arguments that can be passed to the script to control things such as event / site filtering or number of processes to use for the given system.
+There are also a variety of extra arguments that can be passed to the script, allowing control and modification of different steps, such as event / site filtering or the number of processes to use for the given system.
 For a full list of arguments and their descriptions, run:
 
 ```bash
