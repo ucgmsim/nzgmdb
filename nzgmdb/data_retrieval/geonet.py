@@ -499,8 +499,7 @@ def process_batch(
     batch_events: np.ndarray[str],
     batch_index: int,
     main_dir: Path,
-    client_NZ: FDSN_Client,
-    inventory: Inventory,
+    real_time: bool,
     site_table: pd.DataFrame,
     mw_rrup_data: np.ndarray,
     n_procs: int = 1,
@@ -536,6 +535,15 @@ def process_batch(
     mp_sites : bool (optional)
         Whether to multiprocess over sites (when not using mp over events)
     """
+    config = cfg.Config()
+    channel_codes = ",".join(config.get_value("channel_codes"))
+    if real_time:
+        client_NZ = FDSN_Client(base_url=config.get_value("real_time_url"))
+    else:
+        # Get Station Information from geonet clients
+        client_NZ = FDSN_Client("GEONET")
+    inventory = client_NZ.get_stations(channel=channel_codes, level="response")
+
     # Fetch results
     if mp_sites:
         results = [
@@ -778,17 +786,6 @@ def parse_geonet_information(
             event_ids = only_event_ids
         only_record_ids = None
 
-    # Set constants
-    config = cfg.Config()
-    channel_codes = ",".join(config.get_value("channel_codes"))
-
-    if real_time:
-        client_NZ = FDSN_Client(base_url=config.get_value("real_time_url"))
-    else:
-        # Get Station Information from geonet clients
-        client_NZ = FDSN_Client("GEONET")
-    inventory = client_NZ.get_stations(channel=channel_codes, level="response")
-
     # Get the rrup data
     mw_rrup_data = np.loadtxt(NZGMDB_DATA.fetch("Mw_rrup.txt"))
 
@@ -813,8 +810,7 @@ def parse_geonet_information(
                 batch,
                 index,
                 main_dir,
-                client_NZ,
-                inventory,
+                real_time,
                 site_table,
                 mw_rrup_data,
                 n_procs,
