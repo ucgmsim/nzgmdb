@@ -385,8 +385,7 @@ def fetch_sta_extraction(
 
 def fetch_event_data(
     event_id: str,
-    client_NZ: FDSN_Client,
-    inventory: Inventory,
+    real_time: bool,
     site_table: pd.DataFrame,
     mw_rrup_data: np.ndarray,
     only_sites: list[str] = None,
@@ -420,6 +419,15 @@ def fetch_event_data(
     EventData
         The parsed event data.
     """
+    config = cfg.Config()
+    channel_codes = ",".join(config.get_value("channel_codes"))
+    if real_time:
+        client_NZ = FDSN_Client(base_url=config.get_value("real_time_url"))
+    else:
+        # Get Station Information from geonet clients
+        client_NZ = FDSN_Client("GEONET")
+    inventory = client_NZ.get_stations(channel=channel_codes, level="response")
+
     # Get the catalogue information
     cat = client_NZ.get_events(eventid=event_id)
     event_cat = cat[0]
@@ -535,22 +543,12 @@ def process_batch(
     mp_sites : bool (optional)
         Whether to multiprocess over sites (when not using mp over events)
     """
-    config = cfg.Config()
-    channel_codes = ",".join(config.get_value("channel_codes"))
-    if real_time:
-        client_NZ = FDSN_Client(base_url=config.get_value("real_time_url"))
-    else:
-        # Get Station Information from geonet clients
-        client_NZ = FDSN_Client("GEONET")
-    inventory = client_NZ.get_stations(channel=channel_codes, level="response")
-
     # Fetch results
     if mp_sites:
         results = [
             fetch_event_data(
                 event_id,
-                client_NZ,
-                inventory,
+                real_time,
                 site_table,
                 mw_rrup_data,
                 only_sites,
@@ -564,8 +562,7 @@ def process_batch(
             results = p.map(
                 functools.partial(
                     fetch_event_data,
-                    client_NZ=client_NZ,
-                    inventory=inventory,
+                    real_time=real_time,
                     site_table=site_table,
                     mw_rrup_data=mw_rrup_data,
                     only_sites=only_sites,
