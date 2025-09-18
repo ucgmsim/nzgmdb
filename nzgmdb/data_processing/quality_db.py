@@ -94,6 +94,40 @@ def filter_flatfiles_on_catalouge(
         df_filtered.to_csv(final_output / file, index=False)
 
 
+def filter_mag(catalogue: pd.DataFrame, mag_min: float):
+    """
+    Filter the catalogue based on the minimum magnitude.
+
+    Parameters
+    ----------
+    catalogue : pd.DataFrame
+        The catalogue dataframe to filter
+    mag_min : float
+        The minimum magnitude to filter on
+
+    Returns
+    -------
+    pd.DataFrame
+        The filtered catalogue
+    pd.DataFrame
+        The skipped records
+    """
+    # Find records that have too low of a magnitude value
+    mag_min_filter = catalogue[catalogue["mag"] < mag_min]
+
+    # Create the skipped_records dataframe from mag_min_filter
+    skipped_records = pd.DataFrame(
+        {
+            "record_id": mag_min_filter["record_id"],
+            "reason": f"Magnitude is less than {mag_min}",
+        }
+    )
+
+    # Filter out the mag_min records out of the catalogue
+    catalogue = catalogue[~catalogue["record_id"].isin(mag_min_filter["record_id"])]
+
+    return catalogue, skipped_records
+
 def filter_has_score_mean(catalogue: pd.DataFrame, bypass_records: np.ndarray = None):
     """
     Filter the catalogue based on if there is a score from GMC.
@@ -855,6 +889,10 @@ def apply_all_filters(
     multi_max = multi_max if multi_max is not None else config.get_value("multi_max")
     fmax_min = fmax_min if fmax_min is not None else config.get_value("fmax_min")
     fmin_max = fmin_max if fmin_max is not None else config.get_value("fmin_max")
+
+    # Filter by magnitude
+    mag_min = config.get_value("quality_min_mag")
+    catalogue, skipped_records_mag = filter_mag(catalogue, mag_min)
 
     # Filter by has score mean
     catalogue, skipped_records_has_score = filter_has_score_mean(

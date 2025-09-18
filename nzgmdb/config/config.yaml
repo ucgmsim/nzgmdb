@@ -1,7 +1,8 @@
 # Description: Configuration file for the NZGMDB
 # Geonet filters
-min_mag: 3.5
+min_mag: 3
 max_mag: 10
+quality_min_mag: 3.5
 # Geonet Variables
 geonet_url: https://quakesearch.geonet.org.nz
 real_time_url: https://service-nrt.geonet.org.nz
