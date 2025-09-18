@@ -112,8 +112,6 @@ def filter_mag(catalogue: pd.DataFrame, mag_min: float):
     Returns
     -------
     pd.DataFrame
-        The filtered catalogue
-    pd.DataFrame
         The skipped records
     """
     # Find records that have too low of a magnitude value
@@ -127,10 +125,7 @@ def filter_mag(catalogue: pd.DataFrame, mag_min: float):
         }
     )
 
-    # Filter out the mag_min records out of the catalogue
-    catalogue = catalogue[~catalogue["record_id"].isin(mag_min_filter["record_id"])]
-
-    return catalogue, skipped_records
+    return skipped_records
 
 def filter_has_score_mean(catalogue: pd.DataFrame, bypass_records: np.ndarray = None):
     """
@@ -827,12 +822,14 @@ def apply_all_filters(
     multi_max: float = None,
     fmax_min: float = None,
     fmin_max: float = None,
+    min_mag: float = None,
 ):
     """
     Apply all the quality filters to the catalogue.
 
     This function performs the following filtering steps:
     - Ensure only ground level locations are used.
+    - Filter by minimum magnitude.
     - Filter by presence of GMC predictions.
     - Filter by score mean.
     - Filter by multi mean.
@@ -861,6 +858,8 @@ def apply_all_filters(
         The minimum fmax value to filter on.
     fmin_max : float, optional
         The maximum fmin value to filter on.
+    min_mag : float, optional
+        The minimum magnitude to filter on.
 
     Returns
     -------
@@ -877,10 +876,10 @@ def apply_all_filters(
     multi_max = multi_max if multi_max is not None else config.get_value("multi_max")
     fmax_min = fmax_min if fmax_min is not None else config.get_value("fmax_min")
     fmin_max = fmin_max if fmin_max is not None else config.get_value("fmin_max")
+    mag_min = min_mag if min_mag is not None else config.get_value("quality_min_mag")
 
     # Filter by magnitude
-    mag_min = config.get_value("quality_min_mag")
-    catalogue, skipped_records_mag = filter_mag(catalogue, mag_min)
+    skipped_records_mag = filter_mag(catalogue, mag_min)
 
     # Find ground level locations
     skipped_records_ground = filter_ground_level_locations(catalogue, bypass_records)
@@ -924,6 +923,7 @@ def apply_all_filters(
     # Combine all the skipped records
     skipped_records = pd.concat(
         [
+            skipped_records_mag,
             skipped_records_ground,
             skipped_records_has_score,
             skipped_records_score,
@@ -974,6 +974,7 @@ def create_quality_db(
 ):
     """
     Create the quality database by running the following checks:
+    - Filter by minimum magnitude.
     - Filter by presence of GMC predictions.
     - Filter by score mean.
     - Filter by multi mean.
@@ -982,6 +983,7 @@ def create_quality_db(
     - Filter by missing station information.
     - Ensure only ground level locations are used.
     - Filter out clipped records.
+    - Filter out jerk records.
     - Filter out troublesome sensitivity records.
     - Filter out records too far from empirical predictions.
     - Select the appropriate channel for duplicate HN/BN records for the same event/station.
