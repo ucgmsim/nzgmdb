@@ -11,7 +11,7 @@ import typer
 from IM.ims import IM
 from nzgmdb.calculation import aftershocks, distances, fmax, ims, snr
 from nzgmdb.data_processing import merge_flatfiles, process_observed, quality_db
-from nzgmdb.data_retrieval import geonet, sites, tect_domain
+from nzgmdb.data_retrieval import geonet, sites, tect_domain, waveform_extraction
 from nzgmdb.management import config as cfg
 from nzgmdb.management import file_structure
 from nzgmdb.phase_arrival import gen_phase_arrival_table
@@ -81,6 +81,57 @@ def fetch_geonet_data(
 
 
 @cli.from_docstring(app)
+def extract_waveforms(
+    main_dir: Annotated[
+        Path,
+        typer.Argument(
+            exists=True,
+            file_okay=False,
+        ),
+    ],
+    station_extraction_table_ffp: Annotated[
+        Path,
+        typer.Argument(
+            exists=True,
+            dir_okay=False,
+        ),
+    ],
+    n_procs: Annotated[int, typer.Option()] = 1,
+    only_record_ids_ffp: Annotated[
+        Path,
+        typer.Option(
+            exists=True,
+            dir_okay=False,
+        ),
+    ] = None,
+    batch_size: Annotated[
+        int,
+        typer.Option(),
+    ] = 1000,
+):
+    """
+    Extract waveforms using the station extraction table and save them as MiniSEED files.
+
+    Parameters
+    ----------
+    main_dir : Path
+        The main directory of the NZGMDB results (Highest level directory).
+    station_extraction_table_ffp : Path
+        The full file path to the station extraction table, which contains the information on which stations to extract waveforms from
+        and the parameters for the extraction.
+    n_procs : int, optional
+        The number of processes to use for waveform extraction (default is 1).
+    only_record_ids_ffp : Path, optional
+        The full file path to a set of record IDs to only run for. If provided, only these records will be processed.
+    batch_size : int, optional
+        The batch size for how many extracted waveforms to process before checkpointing (default is 1000).
+    """
+    waveform_extraction.extract_waveforms(
+        main_dir, station_extraction_table_ffp, n_procs, only_record_ids_ffp, batch_size
+    )
+
+
+@cli.from_docstring(app)
 def merge_tect_domain(
     eq_source_ffp: Annotated[
         Path,
@@ -140,7 +191,6 @@ def make_phase_arrival_table(
     bypass_records_ffp: Annotated[
         Path,
         typer.Option(
-            help="The full file path to the bypass records file for custom p_wave_ix values",
             exists=True,
             dir_okay=False,
         ),
@@ -879,6 +929,29 @@ def run_full_nzgmdb(
             only_sites,
             only_record_ids_ffp,
             real_time,
+        )
+
+    # Extract Waveforms
+    if not (
+        checkpoint
+        and (
+            flatfile_dir
+            / file_structure.PreFlatfileNames.STATION_MAGNITUDE_TABLE_EXTRACTION
+        ).exists()
+    ):
+        print("Extracting waveforms")
+        extract_n_procs = (
+            n_procs
+            if machine is None
+            else config.get_n_procs(machine, cfg.WorkflowStep.EXTRACTION)
+        )
+        waveform_extraction.extract_waveforms(
+            main_dir,
+            flatfile_dir
+            / file_structure.PreFlatfileNames.STATION_EXTRACTION_TABLE_GEONET,
+            extract_n_procs,
+            only_record_ids_ffp,
+            batch_size=geonet_batch_size,
         )
 
     # Merge the tectonic domains

@@ -177,7 +177,8 @@ def merge_flatfiles(main_dir: Path, bypass_records_ffp: Path = None):
         dtype={"evid": str},
     )
     sta_mag_df = pd.read_csv(
-        flatfile_dir / file_structure.PreFlatfileNames.STATION_MAGNITUDE_TABLE_GEONET,
+        flatfile_dir
+        / file_structure.PreFlatfileNames.STATION_MAGNITUDE_TABLE_EXTRACTION,
         dtype={"evid": str},
     )
     if (flatfile_dir / file_structure.PreFlatfileNames.PHASE_ARRIVAL_TABLE).exists():
@@ -208,6 +209,10 @@ def merge_flatfiles(main_dir: Path, bypass_records_ffp: Path = None):
     site_basin_df = pd.read_csv(
         flatfile_dir / file_structure.PreFlatfileNames.SITE_TABLE
     )
+    station_extraction_df = pd.read_csv(
+        flatfile_dir / file_structure.PreFlatfileNames.STATION_EXTRACTION_TABLE_GEONET,
+        dtype={"evid": str},
+    )
 
     # Get the recorders information for location codes
     config = cfg.Config()
@@ -237,6 +242,11 @@ def merge_flatfiles(main_dir: Path, bypass_records_ffp: Path = None):
     # Ensure the station magnitude table only has values of events and station pairs available in the im_df
     unique_pairs_df = im_df[["evid", "sta"]].drop_duplicates()
     sta_mag_df = pd.merge(sta_mag_df, unique_pairs_df, on=["evid", "sta"], how="inner")
+
+    # Ensure the station extraction table only has values of events and station pairs available in the im_df
+    station_extraction_df = pd.merge(
+        station_extraction_df, unique_pairs_df, on=["evid", "sta"], how="inner"
+    )
 
     # Get a list of sites not found in the site basin df
     missing_sites = set(unique_sites) - set(site_basin_df["sta"].unique())
@@ -675,6 +685,10 @@ def merge_flatfiles(main_dir: Path, bypass_records_ffp: Path = None):
     )
     sta_mag_df.to_csv(
         flatfile_dir / file_structure.FlatfileNames.STATION_MAGNITUDE_TABLE, index=False
+    )
+    station_extraction_df.to_csv(
+        flatfile_dir / file_structure.FlatfileNames.STATION_EXTRACTION_TABLE,
+        index=False,
     )
     phase_table_df.to_csv(
         flatfile_dir / file_structure.FlatfileNames.PHASE_ARRIVAL_TABLE, index=False
