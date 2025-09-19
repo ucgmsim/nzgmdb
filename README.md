@@ -46,6 +46,21 @@ Then follow the instructions in the gm_classifier repository to create two Conda
 
 - **gmc_predict**: For feature classification
 
+### 3. Grab the NZCVM Basin data
+
+The NZGMDB pipeline requires basin outlines from the `nzcvm_data` repository to assign basin names to stations.
+
+To fetch the data, run the following in the NZGMDB activated environment:
+
+```bash
+nzcvm-data-helper ensure --no-full --path /path/to/nzcvm_data
+```
+
+The `--no-full` flag ensures that large files are skipped, as they are not needed for NZGMDB.
+As we just need the basin outlines, this is sufficient.
+The `--path` argument specifies where to clone the repository.
+This is useful if you want to keep the data in a specific location and the location is used as an argument when running the pipeline.
+
 ## ✅ Pre-requisites
 
 Before running the full pipeline, ensure the following:
@@ -56,6 +71,7 @@ Before running the full pipeline, ensure the following:
 
 - You know the paths to:
   - The cloned `gm_classifier` directory
+  - The `nzcvm_data` directory
   - Your `conda.sh` initialization script
   - The directory containing the generated KO matrices
   - Your two Conda environments:
@@ -74,6 +90,7 @@ python scripts/run_nzgmdb.py run-full-nzgmdb \
   /output_dir \
   2000-01-01 \
   2024-12-31 \
+  /path/to/nzcvm_data \
   /path/to/gm_classifier \
   /path/to/conda.sh \
   "conda activate gmc_features" \
@@ -88,6 +105,7 @@ python scripts/run_nzgmdb.py run-full-nzgmdb \
 | `/output_dir`                   | Output directory for processed results                                      |
 | `2000-01-01`                    | Start date for event selection                                              |
 | `2024-12-31`                    | End date for event selection                                                |
+| `/path/to/nzcvm_data`           | Path to the cloned `nzcvm_data` repository                                  |
 | `/path/to/gm_classifier`        | Path to the cloned `gm_classifier` repository                               |
 | `/path/to/conda.sh`             | Path to the Conda initialization script (e.g., `/opt/anaconda3/etc/profile.d/conda.sh`) |
 | `"conda activate gmc_features"` | Command to activate the feature extraction environment                      |
