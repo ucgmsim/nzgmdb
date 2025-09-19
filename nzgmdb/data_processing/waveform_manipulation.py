@@ -3,6 +3,7 @@ This module contains functions for the initial pre-processing of waveform data a
 """
 
 import numpy as np
+import pandas as pd
 from obspy.clients.fdsn import Client as FDSN_Client
 from obspy.clients.fdsn.header import FDSNNoDataException
 from obspy.core.stream import Stream
@@ -13,7 +14,11 @@ from nzgmdb.management import custom_errors
 
 
 def initial_preprocessing(
-    mseed: Stream, apply_taper: bool = True, apply_zero_padding: bool = True
+    mseed: Stream,
+    apply_taper: bool = True,
+    apply_zero_padding: bool = True,
+    tp=None,
+    record_id=None,
 ):
     """
     Basic pre-processing of the waveform data
@@ -58,8 +63,21 @@ def initial_preprocessing(
     zero_padding_time = config.get_value("zero_padding_time")
 
     if apply_taper:
+        taper_length = 5
+        # if tp is not None:
+        #     # If the P-wave arrival time is provided, use it to determine the taper length
+        #     # Taper length should be the minimum of 5 seconds or 10% of the time before the P-wave arrival
+        #     npts = mseed[0].stats.npts
+        #     if tp < 0.05 * npts:
+        #         taper_length = tp / npts * 100
+        #     else:
+        #         taper_length = 5
         # Taper the data by the taper_fraction
-        mseed.taper(taper_fraction, side="both", max_length=5)
+        mseed.taper(taper_fraction, side="both", max_length=taper_length)
+        # Save the taper lengths to a df
+        # dir = "/media/joel/data/nzgmdb/test_runs/taper_check/tapers"
+        # df = pd.DataFrame({"record_id": [record_id], "taper_length": [taper_length]})
+        # df.to_csv(f"{dir}/{record_id}.csv", index=False)
 
     if apply_zero_padding:
         # Perform zero-padding

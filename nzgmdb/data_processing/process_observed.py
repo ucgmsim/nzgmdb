@@ -20,6 +20,7 @@ def process_single_mseed(
     gmc_df: pd.DataFrame | None = None,
     fmax_df: pd.DataFrame | None = None,
     bypass_df: pd.DataFrame | None = None,
+    phases: pd.DataFrame | None = None,
 ):
     """
     Process a single mseed file and save the processed data to a txt file
@@ -56,6 +57,15 @@ def process_single_mseed(
     dt = mseed.traces[0].stats.delta
     station = mseed.traces[0].stats.station
 
+    # Get the phase arrival time for the record if available
+    tp = None
+    if phases is not None and not phases.empty:
+        phase_row = phases[phases["record_id"] == mseed_stem]
+        if not phase_row.empty:
+            tp = phase_row["p_wave_ix"].values[0]
+            if np.isnan(tp):
+                tp = None
+
     # Check the length of the mseed file for 3 components
     if len(mseed) != 3:
         skipped_record_dict = {
@@ -67,7 +77,9 @@ def process_single_mseed(
 
     # Perform initial pre-processing
     try:
-        mseed = waveform_manipulation.initial_preprocessing(mseed)
+        mseed = waveform_manipulation.initial_preprocessing(
+            mseed, tp=tp, record_id=mseed_stem
+        )
     except custom_errors.InventoryNotFoundError:
         skipped_record_dict = {
             "record_id": mseed_stem,
@@ -229,6 +241,11 @@ def process_mseeds_to_txt(
         )
     bypass_df = None if bypass_records_ffp is None else pd.read_csv(bypass_records_ffp)
 
+    # Load the phase arrial table
+    phases = pd.read_csv(
+        "/media/joel/data/nzgmdb/test_runs/taper_check/flatfiles/phase_arrival_table_all.csv"
+    )
+
     # Use multiprocessing to process the mseed files
     with multiprocessing.Pool(processes=n_procs) as pool:
         skipped_records = pool.map(
@@ -237,6 +254,7 @@ def process_mseeds_to_txt(
                 gmc_df=gmc_df,
                 fmax_df=fmax_df,
                 bypass_df=bypass_df,
+                phases=phases,
             ),
             mseed_files,
         )
