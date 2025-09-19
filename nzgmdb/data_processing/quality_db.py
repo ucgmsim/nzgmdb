@@ -429,7 +429,7 @@ def apply_clipNet_filter(
     try:
         clipped_records = pd.read_csv(clipped_records_ffp)
     except pd.errors.EmptyDataError:
-        return catalogue, pd.DataFrame(columns=["record_id", "reason"])
+        return pd.DataFrame(columns=["record_id", "reason"])
 
     # Remove the bypass records if they exist
     if bypass_records is not None:
@@ -788,38 +788,46 @@ def apply_all_filters(
     fmin_max = fmin_max if fmin_max is not None else config.get_value("fmin_max")
 
     # Find ground level locations
-    skipped_records_ground = filter_ground_level_locations(catalogue, bypass_records)
+    skipped_records_ground = filter_ground_level_locations(
+        catalogue.copy(), bypass_records
+    )
 
     # Find has score mean
-    skipped_records_has_score = filter_has_score_mean(catalogue, bypass_records)
+    skipped_records_has_score = filter_has_score_mean(catalogue.copy(), bypass_records)
 
     # Find score mean
-    skipped_records_score = filter_score_mean(catalogue, score_min, bypass_records)
+    skipped_records_score = filter_score_mean(
+        catalogue.copy(), score_min, bypass_records
+    )
 
     # Find multi mean
-    skipped_records_multi = filter_multi_mean(catalogue, multi_max, bypass_records)
+    skipped_records_multi = filter_multi_mean(
+        catalogue.copy(), multi_max, bypass_records
+    )
 
     # Find fmax
-    skipped_records_fmax = filter_fmax(catalogue, fmax_min, bypass_records)
+    skipped_records_fmax = filter_fmax(catalogue.copy(), fmax_min, bypass_records)
 
     # Find fmin
-    skipped_records_fmin = filter_fmin(catalogue, fmin_max, bypass_records)
+    skipped_records_fmin = filter_fmin(catalogue.copy(), fmin_max, bypass_records)
 
     # Find missing station information
-    skipped_records_sta = filter_missing_sta_info(catalogue, bypass_records)
+    skipped_records_sta = filter_missing_sta_info(catalogue.copy(), bypass_records)
 
     # Find clipped records
     skipped_records_clipped = apply_clipNet_filter(
-        catalogue, clipped_records_ffp, bypass_records
+        catalogue.copy(), clipped_records_ffp, bypass_records
     )
 
     # Find troublesome sensitivity records
     skipped_records_sensitivity = filter_troublesome_sensitivity(
-        catalogue, bypass_records
+        catalogue.copy(), bypass_records
     )
 
     # Find empirical predictions
-    skipped_records_empirical = filter_empirical_predictions(catalogue, bypass_records)
+    skipped_records_empirical = filter_empirical_predictions(
+        catalogue.copy(), bypass_records
+    )
 
     # Combine all the skipped records
     skipped_records = pd.concat(
@@ -841,7 +849,9 @@ def apply_all_filters(
     catalogue = catalogue[~catalogue["record_id"].isin(skipped_records["record_id"])]
 
     # Find duplicate channels
-    skipped_records_duplicate = filter_duplicate_channels(catalogue, bypass_records)
+    skipped_records_duplicate = filter_duplicate_channels(
+        catalogue.copy(), bypass_records
+    )
 
     # Filter out the duplicate channels from the catalogue
     catalogue = catalogue[
@@ -851,18 +861,8 @@ def apply_all_filters(
     # Add the skipped records from duplicate channels
     skipped_records = pd.concat([skipped_records, skipped_records_duplicate])
 
-    # Clean up and ensure uniqueness
+    # Ensure uniqueness
     assert len(catalogue["evid_sta"].unique()) == len(catalogue)
-    catalogue = catalogue.drop(
-        columns=[
-            "evid_sta",
-            "bypass",
-            "chan_priority",
-            "mean_residual",
-            "max_residual",
-            "fmax_min",
-        ]
-    )
 
     return catalogue, skipped_records
 
@@ -904,10 +904,9 @@ def create_quality_db(
     )
 
     # Get the clipped records
-    # clipped_records_ffp = (
-    #     flatfile_dir / file_structure.SkippedRecordFilenames.CLIPPED_RECORDS
-    # )
-    clipped_records_ffp = Path("/home/joel/local/gmdb/4p3_mantle/tmp_clipped.csv")
+    clipped_records_ffp = (
+        flatfile_dir / file_structure.SkippedRecordFilenames.CLIPPED_RECORDS
+    )
 
     # Load the bypass records if they exist
     bypass_records = (

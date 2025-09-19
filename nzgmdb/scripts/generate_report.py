@@ -1480,7 +1480,7 @@ def generate_report(
 
     # For new
     bar_img_base64_new, pie_imgs_base64_new = important_set_figures(
-        quality_new,
+        quality_new.copy(),
         new_flatfiles_dir,
         important_set_names,
         import_set_ffps,
@@ -1490,7 +1490,7 @@ def generate_report(
     # For old (if available)
     if compare_version_directory:
         bar_img_base64_old, pie_imgs_base64_old = important_set_figures(
-            quality_old,
+            quality_old.copy(),
             old_flatifles_dir,
             important_set_names,
             import_set_ffps,
