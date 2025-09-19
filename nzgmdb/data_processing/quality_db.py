@@ -861,7 +861,9 @@ def apply_all_filters(
     skipped_records = pd.concat([skipped_records, skipped_records_duplicate])
 
     # Ensure uniqueness
-    assert len(catalogue["evid_sta"].unique()) == len(catalogue)
+    catalogue_test = catalogue.copy()
+    catalogue_test["evid_sta"] = catalogue_test["evid"].astype(str) + "_" + catalogue_test["sta"]
+    assert len(catalogue_test["evid_sta"].unique()) == len(catalogue_test)
 
     return catalogue, skipped_records
 
