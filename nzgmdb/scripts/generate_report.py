@@ -46,6 +46,19 @@ OQ_INPUT_COLUMNS = [
     "hypo_depth",
 ]
 
+OBS_DATA_OQ_COLS_MAPPING = {
+    "Vs30": "vs30",
+    "r_rup": "rrup",
+    "r_jb": "rjb",
+    "Z1.0": "z1pt0",
+    "mag": "mag",
+    "rake": "rake",
+    "dip": "dip",
+    "z_tor": "ztor",
+    "r_x": "rx",
+    "ev_depth": "hypo_depth",
+}
+
 PERIODS = [
     0.01,
     0.02,
@@ -282,20 +295,6 @@ def get_fig_axes(
         axs = list(axs.flatten())
 
     return fig, axs
-
-
-OBS_DATA_OQ_COLS_MAPPING = {
-    "Vs30": "vs30",
-    "r_rup": "rrup",
-    "r_jb": "rjb",
-    "Z1.0": "z1pt0",
-    "mag": "mag",
-    "rake": "rake",
-    "dip": "dip",
-    "z_tor": "ztor",
-    "r_x": "rx",
-    "ev_depth": "hypo_depth",
-}
 
 
 def compute_nzgmdb_emp_gm_params(obs_data: pd.DataFrame):

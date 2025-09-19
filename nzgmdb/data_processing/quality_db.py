@@ -10,7 +10,6 @@ import pandas as pd
 from nzgmdb.management import config as cfg
 from nzgmdb.management import file_structure
 from nzgmdb.management.data_registry import NZGMDB_DATA
-from nzgmdb.management.file_structure import FlatfileNames
 from oq_wrapper import constants, wrapper
 
 
@@ -31,34 +30,34 @@ def filter_flatfiles_on_catalouge(
         The dataframe containing the records to filter on
     """
     file_to_filter = [
-        FlatfileNames.EARTHQUAKE_SOURCE_TABLE,
-        FlatfileNames.EARTHQUAKE_SOURCE_GEOMETRY,
-        FlatfileNames.FMAX,
-        FlatfileNames.STATION_MAGNITUDE_TABLE,
-        FlatfileNames.SITE_TABLE,
-        FlatfileNames.PHASE_ARRIVAL_TABLE,
-        FlatfileNames.PROPAGATION_TABLE,
-        FlatfileNames.GMC_PREDICTIONS,
-        FlatfileNames.SNR_METADATA,
-        FlatfileNames.GROUND_MOTION_IM_000_FLAT,
-        FlatfileNames.GROUND_MOTION_IM_090_FLAT,
-        FlatfileNames.GROUND_MOTION_IM_VER_FLAT,
-        FlatfileNames.GROUND_MOTION_IM_ROTD0_FLAT,
-        FlatfileNames.GROUND_MOTION_IM_ROTD100_FLAT,
-        FlatfileNames.GROUND_MOTION_IM_GEOM_FLAT,
-        FlatfileNames.GROUND_MOTION_IM_EAS_FLAT,
+        file_structure.FlatfileNames.EARTHQUAKE_SOURCE_TABLE,
+        file_structure.FlatfileNames.EARTHQUAKE_SOURCE_GEOMETRY,
+        file_structure.FlatfileNames.FMAX,
+        file_structure.FlatfileNames.STATION_MAGNITUDE_TABLE,
+        file_structure.FlatfileNames.SITE_TABLE,
+        file_structure.FlatfileNames.PHASE_ARRIVAL_TABLE,
+        file_structure.FlatfileNames.PROPAGATION_TABLE,
+        file_structure.FlatfileNames.GMC_PREDICTIONS,
+        file_structure.FlatfileNames.SNR_METADATA,
+        file_structure.FlatfileNames.GROUND_MOTION_IM_000_FLAT,
+        file_structure.FlatfileNames.GROUND_MOTION_IM_090_FLAT,
+        file_structure.FlatfileNames.GROUND_MOTION_IM_VER_FLAT,
+        file_structure.FlatfileNames.GROUND_MOTION_IM_ROTD0_FLAT,
+        file_structure.FlatfileNames.GROUND_MOTION_IM_ROTD100_FLAT,
+        file_structure.FlatfileNames.GROUND_MOTION_IM_GEOM_FLAT,
+        file_structure.FlatfileNames.GROUND_MOTION_IM_EAS_FLAT,
     ]
 
     for file in file_to_filter:
         # Load the new file and filter based on record_id
         df = pd.read_csv(flatfile_dir / file, dtype={"evid": str})
         if file in [
-            FlatfileNames.EARTHQUAKE_SOURCE_TABLE,
-            FlatfileNames.EARTHQUAKE_SOURCE_GEOMETRY,
+            file_structure.FlatfileNames.EARTHQUAKE_SOURCE_TABLE,
+            file_structure.FlatfileNames.EARTHQUAKE_SOURCE_GEOMETRY,
         ]:
             # filter by evid
             df_filtered = df[df["evid"].isin(rotd50_flat["evid"])]
-        elif file == FlatfileNames.STATION_MAGNITUDE_TABLE:
+        elif file == file_structure.FlatfileNames.STATION_MAGNITUDE_TABLE:
             # Ensure loc is str
             df["loc"] = df["loc"].astype(str)
             # Make the record_id column
@@ -74,9 +73,9 @@ def filter_flatfiles_on_catalouge(
             df_filtered = df[df["record_id"].isin(rotd50_flat["record_id"])]
             # remove the record_id column
             df_filtered = df_filtered.drop(columns=["record_id"])
-        elif file == FlatfileNames.SITE_TABLE:
+        elif file == file_structure.FlatfileNames.SITE_TABLE:
             df_filtered = df[df["sta"].isin(rotd50_flat["sta"])]
-        elif file == FlatfileNames.PROPAGATION_TABLE:
+        elif file == file_structure.FlatfileNames.PROPAGATION_TABLE:
             # Make the evid_sta column
             df["evid_sta"] = df["evid"] + "_" + df["sta"]
             # Assert the same length of unique values
@@ -87,7 +86,7 @@ def filter_flatfiles_on_catalouge(
             # remove the evid_sta column
             df_filtered = df_filtered.drop(columns=["evid_sta"])
             rotd50_flat = rotd50_flat.drop(columns=["evid_sta"])
-        elif file == FlatfileNames.GMC_PREDICTIONS:
+        elif file == file_structure.FlatfileNames.GMC_PREDICTIONS:
             df_filtered = df[df["record"].isin(rotd50_flat["record_id"])]
         else:
             df_filtered = df[df["record_id"].isin(rotd50_flat["record_id"])]
@@ -893,7 +892,7 @@ def create_quality_db(
         The file path to the records that will bypass the quality checks
     """
     # Make the quality db directory
-    output_dir = main_dir / "quality_db_testing"
+    output_dir = file_structure.get_quality_db_dir(main_dir)
     output_dir.mkdir(exist_ok=True)
 
     # Load the ground motion im catalogue
@@ -924,7 +923,10 @@ def create_quality_db(
     filter_flatfiles_on_catalouge(flatfile_dir, output_dir, gm_df)
 
     # Save the gm_df and skipped_records
-    gm_df.to_csv(output_dir / FlatfileNames.GROUND_MOTION_IM_ROTD50_FLAT, index=False)
+    gm_df.to_csv(
+        output_dir / file_structure.FlatfileNames.GROUND_MOTION_IM_ROTD50_FLAT,
+        index=False,
+    )
     skipped_records.to_csv(
         flatfile_dir / file_structure.SkippedRecordFilenames.QUALITY_SKIPPED_RECORDS,
         index=False,
