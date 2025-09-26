@@ -17,7 +17,7 @@ from qcore import cli
 app = typer.Typer(pretty_exceptions_enable=False)
 
 
-def get_gmc_errors(gmc_dir: Path):
+def get_gmc_errors(gmc_dir: Path) -> pd.DataFrame:
     """
     Get all the GMC error files that had an issue during the execution
 
