@@ -920,7 +920,7 @@ def distance_in_taupo(
     wgs2nztm = Transformer.from_crs(ll_num, nztm_num)
 
     # Transform the rrups to NZTM
-    rrups_transform = wgs2nztm.transform(rrups_lat, rrups_lon)
+    rrups_transform = wgs2nztm.transform(rrups_lon, rrups_lat)
 
     tvz_lengths = []
     boundary_dists_rjb = []
