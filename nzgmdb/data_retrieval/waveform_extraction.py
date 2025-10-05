@@ -756,7 +756,7 @@ def extract_station_info(
     list
         A list of DataFrames containing any multi-trace issues raised during the extraction.
     """
-    client_NZ = FDSN_Client("GEONET")
+    client = FDSN_Client("GEONET")
     sta_mag_line, skipped_records, clipped_records, multi_trace_issues = [], [], [], []
     # Extract the parameters from the row
     event_id = station_extraction_row["evid"]
