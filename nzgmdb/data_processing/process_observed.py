@@ -242,9 +242,9 @@ def process_mseeds_to_txt(
     bypass_df = None if bypass_records_ffp is None else pd.read_csv(bypass_records_ffp)
 
     # Load the phase arrial table
-    phases = pd.read_csv(
-        "/media/joel/data/nzgmdb/test_runs/taper_check/flatfiles/phase_arrival_table_all.csv"
-    )
+    # phases = pd.read_csv(
+    #     "/media/joel/data/nzgmdb/test_runs/taper_check/flatfiles/phase_arrival_table_all.csv"
+    # )
 
     # Use multiprocessing to process the mseed files
     with multiprocessing.Pool(processes=n_procs) as pool:
@@ -254,7 +254,7 @@ def process_mseeds_to_txt(
                 gmc_df=gmc_df,
                 fmax_df=fmax_df,
                 bypass_df=bypass_df,
-                phases=phases,
+                # phases=phases,
             ),
             mseed_files,
         )
