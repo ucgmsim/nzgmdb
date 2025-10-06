@@ -55,13 +55,13 @@ def create_site_table_response() -> pd.DataFrame:
     geo_meta_summary_df = pd.read_csv(
         NZGMDB_DATA.fetch("Geonet_Metadata_Summary_v1.4.csv")
     )
+    # remove the lat and lon columns as they are not needed
+    geo_meta_summary_df = geo_meta_summary_df.drop(columns=["Lat", "Long"])
 
     # Rename the columns
     geo_meta_summary_df = geo_meta_summary_df.rename(
         columns={
             "Name": "sta",
-            "Lat": "lat",
-            "Long": "lon",
             "NZS1170SiteClass": "site_class",
             "Vs30_median": "Vs30",
             "Sigmaln_Vs30": "Vs30_std",
