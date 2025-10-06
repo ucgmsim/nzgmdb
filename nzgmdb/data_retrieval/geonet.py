@@ -224,6 +224,7 @@ def get_stations_within_radius(
     preferred_origin = event_cat.preferred_origin()
     event_lat = preferred_origin.latitude
     event_lon = preferred_origin.longitude
+    ev_datetime = preferred_origin.time
 
     # Get the max radius
     mags = mw_rrup_data[:, 0]
@@ -239,7 +240,7 @@ def get_stations_within_radius(
     maxradius = obspy.geodetics.kilometers2degrees(rrup)
 
     inv_sub = inventory.select(
-        latitude=event_lat, longitude=event_lon, maxradius=maxradius
+        latitude=event_lat, longitude=event_lon, maxradius=maxradius, starttime=ev_datetime, endtime=ev_datetime
     )
 
     return inv_sub
