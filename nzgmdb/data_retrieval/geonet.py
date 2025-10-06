@@ -726,7 +726,7 @@ def parse_geonet_information(
     only_sites: list[str] = None,
     only_record_ids_ffp: Path = None,
     real_time: bool = False,
-    mp_sites: bool = False,
+    mp_sites: bool = True,
 ):
     """
     Read the geonet information and manage the fetching of more data to create the mseed files
@@ -769,10 +769,6 @@ def parse_geonet_information(
         if not only_event_ids:
             # Get the earthquake data
             geonet = download_earthquake_data(start_date, end_date)
-            # geonet = pd.read_csv(
-            #     "/home/joel/local/gmdb/waveform_window/4p4_window/events_around_large_subset/events_around.csv",
-            #     dtype={"publicid": str},
-            # )
 
             # Get all event ids
             event_ids = geonet.publicid.unique().astype(str)
@@ -787,7 +783,7 @@ def parse_geonet_information(
     else:
         # Get Station Information from geonet clients
         client_NZ = FDSN_Client("GEONET")
-    inventory = client_NZ.get_stations(channel=channel_codes, level="response")
+    inventory = client_NZ.get_stations(channel=channel_codes, level="station")
 
     # Get the rrup data
     mw_rrup_data = np.loadtxt(NZGMDB_DATA.fetch("Mw_rrup.txt"))
