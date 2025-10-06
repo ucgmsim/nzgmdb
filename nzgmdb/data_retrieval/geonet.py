@@ -385,7 +385,8 @@ def fetch_sta_extraction(
 
 def fetch_event_data(
     event_id: str,
-    real_time: bool,
+    client_NZ: FDSN_Client,
+    inventory: Inventory,
     site_table: pd.DataFrame,
     mw_rrup_data: np.ndarray,
     only_sites: list[str] = None,
@@ -419,15 +420,6 @@ def fetch_event_data(
     EventData
         The parsed event data.
     """
-    config = cfg.Config()
-    channel_codes = ",".join(config.get_value("channel_codes"))
-    if real_time:
-        client_NZ = FDSN_Client(base_url=config.get_value("real_time_url"))
-    else:
-        # Get Station Information from geonet clients
-        client_NZ = FDSN_Client("GEONET")
-    inventory = client_NZ.get_stations(channel=channel_codes, level="response")
-
     # Get the catalogue information
     cat = client_NZ.get_events(eventid=event_id)
     event_cat = cat[0]
@@ -507,7 +499,8 @@ def process_batch(
     batch_events: np.ndarray[str],
     batch_index: int,
     main_dir: Path,
-    real_time: bool,
+    client_NZ: FDSN_Client,
+    inventory: Inventory,
     site_table: pd.DataFrame,
     mw_rrup_data: np.ndarray,
     n_procs: int = 1,
@@ -543,12 +536,15 @@ def process_batch(
     mp_sites : bool (optional)
         Whether to multiprocess over sites (when not using mp over events)
     """
+    # Ensure fork
+    mp.set_start_method("fork", force=True)
     # Fetch results
     if mp_sites:
         results = [
             fetch_event_data(
                 event_id,
-                real_time,
+                client_NZ,
+                inventory,
                 site_table,
                 mw_rrup_data,
                 only_sites,
@@ -562,7 +558,8 @@ def process_batch(
             results = p.map(
                 functools.partial(
                     fetch_event_data,
-                    real_time=real_time,
+                    client_NZ=client_NZ,
+                    inventory=inventory,
                     site_table=site_table,
                     mw_rrup_data=mw_rrup_data,
                     only_sites=only_sites,
@@ -783,6 +780,15 @@ def parse_geonet_information(
             event_ids = only_event_ids
         only_record_ids = None
 
+    config = cfg.Config()
+    channel_codes = ",".join(config.get_value("channel_codes"))
+    if real_time:
+        client_NZ = FDSN_Client(base_url=config.get_value("real_time_url"))
+    else:
+        # Get Station Information from geonet clients
+        client_NZ = FDSN_Client("GEONET")
+    inventory = client_NZ.get_stations(channel=channel_codes, level="response")
+
     # Get the rrup data
     mw_rrup_data = np.loadtxt(NZGMDB_DATA.fetch("Mw_rrup.txt"))
 
@@ -807,7 +813,8 @@ def parse_geonet_information(
                 batch,
                 index,
                 main_dir,
-                real_time,
+                client_NZ,
+                inventory,
                 site_table,
                 mw_rrup_data,
                 n_procs,
