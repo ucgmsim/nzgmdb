@@ -29,7 +29,7 @@ def create_site_table_response() -> pd.DataFrame:
         used in the NZGMDB
     """
     # Fetch the client station information
-    client_NZ = FDSN_Client("GEONET")
+    client_NZ = FDSN_Client("IRIS")
     inventory = client_NZ.get_stations()
     station_info = []
     for network in inventory:
@@ -45,8 +45,11 @@ def create_site_table_response() -> pd.DataFrame:
                     station.end_date,
                 ]
             )
-    sta_df = pd.DataFrame(station_info, columns=["net", "sta", "lat", "lon", "elev", "creation_date", "end_date"])
-    sta_df = sta_df.drop_duplicates().reset_index(drop=True)
+    sta_df = pd.DataFrame(
+        station_info,
+        columns=["net", "sta", "lat", "lon", "elev", "creation_date", "end_date"],
+    )
+    # sta_df = sta_df.drop_duplicates().reset_index(drop=True)
 
     # Get the Geonet metadata summary information
     geo_meta_summary_df = pd.read_csv(
@@ -77,7 +80,9 @@ def create_site_table_response() -> pd.DataFrame:
     )
 
     merged_df = geo_meta_summary_df.merge(
-        sta_df[["net", "elev", "sta"]], on="sta", how="left"
+        sta_df[["net", "lat", "lon", "elev", "sta", "creation_date", "end_date"]],
+        on="sta",
+        how="right",
     )
     # Specify the required files for fiona
     NZGMDB_DATA.fetch("TectonicDomains_Feb2021_8_NZTM.shp")

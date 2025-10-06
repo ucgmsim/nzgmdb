@@ -347,21 +347,36 @@ def merge_flatfiles(main_dir: Path, bypass_records_ffp: Path = None):
     # Find the station location information with the inventory lat, lon and elev
     config = cfg.Config()
     channel_codes = ",".join(config.get_value("channel_codes"))
-    client_NZ = FDSN_Client("GEONET")
-    inventory = client_NZ.get_stations(channel=channel_codes, level="response")
-    station_info = [
-        [
-            station.code,
-            station.latitude,
-            station.longitude,
-            station.elevation,
-        ]
-        for network in inventory
-        for station in network
-    ]
-    station_df = pd.DataFrame(
-        station_info, columns=["sta", "sta_lat", "sta_lon", "sta_elev"]
+    station_df = pd.read_csv(
+        "/media/joel/data/nzgmdb/tmp_arrays/nz_mainland_stations_all_iris_networks.csv"
     )
+    # Rename the columns
+    station_df = station_df.rename(
+        columns={
+            "net": "net",
+            "sta": "sta",
+            "lat": "sta_lat",
+            "lon": "sta_lon",
+            "elev": "sta_elev",
+        }
+    )
+    # Remove the net column
+    station_df = station_df.drop(columns=["net"])
+    # client_NZ = FDSN_Client("GEONET")
+    # inventory = client_NZ.get_stations(channel=channel_codes, level="response")
+    # station_info = [
+    #     [
+    #         station.code,
+    #         station.latitude,
+    #         station.longitude,
+    #         station.elevation,
+    #     ]
+    #     for network in inventory
+    #     for station in network
+    # ]
+    # station_df = pd.DataFrame(
+    #     station_info, columns=["sta", "sta_lat", "sta_lon", "sta_elev"]
+    # )
 
     # Merge the station information into the gm_im_df_flat
     gm_im_df_flat = gm_im_df_flat.merge(

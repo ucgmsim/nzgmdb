@@ -1037,24 +1037,27 @@ def calc_distances(main_dir: Path, n_procs: int = 1):
     )
 
     # Get the station information
-    client_NZ = FDSN_Client("GEONET")
-    inventory = client_NZ.get_stations()
-    station_info = []
-    for network in inventory:
-        for station in network:
-            station_info.append(
-                [
-                    network.code,
-                    station.code,
-                    station.latitude,
-                    station.longitude,
-                    station.elevation,
-                ]
-            )
-    station_df = pd.DataFrame(
-        station_info, columns=["net", "sta", "lat", "lon", "elev"]
+    # client_NZ = FDSN_Client("GEONET")
+    # inventory = client_NZ.get_stations()
+    # station_info = []
+    # for network in inventory:
+    #     for station in network:
+    #         station_info.append(
+    #             [
+    #                 network.code,
+    #                 station.code,
+    #                 station.latitude,
+    #                 station.longitude,
+    #                 station.elevation,
+    #             ]
+    #         )
+    # station_df = pd.DataFrame(
+    #     station_info, columns=["net", "sta", "lat", "lon", "elev"]
+    # )
+    # station_df = station_df.drop_duplicates().reset_index(drop=True)
+    station_df = pd.read_csv(
+        "/media/joel/data/nzgmdb/tmp_arrays/nz_mainland_stations_all_iris_networks.csv"
     )
-    station_df = station_df.drop_duplicates().reset_index(drop=True)
 
     # Select unique stations from IM data and merge
     im_station_df = im_df[["sta"]].drop_duplicates()

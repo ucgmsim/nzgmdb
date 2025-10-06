@@ -95,9 +95,12 @@ def initial_preprocessing(
     # Fetching here instead of passing the inventory object as searching for the station, network, and channel
     # information takes a long time as it's implemented in a for loop
     try:
-        client_NZ = FDSN_Client("GEONET")
+        client_NZ = FDSN_Client("IRIS")
+        # inv = client_NZ.get_stations(
+        #     level="response", network="NZ", station=station, location=location
+        # )
         inv = client_NZ.get_stations(
-            level="response", network="NZ", station=station, location=location
+            level="response", station=station, location=location
         )
     except FDSNNoDataException:
         raise custom_errors.InventoryNotFoundError(

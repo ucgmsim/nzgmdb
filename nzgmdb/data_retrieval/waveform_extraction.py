@@ -756,7 +756,8 @@ def extract_station_info(
     list
         A list of DataFrames containing any multi-trace issues raised during the extraction.
     """
-    client = FDSN_Client("GEONET")
+    client_GEO = FDSN_Client("GEONET")
+    client = FDSN_Client("IRIS")
     sta_mag_line, skipped_records, clipped_records, multi_trace_issues = [], [], [], []
     # Extract the parameters from the row
     event_id = station_extraction_row["evid"]
@@ -767,7 +768,7 @@ def extract_station_info(
     r_hyp = station_extraction_row["r_hyp"]
 
     # Get the catalogue information
-    cat = client.get_events(eventid=event_id)
+    cat = client_GEO.get_events(eventid=event_id)
     event_cat = cat[0]
 
     # Obtain the station channel codes and location

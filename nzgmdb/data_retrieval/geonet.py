@@ -240,7 +240,11 @@ def get_stations_within_radius(
     maxradius = obspy.geodetics.kilometers2degrees(rrup)
 
     inv_sub = inventory.select(
-        latitude=event_lat, longitude=event_lon, maxradius=maxradius, starttime=ev_datetime, endtime=ev_datetime
+        latitude=event_lat,
+        longitude=event_lon,
+        maxradius=maxradius,
+        starttime=ev_datetime,
+        endtime=ev_datetime,
     )
 
     return inv_sub
@@ -426,11 +430,12 @@ def fetch_event_data(
         client_NZ = FDSN_Client(base_url=config.get_value("real_time_url"))
     else:
         # Get Station Information from geonet clients
-        client_NZ = FDSN_Client("GEONET")
+        client_NZ = FDSN_Client("IRIS")
+        client_GEO = FDSN_Client("GEONET")
     inventory = client_NZ.get_stations(channel=channel_codes, level="response")
 
     # Get the catalogue information
-    cat = client_NZ.get_events(eventid=event_id)
+    cat = client_GEO.get_events(eventid=event_id)
     event_cat = cat[0]
 
     # Get the event line
