@@ -8,6 +8,7 @@ from pathlib import Path
 import fiona
 import pandas as pd
 from obspy.clients.fdsn import Client as FDSN_Client
+from obspy import UTCDateTime
 
 from nzgmdb.data_retrieval import tect_domain
 from nzgmdb.management import config as cfg
@@ -30,7 +31,22 @@ def create_site_table_response() -> pd.DataFrame:
     """
     # Fetch the client station information
     client_NZ = FDSN_Client("IRIS")
-    inventory = client_NZ.get_stations()
+    # Define rough NZ bounding box (adjust as needed)
+    min_lat, max_lat = -49, -32.0
+    min_lon, max_lon = 165.0, -176.9
+
+    # Get all networks with stations in the NZ bounding box
+    starttime = UTCDateTime("2000-01-01")
+    endtime = UTCDateTime()
+    inventory = client_NZ.get_stations(
+        starttime=starttime,
+        endtime=endtime,
+        minlatitude=min_lat,
+        maxlatitude=max_lat,
+        minlongitude=min_lon,
+        maxlongitude=max_lon,
+        level="station",
+    )
     station_info = []
     for network in inventory:
         for station in network:

@@ -792,7 +792,7 @@ def parse_geonet_information(
     else:
         # Get Station Information from geonet clients
         client_NZ = FDSN_Client("GEONET")
-    inventory = client_NZ.get_stations(channel=channel_codes, level="response")
+    inventory = client_NZ.get_stations(channel=channel_codes, level="station")
 
     # Get the rrup data
     mw_rrup_data = np.loadtxt(NZGMDB_DATA.fetch("Mw_rrup.txt"))
