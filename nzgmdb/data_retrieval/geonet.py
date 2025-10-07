@@ -86,6 +86,7 @@ def fetch_event_line(event_cat: Event, event_id: str):
     # Get the preferred magnitude and preferred origin
     preferred_origin = event_cat.preferred_origin()
     preferred_magnitude = event_cat.preferred_magnitude()
+    quality = preferred_origin.quality
 
     # If the preferred origin is None, return None
     if preferred_origin is None:
@@ -108,18 +109,18 @@ def fetch_event_line(event_cat: Event, event_id: str):
     )
     ev_ndef = (
         None
-        if preferred_origin.quality.used_phase_count is None
-        else preferred_origin.quality.used_phase_count
+        if quality is None or quality.used_phase_count is None
+        else quality.used_phase_count
     )
     ev_nsta = (
         None
-        if preferred_origin.quality.used_station_count is None
-        else preferred_origin.quality.used_station_count
+        if quality is None or quality.used_station_count is None
+        else quality.used_station_count
     )
     std = (
         None
-        if preferred_origin.quality.standard_error is None
-        else preferred_origin.quality.standard_error
+        if quality is None or quality.standard_error is None
+        else quality.standard_error
     )
 
     pref_mag_type = preferred_magnitude.magnitude_type
