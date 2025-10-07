@@ -14,6 +14,7 @@ import obspy
 import pandas as pd
 import requests
 from obspy.clients.fdsn import Client as FDSN_Client
+from obspy.core import UTCDateTime
 from obspy.core.event import Event, Magnitude
 from obspy.core.inventory import Inventory, Network, Station
 from obspy.geodetics import kilometers2degrees
@@ -792,7 +793,25 @@ def parse_geonet_information(
     else:
         # Get Station Information from geonet clients
         client_NZ = FDSN_Client("GEONET")
-    inventory = client_NZ.get_stations(channel=channel_codes, level="station")
+    # inventory = client_IRIS.get_stations(channel=channel_codes, level="station")
+    # Fetch the client station information
+    client_IRIS = FDSN_Client("IRIS")
+    # Define rough NZ bounding box (adjust as needed)
+    min_lat, max_lat = -49, -32.0
+    min_lon, max_lon = 165.0, -176.9
+
+    # Get all networks with stations in the NZ bounding box
+    starttime = UTCDateTime("2000-01-01")
+    endtime = UTCDateTime()
+    inventory = client_IRIS.get_stations(
+        starttime=starttime,
+        endtime=endtime,
+        minlatitude=min_lat,
+        maxlatitude=max_lat,
+        minlongitude=min_lon,
+        maxlongitude=max_lon,
+        level="station",
+    )
 
     # Get the rrup data
     mw_rrup_data = np.loadtxt(NZGMDB_DATA.fetch("Mw_rrup.txt"))
