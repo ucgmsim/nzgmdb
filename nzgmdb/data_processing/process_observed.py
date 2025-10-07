@@ -238,7 +238,7 @@ def process_mseeds_to_txt(
     config = cfg.Config()
     channel_codes = ",".join(config.get_value("channel_codes"))
     client = FDSN_Client("GEONET")
-    inventory = client.get_stations(channels=channel_codes, level="response")
+    inventory = client.get_stations(channel=channel_codes, level="response")
 
     # Use multiprocessing to process the mseed files
     with multiprocessing.Pool(processes=n_procs) as pool:
