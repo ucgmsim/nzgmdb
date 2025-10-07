@@ -8,9 +8,12 @@ from pathlib import Path
 
 import numpy as np
 import pandas as pd
+from obspy.clients.fdsn import Client as FDSN_Client
+from obspy.core.inventory import Inventory
 
 import qcore.timeseries as ts
 from nzgmdb.data_processing import waveform_manipulation
+from nzgmdb.management import config as cfg
 from nzgmdb.management import custom_errors, file_structure
 from nzgmdb.mseed_management import reading
 
@@ -20,7 +23,7 @@ def process_single_mseed(
     gmc_df: pd.DataFrame | None = None,
     fmax_df: pd.DataFrame | None = None,
     bypass_df: pd.DataFrame | None = None,
-    phases: pd.DataFrame | None = None,
+    inventory: Inventory | None = None,
 ):
     """
     Process a single mseed file and save the processed data to a txt file
@@ -39,6 +42,8 @@ def process_single_mseed(
         The Fmax values
     bypass_df : pd.DataFrame, optional
         The bypass records containing custom fmin, fmax values
+    inventory : Inventory, optional
+        The inventory information for the mseed file
 
     Returns
     -------
@@ -57,15 +62,6 @@ def process_single_mseed(
     dt = mseed.traces[0].stats.delta
     station = mseed.traces[0].stats.station
 
-    # Get the phase arrival time for the record if available
-    tp = None
-    if phases is not None and not phases.empty:
-        phase_row = phases[phases["record_id"] == mseed_stem]
-        if not phase_row.empty:
-            tp = phase_row["p_wave_ix"].values[0]
-            if np.isnan(tp):
-                tp = None
-
     # Check the length of the mseed file for 3 components
     if len(mseed) != 3:
         skipped_record_dict = {
@@ -77,9 +73,7 @@ def process_single_mseed(
 
     # Perform initial pre-processing
     try:
-        mseed = waveform_manipulation.initial_preprocessing(
-            mseed, tp=tp, record_id=mseed_stem
-        )
+        mseed = waveform_manipulation.initial_preprocessing(mseed, inventory=inventory)
     except custom_errors.InventoryNotFoundError:
         skipped_record_dict = {
             "record_id": mseed_stem,
@@ -241,10 +235,10 @@ def process_mseeds_to_txt(
         )
     bypass_df = None if bypass_records_ffp is None else pd.read_csv(bypass_records_ffp)
 
-    # Load the phase arrial table
-    # phases = pd.read_csv(
-    #     "/media/joel/data/nzgmdb/test_runs/taper_check/flatfiles/phase_arrival_table_all.csv"
-    # )
+    config = cfg.Config()
+    channel_codes = ",".join(config.get_value("channel_codes"))
+    client = FDSN_Client("GEONET")
+    inventory = client.get_stations(channels=channel_codes, level="response")
 
     # Use multiprocessing to process the mseed files
     with multiprocessing.Pool(processes=n_procs) as pool:
@@ -254,7 +248,7 @@ def process_mseeds_to_txt(
                 gmc_df=gmc_df,
                 fmax_df=fmax_df,
                 bypass_df=bypass_df,
-                # phases=phases,
+                inventory=inventory,
             ),
             mseed_files,
         )

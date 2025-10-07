@@ -9,6 +9,8 @@ from pathlib import Path
 
 import numpy as np
 import pandas as pd
+from obspy.clients.fdsn import Client as FDSN_Client
+from obspy.core.inventory import Inventory
 from pandas.errors import EmptyDataError
 
 from IM import im_calculation, snr_calculation
@@ -23,6 +25,7 @@ def compute_snr_for_single_mseed(
     output_dir: Path,
     ko_directory: Path,
     common_frequency_vector: np.ndarray = im_calculation.DEFAULT_FREQUENCIES,
+    inventory: Inventory = None,
 ):
     """
     Compute the SNR for a single mseed file
@@ -39,6 +42,9 @@ def compute_snr_for_single_mseed(
         Path to the directory containing the Ko matrices
     common_frequency_vector : np.ndarray, optional
         Common frequency vector to extract for SNR and FAS, by default None
+    inventory : Inventory, optional
+        The inventory information for the mseed file, by default None
+        (Only used to improve performance when reading the mseed file)
 
     Returns
     -------
@@ -60,7 +66,13 @@ def compute_snr_for_single_mseed(
 
     # Read mseed information
     try:
-        waveform = reading.create_waveform_from_mseed(mseed_file, pre_process=True, apply_taper=False, apply_zero_padding=False)
+        waveform = reading.create_waveform_from_mseed(
+            mseed_file,
+            pre_process=True,
+            apply_taper=False,
+            apply_zero_padding=False,
+            inventory=inventory,
+        )
     except custom_errors.InventoryNotFoundError:
         skipped_record_dict = {
             "record_id": mseed_file.stem,
@@ -267,6 +279,11 @@ def compute_snr_for_mseed_data(
     # Load the phase arrival table
     phase_table = pd.read_csv(phase_table_path)
 
+    # Load the inventory
+    client = FDSN_Client("GEONET")
+    channel_codes = ",".join(config.get_value("channel_codes"))
+    inventory = client.get_stations(channel=channel_codes, level="response")
+
     # Load the bypass records if provided
     if bypass_records_ffp is not None:
         bypass_records = pd.read_csv(bypass_records_ffp)
@@ -295,6 +312,7 @@ def compute_snr_for_mseed_data(
                         output_dir=snr_fas_output_dir,
                         ko_directory=ko_directory,
                         common_frequency_vector=common_frequency_vector,
+                        inventory=inventory,
                     ),
                     batch,
                 )
