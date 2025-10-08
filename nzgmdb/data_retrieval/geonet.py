@@ -385,7 +385,7 @@ def fetch_sta_extraction(
 
 def fetch_event_data(
     event_id: str,
-    client_NZ: FDSN_Client,
+    event_cat: Event,
     inventory: Inventory,
     site_table: pd.DataFrame,
     mw_rrup_data: np.ndarray,
@@ -420,10 +420,6 @@ def fetch_event_data(
     EventData
         The parsed event data.
     """
-    # Get the catalogue information
-    cat = client_NZ.get_events(eventid=event_id)
-    event_cat = cat[0]
-
     # Get the event line
     event_line = fetch_event_line(event_cat, event_id)
     station_extraction_table = pd.DataFrame()
@@ -536,6 +532,11 @@ def process_batch(
     mp_sites : bool (optional)
         Whether to multiprocess over sites (when not using mp over events)
     """
+    # Get the catalogue information
+    catalog_dict = {
+        event_id: client_NZ.get_events(eventid=event_id)[0] for event_id in batch_events
+    }
+
     # Ensure fork
     mp.set_start_method("fork", force=True)
     # Fetch results
@@ -543,7 +544,7 @@ def process_batch(
         results = [
             fetch_event_data(
                 event_id,
-                client_NZ,
+                catalog_dict[event_id],
                 inventory,
                 site_table,
                 mw_rrup_data,
@@ -555,10 +556,9 @@ def process_batch(
         ]
     else:
         with mp.Pool(n_procs) as p:
-            results = p.map(
+            results = p.starmap(
                 functools.partial(
                     fetch_event_data,
-                    client_NZ=client_NZ,
                     inventory=inventory,
                     site_table=site_table,
                     mw_rrup_data=mw_rrup_data,
@@ -566,7 +566,7 @@ def process_batch(
                     only_record_ids=only_record_ids,
                     n_procs=1,
                 ),
-                batch_events,
+                [(event_id, catalog_dict[event_id]) for event_id in batch_events],
             )
 
     # Extract the results
@@ -726,7 +726,7 @@ def parse_geonet_information(
     only_sites: list[str] = None,
     only_record_ids_ffp: Path = None,
     real_time: bool = False,
-    mp_sites: bool = True,
+    mp_sites: bool = False,
 ):
     """
     Read the geonet information and manage the fetching of more data to create the mseed files
