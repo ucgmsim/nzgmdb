@@ -799,7 +799,7 @@ def extract_station_info(
                 {"record_id": [f"{event_id}_{station}"], "reason": ["No Waveform Data"]}
             )
         )
-        return sta_mag_line, skipped_records, clipped_records
+        return sta_mag_line, skipped_records, clipped_records, multi_trace_issues
 
     # Get the unique channels (Using first 2 keys) and locations
     unique_channels = set([(tr.stats.channel[:2], tr.stats.location) for tr in st])
