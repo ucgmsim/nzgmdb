@@ -1025,7 +1025,7 @@ def extract_waveforms(
                     functools.partial(
                         extract_station_info,
                         main_dir=main_dir,
-                        catalog_dict=catalog_dict,
+                        event_catalogues=catalog_dict,
                         only_record_ids=only_record_ids,
                     ),
                     (row for _, row in batch_rows.iterrows()),
