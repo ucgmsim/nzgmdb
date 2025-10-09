@@ -969,7 +969,7 @@ def run_full_nzgmdb(
             / file_structure.PreFlatfileNames.STATION_EXTRACTION_TABLE_GEONET,
             extract_n_procs,
             only_record_ids_ffp,
-            batch_size=geonet_batch_size,
+            batch_size=250,
         )
 
     # Merge the tectonic domains
