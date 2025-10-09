@@ -979,7 +979,7 @@ def extract_waveforms(
         station_extraction_table["evid_sta"] = (
             station_extraction_table["evid"] + "_" + station_extraction_table["sta"]
         )
-        # Mkae a evid_sta column in the only_record_ids
+        # Make a evid_sta column in the only_record_ids
         only_record_ids["evid_sta"] = (
             only_record_ids["record_id"].str.split("_").str[0]
             + "_"
