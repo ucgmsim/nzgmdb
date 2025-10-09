@@ -863,7 +863,8 @@ def apply_all_filters(
     # Ensure uniqueness
     catalogue_test = catalogue.copy()
     catalogue_test["evid_sta"] = catalogue_test["evid"].astype(str) + "_" + catalogue_test["sta"]
-    assert len(catalogue_test["evid_sta"].unique()) == len(catalogue_test)
+    if len(catalogue_test["evid_sta"].unique()) != len(catalogue_test):
+        raise ValueError("Catalogue 'evid_sta' column must be unique.")
 
     return catalogue, skipped_records
 
