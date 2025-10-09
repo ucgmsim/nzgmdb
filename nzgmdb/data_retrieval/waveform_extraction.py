@@ -732,7 +732,6 @@ def extract_station_info(
     station_extraction_row: pd.Series,
     main_dir: Path,
     event_catalogues: dict,
-    client: FDSN_Client,
     only_record_ids: pd.DataFrame = None,
 ):
     """
@@ -790,6 +789,7 @@ def extract_station_info(
         location = site_only_record_ids["record_id"].str.split("_").str[-1].values[0]
 
     # Get the Stream
+    client = FDSN_Client("GEONET")
     st = get_station_window(station_extraction_row, client, channel_codes, location)
 
     # Check that data was found
@@ -1004,7 +1004,6 @@ def extract_waveforms(
         station_extraction_table.index,
         np.ceil(len(station_extraction_table) / batch_size),
     )
-
     client = FDSN_Client("GEONET")
 
     for batch_index, batch_indices in enumerate(index_batches):
@@ -1027,7 +1026,6 @@ def extract_waveforms(
                         extract_station_info,
                         main_dir=main_dir,
                         catalog_dict=catalog_dict,
-                        client=client,
                         only_record_ids=only_record_ids,
                     ),
                     (row for _, row in batch_rows.iterrows()),
