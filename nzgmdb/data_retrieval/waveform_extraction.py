@@ -731,6 +731,8 @@ def get_station_window(
 def extract_station_info(
     station_extraction_row: pd.Series,
     main_dir: Path,
+    event_catalogues: dict,
+    client: FDSN_Client,
     only_record_ids: pd.DataFrame = None,
 ):
     """
@@ -756,7 +758,6 @@ def extract_station_info(
     list
         A list of DataFrames containing any multi-trace issues raised during the extraction.
     """
-    client = FDSN_Client("GEONET")
     sta_mag_line, skipped_records, clipped_records, multi_trace_issues = [], [], [], []
     # Extract the parameters from the row
     event_id = station_extraction_row["evid"]
@@ -767,8 +768,7 @@ def extract_station_info(
     r_hyp = station_extraction_row["r_hyp"]
 
     # Get the catalogue information
-    cat = client.get_events(eventid=event_id)
-    event_cat = cat[0]
+    event_cat = event_catalogues[event_id]
 
     # Obtain the station channel codes and location
     config = cfg.Config()
@@ -1005,15 +1005,29 @@ def extract_waveforms(
         np.ceil(len(station_extraction_table) / batch_size),
     )
 
+    client = FDSN_Client("GEONET")
+
     for batch_index, batch_indices in enumerate(index_batches):
         if batch_index not in processed_suffixes:
             print(f"Processing batch {batch_index + 1}/{len(index_batches)}")
             batch_rows = station_extraction_table.loc[batch_indices]
+
+            # Get the catalogue information
+            catalog_dict = {
+                event_id: client.get_events(eventid=event_id)[0]
+                for event_id in batch_rows["evid"].unique()
+            }
+
+            # Ensure fork
+            mp.set_start_method("fork", force=True)
+
             with mp.Pool(n_procs) as pool:
                 results = pool.map(
                     functools.partial(
                         extract_station_info,
                         main_dir=main_dir,
+                        catalog_dict=catalog_dict,
+                        client=client,
                         only_record_ids=only_record_ids,
                     ),
                     (row for _, row in batch_rows.iterrows()),
