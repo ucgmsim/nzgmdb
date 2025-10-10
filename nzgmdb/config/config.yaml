@@ -81,6 +81,7 @@ clip_threshold: 0.2
 ims:
   - PGA
   - PGV
+  - PGD
   - CAV
   - CAV5
   - AI

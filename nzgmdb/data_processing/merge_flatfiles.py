@@ -122,6 +122,7 @@ def merge_im_data(
             "component",
             "PGA",
             "PGV",
+            "PGD",
             "CAV",
             "CAV5",
             "AI",
@@ -593,6 +594,7 @@ def merge_flatfiles(main_dir: Path, bypass_records_ffp: Path = None):
             "site_domain_no",
             "PGA",
             "PGV",
+            "PGD",
             "CAV",
             "CAV5",
             "AI",
@@ -654,6 +656,7 @@ def merge_flatfiles(main_dir: Path, bypass_records_ffp: Path = None):
     columns_remove_eas = [
         "PGA",
         "PGV",
+        "PGD",
         "CAV",
         "CAV5",
         "AI",
