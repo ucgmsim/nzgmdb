@@ -86,11 +86,11 @@ def fetch_event_line(event_cat: Event, event_id: str):
     # Get the preferred magnitude and preferred origin
     preferred_origin = event_cat.preferred_origin()
     preferred_magnitude = event_cat.preferred_magnitude()
-    quality = preferred_origin.quality
 
     # If the preferred origin is None, return None
     if preferred_origin is None:
         return None
+    quality = preferred_origin.quality
 
     # Extract basic info from the catalogue
     ev_datetime = preferred_origin.time
