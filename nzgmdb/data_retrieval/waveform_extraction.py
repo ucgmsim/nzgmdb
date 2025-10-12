@@ -35,7 +35,7 @@ def get_inital_stream(
     location: str,
     client: FDSN_Client,
     net: str,
-    sta: str,
+    stations: str,
 ):
     """
     Get the initial stream of waveforms from the FDSN client with multiple retries for incomplete reads.
@@ -55,8 +55,9 @@ def get_inital_stream(
         The FDSN client to use for retrieving waveforms.
     net : str
         The network code to retrieve waveforms for.
-    sta : str
-        The station code to retrieve waveforms for.
+    stations: str
+        The station codes to retrieve waveforms for, formatted as a comma-separated string.
+        e.g. "CCCC,WELS,HORC".
 
     Returns
     -------
@@ -71,7 +72,7 @@ def get_inital_stream(
                 warnings.filterwarnings("ignore", category=UserWarning)
                 st = client.get_waveforms(
                     net,
-                    sta,
+                    stations,
                     location,
                     channel_codes,
                     start_time,
@@ -89,13 +90,13 @@ def get_inital_stream(
             else:
                 return None
         except FDSNServiceUnavailableException:
-            print(f"Error getting waveforms for {net}.{sta}")
+            print(f"Error getting waveforms for Network: {net} N_Stations: {len(stations)}")
             print("Service temporarily unavailable")
             print("HTTP Status code: 503")
             print("Retrying in 2 minutes...")
             time.sleep(120)  # Wait for 2 minutes before retrying
         except Exception as e:  # noqa: BLE001
-            print(f"Unexpected error getting waveforms for {net}.{sta}")
+            print(f"Unexpected error getting waveforms for Network: {net} N_Stations: {len(stations)}")
             print(e)
             return None
     return st
@@ -683,53 +684,8 @@ def check_trace_issues(st: Stream, record_id: str, station_extraction_row: pd.Se
     return st, None, raised_issues
 
 
-def get_station_window(
-    station_extraction_row: pd.Series,
-    client: FDSN_Client,
-    channel_codes: str,
-    loc: str,
-):
-    """
-    Get the initial stream of waveforms for a station based on the extraction parameters.
-
-    Parameters
-    ----------
-    station_extraction_row : pd.Series
-        A row from the station extraction table containing the parameters for waveform extraction.
-    client : FDSN_Client
-        The FDSN client to use for retrieving waveforms.
-    channel_codes : str
-        The channel codes to retrieve, formatted as a comma-separated string.
-        e.g. "HN?,BN?,HH?".
-    loc : str
-        The location code to retrieve waveforms for, typically "*".
-
-    Returns
-    -------
-    Stream
-        An ObsPy Stream object containing the waveform data for the specified station.
-    """
-    # Extract the parameters from the row
-    net = station_extraction_row["net"]
-    sta = station_extraction_row["sta"]
-    ptime_est = UTCDateTime(station_extraction_row["ptime_est"])
-    ds_mean = station_extraction_row["ds_mean"]
-    ds_std = station_extraction_row["ds_std"]
-
-    # Get the config values
-    config = cfg.Config()
-    pre_event_time_difference = config.get_value("pre_event_time_difference")
-    ds_std_multiplier = config.get_value("ds_std_multiplier")
-
-    start_time = ptime_est - pre_event_time_difference
-    # Note: both ds_mean and ds_std are in logspace
-    end_time = ptime_est + np.exp(ds_mean) * np.exp(ds_std_multiplier * ds_std)
-
-    return get_inital_stream(start_time, end_time, channel_codes, loc, client, net, sta)
-
-
 def extract_station_info(
-    station_extraction_row: pd.Series,
+    station_extraction_rows: pd.DataFrame,
     main_dir: Path,
     event_catalogues: dict,
     only_record_ids: pd.DataFrame = None,
@@ -739,8 +695,8 @@ def extract_station_info(
 
     Parameters
     ----------
-    station_extraction_row : pd.Series
-        A row from the station extraction table containing the parameters for waveform extraction.
+    station_extraction_rows : pd.DataFrame
+        The rows for a sinlge event from the station extraction table containing the parameters for waveform extraction.
     main_dir : Path
         The main directory of the NZGMDB results (Highest Level Directory).
     only_record_ids : pd.DataFrame, optional
@@ -758,13 +714,9 @@ def extract_station_info(
         A list of DataFrames containing any multi-trace issues raised during the extraction.
     """
     sta_mag_line, skipped_records, clipped_records, multi_trace_issues = [], [], [], []
-    # Extract the parameters from the row
-    event_id = station_extraction_row["evid"]
-    station = station_extraction_row["sta"]
-    network = station_extraction_row["net"]
-    mag = station_extraction_row["mag"]
-    pref_mag_type = station_extraction_row["pref_mag_type"]
-    r_hyp = station_extraction_row["r_hyp"]
+
+    # Grab the evid (Same for all rows)
+    event_id = station_extraction_rows["evid"].values[0]
 
     # Get the catalogue information
     event_cat = event_catalogues[event_id]
@@ -774,164 +726,200 @@ def extract_station_info(
     channel_codes = ",".join(config.get_value("channel_codes"))
     location = "*"
 
-    # Check what channel codes and locations to use from only_record_ids if provided
-    if only_record_ids is not None:
-        event_only_record_ids = only_record_ids[
-            only_record_ids["record_id"].str.startswith(f"{event_id}_")
-        ]
-        site_only_record_ids = event_only_record_ids[
-            event_only_record_ids["record_id"].str.contains(f"_{station}_")
-        ]
-        # Get the channel and location to use
-        channel_codes = (
-            site_only_record_ids["record_id"].str.split("_").str[-2].values[0] + "?"
-        )
-        location = site_only_record_ids["record_id"].str.split("_").str[-1].values[0]
+    # Calculate the start and end times in the station_extraction_rows
+    for index, row in station_extraction_rows.iterrows():
+        ptime_est = UTCDateTime(row["ptime_est"])
+        ds_mean = row["ds_mean"]
+        ds_std = row["ds_std"]
+        pre_event_time_difference = config.get_value("pre_event_time_difference")
+        ds_std_multiplier = config.get_value("ds_std_multiplier")
+        start_time = ptime_est - pre_event_time_difference
+        end_time = ptime_est + np.exp(ds_mean) * np.exp(ds_std_multiplier * ds_std)
+        station_extraction_rows.at[index, "start_time"] = start_time
+        station_extraction_rows.at[index, "end_time"] = end_time
 
-    # Get the Stream
+    # Get the min start time and max end time
+    start_time = min(station_extraction_rows["start_time"])
+    end_time = max(station_extraction_rows["end_time"])
+
+    # Get the pairings of network and station
+    net_sta_pairs = station_extraction_rows.groupby(["net"])
+
     client = FDSN_Client("GEONET")
-    st = get_station_window(station_extraction_row, client, channel_codes, location)
 
-    # Check that data was found
-    if st is None:
-        skipped_records.append(
-            pd.DataFrame(
-                {"record_id": [f"{event_id}_{station}"], "reason": ["No Waveform Data"]}
-            )
-        )
-        return sta_mag_line, skipped_records, clipped_records, multi_trace_issues
+    for _, group in net_sta_pairs:
+        network = group["net"].values[0]
+        stations = group["sta"].unique()
 
-    # Get the unique channels (Using first 2 keys) and locations
-    unique_channels = set([(tr.stats.channel[:2], tr.stats.location) for tr in st])
+        # Get the Stream for all stations
+        st_all_stations = get_inital_stream(start_time, end_time, channel_codes, location, client, network, stations)
 
-    # Split the stream into mseeds
-    mseeds = []
-    for chan, loc in unique_channels:
-        # Each unique channel and location pair is a new mseed file
-        st_new = st.select(location=loc, channel=f"{chan}?")
-        record_id = f"{event_id}_{st_new[0].stats.station}_{st_new[0].stats.channel[:2]}_{st_new[0].stats.location}"
+        for _, station_extraction_row in station_extraction_rows.iterrows():
 
-        # Check trace issues
-        st_revised, skipped, issues = check_trace_issues(
-            st_new, record_id, station_extraction_row
-        )
+            # Extract the parameters from the row
+            station = station_extraction_row["sta"]
+            network = station_extraction_row["net"]
+            mag = station_extraction_row["mag"]
+            pref_mag_type = station_extraction_row["pref_mag_type"]
+            r_hyp = station_extraction_row["r_hyp"]
 
-        multi_trace_issues.extend(issues)
-        # Add to the skipped records if any were raised
-        if skipped is not None:
-            skipped_records.append(skipped)
-            continue
-        else:
-            mseeds.append(st_revised)
+            # Select the data for the given station / network
+            st = st_all_stations.select(station=station, network=network)
 
-    # Get the station magnitudes
-    station_magnitudes = [
-        mag
-        for mag in event_cat.station_magnitudes
-        if mag.waveform_id.station_code == station
-    ]
-
-    for mseed in mseeds:
-        try:
-            # Check the data is not all 0's
-            if all([np.allclose(tr.data, 0) for tr in mseed]):
-                stats = mseed[0].stats
+            # Check that data was found
+            if st is None:
                 skipped_records.append(
                     pd.DataFrame(
-                        {
-                            "record_id": [
-                                f"{event_id}_{stats.station}_{stats.channel}_{stats.location}"
-                            ],
-                            "reason": ["All 0's"],
-                        }
+                        {"record_id": [f"{event_id}_{station}"], "reason": ["No Waveform Data"]}
                     )
                 )
-                continue
-        except TypeError:
-            stats = mseed[0].stats
-            skipped_records.append(
-                pd.DataFrame(
-                    {
-                        "record_id": [
-                            f"{event_id}_{stats.station}_{stats.channel}_{stats.location}"
-                        ],
-                        "reason": ["TypeError when checking for all 0's"],
-                    }
+                return sta_mag_line, skipped_records, clipped_records, multi_trace_issues
+
+            # Get the unique channels (Using first 2 keys) and locations
+            unique_channels = set([(tr.stats.channel[:2], tr.stats.location) for tr in st])
+
+            # Check what channel codes and locations to use from only_record_ids if provided
+            # if only_record_ids is not None:
+            #     event_only_record_ids = only_record_ids[
+            #         only_record_ids["record_id"].str.startswith(f"{event_id}_")
+            #     ]
+            #     site_only_record_ids = event_only_record_ids[
+            #         event_only_record_ids["record_id"].str.contains(f"_{station}_")
+            #     ]
+            #     # Get the channel and location to use
+            #     channel_codes = (
+            #             site_only_record_ids["record_id"].str.split("_").str[-2].values[0] + "?"
+            #     )
+            #     location = site_only_record_ids["record_id"].str.split("_").str[-1].values[0]
+
+            # Split the stream into mseeds
+            mseeds = []
+            for chan, loc in unique_channels:
+                # Each unique channel and location pair is a new mseed file
+                st_new = st.select(location=loc, channel=f"{chan}?")
+                record_id = f"{event_id}_{st_new[0].stats.station}_{st_new[0].stats.channel[:2]}_{st_new[0].stats.location}"
+
+                # Check trace issues
+                st_revised, skipped, issues = check_trace_issues(
+                    st_new, record_id, station_extraction_row
                 )
-            )
 
-        # Calculate clip to determine if the record should be dropped
-        # clip = filtering.get_clip_probability(mag, r_hyp, mseed)
+                multi_trace_issues.extend(issues)
+                # Add to the skipped records if any were raised
+                if skipped is not None:
+                    skipped_records.append(skipped)
+                    continue
+                else:
+                    mseeds.append(st_revised)
 
-        # threshold = config.get_value("clip_threshold")
+            # Get the station magnitudes
+            station_magnitudes = [
+                mag
+                for mag in event_cat.station_magnitudes
+                if mag.waveform_id.station_code == station
+            ]
 
-        # Check if the record should be dropped
-        # if clip > threshold:
-        #     stats = mseed[0].stats
-        #     clipped_records.append(
-        #         [
-        #             f"{event_id}_{stats.station}_{stats.channel[:2]}_{stats.location}",
-        #             "Clipped",
-        #         ]
-        #     )
+            for mseed in mseeds:
+                try:
+                    # Check the data is not all 0's
+                    if all([np.allclose(tr.data, 0) for tr in mseed]):
+                        stats = mseed[0].stats
+                        skipped_records.append(
+                            pd.DataFrame(
+                                {
+                                    "record_id": [
+                                        f"{event_id}_{stats.station}_{stats.channel}_{stats.location}"
+                                    ],
+                                    "reason": ["All 0's"],
+                                }
+                            )
+                        )
+                        continue
+                except TypeError:
+                    stats = mseed[0].stats
+                    skipped_records.append(
+                        pd.DataFrame(
+                            {
+                                "record_id": [
+                                    f"{event_id}_{stats.station}_{stats.channel}_{stats.location}"
+                                ],
+                                "reason": ["TypeError when checking for all 0's"],
+                            }
+                        )
+                    )
 
-        # Create the directory structure for the given event
-        year = event_cat.origins[0].time.year
-        mseed_dir = file_structure.get_mseed_dir(main_dir, year, event_id)
+                # Calculate clip to determine if the record should be dropped
+                # clip = filtering.get_clip_probability(mag, r_hyp, mseed)
 
-        # Write the mseed file
-        creation.write_mseed(mseed, event_id, station, mseed_dir)
+                # threshold = config.get_value("clip_threshold")
 
-        for trace in mseed:
-            chan = trace.stats.channel
-            loc = trace.stats.location
-            # Find the station magnitude
-            # Ensures that the station codes matches and that if the channel code ends with Z then it makes
-            # sure that the station magnitude is for the Z channel, otherwise any that match with the first two
-            # characters of the channel code is sufficient
-            sta_mag = None
-            for mag in station_magnitudes:
-                if mag.waveform_id.channel_code[:2] == chan[:2]:
-                    sta_mag = mag
-                    if chan[-1] == "Z":
-                        break
+                # Check if the record should be dropped
+                # if clip > threshold:
+                #     stats = mseed[0].stats
+                #     clipped_records.append(
+                #         [
+                #             f"{event_id}_{stats.station}_{stats.channel[:2]}_{stats.location}",
+                #             "Clipped",
+                #         ]
+                #     )
 
-            if sta_mag:
-                sta_mag_mag = sta_mag.mag
-                sta_mag_type = sta_mag.station_magnitude_type
-                amp = next(
-                    (
-                        amp
-                        for amp in event_cat.amplitudes
-                        if amp.resource_id == sta_mag.amplitude_id
-                    ),
-                    None,
-                )
-            else:
-                sta_mag_mag = None
-                sta_mag_type = pref_mag_type
-                amp = None
+                # Create the directory structure for the given event
+                year = event_cat.origins[0].time.year
+                mseed_dir = file_structure.get_mseed_dir(main_dir, year, event_id)
 
-            # Get the amp values
-            amp_amp = amp.generic_amplitude if amp else None
-            amp_unit = amp.unit if amp and "unit" in amp else None
+                # Write the mseed file
+                creation.write_mseed(mseed, event_id, station, mseed_dir)
 
-            mag_id = f"{event_id}m{len(sta_mag_line) + 1}"
-            sta_mag_line.append(
-                [
-                    mag_id,
-                    network,
-                    station,
-                    loc,
-                    chan,
-                    event_id,
-                    sta_mag_mag,
-                    sta_mag_type,
-                    "uncorrected",
-                    amp_amp,
-                    amp_unit,
-                ]
-            )
+                for trace in mseed:
+                    chan = trace.stats.channel
+                    loc = trace.stats.location
+                    # Find the station magnitude
+                    # Ensures that the station codes matches and that if the channel code ends with Z then it makes
+                    # sure that the station magnitude is for the Z channel, otherwise any that match with the first two
+                    # characters of the channel code is sufficient
+                    sta_mag = None
+                    for mag in station_magnitudes:
+                        if mag.waveform_id.channel_code[:2] == chan[:2]:
+                            sta_mag = mag
+                            if chan[-1] == "Z":
+                                break
+
+                    if sta_mag:
+                        sta_mag_mag = sta_mag.mag
+                        sta_mag_type = sta_mag.station_magnitude_type
+                        amp = next(
+                            (
+                                amp
+                                for amp in event_cat.amplitudes
+                                if amp.resource_id == sta_mag.amplitude_id
+                            ),
+                            None,
+                        )
+                    else:
+                        sta_mag_mag = None
+                        sta_mag_type = pref_mag_type
+                        amp = None
+
+                    # Get the amp values
+                    amp_amp = amp.generic_amplitude if amp else None
+                    amp_unit = amp.unit if amp and "unit" in amp else None
+
+                    mag_id = f"{event_id}m{len(sta_mag_line) + 1}"
+                    sta_mag_line.append(
+                        [
+                            mag_id,
+                            network,
+                            station,
+                            loc,
+                            chan,
+                            event_id,
+                            sta_mag_mag,
+                            sta_mag_type,
+                            "uncorrected",
+                            amp_amp,
+                            amp_unit,
+                        ]
+                    )
 
     return sta_mag_line, skipped_records, clipped_records, multi_trace_issues
 
