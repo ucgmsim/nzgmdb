@@ -998,23 +998,26 @@ def extract_waveforms(
     # Find files that have already been processed and get the suffix indexes and remove them from the event_ids
     processed_files = [f for f in batch_dir.iterdir() if f.is_file()]
     processed_suffixes = set(int(f.stem.split("_")[-1]) for f in processed_files)
+    batch_size = 50
 
-    # Split the DataFrame index into batches
-    index_batches = np.array_split(
-        station_extraction_table.index,
-        np.ceil(len(station_extraction_table) / batch_size),
+    # Group by evid
+    event_groups = [group for _, group in station_extraction_table.groupby("evid")]
+
+    # Split event groups into batches
+    event_batches = np.array_split(
+        event_groups, np.ceil(len(event_groups) / batch_size)
     )
     client = FDSN_Client("GEONET")
 
-    for batch_index, batch_indices in enumerate(index_batches):
+    for batch_index, batch in enumerate(event_batches):
         if batch_index not in processed_suffixes:
-            print(f"Processing batch {batch_index + 1}/{len(index_batches)}")
-            batch_rows = station_extraction_table.loc[batch_indices]
+            print(f"Processing batch {batch_index + 1}/{len(event_batches)}")
+            batch_evids = [group["evid"].iloc[0] for group in batch]
 
             # Get the catalogue information
             catalog_dict = {
                 event_id: client.get_events(eventid=event_id)[0]
-                for event_id in batch_rows["evid"].unique()
+                for event_id in batch_evids
             }
 
             # Ensure fork
@@ -1028,7 +1031,7 @@ def extract_waveforms(
                         event_catalogues=catalog_dict,
                         only_record_ids=only_record_ids,
                     ),
-                    (row for _, row in batch_rows.iterrows()),
+                    batch,
                 )
 
             # Extract the results
