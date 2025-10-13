@@ -88,7 +88,7 @@ def fetch_event_line(event_cat: Event, event_id: str):
     preferred_magnitude = event_cat.preferred_magnitude()
 
     # If the preferred origin is None, return None
-    if preferred_origin is None:
+    if preferred_origin is None or preferred_magnitude is None:
         return None
     quality = preferred_origin.quality
 
