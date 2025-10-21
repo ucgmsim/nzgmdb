@@ -759,7 +759,7 @@ def extract_station_info(
     event_id = station_extraction_row["evid"]
     station = station_extraction_row["sta"]
     network = station_extraction_row["net"]
-    mag = station_extraction_row["mag"]
+    event_mag = station_extraction_row["mag"]
     pref_mag_type = station_extraction_row["pref_mag_type"]
     r_hyp = station_extraction_row["r_hyp"]
 
@@ -859,7 +859,7 @@ def extract_station_info(
             )
 
         # Calculate clip to determine if the record should be dropped
-        clip = filtering.get_clip_probability(mag, r_hyp, mseed)
+        clip = filtering.get_clip_probability(event_mag, r_hyp, mseed)
 
         threshold = config.get_value("clip_threshold")
 
