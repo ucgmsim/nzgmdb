@@ -121,9 +121,7 @@ def get_arias_intensity_norm(
     dt = trace.stats.delta
     npts = trace.stats.npts
 
-    a = trace.data  # acceleration in m/s^2
-
-    a_sq = a**2.0
+    a_sq = trace.data**2.0
     Ia = np.zeros(npts)
 
     for i in range(1, npts):

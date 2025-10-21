@@ -767,10 +767,6 @@ def parse_geonet_information(
         if not only_event_ids:
             # Get the earthquake data
             geonet = download_earthquake_data(start_date, end_date)
-            # geonet = pd.read_csv(
-            #     "/home/joel/local/gmdb/waveform_window/4p4_window/events_around_large_subset/events_around.csv",
-            #     dtype={"publicid": str},
-            # )
 
             # Get all event ids
             event_ids = geonet.publicid.unique().astype(str)
