@@ -340,6 +340,14 @@ def download_dropbox_archive(
         Directory where the NZGMDB archive will be downloaded and extracted.
     version : str
         Version of the NZGMDB archive to download, e.g. "4p3".
+    ignore_flatfiles : bool
+        If True, flatfiles will not be downloaded.
+    ignore_waveforms : bool
+        If True, waveforms will not be downloaded.
+    ignore_snrfas : bool
+        If True, SNR FAS files will not be downloaded.
+    ignore_quality : bool
+        If True, quality flatfiles will not be downloaded.
     """
     dropbox_version_dir = f"{DROPBOX_PATH}/{version}"
 
