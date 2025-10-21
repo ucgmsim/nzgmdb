@@ -24,6 +24,9 @@ REGISTRY = {
     "TectonicDomains_Feb2021_8_NZTM.shx": "sha256:9ca42e270e5604f4740b3d99ea6a72daa75eaae0e6c6bda3c4e5c86a72369403",
     "TectonicDomains_Feb2021_8_NZTM.dbf": "sha256:534c644c5d4d6a08106752e2fe33894bc820645efa017e0137ef5b8d44e8200c",
     "tectonic_domain_polygon_points.csv": "sha256:a54c30a4e68bb078c6ce9d99bd30f902a9627d57fd39392b403064de61b1f1a4",
+    "brendon_set.csv": "sha256:a62d8c69f7f7bc6ccf0318a113a152befb35cfb21c56ab4806c58f24f221ce2e",
+    "lee_large.csv": "sha256:e4077746552937cd0a48be723b0188d33d4a73c2364716f085c0cd55ab78ec58",
+    "lee_small.csv": "sha256:b274bc99fcacb2747623f754b92d594c3b6729cfcfd0d046365ad3c6fba706c1",
     "sensitivity_ignore.csv": "sha256:2282de53c63be44fcd27d753969cacdd23b3b02bf053ffa481f97f2a517d2c7e",
 }
 
@@ -49,6 +52,9 @@ URLS = {
     "3468575.srf": "https://www.dropbox.com/scl/fi/rt2xedggp3yt6jyvmgqmx/3468575.srf?rlkey=t06fswe8kr415k68kc6y58m32&st=2wemmuzx&dl=1",
     "3528839.srf": "https://www.dropbox.com/scl/fi/4cps30pfrt6vw8a2ih1jr/3528839.srf?rlkey=tssde379h8lfn6ql0n29fl7dx&st=u2jnxrsx&dl=1",
     "3631359.srf": "https://www.dropbox.com/scl/fi/g66sx9d30r2k2xs9kg977/3631359.srf?rlkey=ne7zplqwd1datludrae7a3b2o&st=idq88bbj&dl=1",
+    "brendon_set.csv": "https://www.dropbox.com/scl/fi/7t3jv1pjtvhkadwd2bdrq/brendon_set.csv?rlkey=o65u8okmcdmgko133m20hjohl&st=egxi3hie&dl=1",
+    "lee_large.csv": "https://www.dropbox.com/scl/fi/mvrank082ymdoyx9gd01a/lee_large.csv?rlkey=gbma92x0clykky7aibpdv0yaa&st=ahuelv65&dl=1",
+    "lee_small.csv": "https://www.dropbox.com/scl/fi/o1ljfke9qoqgiv4md17ke/lee_small.csv?rlkey=6ojepz5j9snedep1zgi2x9t2s&st=a9qhbgfz&dl=1",
     "sensitivity_ignore.csv": "https://www.dropbox.com/scl/fi/51nz3ia5bzbuvikajba28/sensitivity_ignore.csv?rlkey=9fj57vb5inwtxh68sqrmocth2&st=9r1r5vup&dl=1",
 }
 

@@ -20,8 +20,7 @@ def test_filter_has_score_mean(sample_catalogue: pd.DataFrame):
     sample_catalogue : pd.DataFrame
         A sample catalogue DataFrame to test the filtering function.
     """
-    cat, skipped = quality_db.filter_has_score_mean(sample_catalogue)
-    assert "1493377_NELS_HN_20" not in cat["record_id"].values
+    skipped = quality_db.filter_has_score_mean(sample_catalogue)
     assert "1493377_NELS_HN_20" in skipped["record_id"].values
 
 
@@ -34,8 +33,7 @@ def test_filter_score_mean(sample_catalogue: pd.DataFrame):
     sample_catalogue : pd.DataFrame
         A sample catalogue DataFrame to test the filtering function.
     """
-    cat, skipped = quality_db.filter_score_mean(sample_catalogue, score_min=0.5)
-    assert "2016p858076_BMTS_HN_20" not in cat["record_id"].values
+    skipped = quality_db.filter_score_mean(sample_catalogue, score_min=0.5)
     assert "2016p858076_BMTS_HN_20" in skipped["record_id"].values
 
 
@@ -48,8 +46,7 @@ def test_filter_multi_mean(sample_catalogue: pd.DataFrame):
     sample_catalogue : pd.DataFrame
         A sample catalogue DataFrame to test the filtering function.
     """
-    cat, skipped = quality_db.filter_multi_mean(sample_catalogue, multi_max=0.2)
-    assert "2126295_MLZ_HH_10" not in cat["record_id"].values
+    skipped = quality_db.filter_multi_mean(sample_catalogue, multi_max=0.2)
     assert "2126295_MLZ_HH_10" in skipped["record_id"].values
 
 
@@ -62,8 +59,7 @@ def test_filter_fmax(sample_catalogue: pd.DataFrame):
     sample_catalogue : pd.DataFrame
         A sample catalogue DataFrame to test the filtering function.
     """
-    cat, skipped = quality_db.filter_fmax(sample_catalogue, fmax_min=4.1)
-    assert "2016p858116_QRZ_HH_10" not in cat["record_id"].values
+    skipped = quality_db.filter_fmax(sample_catalogue, fmax_min=4.1)
     assert "2016p858116_QRZ_HH_10" in skipped["record_id"].values
 
 
@@ -76,11 +72,7 @@ def test_filter_fmin(sample_catalogue: pd.DataFrame):
     sample_catalogue : pd.DataFrame
         A sample catalogue DataFrame to test the filtering function.
     """
-    cat, skipped = quality_db.filter_fmin(sample_catalogue, fmin_max=2.0)
-    assert not all(
-        rec in cat["record_id"].values
-        for rec in ["2016p858076_BMTS_HN_20", "2014p001738_POKS_HN_20"]
-    )
+    skipped = quality_db.filter_fmin(sample_catalogue, fmin_max=2.0)
     assert all(
         rec in skipped["record_id"].values
         for rec in ["2016p858076_BMTS_HN_20", "2014p001738_POKS_HN_20"]
@@ -96,8 +88,7 @@ def test_filter_missing_sta_info(sample_catalogue: pd.DataFrame):
     sample_catalogue : pd.DataFrame
         A sample catalogue DataFrame to test the filtering function.
     """
-    cat, skipped = quality_db.filter_missing_sta_info(sample_catalogue)
-    assert "3151675_RIZ_HH_10" not in cat["record_id"].values
+    skipped = quality_db.filter_missing_sta_info(sample_catalogue)
     assert "3151675_RIZ_HH_10" in skipped["record_id"].values
 
 
@@ -110,8 +101,7 @@ def test_filter_ground_level_locations(sample_catalogue: pd.DataFrame):
     sample_catalogue : pd.DataFrame
         A sample catalogue DataFrame to test the filtering function.
     """
-    cat, skipped = quality_db.filter_ground_level_locations(sample_catalogue)
-    assert "2013p707091_CPLB_BN_2D" not in cat["record_id"].values
+    skipped = quality_db.filter_ground_level_locations(sample_catalogue)
     assert "2013p707091_CPLB_BN_2D" in skipped["record_id"].values
 
 
@@ -124,8 +114,7 @@ def test_filter_duplicate_channels(sample_catalogue: pd.DataFrame):
     sample_catalogue : pd.DataFrame
         A sample catalogue DataFrame to test the filtering function.
     """
-    cat, skipped = quality_db.filter_duplicate_channels(sample_catalogue)
-    assert "2016p858848_POTS_BN_20" not in cat["record_id"].values
+    skipped = quality_db.filter_duplicate_channels(sample_catalogue)
     assert "2016p858848_POTS_BN_20" in skipped["record_id"].values
 
 
@@ -139,10 +128,7 @@ def test_apply_clipNet_filter(sample_catalogue: pd.DataFrame):
         A sample catalogue DataFrame to test the filtering function.
     """
     clipped_file = Path(__file__).parent / "clipped_testing.csv"
-    cat, skipped = quality_db.apply_clipNet_filter(
-        sample_catalogue.copy(), clipped_file
-    )
-    assert "1493377_NELS_HN_20" not in cat["record_id"].values
+    skipped = quality_db.apply_clipNet_filter(sample_catalogue.copy(), clipped_file)
     assert "1493377_NELS_HN_20" in skipped["record_id"].values
 
 
@@ -155,11 +141,7 @@ def test_filter_troublesome_sensitivity(sample_catalogue: pd.DataFrame):
     sample_catalogue : pd.DataFrame
         A sample catalogue DataFrame to test the filtering function.
     """
-    cat, skipped = quality_db.filter_troublesome_sensitivity(sample_catalogue.copy())
-    assert not all(
-        rec in cat["record_id"].values
-        for rec in ["1470798_TOZ_HH_10", "1632127_KNZ_HH_10"]
-    )
+    skipped = quality_db.filter_troublesome_sensitivity(sample_catalogue.copy())
     assert all(
         rec in skipped["record_id"].values
         for rec in ["1470798_TOZ_HH_10", "1632127_KNZ_HH_10"]
@@ -175,8 +157,28 @@ def test_filter_empirical_predictions(sample_catalogue: pd.DataFrame):
     sample_catalogue : pd.DataFrame
         A sample catalogue DataFrame to test the filtering function.
     """
-    cat, skipped = quality_db.filter_empirical_predictions(
+    skipped = quality_db.filter_empirical_predictions(
         sample_catalogue.copy(), max_residual_threshold=3.0
     )
-    assert "2014p001738_POKS_HN_20" not in cat["record_id"].values
     assert "2014p001738_POKS_HN_20" in skipped["record_id"].values
+
+
+def test_filter_all(sample_catalogue: pd.DataFrame):
+    """
+    Test applying all filters. Ensures that the final catalogue contains only the expected records.
+    And that the skipped records contain all the expected skipped records.
+
+    Parameters
+    ----------
+    sample_catalogue : pd.DataFrame
+        A sample catalogue DataFrame to test the filtering function.
+    """
+    clipped_file = Path(__file__).parent / "clipped_testing.csv"
+    cat, skipped = quality_db.apply_all_filters(sample_catalogue, clipped_file)
+    # Assert that the 2 records are in the catalogue after filtering
+    assert "2016p858848_POTS_HN_20" in cat["record_id"].values
+    assert "2148502_MLZ_HH_10" in cat["record_id"].values
+    assert len(cat) == 2
+    # Assert that all the skipped records are in the skipped DataFrame
+    removed_ids = set(sample_catalogue["record_id"]) - set(cat["record_id"])
+    assert removed_ids.issubset(set(skipped["record_id"]))

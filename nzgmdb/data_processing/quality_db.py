@@ -10,7 +10,6 @@ import pandas as pd
 from nzgmdb.management import config as cfg
 from nzgmdb.management import file_structure
 from nzgmdb.management.data_registry import NZGMDB_DATA
-from nzgmdb.management.file_structure import FlatfileNames
 from oq_wrapper import constants, wrapper
 
 
@@ -31,34 +30,34 @@ def filter_flatfiles_on_catalouge(
         The dataframe containing the records to filter on
     """
     file_to_filter = [
-        FlatfileNames.EARTHQUAKE_SOURCE_TABLE,
-        FlatfileNames.EARTHQUAKE_SOURCE_GEOMETRY,
-        FlatfileNames.FMAX,
-        FlatfileNames.STATION_MAGNITUDE_TABLE,
-        FlatfileNames.SITE_TABLE,
-        FlatfileNames.PHASE_ARRIVAL_TABLE,
-        FlatfileNames.PROPAGATION_TABLE,
-        FlatfileNames.GMC_PREDICTIONS,
-        FlatfileNames.SNR_METADATA,
-        FlatfileNames.GROUND_MOTION_IM_000_FLAT,
-        FlatfileNames.GROUND_MOTION_IM_090_FLAT,
-        FlatfileNames.GROUND_MOTION_IM_VER_FLAT,
-        FlatfileNames.GROUND_MOTION_IM_ROTD0_FLAT,
-        FlatfileNames.GROUND_MOTION_IM_ROTD100_FLAT,
-        FlatfileNames.GROUND_MOTION_IM_GEOM_FLAT,
-        FlatfileNames.GROUND_MOTION_IM_EAS_FLAT,
+        file_structure.FlatfileNames.EARTHQUAKE_SOURCE_TABLE,
+        file_structure.FlatfileNames.EARTHQUAKE_SOURCE_GEOMETRY,
+        file_structure.FlatfileNames.FMAX,
+        file_structure.FlatfileNames.STATION_MAGNITUDE_TABLE,
+        file_structure.FlatfileNames.SITE_TABLE,
+        file_structure.FlatfileNames.PHASE_ARRIVAL_TABLE,
+        file_structure.FlatfileNames.PROPAGATION_TABLE,
+        file_structure.FlatfileNames.GMC_PREDICTIONS,
+        file_structure.FlatfileNames.SNR_METADATA,
+        file_structure.FlatfileNames.GROUND_MOTION_IM_000_FLAT,
+        file_structure.FlatfileNames.GROUND_MOTION_IM_090_FLAT,
+        file_structure.FlatfileNames.GROUND_MOTION_IM_VER_FLAT,
+        file_structure.FlatfileNames.GROUND_MOTION_IM_ROTD0_FLAT,
+        file_structure.FlatfileNames.GROUND_MOTION_IM_ROTD100_FLAT,
+        file_structure.FlatfileNames.GROUND_MOTION_IM_GEOM_FLAT,
+        file_structure.FlatfileNames.GROUND_MOTION_IM_EAS_FLAT,
     ]
 
     for file in file_to_filter:
         # Load the new file and filter based on record_id
         df = pd.read_csv(flatfile_dir / file, dtype={"evid": str})
         if file in [
-            FlatfileNames.EARTHQUAKE_SOURCE_TABLE,
-            FlatfileNames.EARTHQUAKE_SOURCE_GEOMETRY,
+            file_structure.FlatfileNames.EARTHQUAKE_SOURCE_TABLE,
+            file_structure.FlatfileNames.EARTHQUAKE_SOURCE_GEOMETRY,
         ]:
             # filter by evid
             df_filtered = df[df["evid"].isin(rotd50_flat["evid"])]
-        elif file == FlatfileNames.STATION_MAGNITUDE_TABLE:
+        elif file == file_structure.FlatfileNames.STATION_MAGNITUDE_TABLE:
             # Ensure loc is str
             df["loc"] = df["loc"].astype(str)
             # Make the record_id column
@@ -74,9 +73,9 @@ def filter_flatfiles_on_catalouge(
             df_filtered = df[df["record_id"].isin(rotd50_flat["record_id"])]
             # remove the record_id column
             df_filtered = df_filtered.drop(columns=["record_id"])
-        elif file == FlatfileNames.SITE_TABLE:
+        elif file == file_structure.FlatfileNames.SITE_TABLE:
             df_filtered = df[df["sta"].isin(rotd50_flat["sta"])]
-        elif file == FlatfileNames.PROPAGATION_TABLE:
+        elif file == file_structure.FlatfileNames.PROPAGATION_TABLE:
             # Make the evid_sta column
             df["evid_sta"] = df["evid"] + "_" + df["sta"]
             # Assert the same length of unique values
@@ -87,7 +86,7 @@ def filter_flatfiles_on_catalouge(
             # remove the evid_sta column
             df_filtered = df_filtered.drop(columns=["evid_sta"])
             rotd50_flat = rotd50_flat.drop(columns=["evid_sta"])
-        elif file == FlatfileNames.GMC_PREDICTIONS:
+        elif file == file_structure.FlatfileNames.GMC_PREDICTIONS:
             df_filtered = df[df["record"].isin(rotd50_flat["record_id"])]
         else:
             df_filtered = df[df["record_id"].isin(rotd50_flat["record_id"])]
@@ -108,9 +107,7 @@ def filter_has_score_mean(catalogue: pd.DataFrame, bypass_records: np.ndarray = 
     Returns
     -------
     pd.DataFrame
-        The filtered catalogue
-    pd.DataFrame
-        The skipped records
+        The skipped records to filter out of the catalogue
     """
     # Find records that do not have a score value (is same across all components)
     has_score_filter = catalogue[catalogue["score_X"].isna()]
@@ -129,10 +126,7 @@ def filter_has_score_mean(catalogue: pd.DataFrame, bypass_records: np.ndarray = 
         }
     )
 
-    # Filter out the has_score records out of the catalogue
-    catalogue = catalogue[~catalogue["record_id"].isin(has_score_filter["record_id"])]
-
-    return catalogue, skipped_records
+    return skipped_records
 
 
 def filter_score_mean(
@@ -159,9 +153,7 @@ def filter_score_mean(
     Returns
     -------
     pd.DataFrame
-        The filtered catalogue
-    pd.DataFrame
-        The skipped records
+        The skipped records to filter out of the catalogue
     """
     # Find records that have too low of a score_X or score_Y value (or score_Z if include_z)
     score_min_filter = catalogue[
@@ -188,10 +180,7 @@ def filter_score_mean(
         }
     )
 
-    # Filter out the score_min records out of the catalogue
-    catalogue = catalogue[~catalogue["record_id"].isin(score_min_filter["record_id"])]
-
-    return catalogue, skipped_records
+    return skipped_records
 
 
 def filter_multi_mean(
@@ -218,9 +207,7 @@ def filter_multi_mean(
     Returns
     -------
     pd.DataFrame
-        The filtered catalogue
-    pd.DataFrame
-        The skipped records
+        The skipped records to filter out of the catalogue
     """
     # Find records that have too high of a multi_X or multi_Y or multi_Z value
     multi_max_filter = catalogue[
@@ -249,10 +236,7 @@ def filter_multi_mean(
         }
     )
 
-    # Filter out the multi_max records out of the catalogue
-    catalogue = catalogue[~catalogue["record_id"].isin(multi_max_filter["record_id"])]
-
-    return catalogue, skipped_records
+    return skipped_records
 
 
 def filter_fmax(
@@ -274,9 +258,7 @@ def filter_fmax(
     Returns
     -------
     pd.DataFrame
-        The filtered catalogue
-    pd.DataFrame
-        The skipped records
+        The skipped records to filter out of the catalogue
     """
     # Find fmax_min
     catalogue.loc[:, "fmax_min"] = catalogue[["fmax_X", "fmax_Y"]].apply(min, axis=1)
@@ -298,13 +280,7 @@ def filter_fmax(
         }
     )
 
-    # Filter out the fmax_min records out of the catalogue
-    catalogue = catalogue[~catalogue["record_id"].isin(fmax_min_filter["record_id"])]
-
-    # Remove the fmax_min column
-    catalogue = catalogue.drop(columns=["fmax_min"])
-
-    return catalogue, skipped_records
+    return skipped_records
 
 
 def filter_fmin(
@@ -326,9 +302,7 @@ def filter_fmin(
     Returns
     -------
     pd.DataFrame
-        The filtered catalogue
-    pd.DataFrame
-        The skipped records
+        The skipped records to filter out of the catalogue
     """
     # Find records that have too high of a fmin_max value
     fmin_max_filter = catalogue[catalogue[["fmin_X", "fmin_Y"]].max(axis=1) > fmin_max]
@@ -347,10 +321,7 @@ def filter_fmin(
         }
     )
 
-    # Filter out the fmin_max records out of the catalogue
-    catalogue = catalogue[~catalogue["record_id"].isin(fmin_max_filter["record_id"])]
-
-    return catalogue, skipped_records
+    return skipped_records
 
 
 def filter_missing_sta_info(
@@ -369,9 +340,7 @@ def filter_missing_sta_info(
     Returns
     -------
     pd.DataFrame
-        The filtered catalogue
-    pd.DataFrame
-        The skipped records
+        The skipped records to filter out of the catalogue
     """
     # Find records that are missing station information
     missing_sta_filter = catalogue[catalogue["Vs30"].isna()]
@@ -390,10 +359,7 @@ def filter_missing_sta_info(
         }
     )
 
-    # Filter out the missing_sta records out of the catalogue
-    catalogue = catalogue[~catalogue["record_id"].isin(missing_sta_filter["record_id"])]
-
-    return catalogue, skipped_records
+    return skipped_records
 
 
 def filter_ground_level_locations(
@@ -413,9 +379,7 @@ def filter_ground_level_locations(
     Returns
     -------
     pd.DataFrame
-        The filtered catalogue
-    pd.DataFrame
-        The skipped records
+        The skipped records to filter out of the catalogue
     """
     # Filter records that are not ground level
     ground_level_filter = catalogue[~catalogue["is_ground_level"]]
@@ -434,12 +398,7 @@ def filter_ground_level_locations(
         }
     )
 
-    # Filter out the non ground_level records out of the catalogue
-    catalogue = catalogue[
-        ~catalogue["record_id"].isin(ground_level_filter["record_id"])
-    ]
-
-    return catalogue, skipped_records
+    return skipped_records
 
 
 def apply_clipNet_filter(
@@ -463,15 +422,13 @@ def apply_clipNet_filter(
     Returns
     -------
     pd.DataFrame
-        The filtered catalogue
-    pd.DataFrame
-        The skipped records
+        The skipped records to filter out of the catalogue
     """
     # Read the clipped records
     try:
         clipped_records = pd.read_csv(clipped_records_ffp)
     except pd.errors.EmptyDataError:
-        return catalogue, pd.DataFrame(columns=["record_id", "reason"])
+        return pd.DataFrame(columns=["record_id", "reason"])
 
     # Remove the bypass records if they exist
     if bypass_records is not None:
@@ -487,10 +444,7 @@ def apply_clipNet_filter(
         }
     )
 
-    # Filter out the clipped records out of the catalogue
-    catalogue = catalogue[~catalogue["record_id"].isin(clipped_records["record_id"])]
-
-    return catalogue, skipped_records
+    return skipped_records
 
 
 def filter_troublesome_sensitivity(
@@ -512,9 +466,7 @@ def filter_troublesome_sensitivity(
     Returns
     -------
     pd.DataFrame
-        The filtered catalogue
-    pd.DataFrame
-        The skipped records
+        The skipped records to filter out of the catalogue
     """
     # Load the sensitivity ignore file from the data registry
     sensitivity_ignore = pd.read_csv(NZGMDB_DATA.fetch("sensitivity_ignore.csv"))
@@ -559,10 +511,7 @@ def filter_troublesome_sensitivity(
         }
     )
 
-    # Filter out the sensitivity records out of the catalogue
-    catalogue = catalogue[~catalogue["record_id"].isin(sensitivity_filter["record_id"])]
-
-    return catalogue, skipped_records
+    return skipped_records
 
 
 def filter_empirical_predictions(
@@ -591,9 +540,7 @@ def filter_empirical_predictions(
     Returns
     -------
     pd.DataFrame
-        The filtered catalogue
-    pd.DataFrame
-        The skipped records
+        The skipped records to filter out of the catalogue
 
     References
      ----------
@@ -716,17 +663,9 @@ def filter_empirical_predictions(
         skipped_list.append(skipped)
 
     # Concatenate all skipped records
-    skipped_records = pd.concat(skipped_list, ignore_index=True).drop_duplicates(
-        "record_id"
-    )
+    skipped_records = pd.concat(skipped_list, ignore_index=True)
 
-    # Filter out all skipped records from catalogue
-    catalogue = catalogue[~catalogue["record_id"].isin(skipped_records["record_id"])]
-
-    # Drop the residual columns
-    catalogue = catalogue.drop(columns=["mean_residual", "max_residual"])
-
-    return catalogue, skipped_records
+    return skipped_records
 
 
 def filter_duplicate_channels(
@@ -755,9 +694,7 @@ def filter_duplicate_channels(
     Returns
     -------
     pd.DataFrame
-        The filtered catalogue
-    pd.DataFrame
-        The skipped records
+        The skipped records to filter out of the catalogue
     """
     # Step 1: Create 'evid_sta' for grouping
     catalogue["evid_sta"] = catalogue["evid"].astype(str) + "_" + catalogue["sta"]
@@ -788,14 +725,7 @@ def filter_duplicate_channels(
         {"record_id": records_to_drop["record_id"], "reason": "Duplicate channels"}
     )
 
-    # Step 8: Remove skipped records from catalogue
-    catalogue = catalogue[~catalogue["record_id"].isin(records_to_drop["record_id"])]
-
-    # Step 9: Clean up and ensure uniqueness
-    assert len(catalogue["evid_sta"].unique()) == len(catalogue)
-    catalogue = catalogue.drop(columns=["evid_sta", "bypass", "chan_priority"])
-
-    return catalogue, skipped_records
+    return skipped_records
 
 
 def apply_all_filters(
@@ -811,13 +741,13 @@ def apply_all_filters(
     Apply all the quality filters to the catalogue.
 
     This function performs the following filtering steps:
-    1) Filter by presence of GMC predictions.
-    2) Filter by score mean.
-    3) Filter by multi mean.
-    4) Filter by fmax.
-    5) Filter by fmin.
-    6) Filter by missing station information.
-    7) Ensure only ground level locations are used.
+    1) Ensure only ground level locations are used.
+    2) Filter by presence of GMC predictions.
+    3) Filter by score mean.
+    4) Filter by multi mean.
+    5) Filter by fmax.
+    6) Filter by fmin.
+    7) Filter by missing station information.
     8) Filter out clipped records.
     9) Filter out troublesome sensitivity records.
     10) Filter out records too far from empirical predictions.
@@ -845,7 +775,7 @@ def apply_all_filters(
     pd.DataFrame
         The filtered catalogue.
     pd.DataFrame
-        The skipped records.
+        The skipped records to filter out of the catalogue.
     """
 
     config = cfg.Config()
@@ -856,70 +786,85 @@ def apply_all_filters(
     fmax_min = fmax_min if fmax_min is not None else config.get_value("fmax_min")
     fmin_max = fmin_max if fmin_max is not None else config.get_value("fmin_max")
 
-    # Filter by has score mean
-    catalogue, skipped_records_has_score = filter_has_score_mean(
-        catalogue, bypass_records
+    # Find ground level locations
+    skipped_records_ground = filter_ground_level_locations(
+        catalogue.copy(), bypass_records
     )
 
-    # Filter by score mean
-    catalogue, skipped_records_score = filter_score_mean(
-        catalogue, score_min, bypass_records
+    # Find has score mean
+    skipped_records_has_score = filter_has_score_mean(catalogue.copy(), bypass_records)
+
+    # Find score mean
+    skipped_records_score = filter_score_mean(
+        catalogue.copy(), score_min, bypass_records
     )
 
-    # Filter by multi mean
-    catalogue, skipped_records_multi = filter_multi_mean(
-        catalogue, multi_max, bypass_records
+    # Find multi mean
+    skipped_records_multi = filter_multi_mean(
+        catalogue.copy(), multi_max, bypass_records
     )
 
-    # Filter by fmax
-    catalogue, skipped_records_fmax = filter_fmax(catalogue, fmax_min, bypass_records)
+    # Find fmax
+    skipped_records_fmax = filter_fmax(catalogue.copy(), fmax_min, bypass_records)
 
-    # Filter by fmin
-    catalogue, skipped_records_fmin = filter_fmin(catalogue, fmin_max, bypass_records)
+    # Find fmin
+    skipped_records_fmin = filter_fmin(catalogue.copy(), fmin_max, bypass_records)
 
-    # Filter by missing station information
-    catalogue, skipped_records_sta = filter_missing_sta_info(catalogue, bypass_records)
+    # Find missing station information
+    skipped_records_sta = filter_missing_sta_info(catalogue.copy(), bypass_records)
 
-    # Filter by ground level locations
-    catalogue, skipped_records_ground = filter_ground_level_locations(
-        catalogue, bypass_records
+    # Find clipped records
+    skipped_records_clipped = apply_clipNet_filter(
+        catalogue.copy(), clipped_records_ffp, bypass_records
     )
 
-    # Filter by clipped records
-    catalogue, skipped_records_clipped = apply_clipNet_filter(
-        catalogue, clipped_records_ffp, bypass_records
+    # Find troublesome sensitivity records
+    skipped_records_sensitivity = filter_troublesome_sensitivity(
+        catalogue.copy(), bypass_records
     )
 
-    # Filter by troublesome sensitivity records
-    catalogue, skipped_records_sensitivity = filter_troublesome_sensitivity(
-        catalogue, bypass_records
-    )
-
-    # Filter by empirical predictions
-    catalogue, skipped_records_empirical = filter_empirical_predictions(
-        catalogue, bypass_records
-    )
-
-    # Filter by duplicate channels
-    catalogue, skipped_records_duplicate = filter_duplicate_channels(
-        catalogue, bypass_records
+    # Find empirical predictions
+    skipped_records_empirical = filter_empirical_predictions(
+        catalogue.copy(), bypass_records
     )
 
     # Combine all the skipped records
     skipped_records = pd.concat(
         [
+            skipped_records_ground,
             skipped_records_has_score,
             skipped_records_score,
             skipped_records_multi,
             skipped_records_fmax,
             skipped_records_fmin,
-            skipped_records_ground,
+            skipped_records_sta,
             skipped_records_clipped,
             skipped_records_sensitivity,
             skipped_records_empirical,
-            skipped_records_duplicate,
         ]
     )
+
+    # Filter out the skipped records from the catalogue
+    catalogue = catalogue[~catalogue["record_id"].isin(skipped_records["record_id"])]
+
+    # Find duplicate channels
+    skipped_records_duplicate = filter_duplicate_channels(
+        catalogue.copy(), bypass_records
+    )
+
+    # Filter out the duplicate channels from the catalogue
+    catalogue = catalogue[
+        ~catalogue["record_id"].isin(skipped_records_duplicate["record_id"])
+    ]
+
+    # Add the skipped records from duplicate channels
+    skipped_records = pd.concat([skipped_records, skipped_records_duplicate])
+
+    # Ensure uniqueness
+    catalogue_test = catalogue.copy()
+    catalogue_test["evid_sta"] = catalogue_test["evid"].astype(str) + "_" + catalogue_test["sta"]
+    if len(catalogue_test["evid_sta"].unique()) != len(catalogue_test):
+        raise ValueError("Catalogue 'evid_sta' column must be unique.")
 
     return catalogue, skipped_records
 
@@ -950,7 +895,7 @@ def create_quality_db(
         The file path to the records that will bypass the quality checks
     """
     # Make the quality db directory
-    output_dir = main_dir / "quality_db"
+    output_dir = file_structure.get_quality_db_dir(main_dir)
     output_dir.mkdir(exist_ok=True)
 
     # Load the ground motion im catalogue
@@ -981,7 +926,10 @@ def create_quality_db(
     filter_flatfiles_on_catalouge(flatfile_dir, output_dir, gm_df)
 
     # Save the gm_df and skipped_records
-    gm_df.to_csv(output_dir / FlatfileNames.GROUND_MOTION_IM_ROTD50_FLAT, index=False)
+    gm_df.to_csv(
+        output_dir / file_structure.FlatfileNames.GROUND_MOTION_IM_ROTD50_FLAT,
+        index=False,
+    )
     skipped_records.to_csv(
         flatfile_dir / file_structure.SkippedRecordFilenames.QUALITY_SKIPPED_RECORDS,
         index=False,
