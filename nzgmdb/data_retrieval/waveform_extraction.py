@@ -729,7 +729,6 @@ def get_station_window(
 def extract_station_info(
     station_extraction_row: pd.Series,
     main_dir: Path,
-    client: FDSN_Client,
     only_record_ids: pd.DataFrame = None,
 ):
     """
@@ -741,8 +740,6 @@ def extract_station_info(
         A row from the station extraction table containing the parameters for waveform extraction.
     main_dir : Path
         The main directory of the NZGMDB results (Highest Level Directory).
-    client : FDSN_Client
-        The FDSN client to use for retrieving waveforms.
     only_record_ids : pd.DataFrame, optional
         A DataFrame containing a subset of record IDs to use for extraction, if provided.
 
@@ -767,6 +764,7 @@ def extract_station_info(
     r_hyp = station_extraction_row["r_hyp"]
 
     # Get the catalogue information
+    client = FDSN_Client("GEONET")
     cat = client.get_events(eventid=event_id)
     event_cat = cat[0]
 
@@ -962,7 +960,6 @@ def extract_waveforms(
     batch_size : int, optional
         The number of rows to process in each batch, by default 1000.
     """
-    client_NZ = FDSN_Client("GEONET")
     station_extraction_table = pd.read_csv(
         station_extraction_table_ffp, dtype={"evid": str}
     )
@@ -1006,8 +1003,6 @@ def extract_waveforms(
         np.ceil(len(station_extraction_table) / batch_size),
     )
 
-    mp.set_start_method("fork", force=True)
-
     for batch_index, batch_indices in enumerate(index_batches):
         if batch_index not in processed_suffixes:
             print(f"Processing batch {batch_index + 1}/{len(index_batches)}")
@@ -1017,7 +1012,6 @@ def extract_waveforms(
                     functools.partial(
                         extract_station_info,
                         main_dir=main_dir,
-                        client=client_NZ,
                         only_record_ids=only_record_ids,
                     ),
                     (row for _, row in batch_rows.iterrows()),
