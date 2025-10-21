@@ -2,29 +2,10 @@
 This module contains functions for creating mseed files from the waveform data from the FDSN client
 """
 
-import http
-import http.client
-import time
-import warnings
-from collections.abc import Iterable
 from pathlib import Path
 
 import mseedlib
-import numpy as np
-import pandas as pd
 from obspy import Stream
-from obspy.clients.fdsn import Client as FDSN_Client
-from obspy.clients.fdsn.header import (
-    FDSNNoDataException,
-    FDSNServiceUnavailableException,
-)
-from obspy.core.event import Origin
-from obspy.geodetics import kilometers2degrees
-from obspy.io.mseed import InternalMSEEDError, ObsPyMSEEDFilesizeTooSmallError
-from obspy.taup import TauPyModel
-
-from nzgmdb.management import config as cfg
-from oq_wrapper import constants, estimations, wrapper
 
 
 def write_stream_to_mseed(stream: Stream, output_file: Path):

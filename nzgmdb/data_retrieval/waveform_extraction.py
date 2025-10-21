@@ -114,7 +114,7 @@ def get_arias_intensity_norm(
 
     Returns
     -------
-    Ia : np.ndarray
+    np.ndarray
         The Arias intensity as a 2D array with time and normalized intensity values
     """
     g = 9.81
@@ -1005,6 +1005,8 @@ def extract_waveforms(
         station_extraction_table.index,
         np.ceil(len(station_extraction_table) / batch_size),
     )
+
+    mp.set_start_method("fork", force=True)
 
     for batch_index, batch_indices in enumerate(index_batches):
         if batch_index not in processed_suffixes:
