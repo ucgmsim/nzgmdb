@@ -25,6 +25,7 @@ class WorkflowStep(StrEnum):
     """
 
     GEONET = "geonet"
+    EXTRACTION = "extraction"
     TEC_DOMAIN = "tec_domain"
     PHASE_TABLE = "phase_table"
     SNR = "snr"

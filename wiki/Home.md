@@ -89,7 +89,8 @@ The pipeline is therefore composed of subtasks that can be run independently. Th
 
 ### 🧩 Subtasks
 1. **[Fetching Site Table](https://github.com/ucgmsim/nzgmdb/wiki/Fetching-site-table)** (Gets all the sites in the NZ network domain and gathers their metadata, such as Vs30 and basin info)
-2. **[Parse Geonet](https://github.com/ucgmsim/nzgmdb/wiki/Parse-Geonet)** (Gets all mseed files from Geonet and starts the earthquake source table)
+2. **[Parse Geonet](https://github.com/ucgmsim/nzgmdb/wiki/Parse-Geonet)** (Fetches event metadata and station extraction information)
+3. **[Waveform Extraction](https://github.com/ucgmsim/nzgmdb/wiki/Waveform-Extraction)** (Downloads raw waveforms from the FDSN Client and saves them as MSEED files)
 3. **[Add Tectonic domain](https://github.com/ucgmsim/nzgmdb/wiki/Add-Tectonic-domain)** (Adds the tectonic classification to the earthquake source table and handles relocations)
 4. **[Phase Arrival](https://github.com/ucgmsim/nzgmdb/wiki/Phase-Arrival)** (Estimates the P- and S-wave arrival times for records using PhaseNet)
 5. **[Calculate SNR](https://github.com/ucgmsim/nzgmdb/wiki/Calculate-SNR)** (Computes SNR and FAS files)
@@ -212,6 +213,12 @@ After a successful run of the NZGMDB pipeline, the output directory is organised
 
   - **`station_magnitude_table.csv`**  
     Station magnitude values for each station-event-channel pair.
+
+  - **`station_extraction_table.csv`**
+    Extraction metadata for each station-event pair.
+
+  - **`multi-trace_issue_records.csv`**  
+    Records that have the "multi-trace" problem for the same channel and their resolution.
   
   - **`clipped_records.csv`**  
     Records that were clipped by ClipNet during the fetch GeoNet data stage.
@@ -235,6 +242,7 @@ After a successful run of the NZGMDB pipeline, the output directory is organised
     - **`site_table.csv`**
     - **`snr_metadata.csv`**
     - **`station_magnitude_table.csv`**
+    - **`station_extraction_table.csv`**
 
 - **`waveforms/`**  
   Includes both raw and processed waveform data for every event, organised by year and event ID. Under each `event_id/`, there are two subfolders mseed and processed. Below shows the structure of the `waveforms/` directory and naming conventions used for files:

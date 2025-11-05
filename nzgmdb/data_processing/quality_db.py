@@ -34,6 +34,7 @@ def filter_flatfiles_on_catalouge(
         file_structure.FlatfileNames.EARTHQUAKE_SOURCE_GEOMETRY,
         file_structure.FlatfileNames.FMAX,
         file_structure.FlatfileNames.STATION_MAGNITUDE_TABLE,
+        file_structure.FlatfileNames.STATION_EXTRACTION_TABLE,
         file_structure.FlatfileNames.SITE_TABLE,
         file_structure.FlatfileNames.PHASE_ARRIVAL_TABLE,
         file_structure.FlatfileNames.PROPAGATION_TABLE,
@@ -75,7 +76,10 @@ def filter_flatfiles_on_catalouge(
             df_filtered = df_filtered.drop(columns=["record_id"])
         elif file == file_structure.FlatfileNames.SITE_TABLE:
             df_filtered = df[df["sta"].isin(rotd50_flat["sta"])]
-        elif file == file_structure.FlatfileNames.PROPAGATION_TABLE:
+        elif file in [
+            file_structure.FlatfileNames.PROPAGATION_TABLE,
+            file_structure.FlatfileNames.STATION_EXTRACTION_TABLE,
+        ]:
             # Make the evid_sta column
             df["evid_sta"] = df["evid"] + "_" + df["sta"]
             # Assert the same length of unique values

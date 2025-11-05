@@ -1,5 +1,6 @@
 local:
   geonet: 6
+  extraction: 6
   tec_domain: 6
   phase_table: 6
   snr: 3
@@ -11,6 +12,7 @@ local:
   upload: 6
 mantle:
   geonet: 28
+  extraction: 28
   tec_domain: 28
   phase_table: 28
   snr: 5
@@ -22,6 +24,7 @@ mantle:
   upload: 28
 hypocentre:
   geonet: 44
+  extraction: 44
   tec_domain: 44
   phase_table: 44
   snr: 18

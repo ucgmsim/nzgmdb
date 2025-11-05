@@ -17,14 +17,22 @@ locations_max_elev: 5
 ll_num: 4326
 nztm_num: 2193
 points_per_km: 10
+priority_phase_list:
+  - P
+  - p
+  - Pn
+  - Pg
+  - Pb
 channel_codes:
   - HN?
   - BN?
   - HH?
+percentage_gap_allowed: 0.1
+is_large_overlap: 0.5
 # Mseed Variables
 vs30: 500
-min_time_difference: 15
-ds_multiplier: 2
+pre_event_time_difference: 15
+ds_std_multiplier: 3
 # Velocity Modelling
 nzcvm_version: "2.09"
 priority_basins:
