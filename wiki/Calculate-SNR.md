@@ -52,7 +52,7 @@ Raw MSEED files undergo the following preprocessing steps:
 3. **Zero padding** - Add 5 seconds of zeros at start and end
 4. **Remove instrument response** - Apply sensitivity correction using station inventory
 5. **Rotate components** - Rotate horizontal components to North-East-Vertical (NEZ)
-6. **Gravity normalisation** - Divide acceleration data by gravitational constant (9.81 m/s²)
+6. **Gravity normalisation** - Divide acceleration data by the acceleration due to gravity (9.81 m/s²)
 
 ⚠️ **Note:** Records are skipped if inventory information cannot be found for sensitivity removal.
 

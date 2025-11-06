@@ -13,6 +13,7 @@ from pathlib import Path
 
 import numpy as np
 import pandas as pd
+import scipy as sp
 from obspy import Stream, Trace, UTCDateTime
 from obspy.clients.fdsn import Client as FDSN_Client
 from obspy.clients.fdsn.header import (
@@ -114,22 +115,18 @@ def get_arias_intensity_norm(
 
     Returns
     -------
-    Ia : np.ndarray
+    np.ndarray
         The Arias intensity as a 2D array with time and normalized intensity values
     """
     g = 9.81
     dt = trace.stats.delta
-    npts = trace.stats.npts
+    a_sq = trace.data**2.0
 
-    a = trace.data  # acceleration in m/s^2
+    arias_intensity = (
+        np.pi / (2 * g) * sp.integrate.cumulative_trapezoid(a_sq[:-1], dx=dt, initial=0)
+    )
 
-    a_sq = a**2.0
-    Ia = np.zeros(npts)
-
-    for i in range(1, npts):
-        Ia[i] = Ia[i - 1] + np.pi / (2 * g) * a_sq[i - 1] * dt
-
-    return Ia
+    return arias_intensity
 
 
 def perform_ai_selection(
@@ -193,22 +190,21 @@ def perform_ai_selection(
             ds_end_time = np.exp(ds_mean) * np.exp(ds_std)
             tr_copy = tr.copy()
             tr_copy.trim(ptime_est, ptime_est + ds_end_time, pad=True, fill_value=0)
-            # Get the IA and IA_norm
-            Ia = get_arias_intensity_norm(tr_copy)
+            # Get the Arias Intensity
+            arias_intensity = get_arias_intensity_norm(tr_copy)
             if i == 0:
-                Ia_max = Ia[-1]
-                Ia_max_index = 0
-            else:
-                if Ia[-1] > Ia_max:
-                    Ia_max = Ia[-1]
-                    Ia_max_index = i
-        trace_indexs.append(Ia_max_index)
+                arias_intensity_max = arias_intensity[-1]
+                arias_intensity_max_index = 0
+            elif arias_intensity[-1] > arias_intensity_max:
+                arias_intensity_max = arias_intensity[-1]
+                arias_intensity_max_index = i
+        trace_indexs.append(arias_intensity_max_index)
         # Grab the original trace from the st and group to get the correct trace
         group_original = st.select(
             location=loc,
             channel=f"{chan}{unique_channel_ending}",
         )
-        traces.append(group_original[Ia_max_index])
+        traces.append(group_original[arias_intensity_max_index])
     # Check all the groups agree
     if len(set(trace_indexs)) == 1:
         # We combine the traces into a new stream
@@ -240,26 +236,15 @@ def select_horizontal_pair(values: list[str]):
         A list of issues encountered during the selection process, such as incomplete pairs.
     """
     # Define valid pairs in priority order
-    pair_priority = [
-        ("1", "2"),  # highest priority
-        ("X", "Y"),
-        ("N", "E"),  # lowest priority
-    ]
-    found_pairs = []
+    pair_priority = [("1", "2"), ("X", "Y"), ("N", "E")]
     issues = []
-    # Check each valid pair
+    selected = None
     for a, b in pair_priority:
-        if a in values and b in values:
-            found_pairs.append((a, b))
-    # Check for incomplete pairs (dangling values)
-    for a, b in pair_priority:
-        if (a in values) ^ (b in values):  # XOR = only one present
-            issues.append(f"Incomplete pair: missing {b if a in values else a}")
-    # Select based on priority
-    if found_pairs:
-        selected = found_pairs[0]
-    else:
-        selected = None
+        has_a, has_b = a in values, b in values
+        if selected is None and has_a and has_b:
+            selected = (a, b)
+        elif has_a ^ has_b:
+            issues.append(f"Incomplete pair: missing {b if has_a else a}")
     return selected, issues
 
 
@@ -731,7 +716,6 @@ def get_station_window(
 def extract_station_info(
     station_extraction_row: pd.Series,
     main_dir: Path,
-    client: FDSN_Client,
     only_record_ids: pd.DataFrame = None,
 ):
     """
@@ -743,8 +727,6 @@ def extract_station_info(
         A row from the station extraction table containing the parameters for waveform extraction.
     main_dir : Path
         The main directory of the NZGMDB results (Highest Level Directory).
-    client : FDSN_Client
-        The FDSN client to use for retrieving waveforms.
     only_record_ids : pd.DataFrame, optional
         A DataFrame containing a subset of record IDs to use for extraction, if provided.
 
@@ -764,11 +746,12 @@ def extract_station_info(
     event_id = station_extraction_row["evid"]
     station = station_extraction_row["sta"]
     network = station_extraction_row["net"]
-    mag = station_extraction_row["mag"]
+    event_mag = station_extraction_row["mag"]
     pref_mag_type = station_extraction_row["pref_mag_type"]
     r_hyp = station_extraction_row["r_hyp"]
 
     # Get the catalogue information
+    client = FDSN_Client("GEONET")
     cat = client.get_events(eventid=event_id)
     event_cat = cat[0]
 
@@ -863,7 +846,7 @@ def extract_station_info(
             )
 
         # Calculate clip to determine if the record should be dropped
-        clip = filtering.get_clip_probability(mag, r_hyp, mseed)
+        clip = filtering.get_clip_probability(event_mag, r_hyp, mseed)
 
         threshold = config.get_value("clip_threshold")
 
@@ -975,7 +958,6 @@ def extract_waveforms(
     batch_size : int, optional
         The number of rows to process in each batch, by default 1000.
     """
-    client_NZ = FDSN_Client("GEONET")
     station_extraction_table = pd.read_csv(
         station_extraction_table_ffp, dtype={"evid": str}
     )
@@ -1028,7 +1010,6 @@ def extract_waveforms(
                     functools.partial(
                         extract_station_info,
                         main_dir=main_dir,
-                        client=client_NZ,
                         only_record_ids=only_record_ids,
                     ),
                     (row for _, row in batch_rows.iterrows()),

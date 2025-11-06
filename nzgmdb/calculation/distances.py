@@ -601,7 +601,7 @@ def compute_distances_for_event(
         srf_points, stations, return_rrup_points=True
     )
     rxs, rys = src_site_dist.calc_rx_ry(srf_points, srf_header, stations)
-    rrups_lat, rrups_lon = rrup_points[:, 0], rrup_points[:, 1]
+    rrups_lon, rrups_lat = rrup_points[:, 0], rrup_points[:, 1]
 
     # Get the segment corners for the srf or corners
     if event_id in srf_files:
@@ -993,7 +993,7 @@ def calc_distances(main_dir: Path, n_procs: int = 1):
 
     # Get the regular CMT data
     config = cfg.Config()
-    geonet_cmt_df = pd.read_csv(config.get_value("cmt_url"), low_memory=False)
+    geonet_cmt_df = pd.read_csv(config.get_value("cmt_url"), dtype={"PublicID": str})
 
     # Load the eq source table
     event_df = pd.read_csv(
@@ -1003,13 +1003,12 @@ def calc_distances(main_dir: Path, n_procs: int = 1):
 
     # Get the focal domain
     domain_focal_df = pd.read_csv(
-        NZGMDB_DATA.fetch("focal_mech_tectonic_domain_v1.csv"), low_memory=False
+        NZGMDB_DATA.fetch("focal_mech_tectonic_domain_v1.csv"),
     )
 
     # Get the Taupo VZ polygon
     tect_domain_points = pd.read_csv(
         NZGMDB_DATA.fetch("tectonic_domain_polygon_points.csv"),
-        low_memory=False,
     )
     tvz_points = tect_domain_points[tect_domain_points.domain_no == 4][
         ["latitude", "longitude"]

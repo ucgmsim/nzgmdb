@@ -77,7 +77,7 @@ Each MSEED file undergoes a comprehensive processing workflow:
 4. **Zero Padding** - Add 5 seconds of zeros at start and end
 5. **Inventory Response Removal** - Remove instrument sensitivity using station metadata
 6. **Component Rotation** - Rotate horizontal components to North-East-Vertical (NEZ)
-7. **Gravity normalisation** - Divide acceleration data by gravitational constant (9.81 m/s²)
+7. **Gravity normalisation** - Divide acceleration data by the acceleration due to gravity (9.81 m/s²)
 
 #### Advanced Signal Processing
 1. **Component-Specific Bandpass Filtering** 
@@ -128,7 +128,7 @@ waveforms/
 
 Each ASCII file contains:
 - **Header Line**: Metadata including station, channel, sampling rate, number of points
-- **Data Lines**: One acceleration value per line in m/s² units
+- **Data Lines**: One acceleration value per line in g units
 - **Format**: Plain text with consistent decimal precision
 
 ### 🔹 Metadata Files
