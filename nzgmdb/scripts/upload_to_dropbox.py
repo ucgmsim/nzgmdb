@@ -150,7 +150,7 @@ def main(
     flatfiles_zip = zip_files(flatfiles, output_dir, f"flatfiles_{version}")
 
     # Check if there is a quality_db directory and zip it
-    quality_db_dir = input_dir / "quality_db"
+    quality_db_dir = file_structure.get_quality_db_dir(input_dir)
     if quality_db_dir.exists():
         quality_db_files = list(quality_db_dir.rglob("*.csv"))
         quality_db_zip = zip_files(
@@ -178,7 +178,8 @@ def main(
     snr_fas_zip = zip_files(snr_files, output_dir, f"snr_fas_{version}")
 
     # Upload everything to Dropbox
-    failed_files = upload_zip_to_dropbox(flatfiles_zip, dropbox_version_dir)
+    failed_files = []
+    failed_files.append(upload_zip_to_dropbox(flatfiles_zip, dropbox_version_dir))
     failed_files.append(upload_zip_to_dropbox(skipped_zip, dropbox_version_dir))
     failed_files.append(upload_zip_to_dropbox(pre_flatfiles_zip, dropbox_version_dir))
     failed_files.append(upload_zip_to_dropbox(snr_fas_zip, dropbox_version_dir))
@@ -339,6 +340,14 @@ def download_dropbox_archive(
         Directory where the NZGMDB archive will be downloaded and extracted.
     version : str
         Version of the NZGMDB archive to download, e.g. "4p3".
+    ignore_flatfiles : bool
+        Whether to ignore downloading flatfiles.
+    ignore_waveforms : bool
+        Whether to ignore downloading waveforms.
+    ignore_snrfas : bool
+        Whether to ignore downloading SNR FAS files.
+    ignore_quality : bool
+        Whether to ignore downloading quality flatfiles.
     """
     dropbox_version_dir = f"{DROPBOX_PATH}/{version}"
 
@@ -354,7 +363,7 @@ def download_dropbox_archive(
     flatfiles_dir = file_structure.get_flatfile_dir(output_dir)
     snr_fas_dir = file_structure.get_snr_fas_dir(output_dir)
     waveform_dir = file_structure.get_waveform_dir(output_dir)
-    quality_dir = output_dir / "quality_db"
+    quality_dir = file_structure.get_quality_db_dir(output_dir)
     zip_dir = output_dir / "zips"
     zip_dir.mkdir(exist_ok=True)
 

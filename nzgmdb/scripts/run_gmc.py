@@ -17,6 +17,51 @@ from qcore import cli
 app = typer.Typer(pretty_exceptions_enable=False)
 
 
+def get_gmc_errors(gmc_dir: Path) -> pd.DataFrame:
+    """
+    Get all the GMC error files that had an issue during the execution
+
+    Parameters
+    ----------
+    gmc_dir : Path
+        The directory containing the GMC results.
+
+    Returns
+    -------
+    pd.DataFrame
+        A dataframe containing the record_id and reason for each error.
+    """
+    error_records = []
+    for batch_dir in gmc_dir.iterdir():
+        if not batch_dir.is_dir():
+            continue
+
+        for error_summary_dir in batch_dir.iterdir():
+            if not error_summary_dir.is_dir():
+                continue
+
+            for error_file in error_summary_dir.iterdir():
+                reason = error_file.stem
+                with open(error_file) as f:
+                    if "unknown" in reason:
+                        for line in f:
+                            if ".mseed" in line:
+                                record_id = line.split(",")[0].split(".")[0]
+                                error_records.append(
+                                    {"record_id": record_id, "reason": "unknown"}
+                                )
+                    else:
+                        # Skip header line
+                        next(f, None)
+                        for line in f:
+                            record_id = line.rstrip().split(".")[0]
+                            error_records.append(
+                                {"record_id": record_id, "reason": reason}
+                            )
+
+    return pd.DataFrame(error_records, columns=["record_id", "reason"])
+
+
 def process_batch(
     mseed_batch: list[Path],
     gmc_dir: Path,
@@ -211,6 +256,9 @@ def run_gmc_processing(
         file_structure.get_flatfile_dir(main_dir) if output_dir is None else output_dir
     )
     final_predictions_output = output_dir / file_structure.FlatfileNames.GMC_PREDICTIONS
+    gmc_errors_output = (
+        output_dir / file_structure.SkippedRecordFilenames.GMC_SKIPPED_RECORDS
+    )
 
     # Get the phase arrival table
     flatfile_dir = file_structure.get_flatfile_dir(main_dir)
@@ -266,12 +314,25 @@ def run_gmc_processing(
             )
     combined_df = pd.concat(dfs)
 
+    # Get the gmc errors
+    gmc_errors_df = get_gmc_errors(gmc_dir)
+
     # Check if the bypass records file exists
     if bypass_records_ffp is not None:
         bypass_df = pd.read_csv(bypass_records_ffp)
         # Merge in the bypass fmin values
         combined_df = combined_df.merge(
-            bypass_df[["record_id", "fmin_000", "fmin_090", "fmin_ver", "score_000", "score_090", "score_ver"]],
+            bypass_df[
+                [
+                    "record_id",
+                    "fmin_000",
+                    "fmin_090",
+                    "fmin_ver",
+                    "score_000",
+                    "score_090",
+                    "score_ver",
+                ]
+            ],
             left_on="record",
             right_on="record_id",
             how="left",
@@ -304,10 +365,19 @@ def run_gmc_processing(
 
         # Remove the bypass columns
         combined_df = combined_df.drop(
-            columns=["fmin_000", "fmin_090", "fmin_ver", "record_id_bypass", "score_000", "score_090", "score_ver"]
+            columns=[
+                "fmin_000",
+                "fmin_090",
+                "fmin_ver",
+                "record_id_bypass",
+                "score_000",
+                "score_090",
+                "score_ver",
+            ]
         )
 
     combined_df.to_csv(final_predictions_output, index=False)
+    gmc_errors_df.to_csv(gmc_errors_output, index=False)
 
 
 if __name__ == "__main__":

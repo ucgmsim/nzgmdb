@@ -1,7 +1,6 @@
 # Welcome to the NZGMDB WIKI
 
-This wiki will explain all the processes and steps of the pipeline in detail from start to finish, including the scientific background of the methods used, the file structure of the output, and how to run the pipeline.
-
+The present wikipage provides a detailed description of the pipeline used for the development of the New Zealand Ground Motion Database (NZGMDB), including its scientific background, the output file structure, and instructions for execution.
 
 # 🌐 NZGMDB Pipeline Overview
 
@@ -10,7 +9,7 @@ The NZGMDB pipeline is split into two main concurrent tracks that handle:
 - **Site data, waveform processing and Intensity Measure calculations**
 - **Event metadata, aftershock and distance calculations**
 
-Both tracks eventually converge to merge data into a full database, and apply quality filtering.
+Both tracks converge to integrate the data into the full database, followed by quality filtering.
 
 Below is a breakdown of each stream and the merged steps.
 
@@ -24,10 +23,10 @@ Below is a breakdown of each stream and the merged steps.
 Gathers all stations in the NZ network, including Vs30 and basin metadata.
 
 ### **Waveform Extraction**
-Downloads MSEED raw waveforms from GeoNet using the FDSN Client.
+Downloads miniSEED (mseed) raw waveforms from GeoNet using the FDSN Client.
 
 ### **Phase Arrival Detection**
-Detects P and S-wave arrival times using PhaseNet.
+Estimate P and S-wave arrival times using PhaseNet.
 
 ### **Signal-to-Noise Ratio (SNR)**
 Calculates SNR from waveforms.
@@ -42,7 +41,7 @@ Classifies records (machine learning-based) to generate Fmin and quality metadat
 Applies waveform processing (de-trend, de-mean, taper, etc.) and converts MSEED to ascii.
 
 ### **Intensity Measure (IM) Calculation**
-Computes PSA, PGV, PGA, etc. from processed waveforms.
+Computes the intensity measures from the processed waveforms (PSA, PGV, PGA, FAS, CAV5, CAV, AI, Significant Durations, etc.)
 
 ---
 
@@ -52,16 +51,16 @@ Computes PSA, PGV, PGA, etc. from processed waveforms.
 Pulls event metadata and origin times.
 
 ### **Relocations** *(internal step)*
-Refines event locations based on improved location studies.
+Refines event locations based on relocation studies.
 
 ### **Classify Tectonic Type**
 Adds tectonic classification for each event.
 
 ### **CCLD Calculation**
-Computes the construction of the fault plane using the CCLD method.
+Infer fault planes using the CCLD method.
 
 ### **Compute Distances**
-Uses fault geometry to compute r-rup and other distance measurements.
+Compute hypocentral, epicentral, and source-to-site distances using the fault geometries.
 
 ### **Aftershock Classification**
 Determines whether an event is an aftershock.
@@ -89,22 +88,21 @@ While the flowchart provides a conceptual overview of the NZGMDB pipeline's data
 The pipeline is therefore composed of subtasks that can be run independently. These subtasks are listed below, along with links to their detailed documentation to explain what parts of the site and event streams the task invloves.
 
 ### 🧩 Subtasks
-1. **[Fetching Site Table](https://github.com/ucgmsim/nzgmdb/wiki/Fetching-site-table)** (Gets all the sites in the NZ network domain and gathers data such as Vs30 and basin info)
+1. **[Fetching Site Table](https://github.com/ucgmsim/nzgmdb/wiki/Fetching-site-table)** (Gets all the sites in the NZ network domain and gathers their metadata, such as Vs30 and basin info)
 2. **[Parse Geonet](https://github.com/ucgmsim/nzgmdb/wiki/Parse-Geonet)** (Fetches event metadata and station extraction information)
 3. **[Waveform Extraction](https://github.com/ucgmsim/nzgmdb/wiki/Waveform-Extraction)** (Downloads raw waveforms from the FDSN Client and saves them as MSEED files)
-3. **[Add Tectonic domain](https://github.com/ucgmsim/nzgmdb/wiki/Add-Tectonic-domain)** (Adds the tectonic type to the earthquake source table and handles relocations)
-4. **[Phase Arrival](https://github.com/ucgmsim/nzgmdb/wiki/Phase-Arrival)** (Generates the P and S Wave arrival times for records using PhaseNet)
+3. **[Add Tectonic domain](https://github.com/ucgmsim/nzgmdb/wiki/Add-Tectonic-domain)** (Adds the tectonic classification to the earthquake source table and handles relocations)
+4. **[Phase Arrival](https://github.com/ucgmsim/nzgmdb/wiki/Phase-Arrival)** (Estimates the P- and S-wave arrival times for records using PhaseNet)
 5. **[Calculate SNR](https://github.com/ucgmsim/nzgmdb/wiki/Calculate-SNR)** (Computes SNR and FAS files)
 6. **[Calculate Fmax](https://github.com/ucgmsim/nzgmdb/wiki/Calculate-Fmax)** (Computes Fmax from SNR data)
 7. **[GMC](https://github.com/ucgmsim/nzgmdb/wiki/GMC)** (Machine Learning Model to classify records and produce Fmin and quality metadata)
 8. **[Process records](https://github.com/ucgmsim/nzgmdb/wiki/Process-Records)** (Filters records based on GMC results and performs wave processing to turn mseeds into text files)
-9. **[IM Calculation](https://github.com/ucgmsim/nzgmdb/wiki/IM-Calculation)** (Performs Intensity Measure Calculations such as pSA etc.)
+9. **[IM Calculation](https://github.com/ucgmsim/nzgmdb/wiki/IM-Calculation)** (Performs Intensity Measure Calculations)
 10. **[Merge IM results](https://github.com/ucgmsim/nzgmdb/wiki/Merge-IM-Results)** (Merges all IM result files together)
-11. **[Calculate Distances](https://github.com/ucgmsim/nzgmdb/wiki/Calculate-Distances)** (Determines a fault plane to calculate rrup values for the propagation table)
-12. **[Merge Aftershocks](Merge-Aftershocks.md)** (Merges aftershock classification results into the earthquake source table)`
-12. **[Merge flatfiles](https://github.com/ucgmsim/nzgmdb/wiki/Merge-Flatfiles)** (Merges all flatfiles to ensure to remove filtered entries and split IM results per component into different flatfiles)
-13. **[Quality DB](Quality-DB.md)** (Applies filters and generates the final quality database flatfiles with all filtered records)
-14. **[Upload to Dropbox](https://github.com/ucgmsim/nzgmdb/wiki/Upload-Dropbox)** (Zips together the files that are generated by the NZGMDB and uploads them to a dropbox folder) - Optional step
+11. **[Calculate Distances](https://github.com/ucgmsim/nzgmdb/wiki/Calculate-Distances)** (Determines fault planes to calculate distance values for the propagation table)
+12. **[Merge Aftershocks](Merge-Aftershocks.md)** (Merges aftershock classification into the earthquake source table)
+13. **[Merge flatfiles](https://github.com/ucgmsim/nzgmdb/wiki/Merge-Flatfiles)** (Merges all flatfiles to ensure to remove filtered entries and split IM results per component into different flatfiles)
+14. **[Quality DB](Quality-DB.md)** (Applies filters and generates the final quality database flatfiles with all filtered records)
 
 ---
 
@@ -118,7 +116,7 @@ After a successful run of the NZGMDB pipeline, the output directory is organised
   Contains merged CSV outputs for ground motion intensity measures (IMs), component-specific results, supporting metadata, and skipped record logs. These files summarise the final data products and intermediate results from each pipeline stage.
 
   - **`earthquake_source_table.csv`**  
-    Holds source metadata for each event.
+    Contains source metadata for each event.
 
   - **`earthquake_source_geometry.csv`**  
     Contains the fault geometry for each event, including strike, dip, rake, and full corner coordinates.
