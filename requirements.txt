@@ -13,6 +13,7 @@ gmprocess
 h5py
 pooch
 matplotlib
+h3
 oq_wrapper @ git+https://github.com/ucgmsim/Empirical_Engine.git#subdirectory=oq_wrapper
 openquake-engine @ git+https://github.com/gem/oq-engine.git
 qcore @ git+https://github.com/ucgmsim/qcore.git
