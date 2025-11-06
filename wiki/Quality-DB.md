@@ -57,7 +57,10 @@ The filtering process follows a systematic 9-step approach:
 6. **Filter by missing station information**
 7. **Ensure only ground level locations are used**
 8. **Filter out clipped records**
-9. **Select the appropriate channel for duplicate HN/BN records**
+9. **Filter out jerk records**
+10. **Filter by sensitivity ignore list**
+11. **Filter by empirical prediction residuals**
+12. **Select the appropriate channel for duplicate HN/BN records**
 
 ### 🔹 Detailed Filter Descriptions
 

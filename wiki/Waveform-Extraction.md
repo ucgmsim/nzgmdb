@@ -93,7 +93,7 @@ Also using ClipNet methods we test for Jerk in any of the Streams Traces above a
 - **Action:** Records exceeding median jerk * median_multiplier threshold for greater than point_thresh are flagged and skipped
 
 The output of these are saved to a `clipped_records.csv` file to be used during the quality_db step.
-Clipped record shave a reason column of `Clipped` and records where Jerk was detected have a reason column of `Jerk`.
+Clipped records have a reason column of `Clipped` and records where Jerk was detected have a reason column of `Jerk`.
 
 #### **Component Splitting**
 

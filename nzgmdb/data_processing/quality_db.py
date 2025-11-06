@@ -406,7 +406,6 @@ def filter_ground_level_locations(
 
 
 def apply_clipNet_filter(
-    catalogue: pd.DataFrame,
     clipped_records_ffp: Path,
     bypass_records: np.ndarray = None,
 ):
@@ -416,8 +415,6 @@ def apply_clipNet_filter(
 
     Parameters
     ----------
-    catalogue : pd.DataFrame
-        The catalogue dataframe to filter
     clipped_records_ffp : Path
         The file path to the clipped records (created during the Waveform Extraction processing)
     bypass_records : np.ndarray, optional
@@ -455,7 +452,6 @@ def apply_clipNet_filter(
 
 
 def apply_jerk_filter(
-    catalogue: pd.DataFrame,
     clipped_records_ffp: Path,
     bypass_records: np.ndarray = None,
 ):
@@ -465,8 +461,6 @@ def apply_jerk_filter(
 
     Parameters
     ----------
-    catalogue : pd.DataFrame
-        The catalogue dataframe to filter
     clipped_records_ffp : Path
         The file path to the clipped records (created during the Waveform Extraction processing)
     bypass_records : np.ndarray, optional
@@ -481,7 +475,7 @@ def apply_jerk_filter(
     try:
         clipped_records = pd.read_csv(clipped_records_ffp)
     except pd.errors.EmptyDataError:
-        return catalogue, pd.DataFrame(columns=["record_id", "reason"])
+        return pd.DataFrame(columns=["record_id", "reason"])
 
     # Filter the clipped records to the reason of "Jerk"
     clipped_records = clipped_records[clipped_records["reason"] == "Jerk"]
@@ -871,14 +865,10 @@ def apply_all_filters(
     skipped_records_sta = filter_missing_sta_info(catalogue.copy(), bypass_records)
 
     # Find clipped records
-    skipped_records_clipped = apply_clipNet_filter(
-        catalogue.copy(), clipped_records_ffp, bypass_records
-    )
+    skipped_records_clipped = apply_clipNet_filter(clipped_records_ffp, bypass_records)
 
     # Find jerk records
-    skipped_records_jerk = apply_jerk_filter(
-        catalogue, clipped_records_ffp, bypass_records
-    )
+    skipped_records_jerk = apply_jerk_filter(clipped_records_ffp, bypass_records)
 
     # Find troublesome sensitivity records
     skipped_records_sensitivity = filter_troublesome_sensitivity(
@@ -925,7 +915,9 @@ def apply_all_filters(
 
     # Ensure uniqueness
     catalogue_test = catalogue.copy()
-    catalogue_test["evid_sta"] = catalogue_test["evid"].astype(str) + "_" + catalogue_test["sta"]
+    catalogue_test["evid_sta"] = (
+        catalogue_test["evid"].astype(str) + "_" + catalogue_test["sta"]
+    )
     if len(catalogue_test["evid_sta"].unique()) != len(catalogue_test):
         raise ValueError("Catalogue 'evid_sta' column must be unique.")
 
@@ -946,6 +938,7 @@ def create_quality_db(
     - Filter by missing station information.
     - Ensure only ground level locations are used.
     - Filter out clipped records.
+    - Filter out jerk records.
     - Filter out troublesome sensitivity records.
     - Filter out records too far from empirical predictions.
     - Select the appropriate channel for duplicate HN/BN records for the same event/station.
