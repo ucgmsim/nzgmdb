@@ -265,8 +265,8 @@ def process_mseed(mseed_file: Path, h5_ffp: Path, bypass_row: pd.Series = None):
     times = np.linspace(start_time.timestamp, end_time.timestamp, tr1.stats.npts)
 
     if bypass_row is not None:
-        p_wave_val = bypass_row["p_wave_time"].values[0]
-        s_wave_val = bypass_row["s_wave_time"].values[0]
+        p_wave_val = bypass_row["p_wave_time"]
+        s_wave_val = bypass_row["s_wave_time"]
 
         if p_wave_val is not None and not pd.isna(p_wave_val):
             p_wave_datetime = UTCDateTime(p_wave_val)
@@ -301,7 +301,9 @@ def process_mseed(mseed_file: Path, h5_ffp: Path, bypass_row: pd.Series = None):
     )
 
 
-def run_phasenet(mseed_files_ffp: Path, output_dir: Path, bypass_ffp: Path = None):
+def run_phasenet(
+    mseed_files_ffp: Path, output_dir: Path, bypass_ffp: Path | None = None
+):
     """
     Run PhaseNet on the mseed files.
 
@@ -329,12 +331,11 @@ def run_phasenet(mseed_files_ffp: Path, output_dir: Path, bypass_ffp: Path = Non
     for mseed_file in mseed_files:
         mseed_file = mseed_file.strip()
         mseed_file = Path(mseed_file)
+        bypass_row = None
         if bypass_ffp is not None:
-            bypass_row = bypass_df[bypass_df["record_id"] == mseed_file.stem]
-            if bypass_row.empty:
-                bypass_row = None
-        else:
-            bypass_row = None
+            bypass_row = bypass_df.loc[bypass_df["record_id"] == mseed_file.stem].iloc[
+                0
+            ]
         phase_arrival, skipped_record = process_mseed(mseed_file, h5_ffp, bypass_row)
         if phase_arrival is not None:
             phase_arrival_table.append(phase_arrival)

@@ -19,7 +19,7 @@ def process_batch(
     run_phasenet_script_ffp: Path,
     conda_sh: Path,
     env_activate_command: str,
-    bypass_records_ffp: Path = None,
+    bypass_records_ffp: Path | None = None,
 ):
     """
     Process a single subfolder: run PhaseNet over mseeds.
