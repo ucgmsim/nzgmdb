@@ -13,8 +13,8 @@ gmprocess
 h5py
 pooch
 oq_wrapper @ git+https://github.com/ucgmsim/Empirical_Engine.git#subdirectory=oq_wrapper
-openquake-engine @ git+https://github.com/gem/oq-engine.git
+openquake-engine @ git+https://github.com/gem/oq-engine.git@v3.23.2
 qcore @ git+https://github.com/ucgmsim/qcore.git
 IM_calculation @ git+https://github.com/ucgmsim/IM_calculation.git
-velocity_modelling @ git+https://github.com/ucgmsim/velocity_modelling.git
+velocity_modelling @ git+https://github.com/ucgmsim/velocity_modelling.git@5d1d6ef
 source-modelling @ git+https://github.com/ucgmsim/source_modelling.git
