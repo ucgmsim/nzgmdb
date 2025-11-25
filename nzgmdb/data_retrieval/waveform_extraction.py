@@ -849,14 +849,26 @@ def extract_station_info(
         clip = filtering.get_clip_probability(event_mag, r_hyp, mseed)
 
         threshold = config.get_value("clip_threshold")
+        stats = mseed[0].stats
+        record_id = f"{event_id}_{stats.station}_{stats.channel[:2]}_{stats.location}"
 
         # Check if the record should be dropped
         if clip > threshold:
-            stats = mseed[0].stats
+
             clipped_records.append(
                 [
-                    f"{event_id}_{stats.station}_{stats.channel[:2]}_{stats.location}",
+                    record_id,
                     "Clipped",
+                ]
+            )
+
+        # Check for jerks
+        has_jerk = filtering.get_jerk(mseed)
+        if has_jerk:
+            clipped_records.append(
+                [
+                    record_id,
+                    "Jerk",
                 ]
             )
 

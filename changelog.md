@@ -1,15 +1,21 @@
 # NZGMDB Changelog
 
-## Version 4.4 - Nov 25 **2000-01-01 to 2024-12-31**
-* Broadband sensors (HH) added
+## Version 4.4 - September 25 **2000-01-01 to 2024-12-31**
+* Adding Broadband data (HH) to the database
+* New Quality Filter to remove Broadband data during certain time periods due to sensitivity issues
+* New Quality Filter to compare against an empirical GMPE (Atkinson 2022) to remove significant outliers
+* Add ability to generate a report to compare NZGMDB versions
+* Waveform Extraction seperated from Parse GeoNet step to help with multi-event detection
+* Changed end time of waveform extraction to be p_time_est + ds595 * 3 stddev
+* Use a priority phase arrival list for estimated p-waves for extraction
+* Handles multi-trace issues
 * Automatic report creation
 * Add GMC skipped reasons
 * Update to use the new NZCVM 2.09 basins
 * TPVZ calculation fix
-* New script for converting ascii to common at2 format
-* Multi-trace handling with new waveform extraction step and file
-* Use a priority phase arrival list for estimated p-waves for extraction
-* Update to use NGA-West3 method of waveform extraction using ds595 + 3 * std
+* * New script for converting ascii to common at2 format
+* Adds installation dates for sites
+* New Quality Filter to check for Jerk in the waveform from ClipNet
 
 ## Version 4.3 - July 25 **2000-01-01 to 2024-12-31**
 * Sensitivity Fix (previously always taking first value not for actual datetime expected)

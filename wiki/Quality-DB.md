@@ -57,7 +57,10 @@ The filtering process follows a systematic 9-step approach:
 6. **Filter by missing station information**
 7. **Ensure only ground level locations are used**
 8. **Filter out clipped records**
-9. **Select the appropriate channel for duplicate HN/BN records**
+9. **Filter out jerk records**
+10. **Filter by sensitivity ignore list**
+11. **Filter by empirical prediction residuals**
+12. **Select the appropriate channel for duplicate HN/BN records**
 
 ### 🔹 Detailed Filter Descriptions
 
@@ -213,12 +216,12 @@ catalogue, skipped = apply_all_filters(catalogue, clipped_records_ffp,
 
 #### 8. Filter by Clipped Records
 
-**Purpose**: Removes records identified as clipped during the initial Geonet processing step.
+**Purpose**: Removes records identified as clipped during the Waveform Extraction processing step.
 
 **Implementation**:
-- Reads the `clipped_records.csv` file created during Parse Geonet step
-- Removes any records that appear in the clipped records list
-- Clipping detection is based on configurable magnitude and distance thresholds in the Parse-Geonet Step.
+- Reads the `clipped_records.csv` file created during Waveform Extraction step
+- Removes any records that appear in the clipped records list reason
+- Clipping detection is based on configurable magnitude and distance thresholds in the Waveform Extraction Step.
 
 **Configuration**:
 ```yaml
@@ -234,7 +237,19 @@ clip_threshold: 0.2     # Threshold for clipping detection
 
 ---
 
-#### 9. Filter by Sensitivity Ignore List
+#### 9. Filter by Jerk Records
+
+**Purpose**: Removes records where it was identified that for some number of points the Jerk exceeded the median by 100 times for at least 1 trace during the Waveform Extraction processing step.
+
+**Implementation**:
+- Reads the `clipped_records.csv` file created during Waveform Extraction step
+- Removes any records that appear in the Jerk records list reason
+
+**Bypass**: Records in bypass list are retained even if identified as jerk records.
+
+---
+
+#### 10. Filter by Sensitivity Ignore List
 
 **Purpose**: Removes records known to be problematic in the BroadBand sensors, such as early deployments with potential calibration errors.
 
@@ -249,7 +264,7 @@ clip_threshold: 0.2     # Threshold for clipping detection
 
 ---
 
-#### 10. Filter by Empirical Prediction Residuals
+#### 11. Filter by Empirical Prediction Residuals
 
 **Purpose**: Removes records with ground motion values significantly inconsistent with empirical ground motion prediction models.
 
@@ -279,7 +294,7 @@ max_residual_threshold: 6
 
 ---
 
-#### 11. Filter Duplicate Channels
+#### 12. Filter Duplicate Channels
 
 **Purpose**: Retains the highest-priority record when multiple instruments record the same event at the same station.
 
