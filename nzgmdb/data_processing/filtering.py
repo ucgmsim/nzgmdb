@@ -37,6 +37,17 @@ def get_clip_probability(event_mag: float, dist: float, mseed: Stream) -> float:
     dist_clip_low = config.get_value("dist_clip_low")
     dist_clip_high = config.get_value("dist_clip_high")
 
+    # Ensure numeric inputs
+    try:
+        event_mag = float(event_mag)
+    except (TypeError, ValueError) as exc:
+        raise TypeError(f"event_mag must be a number, got {event_mag!r}") from exc
+
+    try:
+        dist = float(dist)
+    except (TypeError, ValueError) as exc:
+        raise TypeError(f"dist must be a number, got {dist!r}") from exc
+
     # Clip the event_mag and dist values
     event_mag = np.clip(event_mag, mag_clip_low, mag_clip_high)
     dist = np.clip(dist, dist_clip_low, dist_clip_high)

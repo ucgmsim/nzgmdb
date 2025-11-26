@@ -10,7 +10,6 @@ import pandas as pd
 from nzgmdb.management import config as cfg
 from nzgmdb.management import file_structure
 from nzgmdb.management.data_registry import NZGMDB_DATA
-from nzgmdb.management.file_structure import FlatfileNames
 from oq_wrapper import constants, wrapper
 
 
@@ -31,35 +30,35 @@ def filter_flatfiles_on_catalouge(
         The dataframe containing the records to filter on
     """
     file_to_filter = [
-        FlatfileNames.EARTHQUAKE_SOURCE_TABLE,
-        FlatfileNames.EARTHQUAKE_SOURCE_GEOMETRY,
-        FlatfileNames.FMAX,
-        FlatfileNames.STATION_MAGNITUDE_TABLE,
-        FlatfileNames.STATION_EXTRACTION_TABLE,
-        FlatfileNames.SITE_TABLE,
-        FlatfileNames.PHASE_ARRIVAL_TABLE,
-        FlatfileNames.PROPAGATION_TABLE,
-        FlatfileNames.GMC_PREDICTIONS,
-        FlatfileNames.SNR_METADATA,
-        FlatfileNames.GROUND_MOTION_IM_000_FLAT,
-        FlatfileNames.GROUND_MOTION_IM_090_FLAT,
-        FlatfileNames.GROUND_MOTION_IM_VER_FLAT,
-        FlatfileNames.GROUND_MOTION_IM_ROTD0_FLAT,
-        FlatfileNames.GROUND_MOTION_IM_ROTD100_FLAT,
-        FlatfileNames.GROUND_MOTION_IM_GEOM_FLAT,
-        FlatfileNames.GROUND_MOTION_IM_EAS_FLAT,
+        file_structure.FlatfileNames.EARTHQUAKE_SOURCE_TABLE,
+        file_structure.FlatfileNames.EARTHQUAKE_SOURCE_GEOMETRY,
+        file_structure.FlatfileNames.FMAX,
+        file_structure.FlatfileNames.STATION_MAGNITUDE_TABLE,
+        file_structure.FlatfileNames.STATION_EXTRACTION_TABLE,
+        file_structure.FlatfileNames.SITE_TABLE,
+        file_structure.FlatfileNames.PHASE_ARRIVAL_TABLE,
+        file_structure.FlatfileNames.PROPAGATION_TABLE,
+        file_structure.FlatfileNames.GMC_PREDICTIONS,
+        file_structure.FlatfileNames.SNR_METADATA,
+        file_structure.FlatfileNames.GROUND_MOTION_IM_000_FLAT,
+        file_structure.FlatfileNames.GROUND_MOTION_IM_090_FLAT,
+        file_structure.FlatfileNames.GROUND_MOTION_IM_VER_FLAT,
+        file_structure.FlatfileNames.GROUND_MOTION_IM_ROTD0_FLAT,
+        file_structure.FlatfileNames.GROUND_MOTION_IM_ROTD100_FLAT,
+        file_structure.FlatfileNames.GROUND_MOTION_IM_GEOM_FLAT,
+        file_structure.FlatfileNames.GROUND_MOTION_IM_EAS_FLAT,
     ]
 
     for file in file_to_filter:
         # Load the new file and filter based on record_id
         df = pd.read_csv(flatfile_dir / file, dtype={"evid": str})
         if file in [
-            FlatfileNames.EARTHQUAKE_SOURCE_TABLE,
-            FlatfileNames.EARTHQUAKE_SOURCE_GEOMETRY,
+            file_structure.FlatfileNames.EARTHQUAKE_SOURCE_TABLE,
+            file_structure.FlatfileNames.EARTHQUAKE_SOURCE_GEOMETRY,
         ]:
             # filter by evid
             df_filtered = df[df["evid"].isin(rotd50_flat["evid"])]
-        elif file == FlatfileNames.STATION_MAGNITUDE_TABLE:
+        elif file == file_structure.FlatfileNames.STATION_MAGNITUDE_TABLE:
             # Ensure loc is str
             df["loc"] = df["loc"].astype(str)
             # Make the record_id column
@@ -75,11 +74,11 @@ def filter_flatfiles_on_catalouge(
             df_filtered = df[df["record_id"].isin(rotd50_flat["record_id"])]
             # remove the record_id column
             df_filtered = df_filtered.drop(columns=["record_id"])
-        elif file == FlatfileNames.SITE_TABLE:
+        elif file == file_structure.FlatfileNames.SITE_TABLE:
             df_filtered = df[df["sta"].isin(rotd50_flat["sta"])]
         elif file in [
-            FlatfileNames.PROPAGATION_TABLE,
-            FlatfileNames.STATION_EXTRACTION_TABLE,
+            file_structure.FlatfileNames.PROPAGATION_TABLE,
+            file_structure.FlatfileNames.STATION_EXTRACTION_TABLE,
         ]:
             # Make the evid_sta column
             df["evid_sta"] = df["evid"] + "_" + df["sta"]
@@ -91,7 +90,7 @@ def filter_flatfiles_on_catalouge(
             # remove the evid_sta column
             df_filtered = df_filtered.drop(columns=["evid_sta"])
             rotd50_flat = rotd50_flat.drop(columns=["evid_sta"])
-        elif file == FlatfileNames.GMC_PREDICTIONS:
+        elif file == file_structure.FlatfileNames.GMC_PREDICTIONS:
             df_filtered = df[df["record"].isin(rotd50_flat["record_id"])]
         else:
             df_filtered = df[df["record_id"].isin(rotd50_flat["record_id"])]
@@ -436,7 +435,6 @@ def filter_ground_level_locations(
 
 
 def apply_clipNet_filter(
-    catalogue: pd.DataFrame,
     clipped_records_ffp: Path,
     bypass_records: np.ndarray = None,
 ):
@@ -446,8 +444,6 @@ def apply_clipNet_filter(
 
     Parameters
     ----------
-    catalogue : pd.DataFrame
-        The catalogue dataframe to filter
     clipped_records_ffp : Path
         The file path to the clipped records (created during the Waveform Extraction processing)
     bypass_records : np.ndarray, optional
@@ -462,7 +458,10 @@ def apply_clipNet_filter(
     try:
         clipped_records = pd.read_csv(clipped_records_ffp)
     except pd.errors.EmptyDataError:
-        return catalogue, pd.DataFrame(columns=["record_id", "reason"])
+        return pd.DataFrame(columns=["record_id", "reason"])
+
+    # Filter the clipped records to the reason of "Clipped"
+    clipped_records = clipped_records[clipped_records["reason"] == "Clipped"]
 
     # Filter the clipped records to the reason of "Clipped"
     clipped_records = clipped_records[clipped_records["reason"] == "Clipped"]
@@ -485,7 +484,6 @@ def apply_clipNet_filter(
 
 
 def apply_jerk_filter(
-    catalogue: pd.DataFrame,
     clipped_records_ffp: Path,
     bypass_records: np.ndarray = None,
 ):
@@ -495,8 +493,6 @@ def apply_jerk_filter(
 
     Parameters
     ----------
-    catalogue : pd.DataFrame
-        The catalogue dataframe to filter
     clipped_records_ffp : Path
         The file path to the clipped records (created during the Waveform Extraction processing)
     bypass_records : np.ndarray, optional
@@ -511,7 +507,7 @@ def apply_jerk_filter(
     try:
         clipped_records = pd.read_csv(clipped_records_ffp)
     except pd.errors.EmptyDataError:
-        return catalogue, pd.DataFrame(columns=["record_id", "reason"])
+        return pd.DataFrame(columns=["record_id", "reason"])
 
     # Filter the clipped records to the reason of "Jerk"
     clipped_records = clipped_records[clipped_records["reason"] == "Jerk"]
@@ -626,7 +622,7 @@ def filter_empirical_predictions(
     Returns
     -------
     pd.DataFrame
-        The skipped records
+        The skipped records to filter out of the catalogue
 
     References
      ----------
@@ -886,35 +882,47 @@ def apply_all_filters(
 
     # Find has score mean
     skipped_records_has_score = filter_has_score_mean(catalogue, bypass_records)
+    # Find ground level locations
+    skipped_records_ground = filter_ground_level_locations(
+        catalogue.copy(), bypass_records
+    )
 
     # Find score mean
     skipped_records_score = filter_score_mean(catalogue, score_min, bypass_records)
+    # Find has score mean
+    skipped_records_has_score = filter_has_score_mean(catalogue.copy(), bypass_records)
+
+    # Find score mean
+    skipped_records_score = filter_score_mean(
+        catalogue.copy(), score_min, bypass_records
+    )
 
     # Find multi mean
-    skipped_records_multi = filter_multi_mean(catalogue, multi_max, bypass_records)
+    skipped_records_multi = filter_multi_mean(catalogue.copy(), multi_max, bypass_records)
 
     # Find fmax
-    skipped_records_fmax = filter_fmax(catalogue, fmax_min, bypass_records)
+    skipped_records_fmax = filter_fmax(catalogue.copy(), fmax_min, bypass_records)
 
     # Find fmin
-    skipped_records_fmin = filter_fmin(catalogue, fmin_max, bypass_records)
+    skipped_records_fmin = filter_fmin(catalogue.copy(), fmin_max, bypass_records)
 
     # Find missing station information
-    skipped_records_sta = filter_missing_sta_info(catalogue, bypass_records)
+    skipped_records_sta = filter_missing_sta_info(catalogue.copy(), bypass_records)
 
     # Find clipped records
-    skipped_records_clipped = apply_clipNet_filter(
-        catalogue, clipped_records_ffp, bypass_records
-    )
+    skipped_records_clipped = apply_clipNet_filter(clipped_records_ffp, bypass_records)
 
     # Find jerk records
-    skipped_records_jerk = apply_jerk_filter(
-        catalogue, clipped_records_ffp, bypass_records
-    )
+    skipped_records_jerk = apply_jerk_filter(clipped_records_ffp, bypass_records)
 
     # Find troublesome sensitivity records
     skipped_records_sensitivity = filter_troublesome_sensitivity(
-        catalogue, bypass_records
+        catalogue.copy(), bypass_records
+    )
+
+    # Find empirical predictions
+    skipped_records_empirical = filter_empirical_predictions(
+        catalogue.copy(), bypass_records
     )
 
     # Find empirical predictions
@@ -942,7 +950,9 @@ def apply_all_filters(
     catalogue = catalogue[~catalogue["record_id"].isin(skipped_records["record_id"])]
 
     # Find duplicate channels
-    skipped_records_duplicate = filter_duplicate_channels(catalogue, bypass_records)
+    skipped_records_duplicate = filter_duplicate_channels(
+        catalogue.copy(), bypass_records
+    )
 
     # Filter out the duplicate channels from the catalogue
     catalogue = catalogue[
@@ -952,18 +962,13 @@ def apply_all_filters(
     # Add the skipped records from duplicate channels
     skipped_records = pd.concat([skipped_records, skipped_records_duplicate])
 
-    # Clean up and ensure uniqueness
-    assert len(catalogue["evid_sta"].unique()) == len(catalogue)
-    catalogue = catalogue.drop(
-        columns=[
-            "evid_sta",
-            "bypass",
-            "chan_priority",
-            "mean_residual",
-            "max_residual",
-            "fmax_min",
-        ]
+    # Ensure uniqueness
+    catalogue_test = catalogue.copy()
+    catalogue_test["evid_sta"] = (
+        catalogue_test["evid"].astype(str) + "_" + catalogue_test["sta"]
     )
+    if len(catalogue_test["evid_sta"].unique()) != len(catalogue_test):
+        raise ValueError("Catalogue 'evid_sta' column must be unique.")
 
     return catalogue, skipped_records
 
@@ -996,7 +1001,7 @@ def create_quality_db(
         The file path to the records that will bypass the quality checks
     """
     # Make the quality db directory
-    output_dir = main_dir / "quality_db"
+    output_dir = file_structure.get_quality_db_dir(main_dir)
     output_dir.mkdir(exist_ok=True)
 
     # Load the ground motion im catalogue
@@ -1028,7 +1033,10 @@ def create_quality_db(
     filter_flatfiles_on_catalouge(flatfile_dir, output_dir, gm_df)
 
     # Save the gm_df and skipped_records
-    gm_df.to_csv(output_dir / FlatfileNames.GROUND_MOTION_IM_ROTD50_FLAT, index=False)
+    gm_df.to_csv(
+        output_dir / file_structure.FlatfileNames.GROUND_MOTION_IM_ROTD50_FLAT,
+        index=False,
+    )
     skipped_records.to_csv(
         flatfile_dir / file_structure.SkippedRecordFilenames.QUALITY_SKIPPED_RECORDS,
         index=False,

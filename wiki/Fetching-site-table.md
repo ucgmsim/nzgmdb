@@ -10,14 +10,15 @@ This step in the NZGMDB pipeline collects metadata for all seismic stations with
 To generate the site table, run the following Python script:
 
 ```bash
-python -m nzgmdb.scripts.run_nzgmdb generate-site-table-basin <main_dir>
+python -m nzgmdb.scripts.run_nzgmdb generate-site-table-basin <main_dir> <nzcvm_data_ffp>
 ```
 
 - `<main_dir>` is the top-level output directory where NZGMDB stores its results.
+- `<nzcvm_data_ffp>` is the full file path to the local clone of the `nzcvm_data` repository.
 
 Example:
 ```bash
-python -m nzgmdb.scripts.run_nzgmdb generate-site-table-basin nzgmdb_output/
+python -m nzgmdb.scripts.run_nzgmdb generate-site-table-basin nzgmdb_output/ /path/to/nzcvm_data
 ```
 
 This will create the file:
@@ -53,9 +54,17 @@ nzgmdb_output/flatfiles/site_table_basin.csv
 
 Adds basin information to the site table dataframe by checking if station coordinates fall inside known basin polygons.
 
-- Loads the latest version of basin outlines from the velocity modelling repository.
+- Loads the config specified version of basin outlines from the velocity modelling repository. Default is `2.09`.
 - Uses a spatial point-in-polygon test to assign the basin name to sites located within basin boundaries.
+- Sometimes basins can have overlaps in the boundaries, in these cases a priority list is used set in the config file to decide which basin name should be top priority. By default this is:
+  1. Canterbury
+  2. Wellington
+  3. Southland
 - Adds a new column `basin` to the input dataframe.
+- Adds a new column `nzcvm_version` to indicate the version of basin outlines used.
+
+Below is an example of the basin outlines used (version `2.09`):
+![Basin Outlines](images/v2p09_all_basins.png)
 
 ---
 
@@ -90,6 +99,7 @@ Adds basin information to the site table dataframe by checking if station coordi
 | `Z2.5_ref`      | Reference for Z2.5 data source                               |
 | `site_domain_no`| Integer tectonic domain ID assigned from shapefile           |
 | `basin`         | Basin name assigned based on spatial polygon test            |
+| `nzcvm_version` | Version of basin outlines used                               |
 
 ---
 

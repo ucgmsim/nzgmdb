@@ -1,6 +1,6 @@
 # Description: Configuration file for the NZGMDB
 # Geonet filters
-min_mag: 3
+min_mag: 2.5
 max_mag: 10
 quality_min_mag: 3.5
 # Geonet Variables
@@ -34,6 +34,12 @@ is_large_overlap: 0.5
 vs30: 500
 pre_event_time_difference: 15
 ds_std_multiplier: 3
+# Velocity Modelling
+nzcvm_version: "2.09"
+priority_basins:
+  - Canterbury
+  - Wellington
+  - Southland
 # GMProcess Variables
 gmprocess_url: https://earthquake.usgs.gov/fdsnws/event/1/query
 search_radius: 25 # In kilometres

@@ -58,7 +58,10 @@ The filtering process follows a systematic 9-step approach:
 7. **Filter by missing station information**
 8. **Ensure only ground level locations are used**
 9. **Filter out clipped records**
-10. **Select the appropriate channel for duplicate HN/BN records**
+10. **Filter out jerk records**
+11. **Filter by sensitivity ignore list**
+12. **Filter by empirical prediction residuals**
+13. **Select the appropriate channel for duplicate HN/BN records**
 
 ### 🔹 Detailed Filter Descriptions
 
@@ -308,7 +311,7 @@ max_residual_threshold: 6
 
 ---
 
-#### 12. Filter Duplicate Channels
+#### 13. Filter Duplicate Channels
 
 **Purpose**: Retains the highest-priority record when multiple instruments record the same event at the same station.
 

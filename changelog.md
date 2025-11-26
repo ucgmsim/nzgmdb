@@ -7,7 +7,13 @@
 * Add ability to generate a report to compare NZGMDB versions
 * Waveform Extraction seperated from Parse GeoNet step to help with multi-event detection
 * Changed end time of waveform extraction to be p_time_est + ds595 * 3 stddev
+* Use a priority phase arrival list for estimated p-waves for extraction
 * Handles multi-trace issues
+* Automatic report creation
+* Add GMC skipped reasons
+* Update to use the new NZCVM 2.09 basins
+* TPVZ calculation fix
+* * New script for converting ascii to common at2 format
 * Adds installation dates for sites
 * New Quality Filter to check for Jerk in the waveform from ClipNet
 
