@@ -464,9 +464,6 @@ def apply_clipNet_filter(
     # Filter the clipped records to the reason of "Clipped"
     clipped_records = clipped_records[clipped_records["reason"] == "Clipped"]
 
-    # Filter the clipped records to the reason of "Clipped"
-    clipped_records = clipped_records[clipped_records["reason"] == "Clipped"]
-
     # Remove the bypass records if they exist
     if bypass_records is not None:
         clipped_records = clipped_records[

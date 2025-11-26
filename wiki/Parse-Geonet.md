@@ -53,7 +53,7 @@ This will create several output files in the flatfiles directory:
 The pipeline queries the GeoNet earthquake catalogue for events within the specified date range using magnitude constraints from `config.yaml`:
 
 **Configuration Parameters:**
-- **Minimum magnitude:** `min_mag: 3`
+- **Minimum magnitude:** `min_mag: 2.5`
 - **Maximum magnitude:** `max_mag: 10`
 - **Geographic bounds:** `bbox: [165.5205, -49.1817, -176.9238, -32.2871]` (New Zealand region)
 - **GeoNet URL:** `geonet_url: https://quakesearch.geonet.org.nz`
