@@ -126,6 +126,7 @@ def filter_mag(catalogue: pd.DataFrame, mag_min: float):
 
     return skipped_records
 
+
 def filter_has_score_mean(catalogue: pd.DataFrame, bypass_records: np.ndarray = None):
     """
     Filter the catalogue based on if there is a score from GMC.
@@ -875,20 +876,13 @@ def apply_all_filters(
     mag_min = min_mag if min_mag is not None else config.get_value("quality_min_mag")
 
     # Filter by magnitude
-    skipped_records_mag = filter_mag(catalogue, mag_min)
+    skipped_records_mag = filter_mag(catalogue.copy(), mag_min)
 
-    # Find ground level locations
-    skipped_records_ground = filter_ground_level_locations(catalogue, bypass_records)
-
-    # Find has score mean
-    skipped_records_has_score = filter_has_score_mean(catalogue, bypass_records)
     # Find ground level locations
     skipped_records_ground = filter_ground_level_locations(
         catalogue.copy(), bypass_records
     )
 
-    # Find score mean
-    skipped_records_score = filter_score_mean(catalogue, score_min, bypass_records)
     # Find has score mean
     skipped_records_has_score = filter_has_score_mean(catalogue.copy(), bypass_records)
 
@@ -898,7 +892,9 @@ def apply_all_filters(
     )
 
     # Find multi mean
-    skipped_records_multi = filter_multi_mean(catalogue.copy(), multi_max, bypass_records)
+    skipped_records_multi = filter_multi_mean(
+        catalogue.copy(), multi_max, bypass_records
+    )
 
     # Find fmax
     skipped_records_fmax = filter_fmax(catalogue.copy(), fmax_min, bypass_records)
@@ -924,9 +920,6 @@ def apply_all_filters(
     skipped_records_empirical = filter_empirical_predictions(
         catalogue.copy(), bypass_records
     )
-
-    # Find empirical predictions
-    skipped_records_empirical = filter_empirical_predictions(catalogue, bypass_records)
 
     # Combine all the skipped records
     skipped_records = pd.concat(
@@ -1012,10 +1005,9 @@ def create_quality_db(
     )
 
     # Get the clipped records
-    # clipped_records_ffp = (
-    #     flatfile_dir / file_structure.SkippedRecordFilenames.CLIPPED_RECORDS
-    # )
-    clipped_records_ffp = Path("/home/joel/local/gmdb/4p3_mantle/tmp_clipped.csv")
+    clipped_records_ffp = (
+        flatfile_dir / file_structure.SkippedRecordFilenames.CLIPPED_RECORDS
+    )
 
     # Load the bypass records if they exist
     bypass_records = (
