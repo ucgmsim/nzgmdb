@@ -85,6 +85,9 @@ mag_clip_high: 8.8
 dist_clip_low: 0.0
 dist_clip_high: 645.0
 clip_threshold: 0.2
+# Jerk
+point_thresh: 400
+median_multiplier: 100
 # IM Calculation
 ims:
   - PGA

@@ -19,6 +19,7 @@ def process_batch(
     run_phasenet_script_ffp: Path,
     conda_sh: Path,
     env_activate_command: str,
+    bypass_records_ffp: Path | None = None,
 ):
     """
     Process a single subfolder: run PhaseNet over mseeds.
@@ -33,6 +34,8 @@ def process_batch(
         The path to the conda.sh script. (Used to activate the conda PhaseNet environment)
     env_activate_command : str
         The command to activate the environment for running PhaseNet.
+    bypass_records_ffp : Path
+        The full file path to the bypass records file, which includes a custom p_wave_datetime and/or s_wave_datetime
 
     Raises
     ------
@@ -56,7 +59,7 @@ def process_batch(
         print(f"Skipping run_phasenet for Batch {batch_num} as results already exist")
     else:
         # Activate phaseNet environment and run over mseeds for the subfolder
-        phasenet_command = f"python {run_phasenet_script_ffp} {batch_txt} {output_dir}"
+        phasenet_command = f"python {run_phasenet_script_ffp} {batch_txt} {output_dir} {bypass_records_ffp if bypass_records_ffp is not None else ''}"
         shell_commands.run_command(
             phasenet_command, conda_sh, env_activate_command, log_file_path_phasenet
         )
@@ -122,6 +125,7 @@ def generate_phase_arrival_table(
                 run_phasenet_script_ffp=run_phasenet_script_ffp,
                 conda_sh=conda_sh,
                 env_activate_command=env_activate_command,
+                bypass_records_ffp=bypass_records_ffp,
             ),
             batches,
         )
@@ -169,34 +173,6 @@ def generate_phase_arrival_table(
     phase_df = pd.concat(phase_results)
     skipped_df = pd.concat(skipped_records_results)
 
-    # If the bypass file exists, replace p_wave_ix values with ones that exist in the bypass file
-    if bypass_records_ffp is not None:
-        bypass_df = pd.read_csv(bypass_records_ffp)
-        phase_df = pd.merge(
-            phase_df,
-            bypass_df[["record_id", "p_wave_ix", "s_wave_ix"]],
-            how="left",
-            on="record_id",
-            suffixes=("", "_bypass"),
-        )
-        # Replace the suffixes with the original column name if the bypass column is not null
-        phase_df["p_wave_ix"] = phase_df["p_wave_ix_bypass"].combine_first(
-            phase_df["p_wave_ix"]
-        )
-        phase_df["s_wave_ix"] = phase_df["s_wave_ix_bypass"].combine_first(
-            phase_df["s_wave_ix"]
-        )
-        # Identify which rows were overridden for p_wave_ix
-        overridden_mask = phase_df["p_wave_ix_bypass"].notnull()
-        # Set corresponding p_wave_prob to 1.0 where overridden
-        phase_df.loc[overridden_mask, "p_wave_prob"] = 1.0
-
-        # Identify which rows were overridden for s_wave_ix
-        overridden_mask = phase_df["s_wave_ix_bypass"].notnull()
-        # Set corresponding s_wave_prob to 1.0 where overridden
-        phase_df.loc[overridden_mask, "s_wave_prob"] = 1.0
-
-        phase_df = phase_df.drop(columns=["p_wave_ix_bypass", "s_wave_ix_bypass"])
     # Ensure the p_wave_ix and s_wave_ix column is an int
     phase_df["p_wave_ix"] = phase_df["p_wave_ix"].astype(int)
     phase_df["s_wave_ix"] = phase_df["s_wave_ix"].astype(int)
