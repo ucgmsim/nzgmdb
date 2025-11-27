@@ -236,10 +236,23 @@ def add_ground_level(
     station_df["start_time"] = station_df["start_time"].fillna(
         pd.Timestamp("2000-01-01")
     )
-    station_df["end_time"] = station_df["end_time"].fillna(pd.Timestamp.today())
+    station_df["end_time"] = station_df["end_time"].fillna(pd.Timestamp.max)
 
     # Ensure datetime dtypes
-    def _to_py_datetime(val):
+    def _to_py_datetime(val: object) -> object:
+        """
+        Convert UTCDateTime to python datetime.datetime if needed.
+
+        Parameters
+        ----------
+        val : object
+            The value to convert.
+
+        Returns
+        -------
+        object
+            The converted value.
+        """
         if isinstance(val, UTCDateTime):
             return val.datetime
         return val
@@ -248,6 +261,19 @@ def add_ground_level(
     station_df["end_time"] = station_df["end_time"].apply(_to_py_datetime)
 
     def ensure_utc(series: pd.Series) -> pd.Series:
+        """
+        Ensure a pandas Series of datetimes is timezone-aware in UTC.
+
+        Parameters
+        ----------
+        series : pd.Series
+            The pandas Series to ensure is timezone-aware in UTC.
+
+        Returns
+        -------
+        pd.Series
+            The timezone-aware pandas Series in UTC.
+        """
         # coerce to datetime first, then ensure UTC tz (convert if already tz-aware, localize if naive)
         s = pd.to_datetime(series, errors="coerce")
         if pd.api.types.is_datetime64tz_dtype(s.dtype):
@@ -262,26 +288,21 @@ def add_ground_level(
     station_df["end_time"] = pd.to_datetime(station_df["end_time"])
     gm_im_df_flat["datetime"] = pd.to_datetime(gm_im_df_flat["datetime"])
 
-    loc_elev_list = []
-
-    for _, row in gm_im_df_flat.iterrows():
-        mask = (
-            (station_df["sta"] == row["sta"])
-            & (station_df["loc"] == row["loc"])
-            & (station_df["chan"] == row["chan"])
-            & (station_df["start_time"] <= row["datetime"])
-            & (station_df["end_time"] >= row["datetime"])
-        )
-
-        matched_rows = station_df.loc[mask]
-
-        if matched_rows.empty:
-            loc_elev_list.append(None)
-        else:
-            loc_elev_list.append(matched_rows.iloc[0]["loc_elev"])
-
-    # Add the result to other_df
-    gm_im_df_flat["loc_elev"] = loc_elev_list
+    merged = pd.merge(
+        gm_im_df_flat.reset_index(), station_df, on=["sta", "loc", "chan"], how="left"
+    )
+    valid_matches = merged[
+        (merged["datetime"] >= merged["start_time"])
+        & (merged["datetime"] <= merged["end_time"])
+    ]
+    # Sort to ensure deterministic selection of the first match, then drop duplicates.
+    first_matches = valid_matches.sort_values("start_time").drop_duplicates(
+        subset="index", keep="first"
+    )
+    # Map the loc_elev back to the gm_im_df_flat dataframe.
+    gm_im_df_flat["loc_elev"] = gm_im_df_flat.index.map(
+        first_matches.set_index("index")["loc_elev"]
+    )
 
     # Replace -0.0 with 0.0 in the DataFrame
     gm_im_df_flat = gm_im_df_flat.replace(-0.0, 0.0)

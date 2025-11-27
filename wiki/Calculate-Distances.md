@@ -323,6 +323,7 @@ Additional geometry information is stored in a separate table for each of the pl
 | `z_bor`           | Depth to bottom of rupture                      | km      |
 | `hyp_lat`         | Hypocentre latitude                             | degrees |
 | `hyp_lon`         | Hypocentre longitude                            | degrees |
+| `hyp_depth`       | Hypocentre depth                                | km      |
 | `hyp_strike`      | The location of the hypocentre along-strike (expressed as a proportion of fault length).           | 0-1     |
 | `hyp_dip`         | The location of the hypocentre down-dip (expressed as a proportion of fault length).               | 0-1     |
 | `corner_0_lat`    | Latitude of top-left corner of fault plane      | degrees |

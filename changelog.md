@@ -10,6 +10,9 @@
 * Multi-trace handling with new waveform extraction step and file
 * Use a priority phase arrival list for estimated p-waves for extraction
 * Update to use NGA-West3 method of waveform extraction using ds595 + 3 * std
+* Adjust magnitude filters: full ≥ 2.5; quality-filtered ≥ 3.5.
+* Added Hyp_depth to geometry table
+* Adjusted is_ground_level logic by adding in FDSN Inventory data
 
 ## Version 4.3 - July 25 **2000-01-01 to 2024-12-31**
 * Sensitivity Fix (previously always taking first value not for actual datetime expected)
