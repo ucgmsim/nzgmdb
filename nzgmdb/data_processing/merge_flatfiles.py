@@ -6,6 +6,7 @@ from pathlib import Path
 
 import pandas as pd
 from obspy.clients.fdsn import Client as FDSN_Client
+from obspy.core.utcdatetime import UTCDateTime
 
 from nzgmdb.management import config as cfg
 from nzgmdb.management import file_structure
@@ -151,6 +152,216 @@ def merge_im_data(
     )
 
 
+def add_ground_level(
+    gm_im_df_flat: pd.DataFrame,
+):
+    """
+    Add in the ground level location elevation information to the gm_im_df_flat dataframe
+
+    Parameters
+    ----------
+    gm_im_df_flat : pd.DataFrame
+        The ground motion IM dataframe to add the ground level information to
+
+    Returns
+    -------
+    pd.DataFrame
+        The ground motion IM dataframe with the ground level information added
+    """
+    # Find the station location information with the inventory lat, lon and elev
+    config = cfg.Config()
+    channel_codes = ",".join(config.get_value("channel_codes"))
+    client_NZ = FDSN_Client("GEONET")
+    inventory = client_NZ.get_stations(channel=channel_codes, level="response")
+    station_info = [
+        [
+            station.code,
+            station.latitude,
+            station.longitude,
+            station.elevation,
+            channel.code[:2],
+            channel.location_code,
+            channel.depth,
+            channel.start_date,
+            channel.end_date,
+        ]
+        for network in inventory
+        for station in network
+        for channel in station.channels
+    ]
+    station_df = pd.DataFrame(
+        station_info,
+        columns=[
+            "sta",
+            "sta_lat",
+            "sta_lon",
+            "sta_elev",
+            "chan",
+            "loc",
+            "loc_elev",
+            "start_time",
+            "end_time",
+        ],
+    )
+    # Remove duplicates
+    station_df = station_df.drop_duplicates(
+        ["sta", "chan", "loc", "loc_elev"]
+    ).reset_index(drop=True)
+
+    # Get the recorders information for location codes
+    config = cfg.Config()
+    locations_url = config.get_value("locations_url")
+    locations_df = pd.read_csv(locations_url)
+    # Ensure the Station and Location pairings are unique
+    locations_df = locations_df.drop_duplicates(subset=["Station", "Location"])
+
+    # Merge the locations_df with the station_df to get extra loc_elev from locations_df
+    station_df = station_df.merge(
+        locations_df[["Station", "Location", "Depth"]],
+        left_on=["sta", "loc"],
+        right_on=["Station", "Location"],
+        how="outer",
+    )
+
+    # Remove rows where sta is NaN
+    station_df = station_df[station_df["sta"].notna()]
+
+    # Fill the loc_elev with the locations depth when the loc_elev is NaN
+    station_df["loc_elev"] = station_df["loc_elev"].fillna(station_df["Depth"])
+
+    # Apply negative to the loc_elev column to convert to elevation
+    station_df["loc_elev"] = -station_df["loc_elev"]
+
+    # Fill NaN start and end times
+    station_df["start_time"] = station_df["start_time"].fillna(
+        pd.Timestamp("2000-01-01")
+    )
+    station_df["end_time"] = station_df["end_time"].fillna(pd.Timestamp.today())
+
+    # Ensure datetime dtypes
+    def _to_py_datetime(val):
+        if isinstance(val, UTCDateTime):
+            return val.datetime
+        return val
+
+    station_df["start_time"] = station_df["start_time"].apply(_to_py_datetime)
+    station_df["end_time"] = station_df["end_time"].apply(_to_py_datetime)
+
+    def ensure_utc(series: pd.Series) -> pd.Series:
+        # coerce to datetime first, then ensure UTC tz (convert if already tz-aware, localize if naive)
+        s = pd.to_datetime(series, errors="coerce")
+        if pd.api.types.is_datetime64tz_dtype(s.dtype):
+            return s.dt.tz_convert("UTC")
+        return s.dt.tz_localize("UTC")
+
+    # Normalize both frames to UTC before sorting / merge_asof
+    station_df["start_time"] = ensure_utc(station_df["start_time"])
+    station_df["end_time"] = ensure_utc(station_df["end_time"])
+
+    station_df["start_time"] = pd.to_datetime(station_df["start_time"])
+    station_df["end_time"] = pd.to_datetime(station_df["end_time"])
+    gm_im_df_flat["datetime"] = pd.to_datetime(gm_im_df_flat["datetime"])
+
+    loc_elev_list = []
+
+    for _, row in gm_im_df_flat.iterrows():
+        mask = (
+            (station_df["sta"] == row["sta"])
+            & (station_df["loc"] == row["loc"])
+            & (station_df["chan"] == row["chan"])
+            & (station_df["start_time"] <= row["datetime"])
+            & (station_df["end_time"] >= row["datetime"])
+        )
+
+        matched_rows = station_df.loc[mask]
+
+        if matched_rows.empty:
+            loc_elev_list.append(None)
+        else:
+            loc_elev_list.append(matched_rows.iloc[0]["loc_elev"])
+
+    # Add the result to other_df
+    gm_im_df_flat["loc_elev"] = loc_elev_list
+
+    # Replace -0.0 with 0.0 in the DataFrame
+    gm_im_df_flat = gm_im_df_flat.replace(-0.0, 0.0)
+
+    # Add in a flag for when the location elevation is 0
+    # Group by 'evid', 'sta', and 'chan'
+    grouped = gm_im_df_flat.groupby(["evid", "sta", "chan"])
+
+    def custom_idxmin(group: pd.DataFrame):
+        """
+        Custom function to handle NaN values and find the index of the row with the loc_elev value closest to 0
+
+        Parameters
+        ----------
+        group : pd.DataFrame
+            The group of the DataFrame with the same 'evid', 'sta', and 'chan' values
+
+        Returns
+        -------
+        int | None
+            The index of the row with the loc_elev value closest to 0, or None if all values are NaN
+        """
+        # Filter out loc_elev values greater than 5 metres (In either direction)
+        group = group[group["loc_elev"].abs() <= config.get_value("locations_max_elev")]
+        if group["loc_elev"].isna().all():
+            return None
+        # Find the index of the row with the loc_elev value closest to 0
+        return (group["loc_elev"].abs()).idxmin(skipna=True)
+
+    # Find the index of the row with the smallest loc_elev value for each group, excluding NaN values
+    idx_min_loc_elev = grouped.apply(custom_idxmin)
+
+    gm_im_df_flat["is_ground_level"] = False
+    if len(idx_min_loc_elev) > 0:
+        # Set the flag to True for the rows with the smallest loc_elev value
+        record_ids = gm_im_df_flat.loc[idx_min_loc_elev.dropna(), "record_id"]
+        gm_im_df_flat.loc[
+            gm_im_df_flat["record_id"].isin(record_ids), "is_ground_level"
+        ] = True
+
+    # For Locations not found in the dataframe, set the loc_elev to 0 only if there is just 1 location
+    # Also set the is_ground_level to True
+    gm_im_df_flat.loc[
+        gm_im_df_flat["loc_elev"].isna()
+        & gm_im_df_flat.groupby(["evid", "sta", "chan"])["loc"]
+        .transform("nunique")
+        .eq(1),
+        ["is_ground_level", "loc_elev"],
+    ] = [True, 0.0]
+
+    # remove duplicates of sta in the station_df
+    station_df = station_df.drop_duplicates(subset=["sta"])
+
+    # Merge missing station lat / lon / elev information into the gm_im_df_flat
+    gm_im_df_flat = gm_im_df_flat.merge(
+        station_df[["sta", "sta_lat", "sta_lon", "sta_elev"]],
+        on="sta",
+        how="left",
+        suffixes=("", "_new"),
+    )
+
+    # Find where sta_lat is nan and replace with the inventory's lat, lon and elev
+    gm_im_df_flat["sta_lat"] = gm_im_df_flat["sta_lat"].fillna(
+        gm_im_df_flat["sta_lat_new"]
+    )
+    gm_im_df_flat["sta_lon"] = gm_im_df_flat["sta_lon"].fillna(
+        gm_im_df_flat["sta_lon_new"]
+    )
+    gm_im_df_flat["sta_elev"] = gm_im_df_flat["sta_elev"].fillna(
+        gm_im_df_flat["sta_elev_new"]
+    )
+
+    # Drop the new columns
+    gm_im_df_flat = gm_im_df_flat.drop(
+        columns=["sta_lat_new", "sta_lon_new", "sta_elev_new"]
+    )
+
+    return gm_im_df_flat
+
+
 def merge_flatfiles(main_dir: Path, bypass_records_ffp: Path = None):
     """
     Merge the flatfiles into the final flatfiles, separating the components
@@ -213,13 +424,6 @@ def merge_flatfiles(main_dir: Path, bypass_records_ffp: Path = None):
         flatfile_dir / file_structure.PreFlatfileNames.STATION_EXTRACTION_TABLE_GEONET,
         dtype={"evid": str},
     )
-
-    # Get the recorders information for location codes
-    config = cfg.Config()
-    locations_url = config.get_value("locations_url")
-    locations_df = pd.read_csv(locations_url)
-    # Ensure the Station and Location pairings are unique
-    locations_df = locations_df.drop_duplicates(subset=["Station", "Location"])
 
     # Ensure correct strike and rake values
     event_df.loc[event_df.strike == 360, "strike"] = 0
@@ -344,112 +548,8 @@ def merge_flatfiles(main_dir: Path, bypass_records_ffp: Path = None):
         columns={"lat": "sta_lat", "lon": "sta_lon", "elev": "sta_elev"}
     )
 
-    # Find the station location information with the inventory lat, lon and elev
-    config = cfg.Config()
-    channel_codes = ",".join(config.get_value("channel_codes"))
-    client_NZ = FDSN_Client("GEONET")
-    inventory = client_NZ.get_stations(channel=channel_codes, level="response")
-    station_info = [
-        [
-            station.code,
-            station.latitude,
-            station.longitude,
-            station.elevation,
-        ]
-        for network in inventory
-        for station in network
-    ]
-    station_df = pd.DataFrame(
-        station_info, columns=["sta", "sta_lat", "sta_lon", "sta_elev"]
-    )
-
-    # Merge the station information into the gm_im_df_flat
-    gm_im_df_flat = gm_im_df_flat.merge(
-        station_df[["sta", "sta_lat", "sta_lon", "sta_elev"]],
-        on="sta",
-        how="left",
-        suffixes=("", "_new"),
-    )
-
-    # Find where sta_lat is nan and replace with the inventorys lat, lon and elev
-    gm_im_df_flat["sta_lat"] = gm_im_df_flat["sta_lat"].fillna(
-        gm_im_df_flat["sta_lat_new"]
-    )
-    gm_im_df_flat["sta_lon"] = gm_im_df_flat["sta_lon"].fillna(
-        gm_im_df_flat["sta_lon_new"]
-    )
-    gm_im_df_flat["sta_elev"] = gm_im_df_flat["sta_elev"].fillna(
-        gm_im_df_flat["sta_elev_new"]
-    )
-
-    # Drop the new columns
-    gm_im_df_flat = gm_im_df_flat.drop(
-        columns=["sta_lat_new", "sta_lon_new", "sta_elev_new"]
-    )
-
-    # Merge in the location codes extra depth information where the station and location line up
-    # locations_df has the column "Station" and "Location" and "Depth"
-    gm_im_df_flat = (
-        gm_im_df_flat.merge(
-            locations_df[["Station", "Location", "Depth"]],
-            left_on=["sta", "loc"],
-            right_on=["Station", "Location"],
-            how="left",
-        )
-        .drop(columns=["Station", "Location"])
-        .rename(columns={"Depth": "loc_elev"})
-    )
-
-    # Flip the sign for the location elevation as it previously was depth
-    gm_im_df_flat["loc_elev"] = -gm_im_df_flat["loc_elev"]
-
-    # Add in a flag for when the location elevation is 0
-    # Group by 'evid', 'sta', and 'chan'
-    grouped = gm_im_df_flat.groupby(["evid", "sta", "chan"])
-
-    def custom_idxmin(group: pd.DataFrame):
-        """
-        Custom function to handle NaN values and find the index of the row with the loc_elev value closest to 0
-
-        Parameters
-        ----------
-        group : pd.DataFrame
-            The group of the DataFrame with the same 'evid', 'sta', and 'chan' values
-
-        Returns
-        -------
-        int | None
-            The index of the row with the loc_elev value closest to 0, or None if all values are NaN
-        """
-        # Filter out loc_elev values greater than 5 metres (In either direction)
-        group = group[group["loc_elev"].abs() <= config.get_value("locations_max_elev")]
-        if group["loc_elev"].isna().all():
-            return None
-        # Find the index of the row with the loc_elev value closest to 0
-        return (group["loc_elev"].abs()).idxmin(skipna=True)
-
-    # Find the index of the row with the smallest loc_elev value for each group, excluding NaN values
-    idx_min_loc_elev = grouped.apply(custom_idxmin)
-
-    gm_im_df_flat["is_ground_level"] = False
-    if len(idx_min_loc_elev) > 0:
-        # Set the flag to True for the rows with the smallest loc_elev value
-        record_ids = gm_im_df_flat.loc[idx_min_loc_elev.dropna(), "record_id"]
-        gm_im_df_flat.loc[
-            gm_im_df_flat["record_id"].isin(record_ids), "is_ground_level"
-        ] = True
-
-    # For Locations not found in the dataframe, set the loc_elev to 0 only if there is just 1 location
-    # Also set the is_ground_level to True
-    gm_im_df_flat.loc[
-        gm_im_df_flat["loc_elev"].isna()
-        & gm_im_df_flat.groupby(["evid", "sta", "chan"])["loc"]
-        .transform("nunique")
-        .eq(1),
-        ["is_ground_level", "loc_elev"],
-    ] = [True, 0.0]
-    # Replace -0.0 with 0.0 in the DataFrame
-    gm_im_df_flat = gm_im_df_flat.replace(-0.0, 0.0)
+    # Add in the ground level location elevation information
+    gm_im_df_flat = add_ground_level(gm_im_df_flat)
 
     # Remove duplicated columns in prop_df
     prop_df["evid_sta"] = prop_df["evid"].astype(str) + "_" + prop_df["sta"].astype(str)
@@ -526,6 +626,7 @@ def merge_flatfiles(main_dir: Path, bypass_records_ffp: Path = None):
         phase_table_df = pd.concat([phase_table_df, new_records])
 
     # Add in the default fmin values if they are nan
+    config = cfg.Config()
     default_fmin = config.get_value("low_cut_default")
     for col in ["fmin_X", "fmin_Y", "fmin_Z"]:
         gm_im_df_flat[col] = gm_im_df_flat[col].fillna(default_fmin)

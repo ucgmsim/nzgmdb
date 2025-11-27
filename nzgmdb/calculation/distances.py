@@ -207,6 +207,7 @@ def run_ccld_simulation(
         "dip_dist": selected["Width (km)"].values[0],
         "hyp_lat": selected["Hypocenter Latitude"].values[0],
         "hyp_lon": selected["Hypocenter Longitude"].values[0],
+        "hyp_depth": selected["Hypocenter Depth (km)"].values[0],
         "hyp_strike": selected["Hypocenter Along-Strike Position"].values[0],
         "hyp_dip": selected["Hypocenter Down-Dip Position"].values[0],
     }
