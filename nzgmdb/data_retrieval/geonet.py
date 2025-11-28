@@ -633,6 +633,9 @@ def process_batch(
             for event_id in batch_events
         ]
     else:
+        # This is a fix for multiprocessing issues with SSLContext
+        mp.set_start_method("spawn", force=True)
+
         with mp.Pool(n_procs) as p:
             results = p.map(
                 functools.partial(
@@ -648,6 +651,9 @@ def process_batch(
                 ),
                 batch_events,
             )
+
+        # Reset the start method to default
+        mp.set_start_method("fork", force=True)
 
     # Extract the results
     event_data, sta_mag_data, skipped_records, clipped_records = [], [], [], []
