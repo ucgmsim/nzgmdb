@@ -11,6 +11,20 @@ def sample_catalogue():
     return pd.read_csv(Path(__file__).parent / "quality_db_testing.csv")
 
 
+def test_mag_filter(sample_catalogue: pd.DataFrame):
+    """
+    Test the filter_mag function.
+
+    Parameters
+    ----------
+    sample_catalogue : pd.DataFrame
+        A sample catalogue DataFrame to test the filtering function.
+    """
+    skipped = quality_db.filter_mag(sample_catalogue, mag_min=4.1)
+    assert "2148502_MLZ_HH_10" in skipped["record_id"].values
+    assert "2013p707091_CPLB_BN_2D" in skipped["record_id"].values
+
+
 def test_filter_has_score_mean(sample_catalogue: pd.DataFrame):
     """
     Test the filter_has_score_mean function.
