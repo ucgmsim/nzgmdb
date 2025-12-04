@@ -872,35 +872,33 @@ def apply_all_filters(
     fmin_max = fmin_max if fmin_max is not None else config.get_value("fmin_max")
     mag_min = min_mag if min_mag is not None else config.get_value("quality_min_mag")
 
+    catalogue_copy = catalogue.copy()
+
     # Filter by magnitude
-    skipped_records_mag = filter_mag(catalogue.copy(), mag_min)
+    skipped_records_mag = filter_mag(catalogue_copy, mag_min)
 
     # Find ground level locations
     skipped_records_ground = filter_ground_level_locations(
-        catalogue.copy(), bypass_records
+        catalogue_copy, bypass_records
     )
 
     # Find has score mean
-    skipped_records_has_score = filter_has_score_mean(catalogue.copy(), bypass_records)
+    skipped_records_has_score = filter_has_score_mean(catalogue_copy, bypass_records)
 
     # Find score mean
-    skipped_records_score = filter_score_mean(
-        catalogue.copy(), score_min, bypass_records
-    )
+    skipped_records_score = filter_score_mean(catalogue_copy, score_min, bypass_records)
 
     # Find multi mean
-    skipped_records_multi = filter_multi_mean(
-        catalogue.copy(), multi_max, bypass_records
-    )
+    skipped_records_multi = filter_multi_mean(catalogue_copy, multi_max, bypass_records)
 
     # Find fmax
-    skipped_records_fmax = filter_fmax(catalogue.copy(), fmax_min, bypass_records)
+    skipped_records_fmax = filter_fmax(catalogue_copy, fmax_min, bypass_records)
 
     # Find fmin
-    skipped_records_fmin = filter_fmin(catalogue.copy(), fmin_max, bypass_records)
+    skipped_records_fmin = filter_fmin(catalogue_copy, fmin_max, bypass_records)
 
     # Find missing station information
-    skipped_records_sta = filter_missing_sta_info(catalogue.copy(), bypass_records)
+    skipped_records_sta = filter_missing_sta_info(catalogue_copy, bypass_records)
 
     # Find clipped records
     skipped_records_clipped = apply_clipNet_filter(clipped_records_ffp, bypass_records)
@@ -910,12 +908,12 @@ def apply_all_filters(
 
     # Find troublesome sensitivity records
     skipped_records_sensitivity = filter_troublesome_sensitivity(
-        catalogue.copy(), bypass_records
+        catalogue_copy, bypass_records
     )
 
     # Find empirical predictions
     skipped_records_empirical = filter_empirical_predictions(
-        catalogue.copy(), bypass_records
+        catalogue_copy, bypass_records
     )
 
     # Combine all the skipped records
