@@ -37,6 +37,17 @@ def get_clip_probability(event_mag: float, dist: float, mseed: Stream) -> float:
     dist_clip_low = config.get_value("dist_clip_low")
     dist_clip_high = config.get_value("dist_clip_high")
 
+    # Ensure numeric inputs
+    try:
+        event_mag = float(event_mag)
+    except (TypeError, ValueError) as exc:
+        raise TypeError(f"event_mag must be a number, got {event_mag!r}") from exc
+
+    try:
+        dist = float(dist)
+    except (TypeError, ValueError) as exc:
+        raise TypeError(f"dist must be a number, got {dist!r}") from exc
+
     # Clip the event_mag and dist values
     event_mag = np.clip(event_mag, mag_clip_low, mag_clip_high)
     dist = np.clip(dist, dist_clip_low, dist_clip_high)
@@ -57,3 +68,37 @@ def get_clip_probability(event_mag: float, dist: float, mseed: Stream) -> float:
     # Get the clip probability
     clip_nnet = clipNet()
     return clip_nnet.evaluate(inputs)[0][0]
+
+
+def get_jerk(mseed: Stream) -> bool:
+    """
+    Calculate if the mseed has jerk that exceeds the threshold for any trace
+    that exceeds median_multiplier the median jerk.
+
+    Parameters
+    ----------
+    mseed : Stream
+        The mseed Stream object
+
+    Returns
+    -------
+    bool
+        True if the mseed has jerk in any trace, False otherwise
+    """
+    # Get the config values
+    config = cfg.Config()
+    point_thresh = config.get_value("point_thresh")
+    median_multiplier = config.get_value("median_multiplier")
+
+    # Check for jerk in each trace
+    for trace in mseed:
+        temp_tr = trace.copy()
+        temp_tr.differentiate()
+        temp_tr.differentiate()
+        abs_diff = np.abs(temp_tr.data)
+        median_multiplied = median_multiplier * np.median(abs_diff)
+        (i_jerk,) = np.where(abs_diff >= median_multiplied)
+        num_outliers = len(i_jerk)
+        if num_outliers > point_thresh:
+            return True
+    return False

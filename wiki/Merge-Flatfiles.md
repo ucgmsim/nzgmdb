@@ -73,7 +73,7 @@ Creates comprehensive "flat" versions that merge intensity measure data with sup
 
 ### 🔹 4. Location Code Integration
 
-Enhances station metadata by merging location codes from GeoNet to analyse ground level recorders when we have many of the same station-event pairings with multiple location codes:
+Enhances station metadata by merging location codes from GeoNet and the FDSN Client inventory to analyse ground level recorders when we have many of the same station-event pairings with multiple location codes:
 
 **Location Addition:**
 - Adds the locations specific elevation adjustment from the site locations recorded elevation

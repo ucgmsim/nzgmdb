@@ -11,6 +11,20 @@ def sample_catalogue():
     return pd.read_csv(Path(__file__).parent / "quality_db_testing.csv")
 
 
+def test_mag_filter(sample_catalogue: pd.DataFrame):
+    """
+    Test the filter_mag function.
+
+    Parameters
+    ----------
+    sample_catalogue : pd.DataFrame
+        A sample catalogue DataFrame to test the filtering function.
+    """
+    skipped = quality_db.filter_mag(sample_catalogue, mag_min=4.1)
+    assert "2148502_MLZ_HH_10" in skipped["record_id"].values
+    assert "2013p707091_CPLB_BN_2D" in skipped["record_id"].values
+
+
 def test_filter_has_score_mean(sample_catalogue: pd.DataFrame):
     """
     Test the filter_has_score_mean function.
@@ -118,18 +132,22 @@ def test_filter_duplicate_channels(sample_catalogue: pd.DataFrame):
     assert "2016p858848_POTS_BN_20" in skipped["record_id"].values
 
 
-def test_apply_clipNet_filter(sample_catalogue: pd.DataFrame):
+def test_apply_clipNet_filter():
     """
     Test the apply_clipNet_filter function.
-
-    Parameters
-    ----------
-    sample_catalogue : pd.DataFrame
-        A sample catalogue DataFrame to test the filtering function.
     """
     clipped_file = Path(__file__).parent / "clipped_testing.csv"
-    skipped = quality_db.apply_clipNet_filter(sample_catalogue.copy(), clipped_file)
+    skipped = quality_db.apply_clipNet_filter(clipped_file)
     assert "1493377_NELS_HN_20" in skipped["record_id"].values
+
+
+def test_jerk_filter():
+    """
+    Test the apply_jerk_filter function.
+    """
+    clipped_file = Path(__file__).parent / "clipped_testing.csv"
+    skipped = quality_db.apply_jerk_filter(clipped_file)
+    assert "1470798_TOZ_HH_10" in skipped["record_id"].values
 
 
 def test_filter_troublesome_sensitivity(sample_catalogue: pd.DataFrame):

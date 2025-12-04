@@ -50,13 +50,13 @@ The waveform download window is determined by a event-site pairing using seismic
 The travel times are already pre-calculated in the station extraction table, as well as the duration to determine the end of the window.
 
 #### **Start time of waveform window**
-We take the ptime_est (P-wave arrival time) and subtract `pre_event_time_difference: 15` seconds to ensure we capture pre-event noise. (adjustable in config.yaml)
+We take the ptime_est (P-wave estimated arrival time) and subtract `pre_event_time_difference: 15` seconds to ensure we capture pre-event noise. (adjustable in config.yaml)
 
 #### **End time of the waveform window**
 Both ds_mean and ds_std represent the log of the significant duration (Ds595). To get the actual duration, we take the exponential of these values.
 The end window extends to ptime_est + exp(ds_mean) * exp(ds_std_multiplier * ds_std), where ds_std_multiplier is a config parameter (default 3).
 
-Below is an example with a synthetic waveform to illustrate the window:
+Below is an example with a waveform to illustrate the window:
 ![](images/waveform_extraction_window.png)
 
 ### 🔹 Waveform Data Retrieval
@@ -78,13 +78,22 @@ Waveforms are downloaded using the FDSN Client with specific constraints:
 Downloaded waveforms undergo quality assessment using ClipNet with configuration thresholds:
 
 #### **Clipping Detection**
-- **Method:** gmprocess ClipNet algorithm
+- **Method:** gmprocess ClipNet Clipping algorithm
 - **Threshold:** `clip_threshold: 0.2` from config.yaml
 - **Action:** Records exceeding threshold are flagged and skipped
 - **Magnitude bounds:** `mag_clip_low: 3.0`, `mag_clip_high: 8.8`
 - **Distance bounds:** `dist_clip_low: 0.0`, `dist_clip_high: 645.0`
 
-The output of this is saved to a `clipped_records.csv` file to be used during the quality_db step.
+Also using ClipNet methods we test for Jerk in any of the Streams Traces above a certain threshold for a given number of points:
+
+#### **Jerk Detection**
+- **Method:** gmprocess ClipNet Jerk algorithm
+- **Point Threshold:** `point_thresh: 400` from config.yaml
+- **Median Multiplier:** `median_multiplier: 100` from config.yaml
+- **Action:** Records exceeding median jerk * median_multiplier threshold for greater than point_thresh are flagged and skipped
+
+The output of these are saved to a `clipped_records.csv` file to be used during the quality_db step.
+Clipped records have a reason column of `Clipped` and records where Jerk was detected have a reason column of `Jerk`.
 
 #### **Component Splitting**
 

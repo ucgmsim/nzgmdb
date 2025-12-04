@@ -49,19 +49,39 @@ The Quality-DB step loads the `ground_motion_im_rotd50_flat.csv` file and applie
 
 The filtering process follows a systematic 9-step approach:
 
-1. **Filter by presence of GMC predictions**
-2. **Filter by score mean**
-3. **Filter by multi mean**
-4. **Filter by fmax**
-5. **Filter by fmin**
-6. **Filter by missing station information**
-7. **Ensure only ground level locations are used**
-8. **Filter out clipped records**
-9. **Select the appropriate channel for duplicate HN/BN records**
+1. **Filter by minimum magnitude**
+2. **Filter by presence of GMC predictions**
+3. **Filter by score mean**
+4. **Filter by multi mean**
+5. **Filter by fmax**
+6. **Filter by fmin**
+7. **Filter by missing station information**
+8. **Ensure only ground level locations are used**
+9. **Filter out clipped records**
+10. **Filter out jerk records**
+11. **Filter by sensitivity ignore list**
+12. **Filter by empirical prediction residuals**
+13. **Select the appropriate channel for duplicate HN/BN records**
 
 ### 🔹 Detailed Filter Descriptions
 
-#### 1. Filter by Presence of GMC Predictions
+#### 1. Filter by Minimum Magnitude
+
+**Purpose**: Removes records from events below a specified magnitude threshold.
+
+**Implementation**:
+- Uses the `mag` field in the event metadata
+- Default threshold: `min_mag = 3.5` (configurable in `config.yaml`)
+- Records with magnitude below threshold are removed
+
+
+**Configuration**:
+```yaml
+# Minimum magnitude for quality filtering in config.yaml
+quality_min_mag: 3.5  # Minimum magnitude for record inclusion
+```
+
+#### 2. Filter by Presence of GMC Predictions
 
 **Purpose**: Ensures all records have quality scores from the Ground Motion Classification (GMC) step.
 
@@ -75,7 +95,7 @@ The filtering process follows a systematic 9-step approach:
 
 ---
 
-#### 2. Filter by Score Mean
+#### 3. Filter by Score Mean
 
 **Purpose**: Removes records with low-quality waveforms based on GMC quality scores.
 
@@ -102,7 +122,7 @@ catalogue, skipped = apply_all_filters(catalogue, clipped_records_ffp,
 
 ---
 
-#### 3. Filter by Multi Mean
+#### 4. Filter by Multi Mean
 
 **Purpose**: Removes records with higher chance of multi-earthquakes.
 
@@ -129,7 +149,7 @@ catalogue, skipped = apply_all_filters(catalogue, clipped_records_ffp,
 
 ---
 
-#### 4. Filter by Fmax
+#### 5. Filter by Fmax
 
 **Purpose**: Ensures records have sufficient high-frequency content for analysis.
 
@@ -155,7 +175,7 @@ catalogue, skipped = apply_all_filters(catalogue, clipped_records_ffp,
 ```
 ---
 
-#### 5. Filter by Fmin
+#### 6. Filter by Fmin
 
 **Purpose**: Removes records where the minimum usable frequency is too high, indicating poor low-frequency signal quality.
 
@@ -182,7 +202,7 @@ catalogue, skipped = apply_all_filters(catalogue, clipped_records_ffp,
 
 ---
 
-#### 6. Filter by Missing Station Information
+#### 7. Filter by Missing Station Information
 
 **Purpose**: Removes records from stations lacking essential metadata for ground motion studies.
 
@@ -198,7 +218,7 @@ catalogue, skipped = apply_all_filters(catalogue, clipped_records_ffp,
 
 ---
 
-#### 7. Filter by Ground Level Locations
+#### 8. Filter by Ground Level Locations
 
 **Purpose**: Ensures only surface or near-surface recordings are included.
 
@@ -211,14 +231,14 @@ catalogue, skipped = apply_all_filters(catalogue, clipped_records_ffp,
 
 ---
 
-#### 8. Filter by Clipped Records
+#### 9. Filter by Clipped Records
 
-**Purpose**: Removes records identified as clipped during the initial Geonet processing step.
+**Purpose**: Removes records identified as clipped during the Waveform Extraction processing step.
 
 **Implementation**:
-- Reads the `clipped_records.csv` file created during Parse Geonet step
-- Removes any records that appear in the clipped records list
-- Clipping detection is based on configurable magnitude and distance thresholds in the Parse-Geonet Step.
+- Reads the `clipped_records.csv` file created during Waveform Extraction step
+- Removes any records that appear in the clipped records list reason
+- Clipping detection is based on configurable magnitude and distance thresholds in the Waveform Extraction Step.
 
 **Configuration**:
 ```yaml
@@ -234,7 +254,19 @@ clip_threshold: 0.2     # Threshold for clipping detection
 
 ---
 
-#### 9. Filter by Sensitivity Ignore List
+#### 10. Filter by Jerk Records
+
+**Purpose**: Removes records where it was identified that for some number of points the Jerk exceeded the median by 100 times for at least 1 trace during the Waveform Extraction processing step.
+
+**Implementation**:
+- Reads the `clipped_records.csv` file created during Waveform Extraction step
+- Removes any records that appear in the Jerk records list reason
+
+**Bypass**: Records in bypass list are retained even if identified as jerk records.
+
+---
+
+#### 11. Filter by Sensitivity Ignore List
 
 **Purpose**: Removes records known to be problematic in the BroadBand sensors, such as early deployments with potential calibration errors.
 
@@ -249,7 +281,7 @@ clip_threshold: 0.2     # Threshold for clipping detection
 
 ---
 
-#### 10. Filter by Empirical Prediction Residuals
+#### 12. Filter by Empirical Prediction Residuals
 
 **Purpose**: Removes records with ground motion values significantly inconsistent with empirical ground motion prediction models.
 
@@ -279,7 +311,7 @@ max_residual_threshold: 6
 
 ---
 
-#### 11. Filter Duplicate Channels
+#### 13. Filter Duplicate Channels
 
 **Purpose**: Retains the highest-priority record when multiple instruments record the same event at the same station.
 

@@ -67,6 +67,7 @@ class SkippedRecordFilenames(StrEnum):
     PHASE_ARRIVAL_SKIPPED_RECORDS = "phase_arrival_skipped_records.csv"
     SNR_SKIPPED_RECORDS = "snr_skipped_records.csv"
     FMAX_SKIPPED_RECORDS = "fmax_skipped_records.csv"
+    GMC_SKIPPED_RECORDS = "gmc_skipped_records.csv"
     QUALITY_SKIPPED_RECORDS = "quality_skipped_records.csv"
 
 

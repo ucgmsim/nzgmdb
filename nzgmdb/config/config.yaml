@@ -1,7 +1,8 @@
 # Description: Configuration file for the NZGMDB
 # Geonet filters
-min_mag: 2.0
+min_mag: 2.5
 max_mag: 10
+quality_min_mag: 3.5
 # Geonet Variables
 geonet_url: https://quakesearch.geonet.org.nz
 real_time_url: https://service-nrt.geonet.org.nz
@@ -85,6 +86,9 @@ mag_clip_high: 8.8
 dist_clip_low: 0.0
 dist_clip_high: 645.0
 clip_threshold: 0.2
+# Jerk
+point_thresh: 400
+median_multiplier: 100
 # IM Calculation
 ims:
   - PGA

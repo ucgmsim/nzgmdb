@@ -43,9 +43,11 @@ def create_site_table_response() -> pd.DataFrame:
                     station.latitude,
                     station.longitude,
                     station.elevation,
+                    station.creation_date,
+                    station.end_date,
                 ]
             )
-    sta_df = pd.DataFrame(station_info, columns=["net", "sta", "lat", "lon", "elev"])
+    sta_df = pd.DataFrame(station_info, columns=["net", "sta", "lat", "lon", "elev", "creation_date", "end_date"])
     sta_df = sta_df.drop_duplicates().reset_index(drop=True)
 
     # Get the Geonet metadata summary information
@@ -101,6 +103,8 @@ def create_site_table_response() -> pd.DataFrame:
             "lat",
             "lon",
             "elev",
+            "creation_date",
+            "end_date",
             "site_class",
             "Vs30",
             "Vs30_std",

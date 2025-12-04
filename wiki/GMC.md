@@ -109,8 +109,9 @@ python <gm_classifier_dir>/gm_classifier/scripts/predict.py <gmc_dir> <predictio
 
 After all batches complete processing:
 1. **Combine Batch Results** - Merges `gmc_predictions.csv` from all batch directories
-2. **Apply Bypass Records** - Incorporates any custom Fmin values from bypass file
-3. **Generate Final Output** - Creates consolidated `gmc_predictions.csv` in flatfiles directory
+2. **Collect Failed Records** - Gathers all failed record txt files into a single dataframe for review
+3. **Apply Bypass Records** - Incorporates any custom Fmin values from bypass file
+4. **Generate Final Output** - Creates consolidated `gmc_predictions.csv` in flatfiles directory
 
 ---
 
@@ -142,6 +143,9 @@ Located in the flatfiles directory with the following columns:
 - `extract_features.log` - Feature extraction log file
 - `predict.log` - Prediction log file
 - `failed_records_*/` - Records that failed processing with error details
+
+**Summary of Failed Records:**
+- `gmc_skipped_records.csv` - Dataframe that contains record_ids and reason for failure
 
 **Log Files:**
 All processing logs are retained for debugging and quality assurance, including detailed error messages for failed records.

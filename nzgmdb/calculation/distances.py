@@ -207,6 +207,7 @@ def run_ccld_simulation(
         "dip_dist": selected["Width (km)"].values[0],
         "hyp_lat": selected["Hypocenter Latitude"].values[0],
         "hyp_lon": selected["Hypocenter Longitude"].values[0],
+        "hyp_depth": selected["Hypocenter Depth (km)"].values[0],
         "hyp_strike": selected["Hypocenter Along-Strike Position"].values[0],
         "hyp_dip": selected["Hypocenter Down-Dip Position"].values[0],
     }
@@ -344,6 +345,7 @@ def get_nodal_plane_info(
         hyp_point = srf_model.points[srf_model.points["tinit"] == 0]
         nodal_plane_info["hyp_lat"] = hyp_point["lat"].values[0]
         nodal_plane_info["hyp_lon"] = hyp_point["lon"].values[0]
+        nodal_plane_info["hyp_depth"] = hyp_point["dep"].values[0]
 
         # Grab the header information and get the nstk * ndip for each plane
         nstk_ndip = [
@@ -490,6 +492,7 @@ def compute_distances_for_event(
         f_type,
         hyp_lat,
         hyp_lon,
+        hyp_depth,
         hyp_strike,
         hyp_dip,
         hyp_plane_index,
@@ -512,6 +515,7 @@ def compute_distances_for_event(
         nodal_plane_info["f_type"],
         nodal_plane_info["hyp_lat"],
         nodal_plane_info["hyp_lon"],
+        nodal_plane_info["hyp_depth"],
         nodal_plane_info["hyp_strike"],
         nodal_plane_info["hyp_dip"],
         nodal_plane_info["plane_index"],
@@ -601,7 +605,7 @@ def compute_distances_for_event(
         srf_points, stations, return_rrup_points=True
     )
     rxs, rys = src_site_dist.calc_rx_ry(srf_points, srf_header, stations)
-    rrups_lat, rrups_lon = rrup_points[:, 0], rrup_points[:, 1]
+    rrups_lon, rrups_lat = rrup_points[:, 0], rrup_points[:, 1]
 
     # Get the segment corners for the srf or corners
     if event_id in srf_files:
@@ -725,6 +729,7 @@ def compute_distances_for_event(
                     "z_bor": plane.bottom_m / 1000,
                     "hyp_lat": hyp_lat,
                     "hyp_lon": hyp_lon,
+                    "hyp_depth": hyp_depth,
                     "hyp_strike": (
                         hyp_strike if plane_id == hyp_plane_index + 1 else None
                     ),
@@ -761,6 +766,7 @@ def compute_distances_for_event(
                     "z_bor": dbottom,
                     "hyp_lat": hyp_lat,
                     "hyp_lon": hyp_lon,
+                    "hyp_depth": hyp_depth,
                     "hyp_strike": hyp_strike,
                     "hyp_dip": hyp_dip,
                     "corner_0_lat": corner_0[0],
