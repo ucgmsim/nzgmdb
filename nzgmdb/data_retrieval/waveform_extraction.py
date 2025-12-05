@@ -84,8 +84,10 @@ def get_inital_stream(
         except FDSNTooManyRequestsException:
             print(f"Error getting waveforms for {net}.{sta}")
             print("Too many requests - HTTP Status code: 429")
-            print("Retrying in 30 seconds...")
-            time.sleep(30)  # Wait for 2 minutes before retrying
+            print("Retrying in 120 seconds...")
+            time.sleep(120)  # Wait for 2 minutes before retrying
+            # reset attempt count
+            attempt = 0
         except FDSNNoDataException:
             return None
         except ObsPyMSEEDFilesizeTooSmallError:
