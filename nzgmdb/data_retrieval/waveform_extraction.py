@@ -19,6 +19,7 @@ from obspy.clients.fdsn import Client as FDSN_Client
 from obspy.clients.fdsn.header import (
     FDSNNoDataException,
     FDSNServiceUnavailableException,
+    FDSNTooManyRequestsException,
 )
 from obspy.io.mseed import InternalMSEEDError, ObsPyMSEEDFilesizeTooSmallError
 from pandas.errors import EmptyDataError
@@ -80,6 +81,11 @@ def get_inital_stream(
                     attach_response=True,
                 )
             break
+        except FDSNTooManyRequestsException:
+            print(f"Error getting waveforms for {net}.{sta}")
+            print("Too many requests - HTTP Status code: 429")
+            print("Retrying in 30 seconds...")
+            time.sleep(30)  # Wait for 2 minutes before retrying
         except FDSNNoDataException:
             return None
         except ObsPyMSEEDFilesizeTooSmallError:
