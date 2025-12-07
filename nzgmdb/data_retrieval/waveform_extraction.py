@@ -948,7 +948,7 @@ def extract_waveforms(
     station_extraction_table_ffp: Path,
     n_procs: int = 1,
     only_record_ids_ffp: Path = None,
-    batch_size: int = 500,
+    batch_size: int = 1000,
 ):
     """
     Extract waveforms for each station in the station extraction table.
@@ -967,7 +967,7 @@ def extract_waveforms(
     only_record_ids_ffp : Path, optional
         Full file path to the file containing a subset of record IDs to use for extraction, if provided.
     batch_size : int, optional
-        The number of rows to process in each batch, by default 500.
+        The number of rows to process in each batch, by default 1000.
     """
     station_extraction_table = pd.read_csv(
         station_extraction_table_ffp, dtype={"evid": str}
