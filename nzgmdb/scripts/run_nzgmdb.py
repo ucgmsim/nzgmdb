@@ -107,7 +107,7 @@ def extract_waveforms(
     batch_size: Annotated[
         int,
         typer.Option(),
-    ] = 500,
+    ] = 1000,
 ):
     """
     Extract waveforms using the station extraction table and save them as MiniSEED files.
@@ -124,7 +124,7 @@ def extract_waveforms(
     only_record_ids_ffp : Path, optional
         The full file path to a set of record IDs to only run for. If provided, only these records will be processed.
     batch_size : int, optional
-        The batch size for how many extracted waveforms to process before checkpointing (default is 500).
+        The batch size for how many extracted waveforms to process before checkpointing (default is 1000).
     """
     waveform_extraction.extract_waveforms(
         main_dir, station_extraction_table_ffp, n_procs, only_record_ids_ffp, batch_size
@@ -969,7 +969,7 @@ def run_full_nzgmdb(
             / file_structure.PreFlatfileNames.STATION_EXTRACTION_TABLE_GEONET,
             extract_n_procs,
             only_record_ids_ffp,
-            batch_size=5000,
+            batch_size=geonet_batch_size,
         )
 
     # Merge the tectonic domains

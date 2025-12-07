@@ -401,8 +401,8 @@ def fetch_event_data(
     ----------
     event_id : str
         The event id to fetch the data for
-    client_NZ : FDSN_Client
-        The geonet client to fetch the data from New Zealand
+    event_cat : Event
+        The event catalogue to fetch the data from
     inventory : Inventory
         The inventory of the stations from all networks to extract the stations from
     site_table : pd.DataFrame
@@ -538,8 +538,6 @@ def process_batch(
         event_id: client_NZ.get_events(eventid=event_id)[0] for event_id in batch_events
     }
 
-    # Ensure fork
-    mp.set_start_method("fork", force=True)
     # Fetch results
     if mp_sites:
         results = [

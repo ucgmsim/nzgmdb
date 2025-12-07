@@ -1000,10 +1000,9 @@ def create_quality_db(
     )
 
     # Get the clipped records
-    # clipped_records_ffp = (
-    #     flatfile_dir / file_structure.SkippedRecordFilenames.CLIPPED_RECORDS
-    # )
-    clipped_records_ffp = Path("/home/joel/local/gmdb/4p3_mantle/tmp_clipped.csv")
+    clipped_records_ffp = (
+        flatfile_dir / file_structure.SkippedRecordFilenames.CLIPPED_RECORDS
+    )
 
     # Load the bypass records if they exist
     bypass_records = (

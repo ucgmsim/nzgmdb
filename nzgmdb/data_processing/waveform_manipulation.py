@@ -64,9 +64,8 @@ def initial_preprocessing(
     zero_padding_time = config.get_value("zero_padding_time")
 
     if apply_taper:
-        taper_length = 5
         # Taper the data by the taper_fraction
-        mseed.taper(taper_fraction, side="both", max_length=taper_length)
+        mseed.taper(taper_fraction, side="both", max_length=5)
 
     if apply_zero_padding:
         # Perform zero-padding

@@ -736,6 +736,8 @@ def extract_station_info(
         A row from the station extraction table containing the parameters for waveform extraction.
     main_dir : Path
         The main directory of the NZGMDB results (Highest Level Directory).
+    event_catalogues : dict
+        A dictionary of event catalogues indexed by event ID.
     only_record_ids : pd.DataFrame, optional
         A DataFrame containing a subset of record IDs to use for extraction, if provided.
 
@@ -1021,9 +1023,6 @@ def extract_waveforms(
                 event_id: client.get_events(eventid=event_id)[0]
                 for event_id in batch_rows["evid"].unique()
             }
-
-            # Ensure fork
-            mp.set_start_method("fork", force=True)
 
             with mp.Pool(n_procs) as pool:
                 results = pool.map(
