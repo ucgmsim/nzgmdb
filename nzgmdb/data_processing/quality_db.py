@@ -760,6 +760,7 @@ def filter_duplicate_channels(
     2. HN channels (Strong motion, high frequency)
     3. BN channels (Strong motion, lower frequency)
     4. HH channels (Broadband, high frequency)
+    5. BH channels (Broadband, lower frequency)
 
     If multiple records have the same priority, the first one encountered is kept.
     All other duplicates are removed and returned in the skipped records.
@@ -785,15 +786,15 @@ def filter_duplicate_channels(
     catalogue["bypass"] = catalogue["record_id"].isin(bypass_records)
 
     # Step 3: Define priority levels
-    priority = {"HN": 1, "BN": 2, "HH": 3}
-    catalogue["chan_priority"] = catalogue["chan"].map(priority).fillna(4)
+    priority = {"HN": 1, "BN": 2, "HH": 3, "BH": 4}
+    catalogue["chan_priority"] = catalogue["chan"].map(priority).fillna(5)
     # Step 4: Override priority for bypass records
     catalogue.loc[catalogue["bypass"], "chan_priority"] = 0
 
     # Step 5: Sort by priority and select top-priority row per group
     catalog_sorted = catalogue.sort_values(by=["evid_sta", "chan_priority"])
-    # Remove records with priority 4 (not HN, BN, HH)
-    catalog_sorted = catalog_sorted[catalog_sorted["chan_priority"] < 4]
+    # Remove records with priority 4 (not HN, BN, HH, BH)
+    catalog_sorted = catalog_sorted[catalog_sorted["chan_priority"] < 5]
     best_dups = catalog_sorted.groupby("evid_sta", as_index=False).nth(0)
 
     # Step 6: Identify which records to drop (the non-best ones)

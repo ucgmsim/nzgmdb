@@ -281,7 +281,7 @@ def compute_snr_for_mseed_data(
 
     # Load the inventory
     client = FDSN_Client("GEONET")
-    channel_codes = ",".join(config.get_value("channel_codes"))
+    channel_codes = config.get_value("channel_codes")
     inventory = client.get_stations(channel=channel_codes, level="response")
 
     # Load the bypass records if provided

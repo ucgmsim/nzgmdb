@@ -240,7 +240,11 @@ def get_stations_within_radius(
     maxradius = obspy.geodetics.kilometers2degrees(rrup)
 
     inv_sub = inventory.select(
-        latitude=event_lat, longitude=event_lon, maxradius=maxradius, starttime=ev_datetime, endtime=ev_datetime
+        latitude=event_lat,
+        longitude=event_lon,
+        maxradius=maxradius,
+        starttime=ev_datetime,
+        endtime=ev_datetime,
     )
 
     return inv_sub
@@ -776,7 +780,7 @@ def parse_geonet_information(
         only_record_ids = None
 
     config = cfg.Config()
-    channel_codes = ",".join(config.get_value("channel_codes"))
+    channel_codes = config.get_value("channel_codes")
     if real_time:
         client_NZ = FDSN_Client(base_url=config.get_value("real_time_url"))
     else:

@@ -236,7 +236,7 @@ def process_mseeds_to_txt(
     bypass_df = None if bypass_records_ffp is None else pd.read_csv(bypass_records_ffp)
 
     config = cfg.Config()
-    channel_codes = ",".join(config.get_value("channel_codes"))
+    channel_codes = config.get_value("channel_codes")
     client = FDSN_Client("GEONET")
     inventory = client.get_stations(channel=channel_codes, level="response")
 

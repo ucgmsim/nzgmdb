@@ -170,7 +170,7 @@ def add_ground_level(
     """
     # Find the station location information with the inventory lat, lon and elev
     config = cfg.Config()
-    channel_codes = ",".join(config.get_value("channel_codes"))
+    channel_codes = config.get_value("channel_codes")
     client_NZ = FDSN_Client("GEONET")
     inventory = client_NZ.get_stations(channel=channel_codes, level="response")
     station_info = [

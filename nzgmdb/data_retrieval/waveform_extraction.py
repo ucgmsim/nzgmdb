@@ -766,7 +766,7 @@ def extract_station_info(
 
     # Obtain the station channel codes and location
     config = cfg.Config()
-    channel_codes = ",".join(config.get_value("channel_codes"))
+    channel_codes = config.get_value("channel_codes")
     location = "*"
 
     # Check what channel codes and locations to use from only_record_ids if provided
