@@ -8,6 +8,7 @@ import pandas as pd
 from obspy.clients.fdsn import Client as FDSN_Client
 from obspy.core.utcdatetime import UTCDateTime
 
+from nzgmdb.data_processing import multi_event
 from nzgmdb.management import config as cfg
 from nzgmdb.management import file_structure
 
@@ -571,6 +572,10 @@ def merge_flatfiles(main_dir: Path, bypass_records_ffp: Path = None):
 
     # Add in the ground level location elevation information
     gm_im_df_flat = add_ground_level(gm_im_df_flat)
+
+    # Add in the multi-event detection scores
+    waveform_dir = file_structure.get_waveform_dir(main_dir)
+    gm_im_df_flat = multi_event.compute_stalta_scores(gm_im_df_flat, waveform_dir)
 
     # Remove duplicated columns in prop_df
     prop_df["evid_sta"] = prop_df["evid"].astype(str) + "_" + prop_df["sta"].astype(str)
