@@ -1,14 +1,52 @@
-from pathlib import Path
-
 import numpy as np
 import pandas as pd
-from obspy import read
 from obspy.core.stream import Stream, Trace
 from obspy.signal.trigger import recursive_sta_lta, trigger_onset
 
 from nzgmdb.data_processing import waveform_manipulation
 from nzgmdb.management import config as cfg
-from nzgmdb.management import file_structure
+from nzgmdb.management import custom_errors
+
+
+def sync_event_from_stream(
+    stream: Stream,
+    extraction_df: pd.DataFrame,
+) -> tuple[pd.Timestamp, pd.Timestamp, bool]:
+    """
+    Determine trace start/end times from an ObsPy Stream and whether the
+    station has a catalog pick inside that window.
+
+    Parameters
+    ----------
+    stream : obspy.Stream
+        Input stream (multi-component). A Z component is preferred, otherwise
+        the first trace is used.
+    extraction_df : pandas.DataFrame
+        DataFrame containing catalog picks with a `ptime_est` column for the same site
+        for other events.
+
+    Returns
+    -------
+    start_time : pandas.Timestamp
+        UTC start time of the selected trace (or `pd.NaT` on failure).
+    end_time : pandas.Timestamp
+        UTC end time of the selected trace (or `pd.NaT` on failure).
+    sync_event : bool
+        True if there is at least one pick inside the trace window, else False.
+    """
+    trace = stream[0]
+
+    # Convert start/end to pandas UTC timestamps
+    start_time = pd.to_datetime(trace.stats.starttime.datetime, utc=True)
+    end_time = pd.to_datetime(trace.stats.endtime.datetime, utc=True)
+
+    t = pd.to_datetime(extraction_df["ptime_est"], utc=True)
+
+    # Check for any pick inside the window (inclusive)
+    inside = t.between(start_time, end_time)
+    sync_event = inside.any()
+
+    return start_time, end_time, sync_event
 
 
 def stalta_triggers(tr: Trace):
@@ -98,14 +136,22 @@ def stalta_for_stream(stream: Stream):
 
     Returns:
     --------
-    bool
-        Multi-trigger score (True if weighted score > 0.5, else False).
+    float
+        Weighted multi-trigger score based on STA/LTA triggers, or np.nan on failure to process.
     """
 
     # Ensure reproducible component order
-    stream = waveform_manipulation.initial_preprocessing(
-        stream, apply_zero_padding=False
-    )
+    try:
+        stream = waveform_manipulation.initial_preprocessing(
+            stream, apply_zero_padding=False
+        )
+    except (
+        custom_errors.InventoryNotFoundError
+        or custom_errors.SensitivityRemovalError
+        or custom_errors.RotationError
+    ):
+        return np.nan
+
     stream.sort(keys=["channel"])
     tr_H1, tr_H2, tr_Z = stream[0], stream[1], stream[2]
 
@@ -122,45 +168,34 @@ def stalta_for_stream(stream: Stream):
         weights["h1"] * flag_H1 + weights["h2"] * flag_H2 + weights["z"] * flag_Z
     )
 
-    multi_event_score = True if weighted_score > 0.5 else False
-
-    return multi_event_score
+    return weighted_score
 
 
-def compute_stalta_scores(df: pd.DataFrame, main_dir: Path) -> pd.DataFrame:
+def compute_multi_event_scores(stream: Stream, extraction_table: pd.DataFrame):
     """
-    For each row in the dataframe get the mseed file path and compute the
-    STA/LTA multi-trigger score. Add the score as a new column to the dataframe.
+    Compute multi-event scores for a given ObsPy Stream and extraction table.
 
     Parameters
     ----------
-    df : pd.DataFrame
-        DataFrame containing event information and mseed file paths.
-    main_dir : Path
-        The main directory of the NZGMDB results (Highest level directory).
+    stream : obspy.Stream
+        Input multi-component stream.
+    extraction_table : pandas.DataFrame
+        DataFrame containing catalog picks with a `ptime_est` column for the same site
+        for other events.
 
     Returns
     -------
-    pd.DataFrame
-        Updated DataFrame with an additional 'multi_event' column containing
-        the STA/LTA multi-trigger score of True/False.
+    start_time : pandas.Timestamp
+        UTC start time of the selected trace (or `pd.NaT` on failure).
+    end_time : pandas.Timestamp
+        UTC end time of the selected trace (or `pd.NaT` on failure).
+    stalat_score : bool
+        Multi-event score based on STA/LTA triggers.
+    sync_event : bool
+        True if there is at least one pick inside the trace window, else False.
     """
-    multi_event_values = []
-    # Ensure datetime column is in datetime format
-    df["datetime"] = pd.to_datetime(df["datetime"])
+    start_time, end_time, sync_event = sync_event_from_stream(stream, extraction_table)
 
-    for _, row in df.iterrows():
-        # Get the mseed directory
-        year = row["datetime"].year
-        evid = row["evid"]
-        mseed_dir = file_structure.get_mseed_dir(main_dir, year, evid)
+    stalat_score = stalta_for_stream(stream)
 
-        # Get the mseed file path
-        record_id = row["record_id"]
-        mseed_file = mseed_dir / f"{record_id}.mseed"
-
-        # Read the mseed file and compute the multi-trigger score
-        stream = read(mseed_file)
-        multi_event_values.append(stalta_for_stream(stream))
-
-    return df
+    return start_time, end_time, stalat_score, sync_event

@@ -219,15 +219,18 @@ def filter_score_mean(
 
 def filter_multi_event(
     catalogue: pd.DataFrame,
+    score_min: float,
     bypass_records: np.ndarray = None,
 ):
     """
-    Filter the catalogue based on the multi-event STA/LTA check.
+    Filter the catalogue based on the multi-event STA/LTA and sync event check.
 
     Parameters
     ----------
     catalogue : pd.DataFrame
         The catalogue dataframe to filter
+    score_min : float
+        The minimum stalta_score value to filter on
     bypass_records : np.ndarray, optional
         The records to bypass the quality checks
 
@@ -237,7 +240,10 @@ def filter_multi_event(
         The skipped records to filter out of the catalogue
     """
     # Find records that have been flagged as multi-event
-    multi_event_filter = catalogue[catalogue["multi_event"]]
+    multi_event_filter = catalogue[
+        (catalogue["stalta_score"] < score_min)
+        & (~catalogue["sync_event"].astype(bool))
+    ]
 
     # Remove the bypass records if they exist
     if bypass_records is not None:
@@ -249,7 +255,7 @@ def filter_multi_event(
     skipped_records = pd.DataFrame(
         {
             "record_id": multi_event_filter["record_id"],
-            "reason": "Failed multi-event STA/LTA check",
+            "reason": "Failed multi-event check",
         }
     )
 
@@ -797,6 +803,7 @@ def apply_all_filters(
     clipped_records_ffp: Path,
     bypass_records: np.ndarray = None,
     score_min: float = None,
+    multi_score_min: float = None,
     fmax_min: float = None,
     fmin_max: float = None,
     min_mag: float = None,
@@ -829,8 +836,8 @@ def apply_all_filters(
         The records to bypass the quality checks.
     score_min : float, optional
         The minimum score value to filter on.
-    multi_max : float, optional
-        The maximum multi_mean value to filter on.
+    multi_score_min : float, optional
+        The minimum multi-event score value to filter on.
     fmax_min : float, optional
         The minimum fmax value to filter on.
     fmin_max : float, optional
@@ -850,6 +857,11 @@ def apply_all_filters(
 
     # Get the config values if they are not provided
     score_min = score_min if score_min is not None else config.get_value("score_min")
+    multi_score_min = (
+        multi_score_min
+        if multi_score_min is not None
+        else config.get_value("multi_score_min")
+    )
     fmax_min = fmax_min if fmax_min is not None else config.get_value("fmax_min")
     fmin_max = fmin_max if fmin_max is not None else config.get_value("fmin_max")
     mag_min = min_mag if min_mag is not None else config.get_value("quality_min_mag")
@@ -871,7 +883,9 @@ def apply_all_filters(
     skipped_records_score = filter_score_mean(catalogue_copy, score_min, bypass_records)
 
     # Find multi event
-    skipped_records_multi = filter_multi_event(catalogue_copy, bypass_records)
+    skipped_records_multi = filter_multi_event(
+        catalogue_copy, multi_score_min, bypass_records
+    )
 
     # Find fmax
     skipped_records_fmax = filter_fmax(catalogue_copy, fmax_min, bypass_records)

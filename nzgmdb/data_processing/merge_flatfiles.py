@@ -8,7 +8,6 @@ import pandas as pd
 from obspy.clients.fdsn import Client as FDSN_Client
 from obspy.core.utcdatetime import UTCDateTime
 
-from nzgmdb.data_processing import multi_event
 from nzgmdb.management import config as cfg
 from nzgmdb.management import file_structure
 
@@ -446,6 +445,9 @@ def merge_flatfiles(main_dir: Path, bypass_records_ffp: Path = None):
         flatfile_dir / file_structure.PreFlatfileNames.STATION_EXTRACTION_TABLE_GEONET,
         dtype={"evid": str},
     )
+    multi_event_df = pd.read_csv(
+        flatfile_dir / file_structure.PreFlatfileNames.MULTI_EVENT_TABLE,
+    )
 
     # Ensure correct strike and rake values
     event_df.loc[event_df.strike == 360, "strike"] = 0
@@ -459,6 +461,10 @@ def merge_flatfiles(main_dir: Path, bypass_records_ffp: Path = None):
 
     phase_table_df = phase_table_df[
         phase_table_df["record_id"].isin(im_df["record_id"])
+    ]
+
+    multi_event_df = multi_event_df[
+        multi_event_df["record_id"].isin(im_df["record_id"])
     ]
 
     # Ensure that the site_basin_df only has the unique sites found in the im_df
@@ -573,9 +579,18 @@ def merge_flatfiles(main_dir: Path, bypass_records_ffp: Path = None):
     # Add in the ground level location elevation information
     gm_im_df_flat = add_ground_level(gm_im_df_flat)
 
-    # Add in the multi-event detection scores
-    waveform_dir = file_structure.get_waveform_dir(main_dir)
-    gm_im_df_flat = multi_event.compute_stalta_scores(gm_im_df_flat, waveform_dir)
+    # Add in multi_event information
+    gm_im_df_flat = gm_im_df_flat.merge(
+        multi_event_df[
+            [
+                "record_id",
+                "stalat_score",
+                "sync_event",
+            ]
+        ],
+        on="record_id",
+        how="left",
+    )
 
     # Remove duplicated columns in prop_df
     prop_df["evid_sta"] = prop_df["evid"].astype(str) + "_" + prop_df["sta"].astype(str)
@@ -747,6 +762,8 @@ def merge_flatfiles(main_dir: Path, bypass_records_ffp: Path = None):
             "fmin_Z",
             "fmax_Z",
             "multi_Z",
+            "stalat_score",
+            "sync_event",
             "HPF_h",
             "HPF_v",
             "LPF_h",
@@ -816,6 +833,9 @@ def merge_flatfiles(main_dir: Path, bypass_records_ffp: Path = None):
     station_extraction_df.to_csv(
         flatfile_dir / file_structure.FlatfileNames.STATION_EXTRACTION_TABLE,
         index=False,
+    )
+    multi_event_df.to_csv(
+        flatfile_dir / file_structure.FlatfileNames.MULTI_EVENT_TABLE, index=False
     )
     phase_table_df.to_csv(
         flatfile_dir / file_structure.FlatfileNames.PHASE_ARRIVAL_TABLE, index=False
