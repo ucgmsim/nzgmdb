@@ -77,28 +77,37 @@ def initial_preprocessing(
     # Get the inventory information
     station = mseed[0].stats.station
     location = mseed[0].stats.location
-    channel = mseed[0].stats.channel
+    channel = mseed[0].stats.channel[:2]
 
-    if inventory is not None:
-        # Select only the required station and location from the inventory
-        inv_selected = inventory.select(station=station, location=location)
-        if len(inv_selected) == 0:
-            raise custom_errors.InventoryNotFoundError(
-                f"No inventory information found for station {station} with location {location}"
+    inv_selected = None
+    if not hasattr(mseed[0].stats, "response"):
+        # Only check inventory if response information is not already attached
+        if inventory is not None:
+            # Select only the required station and location from the inventory
+            inv_selected = inventory.select(
+                station=station, location=location, channel=f"{channel}?"
             )
-    else:
-        try:
-            client_NZ = FDSN_Client("GEONET")
-            inv_selected = client_NZ.get_stations(
-                level="response", network="NZ", station=station, location=location
-            )
-        except FDSNNoDataException:
-            raise custom_errors.InventoryNotFoundError(
-                f"No inventory information found for station {station} with location {location}"
-            )
+            if len(inv_selected) == 0:
+                raise custom_errors.InventoryNotFoundError(
+                    f"No inventory information found for station {station} with location {location}"
+                )
+        else:
+            try:
+                client_NZ = FDSN_Client("GEONET")
+                inv_selected = client_NZ.get_stations(
+                    level="response",
+                    network="NZ",
+                    station=station,
+                    location=location,
+                    channel=f"{channel}?",
+                )
+            except FDSNNoDataException:
+                raise custom_errors.InventoryNotFoundError(
+                    f"No inventory information found for station {station} with location {location}"
+                )
 
     try:
-        mseed = mseed.remove_sensitivity(inventory=inv_selected)
+        mseed = mseed.remove_response(inventory=inv_selected)
     except ValueError:
         raise custom_errors.SensitivityRemovalError(
             f"Failed to remove sensitivity for station {station} with location {location}"
@@ -116,7 +125,7 @@ def initial_preprocessing(
         )
 
     # If the channel is not a Strong Motion station then we need to differentiate
-    if channel[:2] not in ["HN", "BN"]:
+    if channel not in ["HN", "BN"]:
         try:
             # differentiate data i.e., m/s to m/s^2
             mseed.differentiate()

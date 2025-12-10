@@ -1,3 +1,5 @@
+"""Module for computing multi-event scores from seismic waveform data using STA/LTA triggers."""
+
 import numpy as np
 import pandas as pd
 from obspy.core.stream import Stream, Trace
@@ -60,7 +62,7 @@ def stalta_triggers(tr: Trace):
 
     Returns
     -------
-    flag : int
+    int
         Binary indicator of multiple cleaned triggers. Returns 1 if more than
         one cleaned trigger is found, otherwise 0.
     """
@@ -124,7 +126,7 @@ def stalta_triggers(tr: Trace):
     return flag
 
 
-def stalta_for_stream(stream: Stream):
+def stalta_for_stream(stream: Stream, inventory=None) -> float:
     """
     Run STA/LTA detection for a 3-component stream (H1, H2, Z).
     Returns weighted multi-trigger score.
@@ -133,6 +135,8 @@ def stalta_for_stream(stream: Stream):
     -----------
     stream : obspy.Stream
         Input 3-component stream.
+    inventory : obspy.Inventory, optional
+        Inventory for preprocessing (default is None).
 
     Returns:
     --------
@@ -143,12 +147,12 @@ def stalta_for_stream(stream: Stream):
     # Ensure reproducible component order
     try:
         stream = waveform_manipulation.initial_preprocessing(
-            stream, apply_zero_padding=False
+            stream, apply_zero_padding=False, inventory=inventory
         )
     except (
-        custom_errors.InventoryNotFoundError
-        or custom_errors.SensitivityRemovalError
-        or custom_errors.RotationError
+        custom_errors.InventoryNotFoundError,
+        custom_errors.SensitivityRemovalError,
+        custom_errors.RotationError,
     ):
         return np.nan
 
@@ -171,7 +175,9 @@ def stalta_for_stream(stream: Stream):
     return weighted_score
 
 
-def compute_multi_event_scores(stream: Stream, extraction_table: pd.DataFrame):
+def compute_multi_event_scores(
+    stream: Stream, extraction_table: pd.DataFrame, inventory=None
+) -> tuple[pd.Timestamp, pd.Timestamp, float, bool]:
     """
     Compute multi-event scores for a given ObsPy Stream and extraction table.
 
@@ -182,6 +188,8 @@ def compute_multi_event_scores(stream: Stream, extraction_table: pd.DataFrame):
     extraction_table : pandas.DataFrame
         DataFrame containing catalog picks with a `ptime_est` column for the same site
         for other events.
+    inventory : obspy.Inventory, optional
+        Inventory for preprocessing (default is None).
 
     Returns
     -------
@@ -196,6 +204,6 @@ def compute_multi_event_scores(stream: Stream, extraction_table: pd.DataFrame):
     """
     start_time, end_time, sync_event = sync_event_from_stream(stream, extraction_table)
 
-    stalat_score = stalta_for_stream(stream)
+    stalat_score = stalta_for_stream(stream, inventory)
 
     return start_time, end_time, stalat_score, sync_event
