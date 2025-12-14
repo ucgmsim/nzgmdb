@@ -3,6 +3,7 @@
 import numpy as np
 import pandas as pd
 from obspy.core.stream import Stream, Trace
+from obspy.core.inventory import Inventory
 from obspy.signal.trigger import recursive_sta_lta, trigger_onset
 
 from nzgmdb.data_processing import waveform_manipulation
@@ -125,7 +126,7 @@ def stalta_triggers(tr: Trace):
     return flag
 
 
-def stalta_for_stream(stream: Stream, inventory=None) -> float:
+def stalta_for_stream(stream: Stream, inventory: Inventory | None = None) -> float:
     """
     Run STA/LTA detection for a 3-component stream (H1, H2, Z).
     Returns weighted multi-trigger score.
@@ -175,7 +176,7 @@ def stalta_for_stream(stream: Stream, inventory=None) -> float:
 
 
 def compute_multi_event_scores(
-    stream: Stream, extraction_table: pd.DataFrame, inventory=None
+    stream: Stream, extraction_table: pd.DataFrame, inventory: Inventory | None = None
 ) -> tuple[pd.Timestamp, pd.Timestamp, float, bool]:
     """
     Compute multi-event scores for a given ObsPy Stream and extraction table.
