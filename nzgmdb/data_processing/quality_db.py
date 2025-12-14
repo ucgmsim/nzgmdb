@@ -241,7 +241,7 @@ def filter_multi_event(
     """
     # Find records that have been flagged as multi-event
     multi_event_filter = catalogue[
-        (catalogue["stalta_score"] < score_min)
+        (catalogue["stalta_score"] > score_min)
         & (~catalogue["sync_event"].astype(bool))
     ]
 

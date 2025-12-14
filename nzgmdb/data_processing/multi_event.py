@@ -21,8 +21,7 @@ def sync_event_from_stream(
     Parameters
     ----------
     stream : obspy.Stream
-        Input stream (multi-component). A Z component is preferred, otherwise
-        the first trace is used.
+        Input stream (multi-component). Assumes all traces have the same start/end times.
     extraction_df : pandas.DataFrame
         DataFrame containing catalog picks with a `ptime_est` column for the same site
         for other events.
@@ -197,7 +196,7 @@ def compute_multi_event_scores(
         UTC start time of the selected trace (or `pd.NaT` on failure).
     end_time : pandas.Timestamp
         UTC end time of the selected trace (or `pd.NaT` on failure).
-    stalat_score : bool
+    stalat_score : float
         Multi-event score based on STA/LTA triggers.
     sync_event : bool
         True if there is at least one pick inside the trace window, else False.

@@ -776,7 +776,7 @@ def extract_station_info(
     r_hyp = station_extraction_row["r_hyp"]
 
     # Filter down the extraction table to the same station and other events
-    extraction_table = extraction_table[
+    sync_check_extraction_table = extraction_table[
         (extraction_table["sta"] == station) & (extraction_table["evid"] != event_id)
     ]
 
@@ -909,7 +909,9 @@ def extract_station_info(
 
         # Check for multi-event flagging
         start_time, end_time, stalat_score, sync_event = (
-            multi_event.compute_multi_event_scores(mseed.copy(), extraction_table)
+            multi_event.compute_multi_event_scores(
+                mseed.copy(), sync_check_extraction_table
+            )
         )
         # Add to the multi_event_records list
         multi_event_records.append(
