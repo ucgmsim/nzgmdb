@@ -30,7 +30,6 @@ is_large_overlap: 0.5
 # Mseed Variables
 vs30: 500
 pre_event_time_difference: 15
-ds_std_multiplier: 3
 # Velocity Modelling
 nzcvm_version: "2.09"
 priority_basins:

@@ -705,6 +705,7 @@ def get_station_window(
     # Extract the parameters from the row
     net = station_extraction_row["net"]
     sta = station_extraction_row["sta"]
+    r_hyp = station_extraction_row["r_hyp"]
     ptime_est = UTCDateTime(station_extraction_row["ptime_est"])
     ds_mean = station_extraction_row["ds_mean"]
     ds_std = station_extraction_row["ds_std"]
@@ -712,7 +713,9 @@ def get_station_window(
     # Get the config values
     config = cfg.Config()
     pre_event_time_difference = config.get_value("pre_event_time_difference")
-    ds_std_multiplier = config.get_value("ds_std_multiplier")
+
+    # Compute the ds multiplier time
+    ds_std_multiplier = 0.8 / (1 + np.exp(-0.035 * (r_hyp - 140))) + 2.2
 
     start_time = ptime_est - pre_event_time_difference
     # Note: both ds_mean and ds_std are in logspace
