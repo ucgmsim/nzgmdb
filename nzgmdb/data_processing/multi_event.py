@@ -2,8 +2,8 @@
 
 import numpy as np
 import pandas as pd
-from obspy.core.stream import Stream, Trace
 from obspy.core.inventory import Inventory
+from obspy.core.stream import Stream, Trace
 from obspy.signal.trigger import recursive_sta_lta, trigger_onset
 
 from nzgmdb.data_processing import waveform_manipulation
