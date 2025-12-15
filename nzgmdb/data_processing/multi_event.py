@@ -131,15 +131,15 @@ def stalta_for_stream(stream: Stream, inventory: Inventory | None = None) -> flo
     Run STA/LTA detection for a 3-component stream (H1, H2, Z).
     Returns weighted multi-trigger score.
 
-    Parameters:
-    -----------
+    Parameters
+    ----------
     stream : obspy.Stream
         Input 3-component stream.
     inventory : obspy.Inventory, optional
         Inventory for preprocessing (default is None).
 
-    Returns:
-    --------
+    Returns
+    -------
     float
         Weighted multi-trigger score based on STA/LTA triggers, or np.nan on failure to process.
     """
