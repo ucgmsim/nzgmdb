@@ -2021,10 +2021,3 @@ def generate_report(
     # Save report
     with open(output_file, "w") as f:
         f.write("".join(html_parts))
-
-
-generate_report(
-    Path("/home/joel/local/gmdb/4p3_mantle"),
-    Path("/home/joel/local/gmdb/4p3_mantle/4p3_report.html"),
-    Path("/home/joel/local/gmdb/4p3_mantle"),
-)
