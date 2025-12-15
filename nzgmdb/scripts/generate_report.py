@@ -33,7 +33,7 @@ class TectonicType(StrEnum):
     UNKNOWN = "Undetermined"
 
 
-class NZGMDB_Versions(StrEnum):
+class NZGMDB_Versions(StrEnum):  # noqa: N801
     """Enum for NZGMDB versions."""
 
     V4p3 = "4p3"
@@ -1016,14 +1016,15 @@ def plot_site_table_image(
     combined = combined.reset_index().rename(columns={"index": "site", "sta": "site"})
 
     # Ensure columns order: site, full_count, quality_count, then reasons
-    cols = combined.columns.tolist()
-    # If 'site' wasn't automatically created as first column, move it
-    if "site" not in cols:
-        combined.insert(0, "site", combined.pop(combined.columns[0]))
-    ordered = ["site", "full_count", "quality_count"] + [
-        c for c in combined.columns if c not in ("site", "full_count", "quality_count")
-    ]
-    combined = combined[ordered]
+    reason_cols = sorted(
+        [
+            c
+            for c in combined.columns
+            if c not in ("site", "full_count", "quality_count")
+        ]
+    )
+    ordered_cols = ["site", "full_count", "quality_count"] + reason_cols
+    combined = combined[ordered_cols]
 
     # Create a new df for the quality counts that are 0
     combined_zero_quality = combined[combined["quality_count"] == 0]
@@ -1129,6 +1130,10 @@ def generate_report(
     compare_version_directory : Path | None
         The Top Level directory containing the previous version of the database to compare against.
         If None, a summary of the new version will be generated instead and comparison plots will not be generated.
+    new_version : NZGMDB_Versions | None
+        The version for the new database (choose from the enum). Default is NZGMDB_Versions.V4p3.
+    old_version : NZGMDB_Versions | None
+        The version for the old database (choose from the enum). Default is NZGMDB_Versions.V4p3.
     """
     html_parts = []
     # Start of HTML
@@ -1526,7 +1531,7 @@ def generate_report(
             len(
                 pd.read_csv(
                     old_flatifles_dir / "station_magnitude_table_geonet.csv"
-                    if new_version == NZGMDB_Versions.V4p3
+                    if old_version == NZGMDB_Versions.V4p3
                     else file_structure.PreFlatfileNames.STATION_MAGNITUDE_TABLE_EXTRACTION
                 )
             )
@@ -1670,9 +1675,9 @@ def generate_report(
     # Add New section for low quality site records
     html_parts.append("<h2>New NZGMDB - Low Quality Site Records</h2>")
     # Add sta col to skipped_reasons by splitting record_id
-    new_quality_skipped["sta"] = new_quality_skipped["record_id"].apply(
-        lambda x: x.split("_")[1]
-    )
+    new_quality_skipped["sta"] = new_quality_skipped["record_id"].str.split(
+        "_", expand=True
+    )[1]
     img_base64, n_zero_quality_sites, total_zero_quality_records = (
         plot_site_table_image(full_new, quality_new, new_quality_skipped)
     )
@@ -1694,24 +1699,24 @@ def generate_report(
     if compare_version_directory:
         html_parts.append("<h2>Old NZGMDB - Low Quality Site Records</h2>")
         # Add sta col to skipped_reasons by splitting record_id
-        old_quality_skipped["sta"] = old_quality_skipped["record_id"].apply(
-            lambda x: x.split("_")[1]
-        )
-        img_base64, n_zero_quality_sites, total_zero_quality_records = (
+        old_quality_skipped["sta"] = old_quality_skipped["record_id"].str.split(
+            "_", expand=True
+        )[1]
+        img_base64_old, n_zero_quality_sites_old, total_zero_quality_records_old = (
             plot_site_table_image(full_old, quality_old, old_quality_skipped)
         )
         html_parts.append("<div class='fig-single'>")
-        html_parts.append(f'<img src="data:image/png;base64,{img_base64}">')
+        html_parts.append(f'<img src="data:image/png;base64,{img_base64_old}">')
         html_parts.append("</div>")
 
         # Add text for the zero quality sites
         html_parts.append("<h3>Zero Quality Sites Summary</h3>")
         html_parts.append("<ul>")
         html_parts.append(
-            f"<li>Number of sites with zero quality records: {n_zero_quality_sites}</li>"
+            f"<li>Number of sites with zero quality records: {n_zero_quality_sites_old}</li>"
         )
         html_parts.append(
-            f"<li>Total number of records for these sites in the full database: {total_zero_quality_records}</li>"
+            f"<li>Total number of records for these sites in the full database: {total_zero_quality_records_old}</li>"
         )
         html_parts.append("</ul>")
 
