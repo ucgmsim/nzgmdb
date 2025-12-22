@@ -473,14 +473,12 @@ def add_tect_domain(
         The number of processes to use
     """
     # Specify the required files for fiona
-    NZGMDB_DATA.fetch("TectonicDomains_Feb2021_8_NZTM.shp")
-    NZGMDB_DATA.fetch("TectonicDomains_Feb2021_8_NZTM.dbf")
-    NZGMDB_DATA.fetch("TectonicDomains_Feb2021_8_NZTM.shx")
+    NZGMDB_DATA.fetch("nt_domains_kiran.shp")
+    NZGMDB_DATA.fetch("nt_domains_kiran.dbf")
+    NZGMDB_DATA.fetch("nt_domains_kiran.shx")
 
     # Shape file for determining neotectonic domain
-    shapes = list(
-        fiona.open(Path(NZGMDB_DATA.abspath) / "TectonicDomains_Feb2021_8_NZTM.shp")
-    )
+    shapes = list(fiona.open(Path(NZGMDB_DATA.abspath) / "nt_domains_kiran.shp"))
 
     # Read the geonet CMT and event data
     config = cfg.Config()

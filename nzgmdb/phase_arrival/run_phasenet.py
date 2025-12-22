@@ -4,6 +4,7 @@ Script to run PhaseNet on mseed files, predict p and s waves as well as save the
 
 import argparse
 from pathlib import Path
+from typing import Union
 
 import h5py
 import mseedlib
@@ -302,7 +303,7 @@ def process_mseed(mseed_file: Path, h5_ffp: Path, bypass_row: pd.Series = None):
 
 
 def run_phasenet(
-    mseed_files_ffp: Path, output_dir: Path, bypass_ffp: Path | None = None
+    mseed_files_ffp: Path, output_dir: Path, bypass_ffp: Union[Path, None] = None
 ):
     """
     Run PhaseNet on the mseed files.

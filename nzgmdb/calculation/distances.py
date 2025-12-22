@@ -3,12 +3,14 @@ This module contains functions to calculate distances between earthquake planes 
 as determining the rupture plane geometry for a given event.
 """
 
+import json
 import functools
 import multiprocessing as mp
 from collections import defaultdict
 from pathlib import Path
 from typing import Optional
 
+import fiona
 import numpy as np
 import pandas as pd
 from obspy.clients.fdsn import Client as FDSN_Client
@@ -17,12 +19,14 @@ from shapely.geometry import Point
 from shapely.geometry.polygon import LineString, Polygon
 
 from nzgmdb.CCLD import ccldpy
+from nzgmdb.data_retrieval import tect_domain
 from nzgmdb.management import config as cfg
 from nzgmdb.management import file_structure
 from nzgmdb.management.data_registry import NZGMDB_DATA, REGISTRY
 from oq_wrapper import estimations
 from qcore import coordinates, geo, grid, src_site_dist
 from source_modelling import srf
+from source_modelling import magnitude_scaling
 
 
 def calc_fnorm_slip(
@@ -63,39 +67,6 @@ def calc_fnorm_slip(
     )
 
     return fnorm, slip
-
-
-def get_domain_focal(
-    domain_no: int, domain_focal_df: pd.DataFrame
-) -> tuple[int, int, int]:
-    """
-    Get the focal mechanism for a given domain
-    If not found, return the default values
-    Strike: 220
-    Rake: 45
-    Dip: 90
-
-    Parameters
-    ----------
-    domain_no : int
-        The domain number
-    domain_focal_df : pd.DataFrame
-        The domain focal data
-
-    Returns
-    -------
-    strike : int
-        The strike angle of the fault in degrees
-    rake : int
-        The rake angle of the fault in degrees
-    dip : int
-        The dip angle of the fault in degrees
-    """
-    if domain_no == 0:
-        return 220, 45, 90
-    else:
-        domain = domain_focal_df[domain_focal_df.Domain_No == domain_no].iloc[0]
-        return domain.strike, domain.rake, domain.dip
 
 
 def run_ccld_simulation(
@@ -213,6 +184,99 @@ def run_ccld_simulation(
     }
 
 
+def get_crustal_domain_focal(
+    event_id: str,
+    event_row: pd.Series,
+    nz_mech: dict,
+    length_bin: str,
+):
+    """
+    Select the appropriate nodal plane from the Crustal domain focal mechanism data.
+    If both cases are the same, select the highest probability and run CCLD simulations for that plane.
+    If the cases are different, select the highest probability from each case and run CCLD simulations for both planes.
+    If the domain number is not found, use default Oceanic values.
+
+    Parameters
+    ----------
+    event_id : str
+        The event id
+    event_row : pd.Series
+        The event row from the earthquake source table
+    nz_mech : dict
+        The domain focal mechanism data
+    length_bin : str
+        The length bin to use for the focal mechanism selection
+
+    Returns
+    -------
+    dict
+        A dictionary containing the following keys:
+        'strike' : float
+            The strike angle of the fault in degrees
+        'dip' : float
+            The dip angle of the fault in degrees
+        'rake' : float
+            The rake angle of the fault in degrees
+        'ztor' : float
+            The depth to the top of the rupture in km
+        'dbottom' : float
+            The depth to the bottom of the rupture in km
+        'length' : float
+            The length of the fault along strike in km
+        'dip_dist' : float
+            The width of the fault down dip in km
+        'hyp_lat' : float
+            The latitude of the hypocentre
+        'hyp_lon' : float
+            The longitude of the hypocentre
+        'hyp_strike' : float
+            The hypocentre along-strike position (0 - 1)
+        'hyp_dip' : float
+            The hypocentre down-dip position (0 - 1)
+    """
+    try:
+        domain_model = nz_mech[event_row["domain_no"]]
+    except KeyError:
+        # Use the default Oceanic domain if the domain number is not found
+        strike, dip, rake = 220, 90, 45
+        return run_ccld_simulation(event_id, event_row, strike, dip, rake, "D")
+
+    case1 = domain_model["case1"][length_bin]
+    case2 = domain_model["case2"][length_bin]
+
+    # Check if the cases are the same
+    cases_equal = (
+        case1["strikeAn"] == case2["strikeAn"]
+        and case1["dipAn"] == case2["dipAn"]
+        and case1["rakeAn"] == case2["rakeAn"]
+        and case1["prob"] == case2["prob"]
+    )
+
+    if cases_equal:
+        # Select the highest probability (doesn't matter which case as they are the same)
+        idx_max = int(np.argmax(case1["prob"]))
+        strike = float(case1["strikeAn"][idx_max])
+        dip = float(case1["dipAn"][idx_max])
+        rake = float(case1["rakeAn"][idx_max])
+        # Compute the CCLD Simulations for the event
+        ccld_info = run_ccld_simulation(event_id, event_row, strike, dip, rake, "D")
+    else:
+        # For each case select the highest probability
+        case1_idx_max = int(np.argmax(case1["prob"]))
+        strike1 = float(case1["strikeAn"][case1_idx_max])
+        dip1 = float(case1["dipAn"][case1_idx_max])
+        rake1 = float(case1["rakeAn"][case1_idx_max])
+        case2_idx_max = int(np.argmax(case2["prob"]))
+        strike2 = float(case2["strikeAn"][case2_idx_max])
+        dip2 = float(case2["dipAn"][case2_idx_max])
+        rake2 = float(case2["rakeAn"][case2_idx_max])
+        # Compute the CCLD Simulations for the event with both possible planes
+        ccld_info = run_ccld_simulation(
+            event_id, event_row, strike1, dip1, rake1, "C", strike2, dip2, rake2
+        )
+    return ccld_info
+
+
 def get_nodal_plane_info(
     event_id: str,
     event_row: pd.Series,
@@ -220,6 +284,10 @@ def get_nodal_plane_info(
     modified_cmt_df: pd.DataFrame,
     domain_focal_df: pd.DataFrame,
     srf_files: dict,
+    hik_objs: np.ndarray,
+    puy_objs: np.ndarray,
+    nz_mech: dict,
+    slab_faulting_geo: dict,
 ) -> dict:
     """
     Determine the correct nodal plane for the event
@@ -242,9 +310,17 @@ def get_nodal_plane_info(
     modified_cmt_df : pd.DataFrame
         The modified CMT data for the correct nodal plane
     domain_focal_df : pd.DataFrame
-        The focal mechanism data for the different domains
+        The focal mechanism data for the different domains as a backup
     srf_files : dict
         The srf files for specific events
+    hik_objs : np.ndarray
+        The Hikurangi RBF objects for strike and dip interpolation as well as the Hikurangi footprint for Crustal events
+    puy_objs : np.ndarray
+        The Puysegur RBF objects for strike and dip interpolation as well as the Puysegur footprint for Crustal events
+    nz_mech : dict
+        The domain focal mechanism data for each domain
+    slab_faulting_geo : dict
+        The slab faulting geometry data for both Hikurangi and Puysegur
 
     Returns
     -------
@@ -401,11 +477,111 @@ def get_nodal_plane_info(
     else:
         # Event is not found in any of the datasets
         # Use the domain focal
-        nodal_plane_info["f_type"] = "domain"
-        strike, rake, dip = get_domain_focal(event_row["domain_no"], domain_focal_df)
+        hik_strike_rbf, hik_dip_rbf, hik_footprint = hik_objs
+        puy_strike_rbf, puy_dip_rbf, puy_footprint = puy_objs
+        domain_no_backup = event_row["domain_no_backup"]
 
-        # Compute the CCLD Simulations for the event
-        ccld_info = run_ccld_simulation(event_id, event_row, strike, dip, rake, "D")
+        if event_row["tect_class"] == "Crustal":
+            # First assume strike-slip to estimate length
+            length = magnitude_scaling.leonard_magnitude_to_length(event_row.mag, 15)
+            length_bin = ">45" if length > 45.0 else ">15"
+
+            ccld_info = get_crustal_domain_focal(
+                event_id, event_row, nz_mech, length_bin
+            )
+
+            # Check the new length to see if a different length bin should be used
+            new_length = ccld_info["length"]
+            new_length_bin = ">45" if new_length > 45.0 else ">15"
+            if new_length_bin != length_bin:
+                # Recompute with the new length bin
+                ccld_info = get_crustal_domain_focal(
+                    event_id, event_row, nz_mech, new_length_bin
+                )
+        elif event_row["tect_class"] == "Interface":
+            lat, lon = event_row["lat"], event_row["lon"]
+
+            rake = None
+            # Check which subduction zone the event is in
+            if hik_footprint.contains(Point(lon, lat)):
+                strike = float(np.squeeze(hik_strike_rbf([[lon, lat]])))
+                dip = float(np.squeeze(hik_dip_rbf([[lon, lat]])))
+            elif puy_footprint.contains(Point(lon, lat)):
+                strike = float(np.squeeze(puy_strike_rbf([[lon, lat]])))
+                dip = float(np.squeeze(puy_dip_rbf([[lon, lat]])))
+            else:
+                if domain_no_backup == 0:
+                    strike, rake, dip = 220, 45, 90
+                else:
+                    domain = domain_focal_df[
+                        domain_focal_df.Domain_No == domain_no_backup
+                    ].iloc[0]
+                    strike, rake, dip = domain.strike, domain.rake, domain.dip
+            # Check for infinite values
+            if not np.isfinite(strike) or not np.isfinite(dip):
+                if domain_no_backup == 0:
+                    strike, rake, dip = 220, 45, 90
+                else:
+                    domain = domain_focal_df[
+                        domain_focal_df.Domain_No == domain_no_backup
+                    ].iloc[0]
+                    strike, rake, dip = domain.strike, domain.rake, domain.dip
+            rake = 90.0 if rake is None else rake
+
+            # Run ccld to get length, width, ztor, dbottom
+            ccld_info = run_ccld_simulation(event_id, event_row, strike, dip, rake, "D")
+
+        elif event_row["tect_class"] == "Slab":
+            lat, lon = event_row["lat"], event_row["lon"]
+            # Check which zone the event is in
+            if hik_footprint.contains(Point(lon, lat)):
+                tbl = slab_faulting_geo["hik"]
+            elif puy_footprint.contains(Point(lon, lat)):
+                tbl = slab_faulting_geo["puy"]
+            else:
+                if domain_no_backup == 0:
+                    strike, rake, dip = 220, 45, 90
+                else:
+                    domain = domain_focal_df[
+                        domain_focal_df.Domain_No == domain_no_backup
+                    ].iloc[0]
+                    strike, rake, dip = domain.strike, domain.rake, domain.dip
+                # Run ccld to get length, width, ztor, dbottom
+                ccld_info = run_ccld_simulation(
+                    event_id, event_row, strike, dip, rake, "D"
+                )
+                nodal_plane_info.update(ccld_info)
+                return nodal_plane_info
+
+            # Find the closest point in the table
+            depth_bins = [int(b) for b in tbl.keys()]
+            bin = np.array(
+                tbl[
+                    str(
+                        depth_bins[
+                            np.argmin(np.abs(np.array(depth_bins) - event_row["depth"]))
+                        ]
+                    )
+                ]
+            )
+            # Select the highest probability (doesn't matter which case as they are the same)
+            idx_max = int(np.argmax(bin[:, 3]))
+            strike = float(bin[idx_max, 0]) % 360
+            dip = float(bin[idx_max, 1])
+            rake = float(bin[idx_max, 2])
+
+            # Run ccld to get length, width, ztor, dbottom
+            ccld_info = run_ccld_simulation(event_id, event_row, strike, dip, rake, "D")
+
+        else:
+            if domain_no_backup == 0:
+                strike, rake, dip = 220, 45, 90
+            else:
+                domain = domain_focal_df[
+                    domain_focal_df.Domain_No == domain_no_backup
+                ].iloc[0]
+                strike, rake, dip = domain.strike, domain.rake, domain.dip
+            ccld_info = run_ccld_simulation(event_id, event_row, strike, dip, rake, "D")
 
     if ccld_info is not None:
         # Update the nodal plane info with the ccld info
@@ -423,6 +599,10 @@ def compute_distances_for_event(
     domain_focal_df: pd.DataFrame,
     taupo_polygon: Polygon,
     srf_files: dict,
+    hik_objs: np.ndarray,
+    puy_objs: np.ndarray,
+    nz_mech: dict,
+    slab_faulting_geo: dict,
 ) -> tuple[Optional[pd.DataFrame], Optional[pd.DataFrame]]:
     """
     Compute the distances for a given event
@@ -445,6 +625,14 @@ def compute_distances_for_event(
         The Taupo VZ polygon
     srf_files : dict
         The srf files for specific events
+    hik_objs : np.ndarray
+        The Hikurangi RBF objects for strike and dip interpolation as well as the Hikurangi footprint for Crustal events
+    puy_objs : np.ndarray
+        The Puysegur RBF objects for strike and dip interpolation as well as the Puysegur footprint for Crustal events
+    nz_mech : dict
+        The domain focal mechanism data for each domain
+    slab_faulting_geo : dict
+        The slab faulting geometry data for both Hikurangi and Puysegur
 
     Returns
     -------
@@ -1007,6 +1195,30 @@ def calc_distances(main_dir: Path, n_procs: int = 1):
         dtype={"evid": str},
     )
 
+    NZGMDB_DATA.fetch("TectonicDomains_Feb2021_8_NZTM.shp")
+    NZGMDB_DATA.fetch("TectonicDomains_Feb2021_8_NZTM.dbf")
+    NZGMDB_DATA.fetch("TectonicDomains_Feb2021_8_NZTM.shx")
+    shapes = list(
+        fiona.open(Path(NZGMDB_DATA.abspath) / "TectonicDomains_Feb2021_8_NZTM.shp")
+    )
+
+    fallback_domain_values = tect_domain.find_domain_from_shapes(
+        event_df.loc[:, ["lat", "lon"]],
+        shapes,
+    )
+
+    # Add the fallback domain values to the event df
+    event_df["domain_no_backup"] = fallback_domain_values.loc[:, "domain_no"].values
+
+    hik_objs = np.load(NZGMDB_DATA.fetch("hik_focmec.npy"), allow_pickle=True)[()]
+    puy_objs = np.load(NZGMDB_DATA.fetch("puy_focmec.npy"), allow_pickle=True)[()]
+
+    with open(NZGMDB_DATA.fetch("slab-faulting2.json"), "r", encoding="utf-8") as f:
+        slab_faulting_geo = json.load(f)
+
+    with open(NZGMDB_DATA.fetch("nzfocmecmod.json"), "r") as f:
+        nz_mech = json.load(f)
+
     # Get the focal domain
     domain_focal_df = pd.read_csv(
         NZGMDB_DATA.fetch("focal_mech_tectonic_domain_v1.csv"),
@@ -1078,6 +1290,10 @@ def calc_distances(main_dir: Path, n_procs: int = 1):
                 domain_focal_df=domain_focal_df,
                 taupo_polygon=taupo_polygon,
                 srf_files=srf_files,
+                hik_objs=hik_objs,
+                puy_objs=puy_objs,
+                nz_mech=nz_mech,
+                slab_faulting_geo=slab_faulting_geo,
             ),
             [row for idx, row in event_df.iterrows()],
         )
@@ -1091,7 +1307,11 @@ def calc_distances(main_dir: Path, n_procs: int = 1):
     # Merge the extra event data with the event data
     event_df = pd.merge(event_df, extra_event_data, on="evid", how="right")
 
+    # Remove the domain_no_backup column
+    event_df = event_df.drop(columns=["domain_no_backup"])
+
     # Save the results
+    flatfile_dir = Path("/home/joel/local/gmdb/aaron/new_domain/focmech_kiran/demo_all")
     propagation_data.to_csv(
         flatfile_dir / file_structure.PreFlatfileNames.PROPAGATION_TABLE, index=False
     )
