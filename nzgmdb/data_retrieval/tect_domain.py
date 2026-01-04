@@ -11,6 +11,7 @@ import numpy as np
 import pandas as pd
 from pyproj import Transformer
 
+from cmt_solutions import cmt_data
 from nzgmdb.management import config as cfg
 from nzgmdb.management.data_registry import NZGMDB_DATA
 from qcore import geo, point_in_polygon
@@ -480,9 +481,8 @@ def add_tect_domain(
     # Shape file for determining neotectonic domain
     shapes = list(fiona.open(Path(NZGMDB_DATA.abspath) / "nt_domains_kiran.shp"))
 
-    # Read the geonet CMT and event data
-    config = cfg.Config()
-    geonet_cmt_df = pd.read_csv(config.get_value("cmt_url"), dtype={"evid": str})
+    # Read the CMT and event data
+    cmt_df = cmt_data.get_cmt_data()
     event_df = pd.read_csv(event_csv_ffp, dtype={"evid": str})
 
     # Merge in the Reyners Catalogue data for relocations
@@ -491,8 +491,8 @@ def add_tect_domain(
     )
     event_df = merge_reyners_catalogue_on_events(event_df, reyners_catalogue_df)
 
-    # Replace the geonet CMT data on the event data (override the reyners relocations)
-    event_df = replace_cmt_data_on_event(event_df, geonet_cmt_df)
+    # Replace the CMT data on the event data (override the reyners relocations)
+    event_df = replace_cmt_data_on_event(event_df, cmt_df)
 
     # Merge the NZSMDB data
     event_df = merge_NZSMDB_flatfile_on_events(event_df)

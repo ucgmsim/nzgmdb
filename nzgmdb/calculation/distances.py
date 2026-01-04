@@ -18,6 +18,7 @@ from pyproj import Transformer
 from shapely.geometry import Point
 from shapely.geometry.polygon import LineString, Polygon
 
+from cmt_solutions import cmt_data
 from nzgmdb.CCLD import ccldpy
 from nzgmdb.data_retrieval import tect_domain
 from nzgmdb.management import config as cfg
@@ -280,8 +281,7 @@ def get_crustal_domain_focal(
 def get_nodal_plane_info(
     event_id: str,
     event_row: pd.Series,
-    geonet_cmt_df: pd.DataFrame,
-    modified_cmt_df: pd.DataFrame,
+    cmt_df: pd.DataFrame,
     domain_focal_df: pd.DataFrame,
     srf_files: dict,
     hik_objs: np.ndarray,
@@ -305,10 +305,8 @@ def get_nodal_plane_info(
         The event id
     event_row : pd.Series
         The event row from the earthquake source table
-    geonet_cmt_df : pd.DataFrame
-        The Geonet CMT data
-    modified_cmt_df : pd.DataFrame
-        The modified CMT data for the correct nodal plane
+    cmt_df: pd.DataFrame
+        The Centroid Moment Tensor data for New Zealand events
     domain_focal_df : pd.DataFrame
         The focal mechanism data for the different domains as a backup
     srf_files : dict
@@ -350,6 +348,10 @@ def get_nodal_plane_info(
     # Create the default return to be filled using defaultdict
     nodal_plane_info = defaultdict(lambda: None)
     ccld_info = None
+
+    # Split the cmt data into reviewed and unreviewed data
+    reviewed_cmt_data = cmt_df[cmt_df["reviewed"]]
+    unreviewed_cmt_data = cmt_df[~cmt_df["reviewed"]]
 
     # Check if the event_id is in the srf_files
     if event_id in srf_files:
@@ -447,20 +449,19 @@ def get_nodal_plane_info(
         nodal_plane_info["hyp_dip"] = dip_idx / (ndip - 1)
         nodal_plane_info["plane_index"] = plane_index
 
-    elif event_id in modified_cmt_df.PublicID.values:
-        # Event is in the modified CMT data
+    elif event_id in reviewed_cmt_data.PublicID.values:
+        # Event is in the reviewed CMT data
         nodal_plane_info["f_type"] = "cmt"
-        cmt = modified_cmt_df[modified_cmt_df.PublicID == event_id].iloc[0]
+        cmt = reviewed_cmt_data[reviewed_cmt_data.PublicID == event_id].iloc[0]
         # Compute the CCLD Simulations for the event
         ccld_info = run_ccld_simulation(
             event_id, event_row, cmt.strike1, cmt.dip1, cmt.rake1, "A"
         )
 
-    elif event_id in geonet_cmt_df.PublicID.values:
-        # Event is in the Geonet CMT data
-        # Need to determine the correct plane
+    elif event_id in unreviewed_cmt_data.PublicID.values:
+        # Event is in the Geonet CMT data, however it has not been reviewed
         nodal_plane_info["f_type"] = "cmt_unc"
-        cmt = geonet_cmt_df[geonet_cmt_df.PublicID == event_id].iloc[0]
+        cmt = unreviewed_cmt_data[unreviewed_cmt_data.PublicID == event_id].iloc[0]
 
         # Compute the CCLD Simulations for the event
         ccld_info = run_ccld_simulation(
@@ -594,8 +595,7 @@ def compute_distances_for_event(
     event_row: pd.Series,
     im_df: pd.DataFrame,
     station_df: pd.DataFrame,
-    modified_cmt_df: pd.DataFrame,
-    geonet_cmt_df: pd.DataFrame,
+    cmt_df: pd.DataFrame,
     domain_focal_df: pd.DataFrame,
     taupo_polygon: Polygon,
     srf_files: dict,
@@ -615,10 +615,8 @@ def compute_distances_for_event(
         The full IM data from the catalogue
     station_df : pd.DataFrame
         The full station data
-    modified_cmt_df : pd.DataFrame
-        The modified CMT data for the correct nodal plane
-    geonet_cmt_df : pd.DataFrame
-        The Geonet CMT data
+    cmt_df : pd.DataFrame
+        The Centroid Moment Tensor data
     domain_focal_df : pd.DataFrame
         The focal mechanism data for the different domains
     taupo_polygon : Polygon
@@ -661,8 +659,7 @@ def compute_distances_for_event(
     nodal_plane_info = get_nodal_plane_info(
         event_id,
         event_row,
-        geonet_cmt_df,
-        modified_cmt_df,
+        cmt_df,
         domain_focal_df,
         srf_files,
     )
@@ -1180,14 +1177,8 @@ def calc_distances(main_dir: Path, n_procs: int = 1):
     # Get the flatfile directory
     flatfile_dir = file_structure.get_flatfile_dir(main_dir)
 
-    # Get the modified CMT data
-    modified_cmt_df = pd.read_csv(
-        NZGMDB_DATA.fetch("GeoNet_CMT_solutions_20201129_PreferredNodalPlane_v1.csv")
-    )
-
-    # Get the regular CMT data
-    config = cfg.Config()
-    geonet_cmt_df = pd.read_csv(config.get_value("cmt_url"), dtype={"PublicID": str})
+    # Get the CMT solutions data
+    cmt_df = cmt_data.get_cmt_data()
 
     # Load the eq source table
     event_df = pd.read_csv(
@@ -1231,6 +1222,7 @@ def calc_distances(main_dir: Path, n_procs: int = 1):
     tvz_points = tect_domain_points[tect_domain_points.domain_no == 4][
         ["latitude", "longitude"]
     ]
+    config = cfg.Config()
     ll_num = config.get_value("ll_num")
     nztm_num = config.get_value("nztm_num")
     wgs2nztm = Transformer.from_crs(ll_num, nztm_num)
@@ -1285,8 +1277,7 @@ def calc_distances(main_dir: Path, n_procs: int = 1):
                 compute_distances_for_event,
                 im_df=im_df,
                 station_df=station_df,
-                modified_cmt_df=modified_cmt_df,
-                geonet_cmt_df=geonet_cmt_df,
+                cmt_df=cmt_df,
                 domain_focal_df=domain_focal_df,
                 taupo_polygon=taupo_polygon,
                 srf_files=srf_files,
