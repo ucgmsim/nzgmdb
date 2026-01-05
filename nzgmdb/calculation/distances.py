@@ -3,8 +3,8 @@ This module contains functions to calculate distances between earthquake planes 
 as determining the rupture plane geometry for a given event.
 """
 
-import json
 import functools
+import json
 import multiprocessing as mp
 from collections import defaultdict
 from pathlib import Path
@@ -26,8 +26,7 @@ from nzgmdb.management import file_structure
 from nzgmdb.management.data_registry import NZGMDB_DATA, REGISTRY
 from oq_wrapper import estimations
 from qcore import coordinates, geo, grid, src_site_dist
-from source_modelling import srf
-from source_modelling import magnitude_scaling
+from source_modelling import magnitude_scaling, srf
 
 
 def calc_fnorm_slip(
