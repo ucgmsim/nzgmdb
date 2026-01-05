@@ -190,12 +190,14 @@ def get_crustal_domain_focal(
     event_row: pd.Series,
     nz_mech: dict,
     length_bin: str,
+    domain_no_backup: int,
+    domain_focal_df: pd.DataFrame,
 ):
     """
     Select the appropriate nodal plane from the Crustal domain focal mechanism data.
     If both cases are the same, select the highest probability and run CCLD simulations for that plane.
     If the cases are different, select the highest probability from each case and run CCLD simulations for both planes.
-    If the domain number is not found, use default Oceanic values.
+    If the domain number is not found, use the backup focal mechanism.
 
     Parameters
     ----------
@@ -207,6 +209,10 @@ def get_crustal_domain_focal(
         The domain focal mechanism data
     length_bin : str
         The length bin to use for the focal mechanism selection
+    domain_no_backup : int
+        The domain number for the backup focal mechanism.
+    domain_focal_df : pd.DataFrame
+        The focal mechanism data for the different domains.
 
     Returns
     -------
@@ -238,8 +244,10 @@ def get_crustal_domain_focal(
     try:
         domain_model = nz_mech[event_row["domain_no"]]
     except KeyError:
-        # Use the default Oceanic domain if the domain number is not found
-        strike, dip, rake = 220, 90, 45
+        # Use the backup focal mechanism
+        strike, dip, rake = get_backup_focal_mechanism(
+            domain_no_backup, domain_focal_df
+        )
         return run_ccld_simulation(event_id, event_row, strike, dip, rake, "D")
 
     case1 = domain_model["case1"][length_bin]
@@ -253,29 +261,48 @@ def get_crustal_domain_focal(
         and case1["prob"] == case2["prob"]
     )
 
+    # Select the highest probability for case 1
+    idx_max = int(np.argmax(case1["prob"]))
+    strike = float(case1["strikeAn"][idx_max])
+    dip = float(case1["dipAn"][idx_max])
+    rake = float(case1["rakeAn"][idx_max])
+
     if cases_equal:
-        # Select the highest probability (doesn't matter which case as they are the same)
-        idx_max = int(np.argmax(case1["prob"]))
-        strike = float(case1["strikeAn"][idx_max])
-        dip = float(case1["dipAn"][idx_max])
-        rake = float(case1["rakeAn"][idx_max])
         # Compute the CCLD Simulations for the event
         ccld_info = run_ccld_simulation(event_id, event_row, strike, dip, rake, "D")
     else:
-        # For each case select the highest probability
-        case1_idx_max = int(np.argmax(case1["prob"]))
-        strike1 = float(case1["strikeAn"][case1_idx_max])
-        dip1 = float(case1["dipAn"][case1_idx_max])
-        rake1 = float(case1["rakeAn"][case1_idx_max])
+        # Select the highest probability for case 2
         case2_idx_max = int(np.argmax(case2["prob"]))
         strike2 = float(case2["strikeAn"][case2_idx_max])
         dip2 = float(case2["dipAn"][case2_idx_max])
         rake2 = float(case2["rakeAn"][case2_idx_max])
         # Compute the CCLD Simulations for the event with both possible planes
         ccld_info = run_ccld_simulation(
-            event_id, event_row, strike1, dip1, rake1, "C", strike2, dip2, rake2
+            event_id, event_row, strike, dip, rake, "C", strike2, dip2, rake2
         )
     return ccld_info
+
+
+def get_backup_focal_mechanism(domain_no_backup: int, domain_focal_df: pd.DataFrame):
+    """
+    Retrieves the backup focal mechanism.
+
+    Parameters
+    ----------
+    domain_no_backup : int
+        The domain number for the backup focal mechanism.
+    domain_focal_df : pd.DataFrame
+        The focal mechanism data for the different domains.
+
+    Returns
+    -------
+    tuple
+        A tuple containing the strike, rake, and dip angles.
+    """
+    if domain_no_backup == 0:
+        return 220, 45, 90
+    domain = domain_focal_df[domain_focal_df.Domain_No == domain_no_backup].iloc[0]
+    return domain.strike, domain.rake, domain.dip
 
 
 def get_nodal_plane_info(
@@ -305,7 +332,7 @@ def get_nodal_plane_info(
         The event id
     event_row : pd.Series
         The event row from the earthquake source table
-    cmt_df: pd.DataFrame
+    cmt_df : pd.DataFrame
         The Centroid Moment Tensor data for New Zealand events
     domain_focal_df : pd.DataFrame
         The focal mechanism data for the different domains as a backup
@@ -488,7 +515,12 @@ def get_nodal_plane_info(
             length_bin = ">45" if length > 45.0 else ">15"
 
             ccld_info = get_crustal_domain_focal(
-                event_id, event_row, nz_mech, length_bin
+                event_id,
+                event_row,
+                nz_mech,
+                length_bin,
+                domain_no_backup,
+                domain_focal_df,
             )
 
             # Check the new length to see if a different length bin should be used
@@ -497,7 +529,12 @@ def get_nodal_plane_info(
             if new_length_bin != length_bin:
                 # Recompute with the new length bin
                 ccld_info = get_crustal_domain_focal(
-                    event_id, event_row, nz_mech, new_length_bin
+                    event_id,
+                    event_row,
+                    nz_mech,
+                    new_length_bin,
+                    domain_no_backup,
+                    domain_focal_df,
                 )
         elif event_row["tect_class"] == "Interface":
             lat, lon = event_row["lat"], event_row["lon"]
@@ -511,22 +548,14 @@ def get_nodal_plane_info(
                 strike = float(np.squeeze(puy_strike_rbf([[lon, lat]])))
                 dip = float(np.squeeze(puy_dip_rbf([[lon, lat]])))
             else:
-                if domain_no_backup == 0:
-                    strike, rake, dip = 220, 45, 90
-                else:
-                    domain = domain_focal_df[
-                        domain_focal_df.Domain_No == domain_no_backup
-                    ].iloc[0]
-                    strike, rake, dip = domain.strike, domain.rake, domain.dip
+                strike, rake, dip = get_backup_focal_mechanism(
+                    domain_no_backup, domain_focal_df
+                )
             # Check for infinite values
             if not np.isfinite(strike) or not np.isfinite(dip):
-                if domain_no_backup == 0:
-                    strike, rake, dip = 220, 45, 90
-                else:
-                    domain = domain_focal_df[
-                        domain_focal_df.Domain_No == domain_no_backup
-                    ].iloc[0]
-                    strike, rake, dip = domain.strike, domain.rake, domain.dip
+                strike, rake, dip = get_backup_focal_mechanism(
+                    domain_no_backup, domain_focal_df
+                )
             rake = 90.0 if rake is None else rake
 
             # Run ccld to get length, width, ztor, dbottom
@@ -540,13 +569,9 @@ def get_nodal_plane_info(
             elif puy_footprint.contains(Point(lon, lat)):
                 tbl = slab_faulting_geo["puy"]
             else:
-                if domain_no_backup == 0:
-                    strike, rake, dip = 220, 45, 90
-                else:
-                    domain = domain_focal_df[
-                        domain_focal_df.Domain_No == domain_no_backup
-                    ].iloc[0]
-                    strike, rake, dip = domain.strike, domain.rake, domain.dip
+                strike, rake, dip = get_backup_focal_mechanism(
+                    domain_no_backup, domain_focal_df
+                )
                 # Run ccld to get length, width, ztor, dbottom
                 ccld_info = run_ccld_simulation(
                     event_id, event_row, strike, dip, rake, "D"
@@ -575,13 +600,9 @@ def get_nodal_plane_info(
             ccld_info = run_ccld_simulation(event_id, event_row, strike, dip, rake, "D")
 
         else:
-            if domain_no_backup == 0:
-                strike, rake, dip = 220, 45, 90
-            else:
-                domain = domain_focal_df[
-                    domain_focal_df.Domain_No == domain_no_backup
-                ].iloc[0]
-                strike, rake, dip = domain.strike, domain.rake, domain.dip
+            strike, rake, dip = get_backup_focal_mechanism(
+                domain_no_backup, domain_focal_df
+            )
             ccld_info = run_ccld_simulation(event_id, event_row, strike, dip, rake, "D")
 
     if ccld_info is not None:
@@ -662,6 +683,10 @@ def compute_distances_for_event(
         cmt_df,
         domain_focal_df,
         srf_files,
+        hik_objs,
+        puy_objs,
+        nz_mech,
+        slab_faulting_geo,
     )
     (
         strike,
@@ -1302,7 +1327,6 @@ def calc_distances(main_dir: Path, n_procs: int = 1):
     event_df = event_df.drop(columns=["domain_no_backup"])
 
     # Save the results
-    flatfile_dir = Path("/home/joel/local/gmdb/aaron/new_domain/focmech_kiran/demo_all")
     propagation_data.to_csv(
         flatfile_dir / file_structure.PreFlatfileNames.PROPAGATION_TABLE, index=False
     )
