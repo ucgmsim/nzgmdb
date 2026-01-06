@@ -552,7 +552,7 @@ def filter_troublesome_sensitivity(
     sensitivity_ignore = pd.read_csv(NZGMDB_DATA.fetch("sensitivity_ignore.csv"))
 
     # Ensure datetime columns are in datetime format
-    catalogue["datetime"] = pd.to_datetime(catalogue["datetime"])
+    catalogue["datetime"] = pd.to_datetime(catalogue["datetime"], format="ISO8601")
     sensitivity_ignore["start_date"] = pd.to_datetime(sensitivity_ignore["start_date"])
     sensitivity_ignore["end_date"] = pd.to_datetime(sensitivity_ignore["end_date"])
 

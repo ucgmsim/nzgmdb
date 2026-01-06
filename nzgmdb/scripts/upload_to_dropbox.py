@@ -177,6 +177,14 @@ def main(
     snr_files = list(snr_fas_dir.rglob("*.csv"))
     snr_fas_zip = zip_files(snr_files, output_dir, f"snr_fas_{version}")
 
+    # 6) Zip XML inventory files if they exist
+    stationxml_dir = file_structure.get_stationxml_dir(input_dir)
+    if stationxml_dir.exists():
+        xml_files = list(stationxml_dir.rglob("*.xml"))
+        xml_zip = zip_files(xml_files, output_dir, f"stationxml_{version}")
+        # Upload XML zip to Dropbox
+        upload_zip_to_dropbox(xml_zip, dropbox_version_dir)
+
     # Upload everything to Dropbox
     failed_files = []
     failed_files.append(upload_zip_to_dropbox(flatfiles_zip, dropbox_version_dir))

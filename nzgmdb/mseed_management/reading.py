@@ -6,6 +6,7 @@ from pathlib import Path
 
 import mseedlib
 import numpy as np
+from obspy import Inventory
 from obspy.core import Stream, Trace, UTCDateTime
 
 from nzgmdb.data_processing import waveform_manipulation
@@ -73,6 +74,7 @@ def create_waveform_from_mseed(
     pre_process: bool = False,
     apply_taper: bool = False,
     apply_zero_padding: bool = False,
+    inventory: Inventory | None = None,
 ):
     """
     Create a waveform object from a mseed file
@@ -89,6 +91,8 @@ def create_waveform_from_mseed(
         Whether to apply a taper to the data, by default False (Only used when pre_process is True)
     apply_zero_padding : bool (optional)
         Whether to apply zero padding to the data, by default False (Only used when pre_process is True)
+    inventory : Inventory, optional
+        The inventory object to use for sensitivity removal, by default None (Will try extract from FDSN if not provided)
 
     Returns
     -------
@@ -115,7 +119,10 @@ def create_waveform_from_mseed(
     # Process the data if needed
     if pre_process:
         mseed = waveform_manipulation.initial_preprocessing(
-            mseed, apply_taper=apply_taper, apply_zero_padding=apply_zero_padding
+            mseed,
+            apply_taper=apply_taper,
+            apply_zero_padding=apply_zero_padding,
+            inventory=inventory,
         )
 
     # Stack the data

@@ -9,6 +9,7 @@ from pathlib import Path
 
 import numpy as np
 import pandas as pd
+from obspy import read_inventory
 from pandas.errors import EmptyDataError
 
 from IM import im_calculation, snr_calculation
@@ -23,6 +24,7 @@ def compute_snr_for_single_mseed(
     output_dir: Path,
     ko_directory: Path,
     common_frequency_vector: np.ndarray = im_calculation.DEFAULT_FREQUENCIES,
+    xml_dir: Path = None,
 ):
     """
     Compute the SNR for a single mseed file
@@ -39,6 +41,9 @@ def compute_snr_for_single_mseed(
         Path to the directory containing the Ko matrices
     common_frequency_vector : np.ndarray, optional
         Common frequency vector to extract for SNR and FAS, by default None
+    xml_dir : Path, optional
+        Path to the directory containing the StationXML files, by default None
+        If None, will try to extract inventory from FDSN
 
     Returns
     -------
@@ -58,9 +63,25 @@ def compute_snr_for_single_mseed(
     # Get the event_id
     event_id = file_structure.get_event_id_from_mseed(mseed_file)
 
+    if xml_dir is None:
+        inventory = None
+    else:
+        # Load the inventory information
+        inventory_file = xml_dir / f"NZ.{station}.xml"
+        if not inventory_file.is_file():
+            inventory = None
+        else:
+            inventory = read_inventory(inventory_file)
+
     # Read mseed information
     try:
-        waveform = reading.create_waveform_from_mseed(mseed_file, pre_process=True, apply_taper=False, apply_zero_padding=False)
+        waveform = reading.create_waveform_from_mseed(
+            mseed_file,
+            pre_process=True,
+            apply_taper=False,
+            apply_zero_padding=False,
+            inventory=inventory,
+        )
     except custom_errors.InventoryNotFoundError:
         skipped_record_dict = {
             "record_id": mseed_file.stem,
@@ -238,6 +259,7 @@ def compute_snr_for_mseed_data(
     snr_fas_output_dir.mkdir(parents=True, exist_ok=True)
     batch_dir = meta_output_dir / "snr_batch_files"
     batch_dir.mkdir(parents=True, exist_ok=True)
+    xml_dir = file_structure.get_stationxml_dir(data_dir)
 
     config = cfg.Config()
     # Creating the common frequency vector if not provided
@@ -295,6 +317,7 @@ def compute_snr_for_mseed_data(
                         output_dir=snr_fas_output_dir,
                         ko_directory=ko_directory,
                         common_frequency_vector=common_frequency_vector,
+                        xml_dir=xml_dir,
                     ),
                     batch,
                 )
