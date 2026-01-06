@@ -9,7 +9,7 @@ import h5py
 import mseedlib
 import numpy as np
 import pandas as pd
-from obspy import Stream, Trace, UTCDateTime, Inventory
+from obspy import Inventory, Stream, Trace, UTCDateTime
 from obspy.clients.fdsn import Client as FDSN_Client
 from obspy.clients.fdsn.header import FDSNNoDataException
 
