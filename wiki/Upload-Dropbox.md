@@ -100,6 +100,11 @@ The process creates several thematic ZIP archives:
 - Contains quality-filtered flatfiles from the quality_db directory
 - Only created if quality database processing was enabled
 
+**6. Station XML Inventory Archive (`stationxml_{version}.zip`)** *(if present)*
+- Contains station XML inventory files
+- Only created if station XML inventories were generated
+- Recursively includes all `*.xml` files from the stationxml directory
+
 ### 🔹 Waveform Packaging
 
 **Hierarchical Waveform Archives:**
@@ -147,6 +152,7 @@ dropbox:/QuakeCoRE/Public/NZGMDB/{version}/
 ├── skipped_{version}.zip             # Failed records documentation
 ├── snr_fas_{version}.zip             # SNR and FAS data
 ├── quality_flatfiles_{version}.zip   # Quality-filtered database (optional)
+├── stationxml_{version}.zip          # Station XML inventories (optional)
 └── waveforms/
     ├── {year1}.zip                   # Year-level waveform archive
     ├── {year2}.zip                   # Year-level waveform archive
@@ -169,6 +175,7 @@ All created ZIP files are stored locally in `{input_directory}/zips/` before upl
 ├── skipped_{version}.zip
 ├── snr_fas_{version}.zip
 ├── quality_flatfiles_{version}.zip
+├── stationxml_{version}.zip
 ├── failed_files.txt # (if any uploads failed)
 └── waveforms/
     ├── {year}.zip

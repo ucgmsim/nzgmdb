@@ -50,7 +50,7 @@ Raw MSEED files undergo the following preprocessing steps:
 1. **Demean and detrend** - Remove offset and linear trends
 2. **Taper** - Apply 5% cosine taper to both ends
 3. **Zero padding** - Add 5 seconds of zeros at start and end
-4. **Remove instrument response** - Apply sensitivity correction using station inventory
+4. **Remove instrument response** - Remove instrument response using station metadata
 5. **Rotate components** - Rotate horizontal components to North-East-Vertical (NEZ)
 6. **Gravity normalisation** - Divide acceleration data by the acceleration due to gravity (9.81 m/s²)
 

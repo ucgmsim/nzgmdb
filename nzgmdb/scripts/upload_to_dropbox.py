@@ -336,6 +336,7 @@ def download_dropbox_archive(
     ignore_waveforms: Annotated[bool, typer.Option()] = False,
     ignore_snrfas: Annotated[bool, typer.Option()] = False,
     ignore_quality: Annotated[bool, typer.Option()] = False,
+    ignore_xml: Annotated[bool, typer.Option()] = False,
 ) -> None:
     """
     Download the NZGMDB archive from Dropbox.
@@ -356,6 +357,8 @@ def download_dropbox_archive(
         Whether to ignore downloading SNR FAS files.
     ignore_quality : bool
         Whether to ignore downloading quality flatfiles.
+    ignore_xml : bool
+        Whether to ignore downloading station XML files.
     """
     dropbox_version_dir = f"{DROPBOX_PATH}/{version}"
 
@@ -365,6 +368,7 @@ def download_dropbox_archive(
     snr_fas_zip = f"snr_fas_{version}.zip"
     quality_zip = f"quality_flatfiles_{version}.zip"
     skipped_zip = f"skipped_{version}.zip"
+    xml_zip = f"stationxml_{version}.zip"
 
     # Local paths for the zip files outputs
 
@@ -372,6 +376,7 @@ def download_dropbox_archive(
     snr_fas_dir = file_structure.get_snr_fas_dir(output_dir)
     waveform_dir = file_structure.get_waveform_dir(output_dir)
     quality_dir = file_structure.get_quality_db_dir(output_dir)
+    xml_dir = file_structure.get_stationxml_dir(output_dir)
     zip_dir = output_dir / "zips"
     zip_dir.mkdir(exist_ok=True)
 
@@ -433,6 +438,13 @@ def download_dropbox_archive(
             zips_to_download.append(
                 (dropbox_zip_path, zip_dir / wf_zip, local_extract_path)
             )
+
+    # Gather stationxml zip if exists
+    if not ignore_xml:
+        xml_dir.mkdir(exist_ok=True)
+        zips_to_download.append(
+            f"{dropbox_version_dir}/{xml_zip}", zip_dir / xml_zip, xml_dir
+        )
 
     # Ensure there is something to download
     assert len(zips_to_download) > 0, "No zips to download."

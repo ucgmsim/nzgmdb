@@ -1,6 +1,7 @@
 # ∿ Waveform Extraction
 
 This step in the NZGMDB pipeline downloads waveform data for each station and event listed in the station extraction table. It manages missing data issues, and outputs the results in a structured format for further analysis in MSEED files.
+This step also in addition extracts the Station XML inventory information for each station.
 
 ---
 
@@ -64,7 +65,7 @@ Below is an example with a waveform to illustrate the window:
 Waveforms are downloaded using the FDSN Client with specific constraints:
 
 #### **Channel Selection**
-- **Channel Selection:** `channel_codes: [HN?, BN?, HH?]` from configuration, where HN and BN are Strong Motion channels and HH is Broadband
+- **Channel Selection:** `channel_codes: [HN?, BN?, HH?, BH?]` from configuration, where HN and BN are Strong Motion channels and HH and BH are Broadband
 - **Three-component data:** Horizontal (N-S, E-W) and vertical components
 
 #### **Error Handling**
@@ -210,7 +211,13 @@ For each station-event pair, magnitude information is extracted:
 
 ## 📦 Outputs
 
-As part of the waveform extraction process, several output files are generated in the `flatfiles/` directory as well as the mseed files in the `waveforms/` directory:
+As part of the waveform extraction process, several output files are generated in the `flatfiles/` directory as well as the mseed files in the `waveforms/` directory and the station xml inventories in the `stationxml/` directory.
+
+### 🔹 Station XML Inventory Files
+- **Location:** `stationxml/` subdirectory
+- **Format:** StationXML (`.xml`)
+- **Naming convention:** `{network}_{station}.xml`
+- **Content:** Station metadata including sensor response information
 
 ### 🔹 Station Magnitude Table (`station_magnitude_table.csv`)
 
