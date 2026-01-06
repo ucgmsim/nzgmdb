@@ -69,14 +69,11 @@ def process_single_mseed(
         skipped_record = pd.DataFrame([skipped_record_dict])
         return skipped_record
 
-    if xml_dir is None:
-        inventory = None
-    else:
+    inventory = None
+    if xml_dir:
         # Load the inventory information
         inventory_file = xml_dir / f"NZ.{station}.xml"
-        if not inventory_file.is_file():
-            inventory = None
-        else:
+        if inventory_file.is_file():
             inventory = read_inventory(inventory_file)
 
     # Perform initial pre-processing

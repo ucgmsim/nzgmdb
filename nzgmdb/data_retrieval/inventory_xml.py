@@ -6,6 +6,7 @@ import datetime
 from pathlib import Path
 
 from obspy.clients.fdsn import Client as FDSN_Client
+from obspy.clients.fdsn.header import FDSNNoDataException
 
 from nzgmdb.management import file_structure
 
@@ -35,13 +36,22 @@ def fetch_and_save_inventory(
     xml_dir = file_structure.get_stationxml_dir(main_dir)
     xml_dir.mkdir(parents=True, exist_ok=True)
 
-    for sta in stations:
+    all_stations = ",".join(stations)
+
+    try:
         inv = client.get_stations(
             network="NZ",
-            station=sta,
+            station=all_stations,
             starttime=starttime,
             endtime=endtime,
             level="response",
         )
-        fname = xml_dir / f"NZ.{sta}.xml"
-        inv.write(fname, format="STATIONXML")
+        for sta in stations:
+            sel = inv.select(station=sta)
+            if not sel.networks:
+                print(f"Warning: No inventory data found for station {sta}. Skipping.")
+                continue
+            fname = xml_dir / f"NZ.{sta}.xml"
+            sel.write(fname, format="STATIONXML")
+    except FDSNNoDataException:
+        print("No inventory data found for the specified stations and time range.")

@@ -79,7 +79,8 @@ def initial_preprocessing(
     location = mseed[0].stats.location
     channel = mseed[0].stats.channel
 
-    if inventory is not None:
+    inv = inventory
+    if inv is None:
         try:
             client_NZ = FDSN_Client("GEONET")
             inv = client_NZ.get_stations(
@@ -89,8 +90,6 @@ def initial_preprocessing(
             raise custom_errors.InventoryNotFoundError(
                 f"No inventory information found for station {station} with location {location}"
             )
-    else:
-        inv = inventory
 
     try:
         # Ensure we get the correct output type for strong motion vs broadband

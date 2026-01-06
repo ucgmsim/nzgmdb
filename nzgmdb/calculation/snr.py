@@ -63,14 +63,11 @@ def compute_snr_for_single_mseed(
     # Get the event_id
     event_id = file_structure.get_event_id_from_mseed(mseed_file)
 
-    if xml_dir is None:
-        inventory = None
-    else:
+    inventory = None
+    if xml_dir:
         # Load the inventory information
         inventory_file = xml_dir / f"NZ.{station}.xml"
-        if not inventory_file.is_file():
-            inventory = None
-        else:
+        if inventory_file.is_file():
             inventory = read_inventory(inventory_file)
 
     # Read mseed information
