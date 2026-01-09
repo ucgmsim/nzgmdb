@@ -16,8 +16,8 @@ jobs:
         with:
           enable-cache: true
 
-      - name: Install project with types
-        run: uv sync --all-extras --dev
+      - name: Ensure ty is installed into the uv environment
+        run: uv run python -m pip install ty
 
       - name: Run type checking with ty
         run: uv run ty check --exclude setup.py
