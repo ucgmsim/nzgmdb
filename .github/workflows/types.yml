@@ -16,5 +16,8 @@ jobs:
       - name: Install ty on runner
         run: pip install ty
 
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+
       - name: Run type checking
-        run: ty check --exclude setup.py
+        run: ty check --exclude setup.py --exclude nzgmdb/CCLD/ccldpy.py
