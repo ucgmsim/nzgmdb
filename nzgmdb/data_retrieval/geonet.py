@@ -240,7 +240,11 @@ def get_stations_within_radius(
     maxradius = obspy.geodetics.kilometers2degrees(rrup)
 
     inv_sub = inventory.select(
-        latitude=event_lat, longitude=event_lon, maxradius=maxradius, starttime=ev_datetime, endtime=ev_datetime
+        latitude=event_lat,
+        longitude=event_lon,
+        maxradius=maxradius,
+        starttime=ev_datetime,
+        endtime=ev_datetime,
     )
 
     return inv_sub
@@ -386,7 +390,7 @@ def fetch_sta_extraction(
 
 def fetch_event_data(
     event_id: str,
-    client_NZ: FDSN_Client,
+    event_cat: Event,
     inventory: Inventory,
     site_table: pd.DataFrame,
     mw_rrup_data: np.ndarray,
@@ -401,8 +405,8 @@ def fetch_event_data(
     ----------
     event_id : str
         The event id to fetch the data for
-    client_NZ : FDSN_Client
-        The geonet client to fetch the data from New Zealand
+    event_cat : Event
+        The event catalogue to fetch the data from
     inventory : Inventory
         The inventory of the stations from all networks to extract the stations from
     site_table : pd.DataFrame
@@ -421,10 +425,6 @@ def fetch_event_data(
     EventData
         The parsed event data.
     """
-    # Get the catalogue information
-    cat = client_NZ.get_events(eventid=event_id)
-    event_cat = cat[0]
-
     # Get the event line
     event_line = fetch_event_line(event_cat, event_id)
     station_extraction_table = pd.DataFrame()
@@ -537,12 +537,17 @@ def process_batch(
     mp_sites : bool (optional)
         Whether to multiprocess over sites (when not using mp over events)
     """
+    # Get the catalogue information
+    catalog_dict = {
+        event_id: client_NZ.get_events(eventid=event_id)[0] for event_id in batch_events
+    }
+
     # Fetch results
     if mp_sites:
         results = [
             fetch_event_data(
                 event_id,
-                client_NZ,
+                catalog_dict[event_id],
                 inventory,
                 site_table,
                 mw_rrup_data,
@@ -554,10 +559,9 @@ def process_batch(
         ]
     else:
         with mp.Pool(n_procs) as p:
-            results = p.map(
+            results = p.starmap(
                 functools.partial(
                     fetch_event_data,
-                    client_NZ=client_NZ,
                     inventory=inventory,
                     site_table=site_table,
                     mw_rrup_data=mw_rrup_data,
@@ -565,7 +569,7 @@ def process_batch(
                     only_record_ids=only_record_ids,
                     n_procs=1,
                 ),
-                batch_events,
+                [(event_id, catalog_dict[event_id]) for event_id in batch_events],
             )
 
     # Extract the results
@@ -775,16 +779,14 @@ def parse_geonet_information(
             event_ids = only_event_ids
         only_record_ids = None
 
-    # Set constants
     config = cfg.Config()
-    channel_codes = ",".join(config.get_value("channel_codes"))
-
+    channel_codes = config.get_value("channel_codes")
     if real_time:
         client_NZ = FDSN_Client(base_url=config.get_value("real_time_url"))
     else:
         # Get Station Information from geonet clients
         client_NZ = FDSN_Client("GEONET")
-    inventory = client_NZ.get_stations(channel=channel_codes, level="response")
+    inventory = client_NZ.get_stations(channel=channel_codes, level="station")
 
     # Get the rrup data
     mw_rrup_data = np.loadtxt(NZGMDB_DATA.fetch("Mw_rrup.txt"))
