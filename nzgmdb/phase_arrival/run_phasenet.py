@@ -186,34 +186,32 @@ def process_mseed(mseed_file: Path, h5_ffp: Path, bypass_row: pd.Series = None):
     # Get the inventory information
     station = mseed[0].stats.station
     location = mseed[0].stats.location
+    channel = mseed[0].stats.channel[:2]
 
-    # Get Station Information from geonet clients
-    # Fetching here instead of passing the inventory object as searching for the station, network, and channel
-    # information takes a long time as it's implemented in a for loop
-    try:
-        client_NZ = FDSN_Client("GEONET")
-        inv = client_NZ.get_stations(
-            level="response", network="NZ", station=station, location=location
-        )
-    except FDSNNoDataException:
-        skipped_record = pd.DataFrame(
-            {
-                "record_id": [mseed_file.stem],
-                "reason": ["Failed to find Inventory information"],
-            }
-        )
-        create_empty_h5_file(h5_ffp, mseed_file.stem)
-        return None, skipped_record
-
-    # Add the response (Same for all channels)
-    # this is done so that the sensitivity can be removed otherwise it tries to find the exact same channel
-    # which can fail when including the inventory information
-    response = next(cha.response for sta in inv.networks[0] for cha in sta.channels)
-    for tr in mseed:
-        tr.stats.response = response
+    inv_selected = None
+    if not hasattr(mseed[0].stats, "response"):
+        # Only check inventory if response information is not already attached
+        try:
+            client_NZ = FDSN_Client("GEONET")
+            inv_selected = client_NZ.get_stations(
+                level="response",
+                network="NZ",
+                station=station,
+                location=location,
+                channel=f"{channel}?",
+            )
+        except FDSNNoDataException:
+            skipped_record = pd.DataFrame(
+                {
+                    "record_id": [mseed_file.stem],
+                    "reason": ["Failed to find Inventory information"],
+                }
+            )
+            create_empty_h5_file(h5_ffp, mseed_file.stem)
+            return None, skipped_record
 
     try:
-        mseed = mseed.remove_sensitivity()
+        mseed = mseed.remove_response(inventory=inv_selected)
     except ValueError:
         skipped_record = pd.DataFrame(
             {
@@ -223,6 +221,21 @@ def process_mseed(mseed_file: Path, h5_ffp: Path, bypass_row: pd.Series = None):
         )
         create_empty_h5_file(h5_ffp, mseed_file.stem)
         return None, skipped_record
+
+    # If the channel is not a Strong Motion station then we need to differentiate
+    if channel not in ["HN", "BN"]:
+        try:
+            # differentiate data i.e., m/s to m/s^2
+            mseed.differentiate()
+        except ValueError:
+            skipped_record = pd.DataFrame(
+                {
+                    "record_id": [mseed_file.stem],
+                    "reason": ["Unable to differentiate record"],
+                }
+            )
+            create_empty_h5_file(h5_ffp, mseed_file.stem)
+            return None, skipped_record
 
     try:
         p_wave_ix, s_wave_ix, p_prob_series, s_prob_series, p_prob, s_prob = (

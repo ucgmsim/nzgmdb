@@ -217,56 +217,45 @@ def filter_score_mean(
     return skipped_records
 
 
-def filter_multi_mean(
+def filter_multi_event(
     catalogue: pd.DataFrame,
-    multi_max: float,
+    score_min: float,
     bypass_records: np.ndarray = None,
-    include_z: bool = False,
 ):
     """
-    Filter the catalogue based on the multi_mean value
-    Only looks at X and Y components by default, can include Z.
+    Filter the catalogue based on the multi-event STA/LTA and sync event check.
 
     Parameters
     ----------
     catalogue : pd.DataFrame
         The catalogue dataframe to filter
-    multi_max : float
-        The maximum multi_mean value to filter on
+    score_min : float
+        The minimum stalta_score value to filter on
     bypass_records : np.ndarray, optional
         The records to bypass the quality checks
-    include_z : bool, optional
-        Whether to include the Z component, by default False
 
     Returns
     -------
     pd.DataFrame
         The skipped records to filter out of the catalogue
     """
-    # Find records that have too high of a multi_X or multi_Y or multi_Z value
-    multi_max_filter = catalogue[
-        (
-            (catalogue["multi_X"] > multi_max)
-            | (catalogue["multi_Y"] > multi_max)
-            | (catalogue["multi_Z"] > multi_max)
-            if include_z
-            else (
-                (catalogue["multi_X"] > multi_max) | (catalogue["multi_Y"] > multi_max)
-            )
-        )
+    # Find records that have been flagged as multi-event
+    multi_event_filter = catalogue[
+        (catalogue["stalta_score"] > score_min)
+        & (~catalogue["sync_event"].astype(bool))
     ]
 
     # Remove the bypass records if they exist
     if bypass_records is not None:
-        multi_max_filter = multi_max_filter[
-            ~multi_max_filter["record_id"].isin(bypass_records)
+        multi_event_filter = multi_event_filter[
+            ~multi_event_filter["record_id"].isin(bypass_records)
         ]
 
-    # Create the skipped_records dataframe from multi_max_filter
+    # Create the skipped_records dataframe from multi_event_filter
     skipped_records = pd.DataFrame(
         {
-            "record_id": multi_max_filter["record_id"],
-            "reason": f"Multi mean is greater than {multi_max}",
+            "record_id": multi_event_filter["record_id"],
+            "reason": "Failed multi-event check",
         }
     )
 
@@ -814,7 +803,7 @@ def apply_all_filters(
     clipped_records_ffp: Path,
     bypass_records: np.ndarray = None,
     score_min: float = None,
-    multi_max: float = None,
+    multi_score_min: float = None,
     fmax_min: float = None,
     fmin_max: float = None,
     min_mag: float = None,
@@ -827,7 +816,7 @@ def apply_all_filters(
     - Filter by minimum magnitude.
     - Filter by presence of GMC predictions.
     - Filter by score mean.
-    - Filter by multi mean.
+    - Filter by multi event.
     - Filter by fmax.
     - Filter by fmin.
     - Filter by missing station information.
@@ -847,8 +836,8 @@ def apply_all_filters(
         The records to bypass the quality checks.
     score_min : float, optional
         The minimum score value to filter on.
-    multi_max : float, optional
-        The maximum multi_mean value to filter on.
+    multi_score_min : float, optional
+        The minimum multi-event score value to filter on.
     fmax_min : float, optional
         The minimum fmax value to filter on.
     fmin_max : float, optional
@@ -868,7 +857,11 @@ def apply_all_filters(
 
     # Get the config values if they are not provided
     score_min = score_min if score_min is not None else config.get_value("score_min")
-    multi_max = multi_max if multi_max is not None else config.get_value("multi_max")
+    multi_score_min = (
+        multi_score_min
+        if multi_score_min is not None
+        else config.get_value("multi_score_min")
+    )
     fmax_min = fmax_min if fmax_min is not None else config.get_value("fmax_min")
     fmin_max = fmin_max if fmin_max is not None else config.get_value("fmin_max")
     mag_min = min_mag if min_mag is not None else config.get_value("quality_min_mag")
@@ -889,8 +882,10 @@ def apply_all_filters(
     # Find score mean
     skipped_records_score = filter_score_mean(catalogue_copy, score_min, bypass_records)
 
-    # Find multi mean
-    skipped_records_multi = filter_multi_mean(catalogue_copy, multi_max, bypass_records)
+    # Find multi event
+    skipped_records_multi = filter_multi_event(
+        catalogue_copy, multi_score_min, bypass_records
+    )
 
     # Find fmax
     skipped_records_fmax = filter_fmax(catalogue_copy, fmax_min, bypass_records)

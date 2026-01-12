@@ -51,7 +51,7 @@ def create_site_table_response() -> pd.DataFrame:
         station_info,
         columns=["net", "sta", "lat", "lon", "elev", "creation_date", "end_date"],
     )
-    sta_df = sta_df.drop_duplicates().reset_index(drop=True)
+    sta_df = sta_df.drop_duplicates(["net", "sta"]).reset_index(drop=True)
 
     # Get the Geonet metadata summary information
     geo_meta_summary_df = pd.read_csv(
@@ -82,8 +82,12 @@ def create_site_table_response() -> pd.DataFrame:
     )
 
     merged_df = geo_meta_summary_df.merge(
-        sta_df[["net", "elev", "sta"]], on="sta", how="left"
+        sta_df[["net", "elev", "sta", "creation_date", "end_date"]],
+        on="sta",
+        how="outer",
     )
+    # Fill Elevation NaN values from sta_df
+    merged_df["elev"] = merged_df["Elevation"].combine_first(merged_df["elev"])
     # Specify the required files for fiona
     NZGMDB_DATA.fetch("TectonicDomains_Feb2021_8_NZTM.shp")
     NZGMDB_DATA.fetch("TectonicDomains_Feb2021_8_NZTM.dbf")

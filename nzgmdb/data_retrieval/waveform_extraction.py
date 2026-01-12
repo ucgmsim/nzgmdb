@@ -24,7 +24,7 @@ from obspy.clients.fdsn.header import (
 from obspy.io.mseed import InternalMSEEDError, ObsPyMSEEDFilesizeTooSmallError
 from pandas.errors import EmptyDataError
 
-from nzgmdb.data_processing import filtering
+from nzgmdb.data_processing import filtering, multi_event
 from nzgmdb.management import config as cfg
 from nzgmdb.management import custom_errors, file_structure
 from nzgmdb.mseed_management import creation
@@ -705,6 +705,7 @@ def get_station_window(
     # Extract the parameters from the row
     net = station_extraction_row["net"]
     sta = station_extraction_row["sta"]
+    r_hyp = station_extraction_row["r_hyp"]
     ptime_est = UTCDateTime(station_extraction_row["ptime_est"])
     ds_mean = station_extraction_row["ds_mean"]
     ds_std = station_extraction_row["ds_std"]
@@ -712,7 +713,9 @@ def get_station_window(
     # Get the config values
     config = cfg.Config()
     pre_event_time_difference = config.get_value("pre_event_time_difference")
-    ds_std_multiplier = config.get_value("ds_std_multiplier")
+
+    # Compute the ds multiplier time
+    ds_std_multiplier = 0.8 / (1 + np.exp(-0.035 * (r_hyp - 140))) + 2.2
 
     start_time = ptime_est - pre_event_time_difference
     # Note: both ds_mean and ds_std are in logspace
@@ -725,6 +728,7 @@ def extract_station_info(
     station_extraction_row: pd.Series,
     main_dir: Path,
     event_catalogues: dict,
+    extraction_table: pd.DataFrame,
     only_record_ids: pd.DataFrame = None,
 ):
     """
@@ -738,6 +742,8 @@ def extract_station_info(
         The main directory of the NZGMDB results (Highest Level Directory).
     event_catalogues : dict
         A dictionary of event catalogues indexed by event ID.
+    extraction_table : pd.DataFrame
+        The full extraction table containing all extraction parameters.
     only_record_ids : pd.DataFrame, optional
         A DataFrame containing a subset of record IDs to use for extraction, if provided.
 
@@ -751,8 +757,16 @@ def extract_station_info(
         A list of lists containing the clipped records.
     list
         A list of DataFrames containing any multi-trace issues raised during the extraction.
+    list
+        A list of lists containing the multi-event records scores.
     """
-    sta_mag_line, skipped_records, clipped_records, multi_trace_issues = [], [], [], []
+    (
+        sta_mag_line,
+        skipped_records,
+        clipped_records,
+        multi_trace_issues,
+        multi_event_records,
+    ) = ([], [], [], [], [])
     # Extract the parameters from the row
     event_id = station_extraction_row["evid"]
     station = station_extraction_row["sta"]
@@ -760,6 +774,11 @@ def extract_station_info(
     event_mag = station_extraction_row["mag"]
     pref_mag_type = station_extraction_row["pref_mag_type"]
     r_hyp = station_extraction_row["r_hyp"]
+
+    # Filter down the extraction table to the same station and other events
+    sync_check_extraction_table = extraction_table[
+        (extraction_table["sta"] == station) & (extraction_table["evid"] != event_id)
+    ]
 
     # Get the catalogue information
     event_cat = event_catalogues[event_id]
@@ -794,7 +813,13 @@ def extract_station_info(
                 {"record_id": [f"{event_id}_{station}"], "reason": ["No Waveform Data"]}
             )
         )
-        return sta_mag_line, skipped_records, clipped_records, multi_trace_issues
+        return (
+            sta_mag_line,
+            skipped_records,
+            clipped_records,
+            multi_trace_issues,
+            multi_event_records,
+        )
 
     # Get the unique channels (Using first 2 keys) and locations
     unique_channels = set([(tr.stats.channel[:2], tr.stats.location) for tr in st])
@@ -882,6 +907,23 @@ def extract_station_info(
                 ]
             )
 
+        # Check for multi-event flagging
+        start_time, end_time, stalat_score, sync_event = (
+            multi_event.compute_multi_event_scores(
+                mseed.copy(), sync_check_extraction_table
+            )
+        )
+        # Add to the multi_event_records list
+        multi_event_records.append(
+            [
+                record_id,
+                start_time.isoformat(),
+                end_time.isoformat(),
+                stalat_score,
+                sync_event,
+            ]
+        )
+
         # Create the directory structure for the given event
         year = event_cat.origins[0].time.year
         mseed_dir = file_structure.get_mseed_dir(main_dir, year, event_id)
@@ -940,7 +982,13 @@ def extract_station_info(
                 ]
             )
 
-    return sta_mag_line, skipped_records, clipped_records, multi_trace_issues
+    return (
+        sta_mag_line,
+        skipped_records,
+        clipped_records,
+        multi_trace_issues,
+        multi_event_records,
+    )
 
 
 def extract_waveforms(
@@ -1019,10 +1067,25 @@ def extract_waveforms(
             batch_rows = station_extraction_table.loc[batch_indices]
 
             # Get the catalogue information
-            catalog_dict = {
-                event_id: client.get_events(eventid=event_id)[0]
-                for event_id in batch_rows["evid"].unique()
-            }
+            fetched_catalog = False
+            attempts = 0
+            while not fetched_catalog:
+                attempts += 1
+                if attempts > 5:
+                    raise Exception(
+                        f"Failed to fetch event catalog after {attempts} attempts."
+                    )
+                try:
+                    catalog_dict = {
+                        event_id: client.get_events(eventid=event_id)[0]
+                        for event_id in batch_rows["evid"].unique()
+                    }
+                    fetched_catalog = True
+                except FDSNTooManyRequestsException:
+                    print(f"Error getting catalog for batch {batch_index}")
+                    print("Too many requests - HTTP Status code: 429")
+                    print("Retrying in 120 seconds...")
+                    time.sleep(120)  # Wait for 2 minutes before retrying
 
             with mp.Pool(n_procs) as pool:
                 results = pool.map(
@@ -1030,13 +1093,21 @@ def extract_waveforms(
                         extract_station_info,
                         main_dir=main_dir,
                         event_catalogues=catalog_dict,
+                        extraction_table=station_extraction_table,
                         only_record_ids=only_record_ids,
                     ),
                     (row for _, row in batch_rows.iterrows()),
                 )
 
             # Extract the results
-            sta_mag_data, skipped_records, clipped_records, multi_trace_issues = (
+            (
+                sta_mag_data,
+                skipped_records,
+                clipped_records,
+                multi_trace_issues,
+                multi_event_records,
+            ) = (
+                [],
                 [],
                 [],
                 [],
@@ -1048,11 +1119,13 @@ def extract_waveforms(
                     finished_skipped_records,
                     finished_clipped_records,
                     finished_multi_trace_issues,
+                    finished_multi_event_records,
                 ) = result
                 sta_mag_data.extend(finished_sta_mag_data)
                 skipped_records.extend(finished_skipped_records)
                 clipped_records.extend(finished_clipped_records)
                 multi_trace_issues.extend(finished_multi_trace_issues)
+                multi_event_records.extend(finished_multi_event_records)
 
             if len(sta_mag_data) > 0:
                 sta_mag_df = pd.DataFrame(
@@ -1106,11 +1179,27 @@ def extract_waveforms(
                     batch_dir / f"multi_trace_issues_{batch_index}.csv", index=False
                 )
 
+            if len(multi_event_records) > 0:
+                multi_event_records_df = pd.DataFrame(
+                    multi_event_records,
+                    columns=[
+                        "record_id",
+                        "start_time",
+                        "end_time",
+                        "stalat_score",
+                        "sync_event",
+                    ],
+                )
+                multi_event_records_df.to_csv(
+                    batch_dir / f"multi_event_records_{batch_index}.csv", index=False
+                )
+
     # Combine all the event and sta_mag dataframes
     sta_mag_dfs = []
     skipped_records_dfs = []
     clipped_records_dfs = []
     multi_trace_issues_dfs = []
+    multi_event_records_dfs = []
 
     for file in batch_dir.iterdir():
         if "station_magnitude_table" in file.stem:
@@ -1131,6 +1220,11 @@ def extract_waveforms(
         elif "multi_trace_issues" in file.stem:
             try:
                 multi_trace_issues_dfs.append(pd.read_csv(file))
+            except EmptyDataError:
+                print(f"Warning: {file} is empty or has no valid columns to parse.")
+        elif "multi_event_records" in file.stem:
+            try:
+                multi_event_records_dfs.append(pd.read_csv(file))
             except EmptyDataError:
                 print(f"Warning: {file} is empty or has no valid columns to parse.")
 
@@ -1155,6 +1249,11 @@ def extract_waveforms(
         if multi_trace_issues_dfs
         else pd.DataFrame()
     )
+    multi_event_records_df = (
+        pd.concat(multi_event_records_dfs, ignore_index=True)
+        if multi_event_records_dfs
+        else pd.DataFrame()
+    )
 
     # Save the dataframes
     sta_mag_df.to_csv(
@@ -1172,5 +1271,9 @@ def extract_waveforms(
     )
     multi_trace_issues_df.to_csv(
         flatfile_dir / file_structure.SkippedRecordFilenames.MULTI_TRACE_ISSUE_RECORDS,
+        index=False,
+    )
+    multi_event_records_df.to_csv(
+        flatfile_dir / file_structure.PreFlatfileNames.MULTI_EVENT_TABLE,
         index=False,
     )

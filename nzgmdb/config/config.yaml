@@ -30,7 +30,6 @@ is_large_overlap: 0.5
 # Mseed Variables
 vs30: 500
 pre_event_time_difference: 15
-ds_std_multiplier: 3
 # Velocity Modelling
 nzcvm_version: "2.09"
 priority_basins:
@@ -120,3 +119,16 @@ crjb_cutoffs:
 # Empirical Thresholds
 max_residual_threshold: 6
 mean_residual_threshold: 4
+# Multi-Event
+multi_score_min: 0.5
+sta_window_s: 1.0        # Short-term average (STA) window length in seconds
+lta_window_s: 5.0        # Long-term average (LTA) window length in seconds
+on_threshold: 2.8        # STA/LTA threshold to trigger "ON"
+off_threshold: 1.5       # STA/LTA threshold to trigger "OFF"
+min_duration_s: 0.7      # Minimum trigger duration in seconds
+min_gap_s: 6.0           # Merge triggers closer than this (seconds)
+edge_skip_s: 4.0         # Ignore detections within this distance of edges (seconds)
+weights:
+  h1: 0.3
+  h2: 0.3
+  z: 0.4
