@@ -190,12 +190,12 @@ The system determines the correct nodal plane through the following hierarchy:
    - Extract nodal plane parameters and SRF points
    - Calculate weighted average of strike, dip, rake based on plane areas
 
-2. **Check Modified CMT Solutions** (Custom review for most likely nodal plane):
+2. **Check Reviewed CMT Solutions** (Custom review for most likely nodal plane):
    - Use predetermined preferred nodal plane
    - Extract strike, dip, rake values
    - Apply CCLD Method A
 
-3. **Check Standard CMT Solutions**: Search GeoNet CMT catalogue:
+3. **Check Standard CMT Solutions**: Search CMT catalogue:
    - Apply CCLD Method C with both nodal planes
 
 4. **Use Domain Default**: For events without CMT solutions:
@@ -243,9 +243,6 @@ Key parameters from `config.yaml` that control distance calculations:
 
 ### 🔹 Fault Discretisation
 - `points_per_km`: Resolution for SRF point generation (default: typically 2-4 points/km)
-
-### 🔹 External Data Sources
-- `cmt_url`: URL for GeoNet CMT solutions catalogue
 
 ---
 
