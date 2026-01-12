@@ -11,6 +11,7 @@ import numpy as np
 import pandas as pd
 from obspy.clients.fdsn import Client as FDSN_Client
 from obspy.core.inventory import Inventory
+from obspy import read_inventory
 from pandas.errors import EmptyDataError
 
 from IM import im_calculation, snr_calculation
@@ -25,6 +26,7 @@ def compute_snr_for_single_mseed(
     output_dir: Path,
     ko_directory: Path,
     common_frequency_vector: np.ndarray = im_calculation.DEFAULT_FREQUENCIES,
+    xml_dir: Path = None,
     inventory: Inventory | None = None,
 ):
     """
@@ -42,6 +44,9 @@ def compute_snr_for_single_mseed(
         Path to the directory containing the Ko matrices
     common_frequency_vector : np.ndarray, optional
         Common frequency vector to extract for SNR and FAS, by default None
+    xml_dir : Path, optional
+        Path to the directory containing the StationXML files, by default None
+        If None, will try to extract inventory from FDSN
     inventory : Inventory, optional
         The inventory information for the mseed file, by default None
         (Only used to improve performance when reading the mseed file)
@@ -63,6 +68,13 @@ def compute_snr_for_single_mseed(
 
     # Get the event_id
     event_id = file_structure.get_event_id_from_mseed(mseed_file)
+
+    inventory = None
+    if xml_dir:
+        # Load the inventory information
+        inventory_file = xml_dir / f"NZ.{station}.xml"
+        if inventory_file.is_file():
+            inventory = read_inventory(inventory_file)
 
     # Read mseed information
     try:
@@ -250,6 +262,7 @@ def compute_snr_for_mseed_data(
     snr_fas_output_dir.mkdir(parents=True, exist_ok=True)
     batch_dir = meta_output_dir / "snr_batch_files"
     batch_dir.mkdir(parents=True, exist_ok=True)
+    xml_dir = file_structure.get_stationxml_dir(data_dir)
 
     config = cfg.Config()
     # Creating the common frequency vector if not provided
@@ -312,6 +325,7 @@ def compute_snr_for_mseed_data(
                         output_dir=snr_fas_output_dir,
                         ko_directory=ko_directory,
                         common_frequency_vector=common_frequency_vector,
+                        xml_dir=xml_dir,
                         inventory=inventory,
                     ),
                     batch,

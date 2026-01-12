@@ -10,7 +10,7 @@ import h5py
 import mseedlib
 import numpy as np
 import pandas as pd
-from obspy import Stream, Trace, UTCDateTime
+from obspy import Inventory, Stream, Trace, UTCDateTime
 from obspy.clients.fdsn import Client as FDSN_Client
 from obspy.clients.fdsn.header import FDSNNoDataException
 
@@ -111,7 +111,12 @@ def run_phase_net(
     return p_wave_ix, s_wave_ix
 
 
-def process_mseed(mseed_file: Path, h5_ffp: Path, bypass_row: pd.Series = None):
+def process_mseed(
+    mseed_file: Path,
+    h5_ffp: Path,
+    bypass_row: pd.Series = None,
+    inventory: Inventory = None,
+):
     """
     Process an mseed file and return the phase arrival data.
 
@@ -123,6 +128,8 @@ def process_mseed(mseed_file: Path, h5_ffp: Path, bypass_row: pd.Series = None):
         Path to the HDF5 file to save the probability series.
     bypass_row : pd.Series, optional
         A row from the bypass file with known p and s wave datetimes, by default None
+    inventory : Inventory, optional
+        The inventory object to use for sensitivity removal, by default None (Will try extract from FDSN if not provided)
 
     Returns
     -------
@@ -189,17 +196,11 @@ def process_mseed(mseed_file: Path, h5_ffp: Path, bypass_row: pd.Series = None):
     location = mseed[0].stats.location
     channel = mseed[0].stats.channel[:2]
 
-    inv_selected = None
-    if not hasattr(mseed[0].stats, "response"):
-        # Only check inventory if response information is not already attached
+    if inventory is None:
         try:
             client_NZ = FDSN_Client("GEONET")
-            inv_selected = client_NZ.get_stations(
-                level="response",
-                network="NZ",
-                station=station,
-                location=location,
-                channel=f"{channel}?",
+            inv = client_NZ.get_stations(
+                level="response", network="NZ", station=station, location=location
             )
         except FDSNNoDataException:
             skipped_record = pd.DataFrame(
@@ -210,9 +211,11 @@ def process_mseed(mseed_file: Path, h5_ffp: Path, bypass_row: pd.Series = None):
             )
             create_empty_h5_file(h5_ffp, mseed_file.stem)
             return None, skipped_record
+    else:
+        inv = inventory
 
     try:
-        mseed = mseed.remove_response(inventory=inv_selected)
+        mseed = mseed.remove_response(inventory=inv, output="ACC")
     except ValueError:
         skipped_record = pd.DataFrame(
             {
@@ -315,9 +318,7 @@ def process_mseed(mseed_file: Path, h5_ffp: Path, bypass_row: pd.Series = None):
     )
 
 
-def run_phasenet(
-    mseed_files_ffp: Path, output_dir: Path, bypass_ffp: Union[Path, None] = None
-):
+def run_phasenet(mseed_files_ffp: Path, output_dir: Path, bypass_ffp: Path = None):
     """
     Run PhaseNet on the mseed files.
 

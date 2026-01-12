@@ -8,6 +8,7 @@ from pathlib import Path
 
 import numpy as np
 import pandas as pd
+from obspy import read_inventory
 from obspy.clients.fdsn import Client as FDSN_Client
 from obspy.core.inventory import Inventory
 
@@ -23,6 +24,7 @@ def process_single_mseed(
     gmc_df: pd.DataFrame | None = None,
     fmax_df: pd.DataFrame | None = None,
     bypass_df: pd.DataFrame | None = None,
+    xml_dir: Path | None = None,
     inventory: Inventory | None = None,
 ):
     """
@@ -42,6 +44,8 @@ def process_single_mseed(
         The Fmax values
     bypass_df : pd.DataFrame, optional
         The bypass records containing custom fmin, fmax values
+    xml_dir : Path, optional
+        The directory containing the station xml files for inventory information
     inventory : Inventory, optional
         The inventory information for the mseed file
 
@@ -70,6 +74,13 @@ def process_single_mseed(
         }
         skipped_record = pd.DataFrame([skipped_record_dict])
         return skipped_record
+
+    inventory = None
+    if xml_dir:
+        # Load the inventory information
+        inventory_file = xml_dir / f"NZ.{station}.xml"
+        if inventory_file.is_file():
+            inventory = read_inventory(inventory_file)
 
     # Perform initial pre-processing
     try:
@@ -223,6 +234,7 @@ def process_mseeds_to_txt(
     """
     # Get the raw waveform mseed files
     waveform_dir = file_structure.get_waveform_dir(main_dir)
+    xml_dir = file_structure.get_stationxml_dir(main_dir)
     mseed_files = waveform_dir.rglob("*.mseed")
 
     # Load the GMC, Fmax and bypass records
@@ -248,6 +260,7 @@ def process_mseeds_to_txt(
                 gmc_df=gmc_df,
                 fmax_df=fmax_df,
                 bypass_df=bypass_df,
+                xml_dir=xml_dir,
                 inventory=inventory,
             ),
             mseed_files,

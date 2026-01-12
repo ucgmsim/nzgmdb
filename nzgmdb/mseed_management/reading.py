@@ -6,6 +6,7 @@ from pathlib import Path
 
 import mseedlib
 import numpy as np
+from obspy import Inventory
 from obspy.core import Stream, Trace, UTCDateTime
 from obspy.core.inventory import Inventory
 
@@ -74,7 +75,7 @@ def create_waveform_from_mseed(
     pre_process: bool = False,
     apply_taper: bool = False,
     apply_zero_padding: bool = False,
-    inventory: Inventory = None,
+    inventory: Inventory | None = None,
 ):
     """
     Create a waveform object from a mseed file
