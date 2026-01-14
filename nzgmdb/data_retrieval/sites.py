@@ -6,14 +6,179 @@ Geonet metadata summary information.
 from pathlib import Path
 
 import fiona
+import numpy as np
 import pandas as pd
+import rasterio
 from obspy.clients.fdsn import Client as FDSN_Client
+from pyproj import Transformer
+from scipy.spatial import cKDTree
 
 from nzgmdb.data_retrieval import tect_domain
 from nzgmdb.management import config as cfg
 from nzgmdb.management.data_registry import NZGMDB_DATA
 from qcore import point_in_polygon
-from velocity_modelling import registry
+from velocity_modelling import registry, threshold
+
+
+def fill_gaps_with_nearest(
+    coords: np.ndarray,
+    values: np.ndarray,
+    invalid_mask: np.ndarray = None,
+    k: int = 8,
+):
+    """
+    Fill NaN or invalid values using nearest-neighbour averaging.
+
+    Parameters
+    ----------
+    coords : (N, 2) array_like
+        Coordinates of the points (e.g., [x, y] or [lon, lat]).
+    values : (N,) array_like
+        Values at the points, with NaN for invalid/missing values.
+    invalid_mask : (N,) array_like, optional
+        Boolean mask indicating invalid points. If None, NaNs in `values` are used.
+    k : int, default=8
+        Number of nearest neighbors to consider for averaging.
+
+    Returns
+    -------
+    filled_values : (N,) ndarray
+        Values with NaNs filled using nearest-neighbour averaging.
+    """
+
+    coords = np.asarray(coords)
+    values = np.asarray(values).astype(float)
+
+    # ---- Enforce correct shapes ----
+    if values.ndim == 2 and values.shape[1] == 1:
+        values = values.ravel()
+
+    if coords.ndim != 2 or coords.shape[1] != 2:
+        raise ValueError("coords must be of shape (N, 2)")
+
+    if invalid_mask is None:
+        invalid_mask = np.isnan(values)
+    else:
+        invalid_mask = np.asarray(invalid_mask)
+        if invalid_mask.ndim == 2 and invalid_mask.shape[1] == 1:
+            invalid_mask = invalid_mask.ravel()
+
+    valid_mask = ~invalid_mask
+
+    if not valid_mask.any():
+        return np.full_like(values, np.nan)
+
+    # ---- Build KDTree ----
+    tree = cKDTree(coords[valid_mask])
+    valid_values = values[valid_mask]
+
+    # ---- Fill invalid points ----
+    for idx in np.where(invalid_mask)[0]:
+        coord = coords[idx]
+        kk = min(k, len(valid_values))
+        _, nn = tree.query(coord, k=kk)
+        values[idx] = np.nanmean(valid_values[nn])
+
+    return values
+
+
+def sample_points_from_geotiff(
+    file_path: Path,
+    latlon_points: np.ndarray,
+    band: int = 1,
+):
+    """
+    Sample a GeoTIFF raster at given latitude/longitude points.
+
+    Parameters
+    ----------
+    file_path : Path
+        Path to the GeoTIFF file.
+    latlon_points : (N, 2) array_like
+        Input points as [lat, lon] in EPSG:4326.
+    band : int, default=1
+        Raster band to sample (1-based index).
+
+    Returns
+    -------
+    samples : (N, 1) ndarray
+        Sampled raster values. NaN where points fall outside the raster
+        or where raster contains nodata.
+    """
+
+    # ---- Normalize inputs ----
+    file_path = Path(file_path)
+    latlon_points = np.asarray(latlon_points, dtype=float)
+
+    lat = latlon_points[:, 0]
+    lon = latlon_points[:, 1]
+
+    # Prepare output (NaN by default)
+    samples = np.full(lat.shape, np.nan, dtype=float)
+
+    # ---- Open raster ----
+    with rasterio.open(file_path) as ds:
+
+        if ds.crs is None:
+            raise ValueError("Raster CRS is undefined.")
+
+        # CRS of input coordinates (WGS84 lat/lon)
+        input_crs = rasterio.crs.CRS.from_epsg(4326)
+
+        # ---- Transform coordinates if needed ----
+        if ds.crs == input_crs:
+            # Raster already in lat/lon
+            x = lon
+            y = lat
+        else:
+            # Transform lat/lon → raster CRS
+            transformer = Transformer.from_crs(
+                input_crs,
+                ds.crs,
+                always_xy=True,
+            )
+            x, y = transformer.transform(lon, lat)
+
+        # ---- Determine which points lie inside raster bounds ----
+        bounds = ds.bounds
+        inside = (
+            (x >= bounds.left)
+            & (x <= bounds.right)
+            & (y >= bounds.bottom)
+            & (y <= bounds.top)
+        )
+
+        if not np.any(inside):
+            return samples.reshape(-1, 1)
+
+        # ---- Sample raster at valid points ----
+        coords = list(zip(x[inside], y[inside]))
+
+        raw_values = np.array(
+            [v[0] for v in ds.sample(coords, indexes=band)],
+            dtype=float,
+        )
+
+        # ---- Handle nodata ----
+        if ds.nodata is not None:
+            raw_values[raw_values == ds.nodata] = np.nan
+
+        # ---- Apply scale and offset if defined ----
+        scale = 1.0
+        offset = 0.0
+
+        if ds.scales is not None:
+            scale = ds.scales[band - 1]
+
+        if ds.offsets is not None:
+            offset = ds.offsets[band - 1]
+
+        values = raw_values * scale + offset
+
+        # ---- Insert values back into output ----
+        samples[inside] = values
+
+    return samples.reshape(-1, 1)
 
 
 def create_site_table_response() -> pd.DataFrame:
@@ -51,7 +216,26 @@ def create_site_table_response() -> pd.DataFrame:
         station_info,
         columns=["net", "sta", "lat", "lon", "elev", "creation_date", "end_date"],
     )
-    sta_df = sta_df.drop_duplicates(["net", "sta"]).reset_index(drop=True)
+    sta_df = sta_df.drop_duplicates(["net", "sta"])
+
+    bbox = config.get_value("bbox")  # [min_lon, min_lat, max_lon, max_lat]
+    min_lon, min_lat, max_lon, max_lat = bbox
+
+    # Ensure lat/lon are present and within latitude bounds
+    mask_lat = (
+        sta_df["lat"].notna()
+        & sta_df["lon"].notna()
+        & (sta_df["lat"] >= min_lat)
+        & (sta_df["lat"] <= max_lat)
+    )
+
+    # Handle antimeridian crossing: if min_lon > max_lon use OR
+    if min_lon <= max_lon:
+        mask_lon = (sta_df["lon"] >= min_lon) & (sta_df["lon"] <= max_lon)
+    else:
+        mask_lon = (sta_df["lon"] >= min_lon) | (sta_df["lon"] <= max_lon)
+
+    sta_df = sta_df.loc[mask_lat & mask_lon]
 
     # Get the Geonet metadata summary information
     geo_meta_summary_df = pd.read_csv(
@@ -62,8 +246,6 @@ def create_site_table_response() -> pd.DataFrame:
     geo_meta_summary_df = geo_meta_summary_df.rename(
         columns={
             "Name": "sta",
-            "Lat": "lat",
-            "Long": "lon",
             "NZS1170SiteClass": "site_class",
             "Vs30_median": "Vs30",
             "Sigmaln_Vs30": "Vs30_std",
@@ -82,12 +264,14 @@ def create_site_table_response() -> pd.DataFrame:
     )
 
     merged_df = geo_meta_summary_df.merge(
-        sta_df[["net", "elev", "sta", "creation_date", "end_date"]],
+        sta_df[["net", "sta", "lat", "lon", "elev", "creation_date", "end_date"]],
         on="sta",
         how="outer",
     )
-    # Fill Elevation NaN values from sta_df
+    # Fill Lat, Lon, Elevation NaN values from sta_df
     merged_df["elev"] = merged_df["Elevation"].combine_first(merged_df["elev"])
+    merged_df["lat"] = merged_df["Lat"].combine_first(merged_df["lat"])
+    merged_df["lon"] = merged_df["Long"].combine_first(merged_df["lon"])
     # Specify the required files for fiona
     NZGMDB_DATA.fetch("nt_domains_kiran.shp")
     NZGMDB_DATA.fetch("nt_domains_kiran.dbf")
@@ -99,6 +283,69 @@ def create_site_table_response() -> pd.DataFrame:
 
     # Rename the domain column
     tect_merged_df = tect_merged_df.rename(columns={"domain_no": "site_domain_no"})
+
+    # Only compute thresholds for stations where Z1.0 is missing
+    mask_missing_z1 = tect_merged_df["Z1.0"].isna()
+    if mask_missing_z1.any():
+        # Prepare stations DataFrame for only missing rows, indexed by station code
+        stations = tect_merged_df.loc[mask_missing_z1, ["sta", "lon", "lat"]].set_index(
+            "sta"
+        )[["lon", "lat"]]
+        try:
+            nzcvm_version = config.get_value("nzcvm_version")
+            thresholds = threshold.compute_station_thresholds(
+                stations, model_version=nzcvm_version
+            )
+            # Merge computed thresholds back (computed columns will be suffixed)
+            tect_merged_df = tect_merged_df.merge(
+                thresholds[["Z1.0(km)", "Z2.5(km)", "sigma"]],
+                left_on="sta",
+                right_index=True,
+                how="left",
+            )
+
+            # Add in the computed values where missing
+            tect_merged_df["Z1.0"] = tect_merged_df["Z1.0"].combine_first(
+                tect_merged_df.get("Z1.0(km)") * 1000.0
+            )
+            tect_merged_df["Z2.5"] = tect_merged_df["Z2.5"].combine_first(
+                tect_merged_df.get("Z2.5(km)") * 1000.0
+            )
+            tect_merged_df["Z1.0_std"] = tect_merged_df["Z1.0_std"].combine_first(
+                tect_merged_df.get("sigma")
+            )
+            tect_merged_df["Z2.5_std"] = tect_merged_df["Z2.5_std"].combine_first(
+                tect_merged_df.get("sigma")
+            )
+
+            # Set extra ref / quality fields
+            tect_merged_df.loc[
+                mask_missing_z1, ["Z1.0_ref", "Z2.5_ref", "Q_Z1.0", "Q_Z2.5"]
+            ] = ["NZCVM (2026)", "NZCVM (2026)", "Q3", "Q3"]
+
+            # Get the file path to the combined MVN GeoTIFF
+            NZGMDB_DATA.fetch("combined_mvn_wgs84.tif")
+            file_path = Path(NZGMDB_DATA.abspath) / "combined_mvn_wgs84.tif"
+
+            # Compute Vs30 for missing values
+            points = tect_merged_df.loc[mask_missing_z1, ["lat", "lon"]].to_numpy()
+            vs30_values = sample_points_from_geotiff(file_path, points).ravel()
+
+            # Fill missing gaps in Vs30 using nearest-neighbour averaging
+            coords = np.column_stack([points[:, 1], points[:, 0]])
+            vs30_values_filled = fill_gaps_with_nearest(coords, vs30_values)
+            vs30_values_filled_rounded = np.round(vs30_values_filled)
+
+            # Update Vs30 and related fields
+            tect_merged_df.loc[mask_missing_z1, "Vs30"] = vs30_values_filled_rounded
+
+            # Ensure reference and quality fields are set for Vs30 where filled
+            vs30_mask = mask_missing_z1 & ~tect_merged_df["Vs30"].isna()
+            tect_merged_df.loc[vs30_mask, "Vs30_Ref"] = "Foster et al. (2019)"
+            tect_merged_df.loc[vs30_mask, "Q_Vs30"] = "Q3"
+
+        except (FileNotFoundError, ValueError, RuntimeError) as e:
+            print(f"Warning: Could not compute thresholds for missing Z1.0 values: {e}")
 
     # Select specific columns
     site_df = tect_merged_df[
