@@ -89,6 +89,7 @@ median_multiplier: 100
 ims:
   - PGA
   - PGV
+  - PGD
   - CAV
   - CAV5
   - AI

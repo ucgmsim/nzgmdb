@@ -25,7 +25,7 @@ def compute_snr_for_single_mseed(
     output_dir: Path,
     ko_directory: Path,
     common_frequency_vector: np.ndarray = im_calculation.DEFAULT_FREQUENCIES,
-    inventory: Inventory = None,
+    inventory: Inventory | None = None,
 ):
     """
     Compute the SNR for a single mseed file

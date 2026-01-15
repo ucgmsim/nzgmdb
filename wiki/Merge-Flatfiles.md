@@ -177,6 +177,7 @@ Only includes the columns where appropriate IMs were calculated for the componen
 **Time-Domain IMs:**
 - `PGA` - Peak Ground Acceleration (g)
 - `PGV` - Peak Ground Velocity (cm/s)
+- `PGD` - Peak Ground Displacement (cm)
 - `CAV` - Cumulative Absolute Velocity (g·s)
 - `CAV5` - CAV with 5 cm/s² threshold (g·s)
 - `AI` - Arias Intensity (m/s)
