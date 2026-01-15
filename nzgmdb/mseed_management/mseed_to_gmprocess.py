@@ -37,7 +37,7 @@ def gen_station_xml(station: str, client: FDSN_Client, output_dir: Path):
         Whether the station xml file was generated successfully
     """
     config = cfg.Config()
-    channel_codes = ",".join(config.get_value("channel_codes"))
+    channel_codes = config.get_value("channel_codes")
 
     try:
         station_info = client.get_stations(

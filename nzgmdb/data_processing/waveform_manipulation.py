@@ -5,6 +5,7 @@ This module contains functions for the initial pre-processing of waveform data a
 import numpy as np
 from obspy.clients.fdsn import Client as FDSN_Client
 from obspy.clients.fdsn.header import FDSNNoDataException
+from obspy.core.inventory import Inventory
 from obspy.core.stream import Stream
 from scipy import integrate, signal
 
@@ -13,7 +14,10 @@ from nzgmdb.management import custom_errors
 
 
 def initial_preprocessing(
-    mseed: Stream, apply_taper: bool = True, apply_zero_padding: bool = True
+    mseed: Stream,
+    apply_taper: bool = True,
+    apply_zero_padding: bool = True,
+    inventory: Inventory = None,
 ):
     """
     Basic pre-processing of the waveform data
@@ -33,6 +37,8 @@ def initial_preprocessing(
         Whether to apply the tapering, by default True
     apply_zero_padding : bool, optional
         Whether to apply zero padding, by default True
+    inventory : Inventory, optional
+        The inventory object containing the response information, by default None
 
     Returns
     -------
@@ -73,21 +79,26 @@ def initial_preprocessing(
     location = mseed[0].stats.location
     channel = mseed[0].stats.channel
 
-    # Get Station Information from geonet clients
-    # Fetching here instead of passing the inventory object as searching for the station, network, and channel
-    # information takes a long time as it's implemented in a for loop
-    try:
-        client_NZ = FDSN_Client("GEONET")
-        inv = client_NZ.get_stations(
-            level="response", network="NZ", station=station, location=location
-        )
-    except FDSNNoDataException:
-        raise custom_errors.InventoryNotFoundError(
-            f"No inventory information found for station {station} with location {location}"
-        )
+    if inventory is not None:
+        # Select only the required station and location from the inventory
+        inv_selected = inventory.select(station=station, location=location)
+        if len(inv_selected) == 0:
+            raise custom_errors.InventoryNotFoundError(
+                f"No inventory information found for station {station} with location {location}"
+            )
+    else:
+        try:
+            client_NZ = FDSN_Client("GEONET")
+            inv_selected = client_NZ.get_stations(
+                level="response", network="NZ", station=station, location=location
+            )
+        except FDSNNoDataException:
+            raise custom_errors.InventoryNotFoundError(
+                f"No inventory information found for station {station} with location {location}"
+            )
 
     try:
-        mseed = mseed.remove_sensitivity(inventory=inv)
+        mseed = mseed.remove_sensitivity(inventory=inv_selected)
     except ValueError:
         raise custom_errors.SensitivityRemovalError(
             f"Failed to remove sensitivity for station {station} with location {location}"
@@ -95,7 +106,7 @@ def initial_preprocessing(
 
     # Rotate
     try:
-        mseed.rotate("->ZNE", inventory=inv)
+        mseed.rotate("->ZNE", inventory=inv_selected)
     except (
         Exception  # noqa: BLE001
     ):  # Due to obspy raising an Exception instead of a specific error

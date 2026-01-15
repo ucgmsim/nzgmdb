@@ -17,6 +17,7 @@ class MachineName(StrEnum):
     LOCAL = "local"
     MANTLE = "mantle"
     HYPOCENTRE = "hypocentre"
+    RCH = "rch"
 
 
 class WorkflowStep(StrEnum):

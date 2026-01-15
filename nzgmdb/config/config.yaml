@@ -24,10 +24,7 @@ priority_phase_list:
   - Pn
   - Pg
   - Pb
-channel_codes:
-  - HN?
-  - BN?
-  - HH?
+channel_codes: "HN?,BN?,HH?,BH?"
 percentage_gap_allowed: 0.1
 is_large_overlap: 0.5
 # Mseed Variables
@@ -93,6 +90,7 @@ median_multiplier: 100
 ims:
   - PGA
   - PGV
+  - PGD
   - CAV
   - CAV5
   - AI

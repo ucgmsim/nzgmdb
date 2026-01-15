@@ -30,7 +30,9 @@ def create_site_table_response() -> pd.DataFrame:
     """
     # Fetch the client station information
     client_NZ = FDSN_Client("GEONET")
-    inventory = client_NZ.get_stations()
+    config = cfg.Config()
+    channel_codes = config.get_value("channel_codes")
+    inventory = client_NZ.get_stations(channel=channel_codes, level="station")
     station_info = []
     for network in inventory:
         for station in network:
@@ -45,7 +47,10 @@ def create_site_table_response() -> pd.DataFrame:
                     station.end_date,
                 ]
             )
-    sta_df = pd.DataFrame(station_info, columns=["net", "sta", "lat", "lon", "elev", "creation_date", "end_date"])
+    sta_df = pd.DataFrame(
+        station_info,
+        columns=["net", "sta", "lat", "lon", "elev", "creation_date", "end_date"],
+    )
     sta_df = sta_df.drop_duplicates().reset_index(drop=True)
 
     # Get the Geonet metadata summary information
