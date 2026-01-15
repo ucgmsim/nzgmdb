@@ -5,7 +5,6 @@
 * New Quality Filter to remove Broadband data during certain time periods due to sensitivity issues
 * New Quality Filter to compare against an empirical GMPE (Atkinson 2022) to remove significant outliers
 * Add ability to generate a report to compare NZGMDB versions
-* Automatic report creation
 * Add GMC skipped reasons
 * Update to use the new NZCVM 2.09 basins
 * TPVZ calculation fix
@@ -22,6 +21,7 @@
 * Change processing to use remove response instead of remove sensitivity
 * Updated CMT solutions for domain regions
 * Increased date range to end of 2025
+* Vs30 and Z1.0 / 2.5 for missing station metadata
 
 ## Version 4.3 - July 25 **2000-01-01 to 2024-12-31**
 * Sensitivity Fix (previously always taking first value not for actual datetime expected)
