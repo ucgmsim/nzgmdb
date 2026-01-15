@@ -60,6 +60,7 @@ The pipeline calculates the following intensity measures based on configuration 
 #### Time-Domain IMs
 - **PGA** - Peak Ground Acceleration
 - **PGV** - Peak Ground Velocity  
+- **PGD** - Peak Ground Displacement
 - **CAV** - Cumulative Absolute Velocity
 - **CAV5** - Cumulative Absolute Velocity (threshold: 5 cm/s²)
 - **AI** - Arias Intensity
@@ -135,12 +136,12 @@ Each CSV file contains all calculated IMs with the following structure:
 
 **File Format**: One row per component (8 rows total), with 509 columns containing all IM data.
 
-| Column Type | Example Columns                                     | Description |
-|-------------|-----------------------------------------------------|-------------|
-| **Identifiers** | `record_id`, `component`                            | Record identifier and component type |
-| **Time-Domain IMs** | `PGA`, `PGV`, `CAV`, `CAV5`, `AI`, `Ds575`, `Ds595` | Peak and duration-based measures |
-| **Spectral Acceleration** | `pSA_0.01`, `pSA_0.1`, `pSA_1.0`, `pSA_20.0`        | Response spectra at 111 periods |
-| **Fourier Spectra** | `FAS_0.013182570000000001`, `FAS_1.0`, `FAS_100.0`  | Amplitude spectra at 389 frequencies |
+| Column Type | Example Columns                                            | Description |
+|-------------|------------------------------------------------------------|-------------|
+| **Identifiers** | `record_id`, `component`                                   | Record identifier and component type |
+| **Time-Domain IMs** | `PGA`, `PGV`, `PGD`, `CAV`, `CAV5`, `AI`, `Ds575`, `Ds595` | Peak and duration-based measures |
+| **Spectral Acceleration** | `pSA_0.01`, `pSA_0.1`, `pSA_1.0`, `pSA_20.0`               | Response spectra at 111 periods |
+| **Fourier Spectra** | `FAS_0.013182570000000001`, `FAS_1.0`, `FAS_100.0`         | Amplitude spectra at 389 frequencies |
 
 **Component Rows Structure**:
 - Row 1-8: Each represents a different component (000, 090, ver, geom, rotd0, rotd50, rotd100, EAS)
@@ -152,15 +153,16 @@ Each CSV file contains all calculated IMs with the following structure:
 
 | Intensity Measure | 000 | 090 | ver | geom | rotd0 | rotd50 | rotd100 | EAS |
 |-------------------|-----|-----|-----|------|---|----|---------|-----|
-| **PGA** | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | |
-| **PGV** | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | |
-| **CAV** | ✓ | ✓ | ✓ | ✓ | | | | |
-| **CAV5** | ✓ | ✓ | ✓ | ✓ | | | | |
-| **AI** | ✓ | ✓ | ✓ | ✓ | | | | |
-| **Ds575** | ✓ | ✓ | ✓ | ✓ | | | | |
-| **Ds595** | ✓ | ✓ | ✓ | ✓ | | | | |
-| **pSA** | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | |
-| **FAS** | ✓ | ✓ | ✓ | | | | | ✓ |
+| **PGA**           | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | |
+| **PGV**           | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | |
+| **PGD**           | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | |
+| **CAV**           | ✓ | ✓ | ✓ | ✓ | | | | |
+| **CAV5**          | ✓ | ✓ | ✓ | ✓ | | | | |
+| **AI**            | ✓ | ✓ | ✓ | ✓ | | | | |
+| **Ds575**         | ✓ | ✓ | ✓ | ✓ | | | | |
+| **Ds595**         | ✓ | ✓ | ✓ | ✓ | | | | |
+| **pSA**           | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | |
+| **FAS**           | ✓ | ✓ | ✓ | | | | | ✓ |
 
 ### 🔹 Metadata Files
 
@@ -250,7 +252,7 @@ The merge operation performs the following consolidation steps:
 Structures the final dataset with logical column ordering:
 ```
 record_id | evid | sta | loc | chan | component | 
-PGA | PGV | CAV | CAV5 | AI | Ds575 | Ds595 |
+PGA | PGV | PGD | CAV | CAV5 | AI | Ds575 | Ds595 |
 score_mean_X | fmin_mean_X | fmax_mean_X | multi_mean_X |
 score_mean_Y | fmin_mean_Y | fmax_mean_Y | multi_mean_Y |
 score_mean_Z | fmin_mean_Z | fmax_mean_Z | multi_mean_Z |
@@ -263,14 +265,14 @@ score_mean_Z | fmin_mean_Z | fmax_mean_Z | multi_mean_Z |
 
 The consolidated catalogue contains:
 
-| Field Group | Description | Example Columns |
-|-------------|-------------|-----------------|
-| **Identifiers** | Record and location info | `record_id`, `evid`, `sta`, `chan`, `loc` |
-| **Components** | Motion component type | `component` (000, 090, ver, rotd50, etc.) |
-| **Time-Domain IMs** | Peak and duration metrics | `PGA`, `PGV`, `CAV`, `AI`, `Ds575`, `Ds595` |
-| **Quality Metrics** | GMC and frequency data | `score_mean_X`, `fmin_mean_X`, `fmax_mean_X` |
-| **Spectral IMs** | Period-dependant response | `pSA_0.010`, `pSA_0.050`, `pSA_1.000` |
-| **Frequency IMs** | Fourier amplitude data | `FAS_0.100`, `FAS_1.000`, `FAS_10.000` |
+| Field Group | Description | Example Columns                                    |
+|-------------|-------------|----------------------------------------------------|
+| **Identifiers** | Record and location info | `record_id`, `evid`, `sta`, `chan`, `loc`          |
+| **Components** | Motion component type | `component` (000, 090, ver, rotd50, etc.)          |
+| **Time-Domain IMs** | Peak and duration metrics | `PGA`, `PGV`, `PGD`, `CAV`, `AI`, `Ds575`, `Ds595` |
+| **Quality Metrics** | GMC and frequency data | `score_mean_X`, `fmin_mean_X`, `fmax_mean_X`       |
+| **Spectral IMs** | Period-dependant response | `pSA_0.010`, `pSA_0.050`, `pSA_1.000`              |
+| **Frequency IMs** | Fourier amplitude data | `FAS_0.100`, `FAS_1.000`, `FAS_10.000`             |
 
 ### 🔹 Integration Benefits
 

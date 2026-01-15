@@ -760,6 +760,7 @@ def filter_duplicate_channels(
     2. HN channels (Strong motion, high frequency)
     3. BN channels (Strong motion, lower frequency)
     4. HH channels (Broadband, high frequency)
+    5. BH channels (Broadband, lower frequency)
 
     If multiple records have the same priority, the first one encountered is kept.
     All other duplicates are removed and returned in the skipped records.
@@ -785,15 +786,15 @@ def filter_duplicate_channels(
     catalogue["bypass"] = catalogue["record_id"].isin(bypass_records)
 
     # Step 3: Define priority levels
-    priority = {"HN": 1, "BN": 2, "HH": 3}
-    catalogue["chan_priority"] = catalogue["chan"].map(priority).fillna(4)
+    priority = {"HN": 1, "BN": 2, "HH": 3, "BH": 4}
+    catalogue["chan_priority"] = catalogue["chan"].map(priority).fillna(5)
     # Step 4: Override priority for bypass records
     catalogue.loc[catalogue["bypass"], "chan_priority"] = 0
 
     # Step 5: Sort by priority and select top-priority row per group
     catalog_sorted = catalogue.sort_values(by=["evid_sta", "chan_priority"])
-    # Remove records with priority 4 (not HN, BN, HH)
-    catalog_sorted = catalog_sorted[catalog_sorted["chan_priority"] < 4]
+    # Remove records with priority 4 (not HN, BN, HH, BH)
+    catalog_sorted = catalog_sorted[catalog_sorted["chan_priority"] < 5]
     best_dups = catalog_sorted.groupby("evid_sta", as_index=False).nth(0)
 
     # Step 6: Identify which records to drop (the non-best ones)
@@ -872,35 +873,33 @@ def apply_all_filters(
     fmin_max = fmin_max if fmin_max is not None else config.get_value("fmin_max")
     mag_min = min_mag if min_mag is not None else config.get_value("quality_min_mag")
 
+    catalogue_copy = catalogue.copy()
+
     # Filter by magnitude
-    skipped_records_mag = filter_mag(catalogue.copy(), mag_min)
+    skipped_records_mag = filter_mag(catalogue_copy, mag_min)
 
     # Find ground level locations
     skipped_records_ground = filter_ground_level_locations(
-        catalogue.copy(), bypass_records
+        catalogue_copy, bypass_records
     )
 
     # Find has score mean
-    skipped_records_has_score = filter_has_score_mean(catalogue.copy(), bypass_records)
+    skipped_records_has_score = filter_has_score_mean(catalogue_copy, bypass_records)
 
     # Find score mean
-    skipped_records_score = filter_score_mean(
-        catalogue.copy(), score_min, bypass_records
-    )
+    skipped_records_score = filter_score_mean(catalogue_copy, score_min, bypass_records)
 
     # Find multi mean
-    skipped_records_multi = filter_multi_mean(
-        catalogue.copy(), multi_max, bypass_records
-    )
+    skipped_records_multi = filter_multi_mean(catalogue_copy, multi_max, bypass_records)
 
     # Find fmax
-    skipped_records_fmax = filter_fmax(catalogue.copy(), fmax_min, bypass_records)
+    skipped_records_fmax = filter_fmax(catalogue_copy, fmax_min, bypass_records)
 
     # Find fmin
-    skipped_records_fmin = filter_fmin(catalogue.copy(), fmin_max, bypass_records)
+    skipped_records_fmin = filter_fmin(catalogue_copy, fmin_max, bypass_records)
 
     # Find missing station information
-    skipped_records_sta = filter_missing_sta_info(catalogue.copy(), bypass_records)
+    skipped_records_sta = filter_missing_sta_info(catalogue_copy, bypass_records)
 
     # Find clipped records
     skipped_records_clipped = apply_clipNet_filter(clipped_records_ffp, bypass_records)
@@ -910,12 +909,12 @@ def apply_all_filters(
 
     # Find troublesome sensitivity records
     skipped_records_sensitivity = filter_troublesome_sensitivity(
-        catalogue.copy(), bypass_records
+        catalogue_copy, bypass_records
     )
 
     # Find empirical predictions
     skipped_records_empirical = filter_empirical_predictions(
-        catalogue.copy(), bypass_records
+        catalogue_copy, bypass_records
     )
 
     # Combine all the skipped records

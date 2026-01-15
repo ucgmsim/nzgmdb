@@ -9,9 +9,12 @@ from pathlib import Path
 import numpy as np
 import pandas as pd
 from obspy import read_inventory
+from obspy.clients.fdsn import Client as FDSN_Client
+from obspy.core.inventory import Inventory
 
 import qcore.timeseries as ts
 from nzgmdb.data_processing import waveform_manipulation
+from nzgmdb.management import config as cfg
 from nzgmdb.management import custom_errors, file_structure
 from nzgmdb.mseed_management import reading
 
@@ -22,6 +25,7 @@ def process_single_mseed(
     fmax_df: pd.DataFrame | None = None,
     bypass_df: pd.DataFrame | None = None,
     xml_dir: Path | None = None,
+    inventory: Inventory | None = None,
 ):
     """
     Process a single mseed file and save the processed data to a txt file
@@ -42,6 +46,8 @@ def process_single_mseed(
         The bypass records containing custom fmin, fmax values
     xml_dir : Path, optional
         The directory containing the station xml files for inventory information
+    inventory : Inventory, optional
+        The inventory information for the mseed file
 
     Returns
     -------
@@ -241,6 +247,11 @@ def process_mseeds_to_txt(
         )
     bypass_df = None if bypass_records_ffp is None else pd.read_csv(bypass_records_ffp)
 
+    config = cfg.Config()
+    channel_codes = config.get_value("channel_codes")
+    client = FDSN_Client("GEONET")
+    inventory = client.get_stations(channel=channel_codes, level="response")
+
     # Use multiprocessing to process the mseed files
     with multiprocessing.Pool(processes=n_procs) as pool:
         skipped_records = pool.map(
@@ -250,6 +261,7 @@ def process_mseeds_to_txt(
                 fmax_df=fmax_df,
                 bypass_df=bypass_df,
                 xml_dir=xml_dir,
+                inventory=inventory,
             ),
             mseed_files,
         )
