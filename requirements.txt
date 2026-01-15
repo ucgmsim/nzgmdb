@@ -13,10 +13,10 @@ gmprocess
 h5py
 pooch
 matplotlib
-oq_wrapper @ git+https://github.com/ucgmsim/Empirical_Engine.git#subdirectory=oq_wrapper
-openquake-engine @ git+https://github.com/gem/oq-engine.git@v3.23.2
-qcore @ git+https://github.com/ucgmsim/qcore.git
-IM_calculation @ git+https://github.com/ucgmsim/IM_calculation.git
-velocity_modelling @ git+https://github.com/ucgmsim/velocity_modelling.git
-source-modelling @ git+https://github.com/ucgmsim/source_modelling.git
+oq_wrapper>=2025.12.3,
+qcore-utils>=2025.12.1,
+source_modelling>=2025.12.1,
+openquake.engine==3.23.2,
+im-calculation>=2025.12.3,
+velocity-modelling>=2025.12.1
 cmt-solutions @ git+https://github.com/ucgmsim/cmt_solutions.git

@@ -19,6 +19,7 @@ from obspy.clients.fdsn import Client as FDSN_Client
 from obspy.clients.fdsn.header import (
     FDSNNoDataException,
     FDSNServiceUnavailableException,
+    FDSNTooManyRequestsException,
 )
 from obspy.io.mseed import InternalMSEEDError, ObsPyMSEEDFilesizeTooSmallError
 from pandas.errors import EmptyDataError
@@ -80,6 +81,13 @@ def get_inital_stream(
                     attach_response=True,
                 )
             break
+        except FDSNTooManyRequestsException:
+            print(f"Error getting waveforms for {net}.{sta}")
+            print("Too many requests - HTTP Status code: 429")
+            print("Retrying in 120 seconds...")
+            time.sleep(120)  # Wait for 2 minutes before retrying
+            # reset attempt count
+            attempt = 0
         except FDSNNoDataException:
             return None
         except ObsPyMSEEDFilesizeTooSmallError:
@@ -716,6 +724,7 @@ def get_station_window(
 def extract_station_info(
     station_extraction_row: pd.Series,
     main_dir: Path,
+    event_catalogues: dict,
     only_record_ids: pd.DataFrame = None,
 ):
     """
@@ -727,6 +736,8 @@ def extract_station_info(
         A row from the station extraction table containing the parameters for waveform extraction.
     main_dir : Path
         The main directory of the NZGMDB results (Highest Level Directory).
+    event_catalogues : dict
+        A dictionary of event catalogues indexed by event ID.
     only_record_ids : pd.DataFrame, optional
         A DataFrame containing a subset of record IDs to use for extraction, if provided.
 
@@ -751,13 +762,11 @@ def extract_station_info(
     r_hyp = station_extraction_row["r_hyp"]
 
     # Get the catalogue information
-    client = FDSN_Client("GEONET")
-    cat = client.get_events(eventid=event_id)
-    event_cat = cat[0]
+    event_cat = event_catalogues[event_id]
 
     # Obtain the station channel codes and location
     config = cfg.Config()
-    channel_codes = ",".join(config.get_value("channel_codes"))
+    channel_codes = config.get_value("channel_codes")
     location = "*"
 
     # Check what channel codes and locations to use from only_record_ids if provided
@@ -775,6 +784,7 @@ def extract_station_info(
         location = site_only_record_ids["record_id"].str.split("_").str[-1].values[0]
 
     # Get the Stream
+    client = FDSN_Client("GEONET")
     st = get_station_window(station_extraction_row, client, channel_codes, location)
 
     # Check that data was found
@@ -976,7 +986,7 @@ def extract_waveforms(
         station_extraction_table["evid_sta"] = (
             station_extraction_table["evid"] + "_" + station_extraction_table["sta"]
         )
-        # Mkae a evid_sta column in the only_record_ids
+        # Make a evid_sta column in the only_record_ids
         only_record_ids["evid_sta"] = (
             only_record_ids["record_id"].str.split("_").str[0]
             + "_"
@@ -1001,16 +1011,25 @@ def extract_waveforms(
         station_extraction_table.index,
         np.ceil(len(station_extraction_table) / batch_size),
     )
+    client = FDSN_Client("GEONET")
 
     for batch_index, batch_indices in enumerate(index_batches):
         if batch_index not in processed_suffixes:
             print(f"Processing batch {batch_index + 1}/{len(index_batches)}")
             batch_rows = station_extraction_table.loc[batch_indices]
+
+            # Get the catalogue information
+            catalog_dict = {
+                event_id: client.get_events(eventid=event_id)[0]
+                for event_id in batch_rows["evid"].unique()
+            }
+
             with mp.Pool(n_procs) as pool:
                 results = pool.map(
                     functools.partial(
                         extract_station_info,
                         main_dir=main_dir,
+                        event_catalogues=catalog_dict,
                         only_record_ids=only_record_ids,
                     ),
                     (row for _, row in batch_rows.iterrows()),

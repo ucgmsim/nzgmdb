@@ -30,7 +30,9 @@ def create_site_table_response() -> pd.DataFrame:
     """
     # Fetch the client station information
     client_NZ = FDSN_Client("GEONET")
-    inventory = client_NZ.get_stations()
+    config = cfg.Config()
+    channel_codes = config.get_value("channel_codes")
+    inventory = client_NZ.get_stations(channel=channel_codes, level="station")
     station_info = []
     for network in inventory:
         for station in network:

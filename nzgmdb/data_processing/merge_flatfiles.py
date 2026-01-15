@@ -123,6 +123,7 @@ def merge_im_data(
             "component",
             "PGA",
             "PGV",
+            "PGD",
             "CAV",
             "CAV5",
             "AI",
@@ -170,7 +171,7 @@ def add_ground_level(
     """
     # Find the station location information with the inventory lat, lon and elev
     config = cfg.Config()
-    channel_codes = ",".join(config.get_value("channel_codes"))
+    channel_codes = config.get_value("channel_codes")
     client_NZ = FDSN_Client("GEONET")
     inventory = client_NZ.get_stations(channel=channel_codes, level="response")
     station_info = [
@@ -725,6 +726,7 @@ def merge_flatfiles(main_dir: Path, bypass_records_ffp: Path = None):
             "site_domain_no",
             "PGA",
             "PGV",
+            "PGD",
             "CAV",
             "CAV5",
             "AI",
@@ -786,6 +788,7 @@ def merge_flatfiles(main_dir: Path, bypass_records_ffp: Path = None):
     columns_remove_eas = [
         "PGA",
         "PGV",
+        "PGD",
         "CAV",
         "CAV5",
         "AI",
