@@ -152,7 +152,7 @@ def test_site_updates_vs30_and_z1_fields_only_when_available(
     """
     Integration-style test of site table population logic using monkeypatches.
 
-    Verifies expected output columns exist and that Vs30 and Z1\.0/Z2\.5 values
+    Verifies expected output columns exist and that Vs30 and Z1.0 / Z2.5 values
     (and their reference/quality fields) are only set when data are available.
 
     Parameters
@@ -162,7 +162,7 @@ def test_site_updates_vs30_and_z1_fields_only_when_available(
     tmp_path : pathlib.Path
         Pytest fixture providing a temporary directory for test artifacts.
     points : numpy.ndarray, shape (N, 2)
-        Input points as \[lat, lon\] used to construct a minimal metadata table.
+        Input points as [lat, lon] used to construct a minimal metadata table.
 
     Returns
     -------
@@ -170,7 +170,7 @@ def test_site_updates_vs30_and_z1_fields_only_when_available(
     """
 
     class _Cfg:
-        def get_value(self, key):
+        def get_value(self, key: str):
             if key == "channel_codes":
                 return "HHZ"
             if key == "bbox":
@@ -200,7 +200,7 @@ def test_site_updates_vs30_and_z1_fields_only_when_available(
     combined_tif = tmp_path / "combined_mvn_wgs84.tif"
     combined_tif.touch()
 
-    def _fetch(name, *args, **kwargs):
+    def _fetch(name: str, *args, **kwargs):
         p = tmp_path / name
         p.parent.mkdir(parents=True, exist_ok=True)
         p.touch(exist_ok=True)
@@ -232,7 +232,7 @@ def test_site_updates_vs30_and_z1_fields_only_when_available(
     )
     monkeypatch.setattr(pd, "read_csv", lambda *_a, **_k: geo)
 
-    def _find_domain_from_shapes(df, _shapes):
+    def _find_domain_from_shapes(df: pd.DataFrame, _shapes: list) -> pd.DataFrame:
         out = df.copy()
         out["domain_no"] = 1
         return out
@@ -241,7 +241,7 @@ def test_site_updates_vs30_and_z1_fields_only_when_available(
         sites.tect_domain, "find_domain_from_shapes", _find_domain_from_shapes
     )
 
-    def _compute_station_thresholds(stations, model_version=None):
+    def _compute_station_thresholds(stations: pd.DataFrame) -> pd.DataFrame:
         n = len(stations)
         return pd.DataFrame(
             {
@@ -256,7 +256,10 @@ def test_site_updates_vs30_and_z1_fields_only_when_available(
         sites.threshold, "compute_station_thresholds", _compute_station_thresholds
     )
 
-    def _sample_points_from_geotiff(_file_path, latlon_points, band=1):
+    def _sample_points_from_geotiff(
+        geotiff_path: str,
+        latlon_points: np.ndarray,
+    ) -> np.ndarray:
         n = len(latlon_points)
         vals = np.linspace(100.0, 500.0, n).astype(float)
         if n >= 2:
@@ -267,7 +270,9 @@ def test_site_updates_vs30_and_z1_fields_only_when_available(
         sites, "sample_points_from_geotiff", _sample_points_from_geotiff
     )
 
-    def _fill_gaps_with_nearest(coords, values, invalid_mask=None, k=8):
+    def _fill_gaps_with_nearest(
+        values: np.ndarray,
+    ) -> np.ndarray:
         values = np.asarray(values, dtype=float).copy()
         values[np.isnan(values)] = 250.0
         return values

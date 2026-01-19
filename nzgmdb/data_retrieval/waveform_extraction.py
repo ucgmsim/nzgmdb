@@ -24,8 +24,8 @@ from obspy.clients.fdsn.header import (
 from obspy.io.mseed import InternalMSEEDError, ObsPyMSEEDFilesizeTooSmallError
 from pandas.errors import EmptyDataError
 
-from nzgmdb.data_processing import filtering, multi_event
 from nzgmdb.data_processing import filtering
+from nzgmdb.data_processing import multi_event
 from nzgmdb.data_retrieval import inventory_xml
 from nzgmdb.management import config as cfg
 from nzgmdb.management import custom_errors, file_structure

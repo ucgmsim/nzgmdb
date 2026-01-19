@@ -42,7 +42,7 @@ def fill_gaps_with_nearest(
 
     Returns
     -------
-    filled_values : (N,) ndarray
+    ndarray
         Values with NaNs filled using nearest-neighbour averaging.
     """
 
@@ -101,7 +101,7 @@ def sample_points_from_geotiff(
 
     Returns
     -------
-    samples : (N, 1) ndarray
+    ndarray
         Sampled raster values. NaN where points fall outside the raster
         or where raster contains nodata.
     """

@@ -4,7 +4,6 @@ Script to run PhaseNet on mseed files, predict p and s waves as well as save the
 
 import argparse
 from pathlib import Path
-from typing import Union
 
 import h5py
 import mseedlib
