@@ -197,13 +197,13 @@ def compute_multi_event_scores(
         UTC start time of the selected trace (or `pd.NaT` on failure).
     end_time : pandas.Timestamp
         UTC end time of the selected trace (or `pd.NaT` on failure).
-    stalat_score : float
+    stalta_score : float
         Multi-event score based on STA/LTA triggers.
     sync_event : bool
         True if there is at least one pick inside the trace window, else False.
     """
     start_time, end_time, sync_event = sync_event_from_stream(stream, extraction_table)
 
-    stalat_score = stalta_for_stream(stream, inventory)
+    stalta_score = stalta_for_stream(stream, inventory)
 
-    return start_time, end_time, stalat_score, sync_event
+    return start_time, end_time, stalta_score, sync_event

@@ -585,7 +585,7 @@ def merge_flatfiles(main_dir: Path, bypass_records_ffp: Path = None):
         multi_event_df[
             [
                 "record_id",
-                "stalat_score",
+                "stalta_score",
                 "sync_event",
             ]
         ],
@@ -764,7 +764,7 @@ def merge_flatfiles(main_dir: Path, bypass_records_ffp: Path = None):
             "fmin_Z",
             "fmax_Z",
             "multi_Z",
-            "stalat_score",
+            "stalta_score",
             "sync_event",
             "HPF_h",
             "HPF_v",

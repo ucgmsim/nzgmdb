@@ -909,7 +909,7 @@ def extract_station_info(
             )
 
         # Check for multi-event flagging
-        start_time, end_time, stalat_score, sync_event = (
+        start_time, end_time, stalta_score, sync_event = (
             multi_event.compute_multi_event_scores(
                 mseed.copy(), sync_check_extraction_table
             )
@@ -920,7 +920,7 @@ def extract_station_info(
                 record_id,
                 start_time.isoformat(),
                 end_time.isoformat(),
-                stalat_score,
+                stalta_score,
                 sync_event,
             ]
         )
@@ -1187,7 +1187,7 @@ def extract_waveforms(
                         "record_id",
                         "start_time",
                         "end_time",
-                        "stalat_score",
+                        "stalta_score",
                         "sync_event",
                     ],
                 )

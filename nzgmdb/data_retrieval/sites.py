@@ -266,7 +266,7 @@ def create_site_table_response() -> pd.DataFrame:
     merged_df = geo_meta_summary_df.merge(
         sta_df[["net", "sta", "lat", "lon", "elev", "creation_date", "end_date"]],
         on="sta",
-        how="outer",
+        how="left",
     )
     # Fill Lat, Lon, Elevation NaN values from sta_df
     merged_df["elev"] = merged_df["Elevation"].combine_first(merged_df["elev"])

@@ -51,16 +51,16 @@ def test_filter_score_mean(sample_catalogue: pd.DataFrame):
     assert "2016p858076_BMTS_HN_20" in skipped["record_id"].values
 
 
-def test_filter_multi_mean(sample_catalogue: pd.DataFrame):
+def test_filter_multi_event(sample_catalogue: pd.DataFrame):
     """
-    Test the filter_multi_mean function.
+    Test the filter_multi_event function.
 
     Parameters
     ----------
     sample_catalogue : pd.DataFrame
         A sample catalogue DataFrame to test the filtering function.
     """
-    skipped = quality_db.filter_multi_mean(sample_catalogue, multi_max=0.2)
+    skipped = quality_db.filter_multi_event(sample_catalogue, score_min=0.5)
     assert "2126295_MLZ_HH_10" in skipped["record_id"].values
 
 
