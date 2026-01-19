@@ -6,7 +6,6 @@ from pathlib import Path
 
 import mseedlib
 import numpy as np
-from obspy import Inventory
 from obspy.core import Stream, Trace, UTCDateTime
 from obspy.core.inventory import Inventory
 

@@ -241,7 +241,9 @@ def test_site_updates_vs30_and_z1_fields_only_when_available(
         sites.tect_domain, "find_domain_from_shapes", _find_domain_from_shapes
     )
 
-    def _compute_station_thresholds(stations: pd.DataFrame) -> pd.DataFrame:
+    def _compute_station_thresholds(
+        stations: pd.DataFrame, model_version: str = None
+    ) -> pd.DataFrame:
         n = len(stations)
         return pd.DataFrame(
             {
@@ -257,8 +259,9 @@ def test_site_updates_vs30_and_z1_fields_only_when_available(
     )
 
     def _sample_points_from_geotiff(
-        geotiff_path: str,
+        file_path: str,
         latlon_points: np.ndarray,
+        band: int = 1,
     ) -> np.ndarray:
         n = len(latlon_points)
         vals = np.linspace(100.0, 500.0, n).astype(float)
@@ -271,7 +274,10 @@ def test_site_updates_vs30_and_z1_fields_only_when_available(
     )
 
     def _fill_gaps_with_nearest(
+        coords: np.ndarray,
         values: np.ndarray,
+        invalid_mask: np.ndarray = None,
+        k: int = 8,
     ) -> np.ndarray:
         values = np.asarray(values, dtype=float).copy()
         values[np.isnan(values)] = 250.0
