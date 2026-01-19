@@ -6,7 +6,6 @@ import numpy as np
 from obspy import Inventory
 from obspy.clients.fdsn import Client as FDSN_Client
 from obspy.clients.fdsn.header import FDSNNoDataException
-from obspy.core.inventory import Inventory
 from obspy.core.stream import Stream
 from scipy import integrate, signal
 
@@ -39,7 +38,7 @@ def initial_preprocessing(
     apply_zero_padding : bool, optional
         Whether to apply zero padding, by default True
     inventory : Inventory, optional
-        The inventory object to use for sensitivity removal, by default None (Will try extract from FDSN if not provided)
+        The inventory object to use for sensitivity removal, by default None (Will try to extract from FDSN if not provided)
 
     Returns
     -------

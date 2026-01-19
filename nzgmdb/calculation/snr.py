@@ -9,8 +9,6 @@ from pathlib import Path
 
 import numpy as np
 import pandas as pd
-from obspy.clients.fdsn import Client as FDSN_Client
-from obspy.core.inventory import Inventory
 from obspy import read_inventory
 from pandas.errors import EmptyDataError
 
@@ -26,8 +24,7 @@ def compute_snr_for_single_mseed(
     output_dir: Path,
     ko_directory: Path,
     common_frequency_vector: np.ndarray = im_calculation.DEFAULT_FREQUENCIES,
-    xml_dir: Path = None,
-    inventory: Inventory | None = None,
+    xml_dir: Path | None = None,
 ):
     """
     Compute the SNR for a single mseed file
@@ -47,9 +44,6 @@ def compute_snr_for_single_mseed(
     xml_dir : Path, optional
         Path to the directory containing the StationXML files, by default None
         If None, will try to extract inventory from FDSN
-    inventory : Inventory, optional
-        The inventory information for the mseed file, by default None
-        (Only used to improve performance when reading the mseed file)
 
     Returns
     -------
@@ -292,11 +286,6 @@ def compute_snr_for_mseed_data(
     # Load the phase arrival table
     phase_table = pd.read_csv(phase_table_path)
 
-    # Load the inventory
-    client = FDSN_Client("GEONET")
-    channel_codes = config.get_value("channel_codes")
-    inventory = client.get_stations(channel=channel_codes, level="response")
-
     # Load the bypass records if provided
     if bypass_records_ffp is not None:
         bypass_records = pd.read_csv(bypass_records_ffp)
@@ -326,7 +315,6 @@ def compute_snr_for_mseed_data(
                         ko_directory=ko_directory,
                         common_frequency_vector=common_frequency_vector,
                         xml_dir=xml_dir,
-                        inventory=inventory,
                     ),
                     batch,
                 )
