@@ -38,7 +38,7 @@ def initial_preprocessing(
     apply_zero_padding : bool, optional
         Whether to apply zero padding, by default True
     inventory : Inventory, optional
-        The inventory object to use for sensitivity removal, by default None (Will try extract from FDSN if not provided)
+        The inventory object to use for sensitivity removal, by default None (Will try to extract from FDSN if not provided)
 
     Returns
     -------

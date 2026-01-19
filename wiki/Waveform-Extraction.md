@@ -1,7 +1,7 @@
 # ∿ Waveform Extraction
 
 This step in the NZGMDB pipeline downloads waveform data for each station and event listed in the station extraction table. It manages missing data issues, and outputs the results in a structured format for further analysis in MSEED files.
-This step also in addition extracts the Station XML inventory information for each station.
+This step also extracts the Station XML inventory information for each station.
 
 ---
 
