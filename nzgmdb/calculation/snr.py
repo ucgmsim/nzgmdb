@@ -10,8 +10,6 @@ from pathlib import Path
 import numpy as np
 import pandas as pd
 from obspy import read_inventory
-from obspy.clients.fdsn import Client as FDSN_Client
-from obspy.core.inventory import Inventory
 from pandas.errors import EmptyDataError
 
 from IM import im_calculation, snr_calculation
