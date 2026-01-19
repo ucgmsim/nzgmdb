@@ -94,7 +94,8 @@ def create_site_table_response() -> pd.DataFrame:
     NZGMDB_DATA.fetch("nt_domains_kiran.shx")
 
     # Shape file for determining neotectonic domain
-    shapes = list(fiona.open(Path(NZGMDB_DATA.abspath) / "nt_domains_kiran.shp"))
+    with fiona.open(Path(NZGMDB_DATA.abspath) / "nt_domains_kiran.shp") as collection:
+        shapes = list(collection)
     tect_merged_df = tect_domain.find_domain_from_shapes(merged_df, shapes)
 
     # Rename the domain column

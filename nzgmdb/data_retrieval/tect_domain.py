@@ -479,7 +479,8 @@ def add_tect_domain(
     NZGMDB_DATA.fetch("nt_domains_kiran.shx")
 
     # Shape file for determining neotectonic domain
-    shapes = list(fiona.open(Path(NZGMDB_DATA.abspath) / "nt_domains_kiran.shp"))
+    with fiona.open(Path(NZGMDB_DATA.abspath) / "nt_domains_kiran.shp") as collection:
+        shapes = list(collection)
 
     # Read the CMT and event data
     cmt_df = cmt_data.get_cmt_data()
