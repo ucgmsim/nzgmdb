@@ -35,24 +35,6 @@ from nzgmdb.mseed_management import creation
 class StationExtractionResult(NamedTuple):
     """
     Container for waveform extraction results from a single station.
-
-    Parameters
-    ----------
-    sta_mag_line: list of list of object
-        Station magnitude rows.
-    skipped_records: list of object
-        Skipped record rows or DataFrames (as currently produced by the function).
-    clipped_records: list of list of object
-        Clipped record rows.
-    multi_trace_issues: list of pd.DataFrame
-        DataFrames describing multi-trace issues encountered.
-    multi_event_records: list of list of object
-        Multi-event score rows.
-
-    Returns
-    -------
-    StationExtractionResult
-        The extraction result container.
     """
 
     sta_mag_line: list[list[object]]
