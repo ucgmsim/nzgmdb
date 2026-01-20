@@ -38,15 +38,15 @@ class StationExtractionResult(NamedTuple):
 
     Parameters
     ----------
-    sta_mag_line
+    sta_mag_line: list of list of object
         Station magnitude rows.
-    skipped_records
+    skipped_records: list of object
         Skipped record rows or DataFrames (as currently produced by the function).
-    clipped_records
+    clipped_records: list of list of object
         Clipped record rows.
-    multi_trace_issues
+    multi_trace_issues: list of pd.DataFrame
         DataFrames describing multi-trace issues encountered.
-    multi_event_records
+    multi_event_records: list of list of object
         Multi-event score rows.
 
     Returns
