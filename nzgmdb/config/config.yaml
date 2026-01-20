@@ -27,6 +27,12 @@ priority_phase_list:
 channel_codes: "HN?,BN?,HH?,BH?"
 percentage_gap_allowed: 0.1
 is_large_overlap: 0.5
+# Provider / Network Filters
+main_providers_networks:
+  - GEONET:
+      - NZ
+tmp_array_providers_networks:
+  - IRIS
 # Mseed Variables
 vs30: 500
 pre_event_time_difference: 15

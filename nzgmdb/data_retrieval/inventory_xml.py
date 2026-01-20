@@ -11,6 +11,16 @@ from obspy.clients.fdsn.header import FDSNNoDataException
 from nzgmdb.management import file_structure
 
 
+def fetch_inventory(
+    add_tmp_arrays: bool = False,
+    level: str = "response",
+    channel_codes: str | None = None,
+    starttime: str = "2000-01-01",
+    endtime: str = datetime.datetime.strftime(datetime.datetime.now(), "%Y-%m-%d"),
+):
+    pass
+
+
 def fetch_and_save_inventory(
     main_dir: Path,
     stations: list[str],

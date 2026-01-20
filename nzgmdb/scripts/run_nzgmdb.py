@@ -837,6 +837,17 @@ def run_full_nzgmdb(
             dir_okay=False,
         ),
     ] = None,
+    add_tmp_arrays: Annotated[
+        bool,
+        typer.Option(),
+    ] = False,
+    tmp_array_data_dir: Annotated[
+        Path,
+        typer.Option(
+            exists=True,
+            file_okay=False,
+        ),
+    ] = None,
     machine: Annotated[
         cfg.MachineName,
         typer.Option(
@@ -907,11 +918,21 @@ def run_full_nzgmdb(
         If True, the function will create a quality database (default is False).
     bypass_records_ffp : Path, optional
         The full file path to the bypass records file, if applicable.
+    add_tmp_arrays : bool, optional
+        If True, temporary arrays will be added to the database run (default is False).
+    tmp_array_data_dir : Path, optional
+        The directory containing temporary array data, required if add_tmp_arrays is True.
     machine : cfg.MachineName, optional
         The machine name to use for process configuration (default is None).
     """
     main_dir.mkdir(parents=True, exist_ok=True)
     config = cfg.Config()
+
+    # Check that if add_tmp_arrays is True, tmp_array_data_dir is provided
+    if add_tmp_arrays and tmp_array_data_dir is None:
+        raise ValueError(
+            "tmp_array_data_dir must be provided if add_tmp_arrays is True."
+        )
 
     # Generate the site basin flatfile
     flatfile_dir = file_structure.get_flatfile_dir(main_dir)
