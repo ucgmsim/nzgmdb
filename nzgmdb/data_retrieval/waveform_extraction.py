@@ -25,6 +25,7 @@ from obspy.io.mseed import InternalMSEEDError, ObsPyMSEEDFilesizeTooSmallError
 from pandas.errors import EmptyDataError
 
 from nzgmdb.data_processing import filtering
+from nzgmdb.data_retrieval import inventory_xml
 from nzgmdb.management import config as cfg
 from nzgmdb.management import custom_errors, file_structure
 from nzgmdb.mseed_management import creation
@@ -78,7 +79,6 @@ def get_inital_stream(
                     channel_codes,
                     start_time,
                     end_time,
-                    attach_response=True,
                 )
             break
         except FDSNTooManyRequestsException:
@@ -1105,6 +1105,12 @@ def extract_waveforms(
                 multi_trace_issues_df.to_csv(
                     batch_dir / f"multi_trace_issues_{batch_index}.csv", index=False
                 )
+
+    # Grab all the station xmls and write them as outputs
+    unique_sites = station_extraction_table["sta"].unique()
+    print(f"Fetching station XML metadata for {len(unique_sites)} unique sites")
+    inventory_xml.fetch_and_save_inventory(main_dir, unique_sites)
+    print("Station XML metadata fetching complete.")
 
     # Combine all the event and sta_mag dataframes
     sta_mag_dfs = []

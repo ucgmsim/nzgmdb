@@ -1,7 +1,7 @@
 # NZGMDB Changelog
 
-## Version 4.4 - September 25 **2000-01-01 to 2024-12-31**
-* Adding Broadband data (HH) to the database
+## Version 4.4 - Feb 26 **2000-01-01 to 2025-12-31**
+* Adding Broadband data (HH, BH) to the database
 * New Quality Filter to remove Broadband data during certain time periods due to sensitivity issues
 * New Quality Filter to compare against an empirical GMPE (Atkinson 2022) to remove significant outliers
 * Add ability to generate a report to compare NZGMDB versions
@@ -18,6 +18,10 @@
 * Adjust magnitude filters: full ≥ 2.5; quality-filtered ≥ 3.5.
 * Added Hyp_depth to geometry table
 * Adjusted is_ground_level logic by adding in FDSN Inventory data
+* Add XML inventory information per station
+* Change processing to use remove response instead of remove sensitivity
+* Updated CMT solutions for domain regions
+* Increased date range to end of 2025
 
 ## Version 4.3 - July 25 **2000-01-01 to 2024-12-31**
 * Sensitivity Fix (previously always taking first value not for actual datetime expected)
