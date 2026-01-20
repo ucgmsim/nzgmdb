@@ -176,10 +176,36 @@ def create_output_dirs(net, sta, chan_prefix, loc):
     return mseed_path, xml_path
 
 
-def worker(task):
+def download_task(
+    task: tuple[int, str, dict[str, object]]
+) -> None | dict[str, int | str | object] | dict[str, int | str]:
     """
-    Worker that performs a single row download.
-    task: (idx, provider, row_dict)
+    Download waveform and StationXML data for a single CSV row task.
+
+    Parameters
+    ----------
+    task
+        A 3-tuple of `(idx, provider, row_dict)` where:
+        - `idx` is the zero-based row index in the input CSV.
+        - `provider` is the FDSN provider name.
+        - `row_dict` contains the CSV row fields such as `net`, `sta`, `loc`,
+          `chan`, `start_date`, and `end_date`.
+
+    Returns
+    -------
+    dict[str, object]
+        A result dictionary containing at least:
+        - `idx`: int
+        - `status`: `ok` or `error`
+        - `provider`: str
+        And, on success, `net` and `sta`. On error, includes `error`.
+
+    Raises
+    ------
+    Exception
+        Re-raises exceptions encountered during download attempts (for example
+        when the server repeatedly rejects the request as too large after
+        backoff to the minimum chunk size).
     """
     idx, provider, row = task
     try:
@@ -275,23 +301,8 @@ def worker(task):
 
 
 def main():
-    # Use explicit start method to avoid forking issues in some environments
-    try:
-        multiprocessing.set_start_method("spawn")
-    except RuntimeError:
-        # start method already set
-        pass
 
     df = pd.read_csv(CSV_FILE, dtype={"loc": str}, keep_default_na=False)
-
-    # Filter down for ones that are False in completed column
-    # df = df[df["completed"] == False]
-
-    # Filter down to ones thar are True in started column
-    # df = df[df["started"] == False]
-
-    # Filter net to Y3 net (kept from original script)
-    # df = df[df["provider"] == "IRIS"]
 
     required_cols = {"net", "sta", "loc", "chan", "start_date", "end_date", "provider"}
 
@@ -307,13 +318,13 @@ def main():
             continue
         tasks.append((int(idx), row["provider"], row.to_dict()))
 
-    processes = 1
     print(
-        f"Starting multiprocessing pool with {processes} processes for {len(tasks)} tasks (skipped {skipped} already done)"
+        f"Starting sequential run for {len(tasks)} tasks (skipped {skipped} already done)"
     )
 
-    with multiprocessing.Pool(processes=processes) as pool:
-        results = pool.map(worker, tasks)
+    results = []
+    for task in tasks:
+        results.append(download_task(task))
 
     save_results(results, results_csv=RESULTS_CSV)
 

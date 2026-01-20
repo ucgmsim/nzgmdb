@@ -10,7 +10,6 @@ import typer
 
 app = typer.Typer(pretty_exceptions_enable=False)
 
-DROPBOX_PATH = "dropbox:/QuakeCoRE/Public/NZGMDB/tmp_array"
 MANIFEST_HEADER = [
     "type",
     "net",
@@ -25,6 +24,7 @@ MANIFEST_HEADER = [
 # ----------------------------
 # RCLONE / ZIP HELPERS
 # ----------------------------
+
 
 def zip_directory(src_dir: Path, out_dir: Path) -> Path:
     """
@@ -54,14 +54,18 @@ def upload_and_verify(local_file: Path, dropbox_dir: str) -> bool:
 
     local_size = local_file.stat().st_size
 
-    out = subprocess.check_output(
-        [
-            "rclone",
-            "lsf",
-            "--format=s",
-            f"{dropbox_dir}/{local_file.name}",
-        ]
-    ).decode().strip()
+    out = (
+        subprocess.check_output(
+            [
+                "rclone",
+                "lsf",
+                "--format=s",
+                f"{dropbox_dir}/{local_file.name}",
+            ]
+        )
+        .decode()
+        .strip()
+    )
 
     return bool(out) and int(out) == local_size
 
@@ -69,6 +73,7 @@ def upload_and_verify(local_file: Path, dropbox_dir: str) -> bool:
 # ----------------------------
 # MANIFEST LOGIC
 # ----------------------------
+
 
 def load_manifest(path: Path) -> Dict[str, dict]:
     """
@@ -112,6 +117,7 @@ def update_manifest_status(path: Path, zip_name: str, status: str, size: int):
 # DISCOVERY
 # ----------------------------
 
+
 def discover_stationxml(stationxml_dir: Path):
     yield {
         "type": "stationxml",
@@ -148,18 +154,17 @@ def discover_waveforms(waveforms_root: Path):
 # MAIN PIPELINE
 # ----------------------------
 
+
 def process_entry(
-    entry: dict,
-    tmp_zip_dir: Path,
-    manifest_path: Path,
+    entry: dict, tmp_zip_dir: Path, manifest_path: Path, dropbox_path: str
 ):
     src = Path(entry["local_path"])
     zip_path = zip_directory(src, tmp_zip_dir)
 
     if entry["type"] == "stationxml":
-        dropbox_target = f"{DROPBOX_PATH}/stationxml"
+        dropbox_target = f"{dropbox_path}/stationxml"
     else:
-        dropbox_target = f"{DROPBOX_PATH}/waveforms/{entry['net']}"
+        dropbox_target = f"{dropbox_path}/waveforms/{entry['net']}"
 
     try:
         ok = upload_and_verify(zip_path, dropbox_target)
@@ -182,9 +187,16 @@ def process_entry(
 # CLI
 # ----------------------------
 
+
 @app.command()
 def run(
-    data_root: Path = typer.Argument(..., help="Root directory containing waveforms/ and stationxml/"),
+    data_root: Path = typer.Argument(
+        ..., help="Root directory containing waveforms/ and stationxml/"
+    ),
+    dropbox_path: str = typer.Argument(
+        ...,
+        help="Rclone Dropbox path to upload to.",
+    ),
 ):
     """
     Resume-safe Dropbox backup with manifest tracking.
@@ -210,15 +222,12 @@ def run(
     # Reload after discovery
     manifest_rows = load_manifest(manifest)
 
-    pending = [
-        row for row in manifest_rows.values()
-        if row["status"] != "DONE"
-    ]
+    pending = [row for row in manifest_rows.values() if row["status"] != "DONE"]
 
     print(f"Pending uploads: {len(pending)}")
 
     for entry in pending:
-        process_entry(entry, tmp_zip_dir, manifest)
+        process_entry(entry, tmp_zip_dir, manifest, dropbox_path)
 
 
 if __name__ == "__main__":
