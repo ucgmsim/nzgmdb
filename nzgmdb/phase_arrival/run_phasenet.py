@@ -10,7 +10,7 @@ import h5py
 import mseedlib
 import numpy as np
 import pandas as pd
-from obspy import Stream, Trace, UTCDateTime
+from obspy import Inventory, Stream, Trace, UTCDateTime
 from obspy.clients.fdsn import Client as FDSN_Client
 from obspy.clients.fdsn.header import FDSNNoDataException
 
@@ -111,7 +111,12 @@ def run_phase_net(
     return p_wave_ix, s_wave_ix
 
 
-def process_mseed(mseed_file: Path, h5_ffp: Path, bypass_row: pd.Series = None):
+def process_mseed(
+    mseed_file: Path,
+    h5_ffp: Path,
+    bypass_row: pd.Series = None,
+    inventory: Inventory = None,
+):
     """
     Process an mseed file and return the phase arrival data.
 
@@ -123,6 +128,8 @@ def process_mseed(mseed_file: Path, h5_ffp: Path, bypass_row: pd.Series = None):
         Path to the HDF5 file to save the probability series.
     bypass_row : pd.Series, optional
         A row from the bypass file with known p and s wave datetimes, by default None
+    inventory : Inventory, optional
+        The inventory object to use for sensitivity removal, by default None (Will try extract from FDSN if not provided)
 
     Returns
     -------
@@ -188,33 +195,26 @@ def process_mseed(mseed_file: Path, h5_ffp: Path, bypass_row: pd.Series = None):
     station = mseed[0].stats.station
     location = mseed[0].stats.location
 
-    # Get Station Information from geonet clients
-    # Fetching here instead of passing the inventory object as searching for the station, network, and channel
-    # information takes a long time as it's implemented in a for loop
-    try:
-        client_NZ = FDSN_Client("GEONET")
-        inv = client_NZ.get_stations(
-            level="response", network="NZ", station=station, location=location
-        )
-    except FDSNNoDataException:
-        skipped_record = pd.DataFrame(
-            {
-                "record_id": [mseed_file.stem],
-                "reason": ["Failed to find Inventory information"],
-            }
-        )
-        create_empty_h5_file(h5_ffp, mseed_file.stem)
-        return None, skipped_record
-
-    # Add the response (Same for all channels)
-    # this is done so that the sensitivity can be removed otherwise it tries to find the exact same channel
-    # which can fail when including the inventory information
-    response = next(cha.response for sta in inv.networks[0] for cha in sta.channels)
-    for tr in mseed:
-        tr.stats.response = response
+    if inventory is None:
+        try:
+            client_NZ = FDSN_Client("GEONET")
+            inv = client_NZ.get_stations(
+                level="response", network="NZ", station=station, location=location
+            )
+        except FDSNNoDataException:
+            skipped_record = pd.DataFrame(
+                {
+                    "record_id": [mseed_file.stem],
+                    "reason": ["Failed to find Inventory information"],
+                }
+            )
+            create_empty_h5_file(h5_ffp, mseed_file.stem)
+            return None, skipped_record
+    else:
+        inv = inventory
 
     try:
-        mseed = mseed.remove_sensitivity()
+        mseed = mseed.remove_response(inventory=inv, output="ACC")
     except ValueError:
         skipped_record = pd.DataFrame(
             {
@@ -302,9 +302,7 @@ def process_mseed(mseed_file: Path, h5_ffp: Path, bypass_row: pd.Series = None):
     )
 
 
-def run_phasenet(
-    mseed_files_ffp: Path, output_dir: Path, bypass_ffp: Union[Path, None] = None
-):
+def run_phasenet(mseed_files_ffp: Path, output_dir: Path, bypass_ffp: Path = None):
     """
     Run PhaseNet on the mseed files.
 
