@@ -283,3 +283,20 @@ def get_gmc_dir(main_dir: Path) -> Path:
         The directory where GMC results are stored.
     """
     return main_dir / "gmc"
+
+
+def get_stationxml_dir(main_dir: Path) -> Path:
+    """
+    Get the directory for storing StationXML files.
+
+    Parameters
+    ----------
+    main_dir : Path
+        The main directory of the NZGMDB results.
+
+    Returns
+    -------
+    Path
+        The directory where StationXML files are stored.
+    """
+    return main_dir / "stationxml"
