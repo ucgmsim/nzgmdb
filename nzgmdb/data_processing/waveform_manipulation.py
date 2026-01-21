@@ -18,7 +18,7 @@ def initial_preprocessing(
     apply_taper: bool = True,
     apply_zero_padding: bool = True,
     inventory: Inventory = None,
-):
+) -> Stream:
     """
     Basic pre-processing of the waveform data
     This performs the following:
