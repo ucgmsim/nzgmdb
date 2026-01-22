@@ -86,15 +86,16 @@ def create_site_table_response() -> pd.DataFrame:
         on="sta",
         how="left",
     )
+    # Fill Elevation NaN values from sta_df
+    merged_df["elev"] = merged_df["Elevation"].combine_first(merged_df["elev"])
     # Specify the required files for fiona
-    NZGMDB_DATA.fetch("TectonicDomains_Feb2021_8_NZTM.shp")
-    NZGMDB_DATA.fetch("TectonicDomains_Feb2021_8_NZTM.dbf")
-    NZGMDB_DATA.fetch("TectonicDomains_Feb2021_8_NZTM.shx")
+    NZGMDB_DATA.fetch("nt_domains_kiran.shp")
+    NZGMDB_DATA.fetch("nt_domains_kiran.dbf")
+    NZGMDB_DATA.fetch("nt_domains_kiran.shx")
 
     # Shape file for determining neotectonic domain
-    shapes = list(
-        fiona.open(Path(NZGMDB_DATA.abspath) / "TectonicDomains_Feb2021_8_NZTM.shp")
-    )
+    with fiona.open(Path(NZGMDB_DATA.abspath) / "nt_domains_kiran.shp") as collection:
+        shapes = list(collection)
     tect_merged_df = tect_domain.find_domain_from_shapes(merged_df, shapes)
 
     # Rename the domain column

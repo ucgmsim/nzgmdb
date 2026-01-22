@@ -19,3 +19,4 @@ source_modelling>=2025.12.1,
 openquake.engine==3.23.2,
 im-calculation>=2025.12.3,
 velocity-modelling>=2025.12.1
+cmt-solutions @ git+https://github.com/ucgmsim/cmt_solutions.git

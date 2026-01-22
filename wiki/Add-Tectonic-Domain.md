@@ -46,11 +46,12 @@ Relocations are applied from the Reyners Catalogue to improve location accuracy:
 - Sets `reloc` field to "reyners" for successfully relocated events
 
 ### 🔹 2. Centroid Moment Tensor (CMT) Solutions
-GeoNet CMT location solutions are applied, which override Reyners relocations when overlapping:
+GeoNet and John Townend CMT location solutions are applied, which override Reyners relocations when overlapping:
 
-**GeoNet CMT Solutions**
+**CMT Solutions**
 
-- Applies Centroid Moment Tensor (CMT) solutions from GeoNet
+- Applies Centroid Moment Tensor (CMT) solutions from GeoNet and John Townend study
+- Overrides previous relocations (including Reyners) when CMT solutions are available
 - Updates source parameters: mag (Mw), lat, lon, depth
 - Sets metadata fields: mag_type="Mw", mag_method="CMT", loc_type="CMT", loc_grid="CMT", reloc="no"
 
@@ -128,7 +129,6 @@ The enhanced earthquake source table contains all original fields plus:
 The step uses several configuration parameters from `config.yaml`:
 
 - **nzsmdb_url**: URL for NZ Strong Motion Database flatfile
-- **cmt_url**: URL for GeoNet CMT solutions
 - **ll_num**: WGS84 coordinate system identifier
 - **nztm_num**: NZTM coordinate system identifier
 
