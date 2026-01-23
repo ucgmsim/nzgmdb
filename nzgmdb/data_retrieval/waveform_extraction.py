@@ -10,6 +10,7 @@ import time
 import warnings
 from datetime import datetime
 from pathlib import Path
+from typing import NamedTuple
 
 import numpy as np
 import pandas as pd
@@ -29,6 +30,18 @@ from nzgmdb.data_retrieval import inventory_xml
 from nzgmdb.management import config as cfg
 from nzgmdb.management import custom_errors, file_structure
 from nzgmdb.mseed_management import creation
+
+
+class StationExtractionResult(NamedTuple):
+    """
+    Container for waveform extraction results from a single station.
+    """
+
+    sta_mag_line: list[list[object]]
+    skipped_records: list[object]
+    clipped_records: list[list[object]]
+    multi_trace_issues: list[pd.DataFrame]
+    multi_event_records: list[list[object]]
 
 
 def get_inital_stream(
@@ -715,6 +728,8 @@ def get_station_window(
     pre_event_time_difference = config.get_value("pre_event_time_difference")
 
     # Compute the ds multiplier time
+    # NOTE: This is based on an equation derived from statistical analysis of NZGMDB data
+    # by Aaron, when looking at impacts of ds_std multiplier on picking up multi-event records.
     ds_std_multiplier = 0.8 / (1 + np.exp(-0.035 * (r_hyp - 140))) + 2.2
 
     start_time = ptime_est - pre_event_time_difference
@@ -730,7 +745,7 @@ def extract_station_info(
     event_catalogues: dict,
     extraction_table: pd.DataFrame,
     only_record_ids: pd.DataFrame = None,
-):
+) -> StationExtractionResult:
     """
     Extract the waveform data for a single station based on the extraction parameters.
 
@@ -749,16 +764,9 @@ def extract_station_info(
 
     Returns
     -------
-    list
-        A list of lists containing the station magnitude data.
-    list
-        A list of lists containing the skipped records.
-    list
-        A list of lists containing the clipped records.
-    list
-        A list of DataFrames containing any multi-trace issues raised during the extraction.
-    list
-        A list of lists containing the multi-event records scores.
+    StationExtractionResult
+        Named result object containing station magnitude data, skipped records, clipped records,
+        multi-trace issues, and multi-event record scores.
     """
     (
         sta_mag_line,
@@ -813,12 +821,12 @@ def extract_station_info(
                 {"record_id": [f"{event_id}_{station}"], "reason": ["No Waveform Data"]}
             )
         )
-        return (
-            sta_mag_line,
-            skipped_records,
-            clipped_records,
-            multi_trace_issues,
-            multi_event_records,
+        return StationExtractionResult(
+            sta_mag_line=sta_mag_line,
+            skipped_records=skipped_records,
+            clipped_records=clipped_records,
+            multi_trace_issues=multi_trace_issues,
+            multi_event_records=multi_event_records,
         )
 
     # Get the unique channels (Using first 2 keys) and locations
@@ -982,12 +990,12 @@ def extract_station_info(
                 ]
             )
 
-    return (
-        sta_mag_line,
-        skipped_records,
-        clipped_records,
-        multi_trace_issues,
-        multi_event_records,
+    return StationExtractionResult(
+        sta_mag_line=sta_mag_line,
+        skipped_records=skipped_records,
+        clipped_records=clipped_records,
+        multi_trace_issues=multi_trace_issues,
+        multi_event_records=multi_event_records,
     )
 
 
