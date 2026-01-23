@@ -542,6 +542,12 @@ def generate_site_table_basin(
             file_okay=False,
         ),
     ],
+    add_tmp_arrays: Annotated[
+        bool,
+        typer.Option(
+            is_flag=True,
+        ),
+    ] = False,
 ):
     """
     Generate the site table basin flatfile.
@@ -554,13 +560,15 @@ def generate_site_table_basin(
         The main directory of the NZGMDB results (Highest level directory).
     nzcvm_data_ffp : Path
         The full file path to the nzcvm_data repository that stores the basin information.
+    add_tmp_arrays : bool, optional
+        If True, temporary arrays will be added to the site table (default is False).
     """
     main_dir.mkdir(parents=True, exist_ok=True)
     # Generate the site basin flatfile
     flatfile_dir = file_structure.get_flatfile_dir(main_dir)
     flatfile_dir.mkdir(parents=True, exist_ok=True)
 
-    site_df = sites.create_site_table_response()
+    site_df = sites.create_site_table_response(add_tmp_arrays)
     site_df = sites.add_site_basins(site_df, nzcvm_data_ffp)
 
     site_df.to_csv(
@@ -942,7 +950,7 @@ def run_full_nzgmdb(
         and (flatfile_dir / file_structure.PreFlatfileNames.SITE_TABLE).exists()
     ):
         print("Generating site table basin flatfile")
-        generate_site_table_basin(main_dir, nzcvm_data_ffp)
+        generate_site_table_basin(main_dir, nzcvm_data_ffp, add_tmp_arrays)
 
     # Fetch the Geonet data
     if not (

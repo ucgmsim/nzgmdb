@@ -359,6 +359,7 @@ def fetch_sta_extraction(
         # Create the station_extraction_table
         station_extraction_table = pd.DataFrame(
             {
+                "provider": ["GEONET"],
                 "net": [network.code],
                 "sta": [station.code],
                 "evid": [event_id],

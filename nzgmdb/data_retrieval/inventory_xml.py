@@ -21,6 +21,21 @@ def fetch_inventory(
     pass
 
 
+"""
+Way of reading all site information from all providers / listed networks
+geonet - all
+iris - limited
+bounding box for all sites to be on land in nz
+
+station level
+response level
+
+
+a specific site channel location extraction - need the provider / net in the function call (maybe)
+
+"""
+
+
 def fetch_and_save_inventory(
     main_dir: Path,
     stations: list[str],

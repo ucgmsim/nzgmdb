@@ -181,61 +181,92 @@ def sample_points_from_geotiff(
     return samples.reshape(-1, 1)
 
 
-def create_site_table_response() -> pd.DataFrame:
+def create_site_table_response(add_tmp_arrays: bool = False) -> pd.DataFrame:
     """
     Create the site table for the NZGMDB. This function fetches the station information from the FDSN clients, and the
     Geonet metadata summary information. It then merges the two dataframes and determines the tectonic domain for each
     station. The final dataframe is saved as a csv file in the flatfile directory.
+
+    Parameters
+    ----------
+    add_tmp_arrays : bool, optional
+        Whether to add temporary arrays to the station information, by default False
 
     Returns
     -------
     pd.DataFrame
         The site table dataframe with all Z, vs30, domain and location values for each site
         used in the NZGMDB
+    pd.DataFrame
+        The station table dataframe with all channel and location values for each site
     """
     # Fetch the client station information
-    client_NZ = FDSN_Client("GEONET")
     config = cfg.Config()
     channel_codes = config.get_value("channel_codes")
-    inventory = client_NZ.get_stations(channel=channel_codes, level="station")
-    station_info = []
-    for network in inventory:
-        for station in network:
-            station_info.append(
-                [
-                    network.code,
-                    station.code,
-                    station.latitude,
-                    station.longitude,
-                    station.elevation,
-                    station.creation_date,
-                    station.end_date,
-                ]
-            )
-    sta_df = pd.DataFrame(
-        station_info,
-        columns=["net", "sta", "lat", "lon", "elev", "creation_date", "end_date"],
-    )
-    sta_df = sta_df.drop_duplicates(["net", "sta"])
+    for provider in ["GEONET"]:
+        client_NZ = FDSN_Client(provider)
+        inventory = client_NZ.get_stations(channel=channel_codes, level="response")
+        station_info = [
+            [
+                provider,
+                network.code,
+                station.code,
+                station.latitude,
+                station.longitude,
+                station.elevation,
+                station.creation_date,
+                station.end_date,
+                channel.code[:2],
+                channel.location_code,
+                channel.depth,
+                channel.start_date,
+                channel.end_date,
+            ]
+            for network in inventory
+            for station in network
+            for channel in station.channels
+        ]
+        all_info_df = pd.DataFrame(
+            station_info,
+            columns=[
+                "provider",
+                "net",
+                "sta",
+                "lat",
+                "lon",
+                "elev",
+                "creation_date",
+                "end_date",
+                "chan",
+                "loc",
+                "loc_elev",
+                "start_time",
+                "end_time",
+            ],
+        )
+
+    all_info_df = all_info_df.drop_duplicates(
+        ["provider", "net", "sta", "chan", "loc", "loc_elev"]
+    ).reset_index(drop=True)
 
     bbox = config.get_value("bbox")  # [min_lon, min_lat, max_lon, max_lat]
     min_lon, min_lat, max_lon, max_lat = bbox
 
     # Ensure lat/lon are present and within latitude bounds
     mask_lat = (
-        sta_df["lat"].notna()
-        & sta_df["lon"].notna()
-        & (sta_df["lat"] >= min_lat)
-        & (sta_df["lat"] <= max_lat)
+        all_info_df["lat"].notna()
+        & all_info_df["lon"].notna()
+        & (all_info_df["lat"] >= min_lat)
+        & (all_info_df["lat"] <= max_lat)
     )
 
     # Handle antimeridian crossing: if min_lon > max_lon use OR
     if min_lon <= max_lon:
-        mask_lon = (sta_df["lon"] >= min_lon) & (sta_df["lon"] <= max_lon)
+        mask_lon = (all_info_df["lon"] >= min_lon) & (all_info_df["lon"] <= max_lon)
     else:
-        mask_lon = (sta_df["lon"] >= min_lon) | (sta_df["lon"] <= max_lon)
+        mask_lon = (all_info_df["lon"] >= min_lon) | (all_info_df["lon"] <= max_lon)
 
-    sta_df = sta_df.loc[mask_lat & mask_lon]
+    all_info_df = all_info_df.loc[mask_lat & mask_lon]
 
     # Get the Geonet metadata summary information
     geo_meta_summary_df = pd.read_csv(
@@ -264,11 +295,11 @@ def create_site_table_response() -> pd.DataFrame:
     )
 
     merged_df = geo_meta_summary_df.merge(
-        sta_df[["net", "sta", "lat", "lon", "elev", "creation_date", "end_date"]],
+        all_info_df[["net", "sta", "lat", "lon", "elev", "creation_date", "end_date"]],
         on="sta",
         how="outer",
     )
-    # Fill Lat, Lon, Elevation NaN values from sta_df
+    # Fill Lat, Lon, Elevation NaN values from all_info_df
     merged_df["elev"] = merged_df["Elevation"].combine_first(merged_df["elev"])
     merged_df["lat"] = merged_df["Lat"].combine_first(merged_df["lat"])
     merged_df["lon"] = merged_df["Long"].combine_first(merged_df["lon"])
@@ -347,9 +378,25 @@ def create_site_table_response() -> pd.DataFrame:
         except (FileNotFoundError, ValueError, RuntimeError) as e:
             print(f"Warning: Could not compute thresholds for missing Z1.0 values: {e}")
 
-    # Select specific columns
+    # Split into station and site dfs
+    station_df = all_info_df.loc[
+        [
+            "provider",
+            "net",
+            "sta",
+            "lat",
+            "lon",
+            "elev",
+            "chan",
+            "loc",
+            "loc_elev",
+            "start_time",
+            "end_time",
+        ]
+    ]
     site_df = tect_merged_df[
         [
+            "provider",
             "net",
             "sta",
             "lat",
@@ -381,7 +428,7 @@ def create_site_table_response() -> pd.DataFrame:
     site_df = site_df.astype({"Z2.5": float})
     site_df.loc[:, "Z2.5"] /= 1000.0
 
-    return site_df
+    return site_df, station_df
 
 
 def add_site_basins(site_df: pd.DataFrame, nzcvm_data_ffp: Path) -> pd.DataFrame:

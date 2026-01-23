@@ -18,6 +18,8 @@ def initial_preprocessing(
     apply_taper: bool = True,
     apply_zero_padding: bool = True,
     inventory: Inventory = None,
+    provider: str = "GEONET",
+    network: str = "NZ",
 ) -> Stream:
     """
     Basic pre-processing of the waveform data
@@ -39,6 +41,10 @@ def initial_preprocessing(
         Whether to apply zero padding, by default True
     inventory : Inventory, optional
         The inventory object to use for sensitivity removal, by default None (Will try to extract from FDSN if not provided)
+    provider : str, optional
+        The FDSN provider to use if inventory is not provided, by default "GEONET"
+    network : str, optional
+        The network code to use if inventory is not provided, by default "NZ"
 
     Returns
     -------
@@ -82,9 +88,9 @@ def initial_preprocessing(
     inv = inventory
     if inv is None:
         try:
-            client_NZ = FDSN_Client("GEONET")
+            client_NZ = FDSN_Client(provider)
             inv = client_NZ.get_stations(
-                level="response", network="NZ", station=station, location=location
+                level="response", network=network, station=station, location=location
             )
         except FDSNNoDataException:
             raise custom_errors.InventoryNotFoundError(
