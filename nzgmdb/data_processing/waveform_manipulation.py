@@ -77,14 +77,14 @@ def initial_preprocessing(
     # Get the inventory information
     station = mseed[0].stats.station
     location = mseed[0].stats.location
-    channel = mseed[0].stats.channel
+    channel = mseed[0].stats.channel[:2]
 
     inv = inventory
     if inv is None:
         try:
             client_NZ = FDSN_Client("GEONET")
             inv = client_NZ.get_stations(
-                level="response", network="NZ", station=station, location=location
+                level="response", network="NZ", station=station, location=location, channel=f"{channel}?"
             )
         except FDSNNoDataException:
             raise custom_errors.InventoryNotFoundError(
@@ -112,7 +112,7 @@ def initial_preprocessing(
         )
 
     # If the channel is not a Strong Motion station then we need to differentiate
-    if channel[:2] not in ["HN", "BN"]:
+    if channel not in ["HN", "BN"]:
         try:
             # differentiate data i.e., m/s to m/s^2
             mseed.differentiate()

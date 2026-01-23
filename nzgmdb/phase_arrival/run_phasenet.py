@@ -193,6 +193,7 @@ def process_mseed(
     # Get the inventory information
     station = mseed[0].stats.station
     location = mseed[0].stats.location
+    channel = mseed[0].stats.channel[:2]
 
     if inventory is None:
         try:
@@ -223,6 +224,21 @@ def process_mseed(
         )
         create_empty_h5_file(h5_ffp, mseed_file.stem)
         return None, skipped_record
+
+    # If the channel is not a Strong Motion station then we need to differentiate
+    if channel not in ["HN", "BN"]:
+        try:
+            # differentiate data i.e., m/s to m/s^2
+            mseed.differentiate()
+        except ValueError:
+            skipped_record = pd.DataFrame(
+                {
+                    "record_id": [mseed_file.stem],
+                    "reason": ["Unable to differentiate record"],
+                }
+            )
+            create_empty_h5_file(h5_ffp, mseed_file.stem)
+            return None, skipped_record
 
     try:
         p_wave_ix, s_wave_ix, p_prob_series, s_prob_series, p_prob, s_prob = (
