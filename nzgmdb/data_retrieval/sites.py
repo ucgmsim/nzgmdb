@@ -202,10 +202,17 @@ def create_site_table_response(add_tmp_arrays: bool = False) -> pd.DataFrame:
     """
     # Fetch the client station information
     config = cfg.Config()
+    bbox = config.get_value("bbox")  # [min_lon, min_lat, max_lon, max_lat]
+    min_lon, min_lat, max_lon, max_lat = bbox
+    max_lon = 180 # Due to issues with FDSN of passing barrier (no land past this point for sites that are of interest)
     channel_codes = config.get_value("channel_codes")
-    for provider in ["GEONET"]:
+    provider_networks = config.get_value("main_providers_networks")
+    if add_tmp_arrays:
+        provider_networks.update(config.get_value("tmp_array_providers_networks"))
+    for provider, networks in provider_networks.items():
         client_NZ = FDSN_Client(provider)
-        inventory = client_NZ.get_stations(channel=channel_codes, level="response")
+        networks = ",".join(networks)
+        inventory = client_NZ.get_stations(network=networks, channel=channel_codes, level="response", maxlatitude=max_lat, minlatitude=min_lat, maxlongitude=max_lon, minlongitude=min_lon)
         station_info = [
             [
                 provider,
@@ -248,25 +255,6 @@ def create_site_table_response(add_tmp_arrays: bool = False) -> pd.DataFrame:
     all_info_df = all_info_df.drop_duplicates(
         ["provider", "net", "sta", "chan", "loc", "loc_elev"]
     ).reset_index(drop=True)
-
-    bbox = config.get_value("bbox")  # [min_lon, min_lat, max_lon, max_lat]
-    min_lon, min_lat, max_lon, max_lat = bbox
-
-    # Ensure lat/lon are present and within latitude bounds
-    mask_lat = (
-        all_info_df["lat"].notna()
-        & all_info_df["lon"].notna()
-        & (all_info_df["lat"] >= min_lat)
-        & (all_info_df["lat"] <= max_lat)
-    )
-
-    # Handle antimeridian crossing: if min_lon > max_lon use OR
-    if min_lon <= max_lon:
-        mask_lon = (all_info_df["lon"] >= min_lon) & (all_info_df["lon"] <= max_lon)
-    else:
-        mask_lon = (all_info_df["lon"] >= min_lon) | (all_info_df["lon"] <= max_lon)
-
-    all_info_df = all_info_df.loc[mask_lat & mask_lon]
 
     # Get the Geonet metadata summary information
     geo_meta_summary_df = pd.read_csv(

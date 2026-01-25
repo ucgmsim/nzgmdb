@@ -29,10 +29,39 @@ percentage_gap_allowed: 0.1
 is_large_overlap: 0.5
 # Provider / Network Filters
 main_providers_networks:
-  - GEONET:
-      - NZ
+  GEONET:
+    - IU
+    - NZ
 tmp_array_providers_networks:
-  - IRIS
+  IRIS:
+    - 1U
+    - 2B
+    - 2L
+    - 2P
+    - 3C
+    - 4A
+    - 6F
+    - 6K
+    - 7D
+    - 7S
+    - 9F
+    - 9G
+    - IU
+    - NZ
+    - QC
+    - X2
+    - XB
+    - XH
+    - XQ
+    - Y3
+    - YA
+    - YO
+    - YR
+    - Z1
+    - Z8
+    - ZP
+    - ZT
+    - ZX
 # Mseed Variables
 vs30: 500
 pre_event_time_difference: 15
