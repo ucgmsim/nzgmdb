@@ -9,11 +9,10 @@ import fiona
 import numpy as np
 import pandas as pd
 import rasterio
-from obspy.clients.fdsn import Client as FDSN_Client
 from pyproj import Transformer
 from scipy.spatial import cKDTree
 
-from nzgmdb.data_retrieval import tect_domain
+from nzgmdb.data_retrieval import tect_domain, inventory_xml
 from nzgmdb.management import config as cfg
 from nzgmdb.management.data_registry import NZGMDB_DATA
 from qcore import point_in_polygon
@@ -202,59 +201,9 @@ def create_site_table_response(add_tmp_arrays: bool = False) -> pd.DataFrame:
     """
     # Fetch the client station information
     config = cfg.Config()
-    bbox = config.get_value("bbox")  # [min_lon, min_lat, max_lon, max_lat]
-    min_lon, min_lat, max_lon, max_lat = bbox
-    max_lon = 180 # Due to issues with FDSN of passing barrier (no land past this point for sites that are of interest)
-    channel_codes = config.get_value("channel_codes")
-    provider_networks = config.get_value("main_providers_networks")
-    if add_tmp_arrays:
-        provider_networks.update(config.get_value("tmp_array_providers_networks"))
-    for provider, networks in provider_networks.items():
-        client_NZ = FDSN_Client(provider)
-        networks = ",".join(networks)
-        inventory = client_NZ.get_stations(network=networks, channel=channel_codes, level="response", maxlatitude=max_lat, minlatitude=min_lat, maxlongitude=max_lon, minlongitude=min_lon)
-        station_info = [
-            [
-                provider,
-                network.code,
-                station.code,
-                station.latitude,
-                station.longitude,
-                station.elevation,
-                station.creation_date,
-                station.end_date,
-                channel.code[:2],
-                channel.location_code,
-                channel.depth,
-                channel.start_date,
-                channel.end_date,
-            ]
-            for network in inventory
-            for station in network
-            for channel in station.channels
-        ]
-        all_info_df = pd.DataFrame(
-            station_info,
-            columns=[
-                "provider",
-                "net",
-                "sta",
-                "lat",
-                "lon",
-                "elev",
-                "creation_date",
-                "end_date",
-                "chan",
-                "loc",
-                "loc_elev",
-                "start_time",
-                "end_time",
-            ],
-        )
-
-    all_info_df = all_info_df.drop_duplicates(
-        ["provider", "net", "sta", "chan", "loc", "loc_elev"]
-    ).reset_index(drop=True)
+    all_info_df = inventory_xml.get_full_inventory(
+        add_tmp_arrays=add_tmp_arrays, return_df=True
+    )
 
     # Get the Geonet metadata summary information
     geo_meta_summary_df = pd.read_csv(

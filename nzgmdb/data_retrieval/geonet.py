@@ -21,6 +21,7 @@ from obspy.taup import TauPyModel
 from pandas.errors import EmptyDataError
 from scipy.interpolate import interp1d
 
+from nzgmdb.data_retrieval import inventory_xml
 from nzgmdb.management import config as cfg
 from nzgmdb.management import custom_errors, file_structure
 from nzgmdb.management.data_registry import NZGMDB_DATA
@@ -731,6 +732,7 @@ def parse_geonet_information(
     only_record_ids_ffp: Path = None,
     real_time: bool = False,
     mp_sites: bool = False,
+    add_tmp_arrays: bool = False,
 ):
     """
     Read the geonet information and manage the fetching of more data to create the mseed files
@@ -757,6 +759,8 @@ def parse_geonet_information(
         If the function is being used in real time use a different client, default is False
     mp_sites : bool (optional)
         Whether to multiprocess over sites (when not using mp over events)
+    add_tmp_arrays : bool (optional)
+        Whether to add temporary array stations to the inventory, default is False
     """
     if only_record_ids_ffp:
         # Read the only record ids file
@@ -781,13 +785,16 @@ def parse_geonet_information(
         only_record_ids = None
 
     config = cfg.Config()
-    channel_codes = config.get_value("channel_codes")
     if real_time:
+        inventory = inventory_xml.get_provider_inventory(
+            real_time=True, level="station"
+        )
         client_NZ = FDSN_Client(base_url=config.get_value("real_time_url"))
     else:
-        # Get Station Information from geonet clients
+        inventory = inventory_xml.get_full_inventory(
+            add_tmp_arrays=add_tmp_arrays, level="station"
+        )
         client_NZ = FDSN_Client("GEONET")
-    inventory = client_NZ.get_stations(channel=channel_codes, level="station")
 
     # Get the rrup data
     mw_rrup_data = np.loadtxt(NZGMDB_DATA.fetch("Mw_rrup.txt"))
