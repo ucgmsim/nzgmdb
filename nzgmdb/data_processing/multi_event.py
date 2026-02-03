@@ -51,7 +51,7 @@ def sync_event_from_stream(
     return start_time, end_time, sync_event
 
 
-def stalta_triggers(tr: Trace):
+def stalta_triggers(tr: Trace) -> int:
     """
     Compute STA/LTA characteristic function and extract cleaned triggers.
 

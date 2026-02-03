@@ -1,4 +1,7 @@
+from collections.abc import Iterator
 from pathlib import Path
+from types import TracebackType
+from typing import Any, Self
 
 import numpy as np
 import pandas as pd
@@ -7,6 +10,39 @@ from rasterio.io import MemoryFile
 from rasterio.transform import from_origin
 
 from nzgmdb.data_retrieval import sites
+
+
+class _DummyFionaCollection:
+    """
+    Minimal context manager that mimics a Fiona Collection.
+
+    Parameters
+    ----------
+    shapes : list
+        Iterable of shape-like records to yield when iterated.
+
+    Returns
+    -------
+    _DummyFionaCollection
+        Context manager instance that can be iterated over.
+    """
+
+    def __init__(self, shapes: list[Any]) -> None:  # noqa: D107
+        self._shapes = shapes
+
+    def __enter__(self) -> Self:  # noqa: D105
+        return self
+
+    def __exit__(  # noqa: D105
+        self,
+        exc_type: type[BaseException] | None,
+        exc: BaseException | None,
+        tb: TracebackType | None,
+    ) -> bool:
+        return False
+
+    def __iter__(self) -> Iterator[Any]:  # noqa: D105
+        return iter(self._shapes)
 
 
 def _make_test_geotiff(
@@ -193,7 +229,11 @@ def test_site_updates_vs30_and_z1_fields_only_when_available(
 
     monkeypatch.setattr(sites, "FDSN_Client", _DummyClient)
 
-    monkeypatch.setattr(sites.fiona, "open", lambda *_a, **_k: [])
+    monkeypatch.setattr(
+        sites.fiona,
+        "open",
+        lambda *_a, **_k: _DummyFionaCollection([]),
+    )
 
     # Do NOT monkeypatch NZGMDB_DATA.abspath (read-only property).
     # Instead, patch fetch() to return a temp file path for the tif and anything else requested.

@@ -90,7 +90,7 @@ def initial_preprocessing(
         try:
             client_NZ = FDSN_Client(provider)
             inv = client_NZ.get_stations(
-                level="response", network=network, station=station, location=location
+                level="response", network=network, station=station, location=location, channel=f"{channel}?"
             )
         except FDSNNoDataException:
             raise custom_errors.InventoryNotFoundError(

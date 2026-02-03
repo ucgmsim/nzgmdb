@@ -9,12 +9,9 @@ from pathlib import Path
 import numpy as np
 import pandas as pd
 from obspy import read_inventory
-from obspy.clients.fdsn import Client as FDSN_Client
-from obspy.core.inventory import Inventory
 
 import qcore.timeseries as ts
 from nzgmdb.data_processing import waveform_manipulation
-from nzgmdb.management import config as cfg
 from nzgmdb.management import custom_errors, file_structure
 from nzgmdb.mseed_management import reading
 

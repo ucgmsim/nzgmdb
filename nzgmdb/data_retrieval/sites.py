@@ -22,9 +22,9 @@ from velocity_modelling import registry, threshold
 def fill_gaps_with_nearest(
     coords: np.ndarray,
     values: np.ndarray,
-    invalid_mask: np.ndarray = None,
+    invalid_mask: np.ndarray | None = None,
     k: int = 8,
-):
+) -> np.ndarray:
     """
     Fill NaN or invalid values using nearest-neighbour averaging.
 
@@ -85,7 +85,7 @@ def sample_points_from_geotiff(
     file_path: Path,
     latlon_points: np.ndarray,
     band: int = 1,
-):
+) -> np.ndarray:
     """
     Sample a GeoTIFF raster at given latitude/longitude points.
 
@@ -246,7 +246,8 @@ def create_site_table_response(add_tmp_arrays: bool = False) -> pd.DataFrame:
     NZGMDB_DATA.fetch("nt_domains_kiran.shx")
 
     # Shape file for determining neotectonic domain
-    shapes = list(fiona.open(Path(NZGMDB_DATA.abspath) / "nt_domains_kiran.shp"))
+    with fiona.open(Path(NZGMDB_DATA.abspath) / "nt_domains_kiran.shp") as collection:
+        shapes = list(collection)
     tect_merged_df = tect_domain.find_domain_from_shapes(merged_df, shapes)
 
     # Rename the domain column
@@ -312,8 +313,10 @@ def create_site_table_response(add_tmp_arrays: bool = False) -> pd.DataFrame:
             tect_merged_df.loc[vs30_mask, "Vs30_Ref"] = "Foster et al. (2019)"
             tect_merged_df.loc[vs30_mask, "Q_Vs30"] = "Q3"
 
-        except (FileNotFoundError, ValueError, RuntimeError) as e:
-            print(f"Warning: Could not compute thresholds for missing Z1.0 values: {e}")
+        except (FileNotFoundError, ValueError, RuntimeError):
+            raise UserWarning(
+                "Could not compute thresholds for missing Z1.0 values, check correct setup for NZCVM"
+            )
 
     # Split into station and site dfs
     station_df = all_info_df.loc[

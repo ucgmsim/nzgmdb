@@ -8,15 +8,14 @@ import json
 import multiprocessing as mp
 from collections import defaultdict
 from pathlib import Path
-from typing import Optional
+from typing import Optional, TypedDict
 
 import fiona
 import numpy as np
 import pandas as pd
 from obspy.clients.fdsn import Client as FDSN_Client
 from pyproj import Transformer
-from shapely.geometry import Point
-from shapely.geometry.polygon import LineString, Polygon
+from shapely.geometry import LineString, Point, Polygon
 
 from cmt_solutions import cmt_data
 from nzgmdb.CCLD import ccldpy
@@ -27,6 +26,38 @@ from nzgmdb.management.data_registry import NZGMDB_DATA, REGISTRY
 from oq_wrapper import estimations
 from qcore import coordinates, geo, grid, src_site_dist
 from source_modelling import magnitude_scaling, srf
+
+
+class FocalMechanism(TypedDict):
+    """
+    Represents the geometric and spatial parameters of a crustal domain
+    focal mechanism.
+    """
+
+    strike: float
+    """The strike angle of the fault in degrees."""
+    dip: float
+    """The dip angle of the fault in degrees."""
+    rake: float
+    """The rake angle of the fault in degrees."""
+    ztor: float
+    """The depth to the top of the rupture in km."""
+    dbottom: float
+    """The depth to the bottom of the rupture in km."""
+    length: float
+    """The length of the fault along strike in km."""
+    dip_dist: float
+    """The width of the fault down dip in km."""
+    hyp_lat: float
+    """The latitude of the hypocentre."""
+    hyp_lon: float
+    """The longitude of the hypocentre."""
+    hyp_depth: float
+    """The depth of the hypocentre in km."""
+    hyp_strike: float
+    """The hypocentre along-strike position (0 - 1)."""
+    hyp_dip: float
+    """The hypocentre down-dip position (0 - 1)."""
 
 
 def calc_fnorm_slip(
@@ -79,7 +110,7 @@ def run_ccld_simulation(
     strike2: float = None,
     dip2: float = None,
     rake2: float = None,
-):
+) -> FocalMechanism:
     """
     Run the CCLD simulation for an event.
     Uses default values for the number of simulations based on the tectonic class mentioned
@@ -108,30 +139,8 @@ def run_ccld_simulation(
 
     Returns
     -------
-    dict
-        A dictionary containing the following keys:
-        'strike' : float
-            The strike angle of the fault in degrees
-        'dip' : float
-            The dip angle of the fault in degrees
-        'rake' : float
-            The rake angle of the fault in degrees
-        'ztor' : float
-            The depth to the top of the rupture in km
-        'dbottom' : float
-            The depth to the bottom of the rupture in km
-        'length' : float
-            The length of the fault along strike in km
-        'dip_dist' : float
-            The width of the fault down dip in km
-        'hyp_lat' : float
-            The latitude of the hypocentre
-        'hyp_lon' : float
-            The longitude of the hypocentre
-        'hyp_strike' : float
-            The hypocentre along-strike position (0 - 1)
-        'hyp_dip' : float
-            The hypocentre down-dip position (0 - 1)
+    FocalMechanism
+        A dictionary containing the calculated fault geometry and hypocentre parameters.
     """
     ccdl_tect_class = ccldpy.TECTONIC_MAPPING[event_row.tect_class]
     # Extra check for undetermined tectonic class
@@ -191,7 +200,7 @@ def get_crustal_domain_focal(
     length_bin: str,
     domain_no_backup: int,
     domain_focal_df: pd.DataFrame,
-):
+) -> FocalMechanism:
     """
     Select the appropriate nodal plane from the Crustal domain focal mechanism data.
     If both cases are the same, select the highest probability and run CCLD simulations for that plane.
@@ -215,30 +224,8 @@ def get_crustal_domain_focal(
 
     Returns
     -------
-    dict
-        A dictionary containing the following keys:
-        'strike' : float
-            The strike angle of the fault in degrees
-        'dip' : float
-            The dip angle of the fault in degrees
-        'rake' : float
-            The rake angle of the fault in degrees
-        'ztor' : float
-            The depth to the top of the rupture in km
-        'dbottom' : float
-            The depth to the bottom of the rupture in km
-        'length' : float
-            The length of the fault along strike in km
-        'dip_dist' : float
-            The width of the fault down dip in km
-        'hyp_lat' : float
-            The latitude of the hypocentre
-        'hyp_lon' : float
-            The longitude of the hypocentre
-        'hyp_strike' : float
-            The hypocentre along-strike position (0 - 1)
-        'hyp_dip' : float
-            The hypocentre down-dip position (0 - 1)
+    FocalMechanism
+        A dictionary containing the calculated fault geometry and hypocentre parameters.
     """
     try:
         domain_model = nz_mech[event_row["domain_no"]]
@@ -282,7 +269,9 @@ def get_crustal_domain_focal(
     return ccld_info
 
 
-def get_backup_focal_mechanism(domain_no_backup: int, domain_focal_df: pd.DataFrame):
+def get_backup_focal_mechanism(
+    domain_no_backup: int, domain_focal_df: pd.DataFrame
+) -> tuple[float, float, float]:
     """
     Retrieves the backup focal mechanism.
 
@@ -1213,9 +1202,10 @@ def calc_distances(main_dir: Path, n_procs: int = 1):
     NZGMDB_DATA.fetch("TectonicDomains_Feb2021_8_NZTM.shp")
     NZGMDB_DATA.fetch("TectonicDomains_Feb2021_8_NZTM.dbf")
     NZGMDB_DATA.fetch("TectonicDomains_Feb2021_8_NZTM.shx")
-    shapes = list(
-        fiona.open(Path(NZGMDB_DATA.abspath) / "TectonicDomains_Feb2021_8_NZTM.shp")
-    )
+    with fiona.open(
+        Path(NZGMDB_DATA.abspath) / "TectonicDomains_Feb2021_8_NZTM.shp"
+    ) as collection:
+        shapes = list(collection)
 
     fallback_domain_values = tect_domain.find_domain_from_shapes(
         event_df.loc[:, ["lat", "lon"]],
@@ -1231,7 +1221,7 @@ def calc_distances(main_dir: Path, n_procs: int = 1):
     with open(NZGMDB_DATA.fetch("slab-faulting2.json"), "r", encoding="utf-8") as f:
         slab_faulting_geo = json.load(f)
 
-    with open(NZGMDB_DATA.fetch("nzfocmecmod.json"), "r") as f:
+    with open(NZGMDB_DATA.fetch("nzfocmecmod.json"), "r", encoding="utf-8") as f:
         nz_mech = json.load(f)
 
     # Get the focal domain
