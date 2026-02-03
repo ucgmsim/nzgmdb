@@ -5,6 +5,7 @@ import pooch
 REGISTRY = {
     "hik_kerm_fault_300km_wgs84_poslon.txt": "sha256:1a199978b6c9c608f8473539b639a8825c1091167da3d14b07c7268528320e03",
     "Geonet_Metadata_Summary_v1.4.csv": "sha256:7884422c3fcae0810c02948ba1a3bd39ba5793ba28189e90d730541be1c207c0",
+    "combined_mvn_wgs84.tif": "sha256:b0aed1d441a3c441d784a5dd9016314ee74df164dcafee6e233211a43cbfba0f",
     "puy_slab2_dep_02.26.18.xyz": "sha256:9ebe4feab4ee3b80e3fe403f2d873f94e4d7f06d937d721cc9e154ecee83e3c0",
     "reyners_relocations.csv": "sha256:7795c60dae67af14eb590b0d919fa850e2f2fe2fb3beb077cbac14d27eb8faf5",
     "focal_mech_tectonic_domain_v1.csv": "sha256:1f1e0c4b7f9ca1b87fb2ca4883e587f330fe82b5bbf9ebb6eb8f4d12aa2e1936",
@@ -40,6 +41,7 @@ REGISTRY = {
 URLS = {
     "focal_mech_tectonic_domain_v1.csv": "https://www.dropbox.com/scl/fi/zseg304cbjmti7gg5tdyv/focal_mech_tectonic_domain_v1.csv?rlkey=kfb9ttvnv9yi9zftixw6kmz4v&st=4j9pgpgj&dl=1",
     "Geonet_Metadata_Summary_v1.4.csv": "https://www.dropbox.com/scl/fi/iev7qmoqqzvc5quhf8mk8/Geonet-Metadata-Summary_v1.4.csv?rlkey=7twwwck5iy5zao7lwao6xodvm&st=6m3elzuu&dl=1",
+    "combined_mvn_wgs84.tif": "https://www.dropbox.com/scl/fi/lzqijoivcg4wzybj06rsh/combined_mvn_wgs84.tif?rlkey=3g4milzk41c2lcsdggvy2ieql&st=re0izlz4&dl=1",
     "GeoNet_CMT_solutions_20201129_PreferredNodalPlane_v1.csv": "https://www.dropbox.com/scl/fi/fq28jx8jlbozj0d1x5tnq/GeoNet_CMT_solutions_20201129_PreferredNodalPlane_v1.csv?rlkey=30xj6n7ara0vz4t8kg4pz8w5s&st=63x7nr3j&dl=1",
     "hik_kerm_fault_300km_wgs84_poslon.txt": "https://www.dropbox.com/scl/fi/ig3ajufpv4xg2qjfxxuup/hik_kerm_fault_300km_wgs84_poslon.txt?rlkey=9jajfkq2elrzwzzgh6px17k8e&st=6ham2oox&dl=1",
     "Mw_rrup.txt": "https://www.dropbox.com/scl/fi/e3o9v9ze9e4955xxtrl14/Mw_rrup.txt?rlkey=c663zntx7gaeyxt04i97r62nu&st=6ri3c620&dl=1",
