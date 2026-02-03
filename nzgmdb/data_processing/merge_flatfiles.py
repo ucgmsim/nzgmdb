@@ -154,13 +154,16 @@ def merge_im_data(
 
 
 def add_ground_level(
+    station_df: pd.DataFrame,
     gm_im_df_flat: pd.DataFrame,
 ):
     """
-    Add in the ground level location elevation information to the gm_im_df_flat dataframe
+    Add in the is ground level location elevation information to the gm_im_df_flat dataframe
 
     Parameters
     ----------
+    station_df : pd.DataFrame
+        The station dataframe containing the station information such as loc_elev
     gm_im_df_flat : pd.DataFrame
         The ground motion IM dataframe to add the ground level information to
 
@@ -169,46 +172,6 @@ def add_ground_level(
     pd.DataFrame
         The ground motion IM dataframe with the ground level information added
     """
-    # Find the station location information with the inventory lat, lon and elev
-    config = cfg.Config()
-    channel_codes = config.get_value("channel_codes")
-    client_NZ = FDSN_Client("GEONET")
-    inventory = client_NZ.get_stations(channel=channel_codes, level="response")
-    station_info = [
-        [
-            station.code,
-            station.latitude,
-            station.longitude,
-            station.elevation,
-            channel.code[:2],
-            channel.location_code,
-            channel.depth,
-            channel.start_date,
-            channel.end_date,
-        ]
-        for network in inventory
-        for station in network
-        for channel in station.channels
-    ]
-    station_df = pd.DataFrame(
-        station_info,
-        columns=[
-            "sta",
-            "sta_lat",
-            "sta_lon",
-            "sta_elev",
-            "chan",
-            "loc",
-            "loc_elev",
-            "start_time",
-            "end_time",
-        ],
-    )
-    # Remove duplicates
-    station_df = station_df.drop_duplicates(
-        ["sta", "chan", "loc", "loc_elev"]
-    ).reset_index(drop=True)
-
     # Get the recorders information for location codes
     config = cfg.Config()
     locations_url = config.get_value("locations_url")
@@ -442,6 +405,9 @@ def merge_flatfiles(main_dir: Path, bypass_records_ffp: Path = None):
     site_basin_df = pd.read_csv(
         flatfile_dir / file_structure.PreFlatfileNames.SITE_TABLE
     )
+    station_df = pd.read_csv(
+        flatfile_dir / file_structure.PreFlatfileNames.STATION_TABLE
+    )
     station_extraction_df = pd.read_csv(
         flatfile_dir / file_structure.PreFlatfileNames.STATION_EXTRACTION_TABLE_GEONET,
         dtype={"evid": str},
@@ -471,6 +437,7 @@ def merge_flatfiles(main_dir: Path, bypass_records_ffp: Path = None):
     # Ensure that the site_basin_df only has the unique sites found in the im_df
     unique_sites = im_df["sta"].unique()
     site_basin_df = site_basin_df[site_basin_df["sta"].isin(unique_sites)]
+    station_df = station_df[station_df["sta"].isin(unique_sites)]
 
     # Ensure the station magnitude table only has values of events and station pairs available in the im_df
     unique_pairs_df = im_df[["evid", "sta"]].drop_duplicates()
@@ -578,7 +545,7 @@ def merge_flatfiles(main_dir: Path, bypass_records_ffp: Path = None):
     )
 
     # Add in the ground level location elevation information
-    gm_im_df_flat = add_ground_level(gm_im_df_flat)
+    gm_im_df_flat = add_ground_level(station_df, gm_im_df_flat)
 
     # Add in multi_event information
     gm_im_df_flat = gm_im_df_flat.merge(

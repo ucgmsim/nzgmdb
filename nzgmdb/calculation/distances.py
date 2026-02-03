@@ -614,7 +614,7 @@ def get_nodal_plane_info(
 def compute_distances_for_event(
     event_row: pd.Series,
     im_df: pd.DataFrame,
-    station_df: pd.DataFrame,
+    site_df: pd.DataFrame,
     cmt_df: pd.DataFrame,
     domain_focal_df: pd.DataFrame,
     taupo_polygon: Polygon,
@@ -633,8 +633,8 @@ def compute_distances_for_event(
         The event row from the earthquake source table
     im_df : pd.DataFrame
         The full IM data from the catalogue
-    station_df : pd.DataFrame
-        The full station data
+    site_df : pd.DataFrame
+        The full site data
     cmt_df : pd.DataFrame
         The Centroid Moment Tensor data
     domain_focal_df : pd.DataFrame
@@ -671,8 +671,8 @@ def compute_distances_for_event(
     if im_event_df.empty:
         return None, None, None
 
-    # Get the station data
-    event_sta_df = station_df[station_df["sta"].isin(im_event_df["sta"])].reset_index()
+    # Get the site data
+    event_sta_df = site_df[site_df["sta"].isin(im_event_df["sta"])].reset_index()
     stations = event_sta_df[["lon", "lat", "depth"]].to_numpy()
 
     # Get the nodal plane information
@@ -1270,38 +1270,24 @@ def calc_distances(main_dir: Path, n_procs: int = 1):
         usecols=["evid", "sta"],
     )
 
-    # Get the station information
-    client_NZ = FDSN_Client("GEONET")
-    channel_codes = config.get_value("channel_codes")
-    inventory = client_NZ.get_stations(channel=channel_codes, level="station")
-    station_info = []
-    for network in inventory:
-        for station in network:
-            station_info.append(
-                [
-                    network.code,
-                    station.code,
-                    station.latitude,
-                    station.longitude,
-                    station.elevation,
-                ]
-            )
-    station_df = pd.DataFrame(
-        station_info, columns=["net", "sta", "lat", "lon", "elev"]
+    # Get the site information
+    site_df = pd.read_csv(
+        flatfile_dir / file_structure.PreFlatfileNames.SITE_TABLE,
+        dtype={"sta": str},
     )
-    station_df = station_df.drop_duplicates().reset_index(drop=True)
+    site_df = site_df.loc[:, ["sta", "lat", "lon", "elev"]]
 
     # Select unique stations from IM data and merge
     im_station_df = im_df[["sta"]].drop_duplicates()
-    station_df = pd.merge(im_station_df, station_df, on="sta", how="left")
-    station_df["depth"] = station_df["elev"] / -1000
+    site_df = pd.merge(im_station_df, site_df, on="sta", how="left")
+    site_df["depth"] = site_df["elev"] / -1000
 
     with mp.Pool(n_procs) as p:
         result_dfs = p.map(
             functools.partial(
                 compute_distances_for_event,
                 im_df=im_df,
-                station_df=station_df,
+                site_df=site_df,
                 cmt_df=cmt_df,
                 domain_focal_df=domain_focal_df,
                 taupo_polygon=taupo_polygon,

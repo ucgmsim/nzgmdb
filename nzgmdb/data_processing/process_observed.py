@@ -75,7 +75,7 @@ def process_single_mseed(
     inventory = None
     if xml_dir:
         # Load the inventory information
-        inventory_file = xml_dir / f"NZ.{station}.xml"
+        inventory_file = xml_dir / f"{station}.xml"
         if inventory_file.is_file():
             inventory = read_inventory(inventory_file)
 

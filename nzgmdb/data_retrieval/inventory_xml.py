@@ -200,7 +200,7 @@ def get_full_inventory(
             ["provider", "net", "sta", "chan", "loc", "loc_elev"]
         ).reset_index(drop=True)
 
-    return all_info_df if return_df else return_inv
+    return return_inv
 
 
 def fetch_and_save_inventory(
@@ -239,7 +239,7 @@ def fetch_and_save_inventory(
             if not sel.networks:
                 print(f"Warning: No inventory data found for station {sta}. Skipping.")
                 continue
-            fname = xml_dir / f"NZ.{sta}.xml"
+            fname = xml_dir / f"{sta}.xml"
             sel.write(fname, format="STATIONXML")
     except FDSNNoDataException:
         print("No inventory data found for the specified stations and time range.")
