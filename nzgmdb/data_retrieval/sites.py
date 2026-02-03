@@ -23,9 +23,9 @@ from velocity_modelling import registry, threshold
 def fill_gaps_with_nearest(
     coords: np.ndarray,
     values: np.ndarray,
-    invalid_mask: np.ndarray = None,
+    invalid_mask: np.ndarray | None = None,
     k: int = 8,
-):
+) -> np.ndarray:
     """
     Fill NaN or invalid values using nearest-neighbour averaging.
 
@@ -86,7 +86,7 @@ def sample_points_from_geotiff(
     file_path: Path,
     latlon_points: np.ndarray,
     band: int = 1,
-):
+) -> np.ndarray:
     """
     Sample a GeoTIFF raster at given latitude/longitude points.
 
@@ -345,8 +345,10 @@ def create_site_table_response() -> pd.DataFrame:
             tect_merged_df.loc[vs30_mask, "Vs30_Ref"] = "Foster et al. (2019)"
             tect_merged_df.loc[vs30_mask, "Q_Vs30"] = "Q3"
 
-        except (FileNotFoundError, ValueError, RuntimeError) as e:
-            print(f"Warning: Could not compute thresholds for missing Z1.0 values: {e}")
+        except (FileNotFoundError, ValueError, RuntimeError):
+            raise UserWarning(
+                "Could not compute thresholds for missing Z1.0 values, check correct setup for NZCVM"
+            )
 
     # Select specific columns
     site_df = tect_merged_df[
