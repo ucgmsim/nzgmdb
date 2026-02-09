@@ -180,7 +180,9 @@ def sample_points_from_geotiff(
     return samples.reshape(-1, 1)
 
 
-def create_site_table_response(add_tmp_arrays: bool = False) -> pd.DataFrame:
+def create_site_table_response(
+    add_tmp_arrays: bool = False,
+) -> tuple[pd.DataFrame, pd.DataFrame]:
     """
     Create the site table for the NZGMDB. This function fetches the station information from the FDSN clients, and the
     Geonet metadata summary information. It then merges the two dataframes and determines the tectonic domain for each
@@ -231,15 +233,19 @@ def create_site_table_response(add_tmp_arrays: bool = False) -> pd.DataFrame:
         }
     )
 
-    merged_df = geo_meta_summary_df.merge(
-        all_info_df[["net", "sta", "lat", "lon", "elev", "creation_date", "end_date"]],
+    # separate into site and sta here to avoid merging issues exploding
+    site_df = all_info_df[
+        ["provider", "net", "sta", "lat", "lon", "elev", "creation_date", "end_date"]
+    ]
+    # Remove duplicate stations (keep first occurrence)
+    site_df = site_df.drop_duplicates(subset=["provider", "net", "sta"])
+
+    merged_df = site_df.merge(
+        geo_meta_summary_df,
         on="sta",
-        how="outer",
+        how="left",
     )
-    # Fill Lat, Lon, Elevation NaN values from all_info_df
-    merged_df["elev"] = merged_df["Elevation"].combine_first(merged_df["elev"])
-    merged_df["lat"] = merged_df["Lat"].combine_first(merged_df["lat"])
-    merged_df["lon"] = merged_df["Long"].combine_first(merged_df["lon"])
+
     # Specify the required files for fiona
     NZGMDB_DATA.fetch("nt_domains_kiran.shp")
     NZGMDB_DATA.fetch("nt_domains_kiran.dbf")
@@ -320,6 +326,7 @@ def create_site_table_response(add_tmp_arrays: bool = False) -> pd.DataFrame:
 
     # Split into station and site dfs
     station_df = all_info_df.loc[
+        :,
         [
             "provider",
             "net",
@@ -332,9 +339,11 @@ def create_site_table_response(add_tmp_arrays: bool = False) -> pd.DataFrame:
             "loc_elev",
             "start_time",
             "end_time",
-        ]
+        ],
     ]
-    site_df = tect_merged_df[
+
+    site_df = tect_merged_df.loc[
+        :,
         [
             "provider",
             "net",
@@ -363,7 +372,7 @@ def create_site_table_response(add_tmp_arrays: bool = False) -> pd.DataFrame:
             "Q_Z2.5",
             "Z2.5_ref",
             "site_domain_no",
-        ]
+        ],
     ]
     site_df = site_df.astype({"Z2.5": float})
     site_df.loc[:, "Z2.5"] /= 1000.0

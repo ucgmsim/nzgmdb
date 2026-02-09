@@ -203,50 +203,56 @@ def add_ground_level(
     station_df["end_time"] = station_df["end_time"].fillna(pd.Timestamp.max)
 
     # Ensure datetime dtypes
-    def _to_py_datetime(val: object) -> object:
-        """
-        Convert UTCDateTime to python datetime.datetime if needed.
+    # def _to_py_datetime(val: object) -> object:
+    #     """
+    #     Convert UTCDateTime to python datetime.datetime if needed.
+    #
+    #     Parameters
+    #     ----------
+    #     val : object
+    #         The value to convert.
+    #
+    #     Returns
+    #     -------
+    #     object
+    #         The converted value.
+    #     """
+    #     if isinstance(val, UTCDateTime):
+    #         return val.datetime
+    #     return val
+    #
+    # station_df["start_time"] = station_df["start_time"].apply(_to_py_datetime)
+    # station_df["end_time"] = station_df["end_time"].apply(_to_py_datetime)
 
-        Parameters
-        ----------
-        val : object
-            The value to convert.
-
-        Returns
-        -------
-        object
-            The converted value.
-        """
-        if isinstance(val, UTCDateTime):
-            return val.datetime
-        return val
-
-    station_df["start_time"] = station_df["start_time"].apply(_to_py_datetime)
-    station_df["end_time"] = station_df["end_time"].apply(_to_py_datetime)
-
-    def ensure_utc(series: pd.Series) -> pd.Series:
-        """
-        Ensure a pandas Series of datetimes is timezone-aware in UTC.
-
-        Parameters
-        ----------
-        series : pd.Series
-            The pandas Series to ensure is timezone-aware in UTC.
-
-        Returns
-        -------
-        pd.Series
-            The timezone-aware pandas Series in UTC.
-        """
-        # coerce to datetime first, then ensure UTC tz (convert if already tz-aware, localize if naive)
-        s = pd.to_datetime(series, errors="coerce")
-        if pd.api.types.is_datetime64tz_dtype(s.dtype):
-            return s.dt.tz_convert("UTC")
-        return s.dt.tz_localize("UTC")
+    # def ensure_utc(series: pd.Series) -> pd.Series:
+    #     """
+    #     Ensure a pandas Series of datetimes is timezone-aware in UTC.
+    #
+    #     Parameters
+    #     ----------
+    #     series : pd.Series
+    #         The pandas Series to ensure is timezone-aware in UTC.
+    #
+    #     Returns
+    #     -------
+    #     pd.Series
+    #         The timezone-aware pandas Series in UTC.
+    #     """
+    #     # coerce to datetime first, then ensure UTC tz (convert if already tz-aware, localize if naive)
+    #     s = pd.to_datetime(series, errors="coerce")
+    #     if pd.api.types.is_datetime64tz_dtype(s.dtype):
+    #         return s.dt.tz_convert("UTC")
+    #     return s.dt.tz_localize("UTC")
 
     # Normalize both frames to UTC before sorting / merge_asof
-    station_df["start_time"] = ensure_utc(station_df["start_time"])
-    station_df["end_time"] = ensure_utc(station_df["end_time"])
+    # station_df["start_time"] = ensure_utc(station_df["start_time"])
+    # station_df["end_time"] = ensure_utc(station_df["end_time"])
+    station_df["start_time"] = pd.to_datetime(
+        station_df["start_time"], errors="coerce", utc=True
+    )
+    station_df["end_time"] = pd.to_datetime(
+        station_df["end_time"], errors="coerce", utc=True
+    )
 
     station_df["start_time"] = pd.to_datetime(station_df["start_time"])
     station_df["end_time"] = pd.to_datetime(station_df["end_time"])
@@ -316,33 +322,6 @@ def add_ground_level(
         .eq(1),
         ["is_ground_level", "loc_elev"],
     ] = [True, 0.0]
-
-    # remove duplicates of sta in the station_df
-    station_df = station_df.drop_duplicates(subset=["sta"])
-
-    # Merge missing station lat / lon / elev information into the gm_im_df_flat
-    gm_im_df_flat = gm_im_df_flat.merge(
-        station_df[["sta", "sta_lat", "sta_lon", "sta_elev"]],
-        on="sta",
-        how="left",
-        suffixes=("", "_new"),
-    )
-
-    # Find where sta_lat is nan and replace with the inventory's lat, lon and elev
-    gm_im_df_flat["sta_lat"] = gm_im_df_flat["sta_lat"].fillna(
-        gm_im_df_flat["sta_lat_new"]
-    )
-    gm_im_df_flat["sta_lon"] = gm_im_df_flat["sta_lon"].fillna(
-        gm_im_df_flat["sta_lon_new"]
-    )
-    gm_im_df_flat["sta_elev"] = gm_im_df_flat["sta_elev"].fillna(
-        gm_im_df_flat["sta_elev_new"]
-    )
-
-    # Drop the new columns
-    gm_im_df_flat = gm_im_df_flat.drop(
-        columns=["sta_lat_new", "sta_lon_new", "sta_elev_new"]
-    )
 
     return gm_im_df_flat
 
@@ -812,6 +791,9 @@ def merge_flatfiles(main_dir: Path, bypass_records_ffp: Path = None):
     )
     site_basin_df.to_csv(
         flatfile_dir / file_structure.FlatfileNames.SITE_TABLE, index=False
+    )
+    station_df.to_csv(
+        flatfile_dir / file_structure.FlatfileNames.STATION_TABLE, index=False
     )
     prop_df.to_csv(
         flatfile_dir / file_structure.FlatfileNames.PROPAGATION_TABLE, index=False

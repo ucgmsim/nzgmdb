@@ -496,6 +496,7 @@ def get_nodal_plane_info(
         hik_strike_rbf, hik_dip_rbf, hik_footprint = hik_objs
         puy_strike_rbf, puy_dip_rbf, puy_footprint = puy_objs
         domain_no_backup = event_row["domain_no_backup"]
+        nodal_plane_info["f_type"] = "domain"
 
         if event_row["tect_class"] == "Crustal":
             # First assume strike-slip to estimate length
@@ -870,6 +871,7 @@ def compute_distances_for_event(
                 [
                     {
                         "evid": event_id,
+                        "provider": station.provider,
                         "net": station.net,
                         "sta": station.sta,
                         "r_epi": r_epis[station_index],
@@ -1265,7 +1267,7 @@ def calc_distances(main_dir: Path, n_procs: int = 1):
         flatfile_dir / file_structure.PreFlatfileNames.SITE_TABLE,
         dtype={"sta": str},
     )
-    site_df = site_df.loc[:, ["sta", "lat", "lon", "elev"]]
+    site_df = site_df.loc[:, ["sta", "provider", "net", "lat", "lon", "elev"]]
 
     # Select unique stations from IM data and merge
     im_station_df = im_df[["sta"]].drop_duplicates()

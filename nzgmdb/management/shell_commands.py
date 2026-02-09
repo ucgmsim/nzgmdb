@@ -31,11 +31,11 @@ def run_command(
     """
     with open(log_file_path, "w") as log_file:
         # Create the command to source conda.sh, activate the environment, and execute the full command
-        command = f"source {env_sh} && {env_activate_command} && {command}"
+        bash_command = f"source {env_sh} && {env_activate_command} && {command}"
         env = os.environ.copy()
         try:
             subprocess.check_call(
-                command,
+                bash_command,
                 stdout=log_file,
                 stderr=log_file,
                 shell=True,
