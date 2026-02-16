@@ -38,10 +38,10 @@ rch:
   geonet: 128
   extraction: 32
   tec_domain: 128
-  phase_table: 128
-  snr: 64
+  phase_table: 16
+  snr: 32
   fmax: 128
-  gmc: 64
+  gmc: 16
   process: 128
   im: 64
   distances: 128
