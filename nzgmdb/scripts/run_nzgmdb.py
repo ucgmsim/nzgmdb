@@ -502,9 +502,17 @@ def run_im_calculation(
         ),
     ] = False,
     intensity_measures: Annotated[
-        list[IM],
+        str | None,
         typer.Option(
-            callback=lambda x: [IM(i) for i in x[0].split(",")],
+            callback=lambda x: (
+                None
+                if x is None or (isinstance(x, (list, tuple)) and not x)
+                else [
+                    IM(i.strip())
+                    for i in (x[0] if isinstance(x, (list, tuple)) else x).split(",")
+                    if i.strip()
+                ]
+            ),
         ),
     ] = None,
 ):

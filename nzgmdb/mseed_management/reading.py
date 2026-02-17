@@ -130,7 +130,7 @@ def create_waveform_from_mseed(
         data = np.stack([tr.data for tr in mseed], axis=1)
         data = data.astype(np.float32)
         # Reshape the waveform to have the correct shape for the IM calculation
-        reshaped_waveform = data[np.newaxis, :, :]
+        reshaped_waveform = data.T[:, None, :]
     except ValueError:
         raise custom_errors.InvalidTraceLengthError(
             f"Error reading data from {mseed_file}"
