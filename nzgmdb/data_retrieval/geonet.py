@@ -106,21 +106,17 @@ def fetch_event_line(event_cat: Event, event_id: str):
         if preferred_origin.earth_model_id is None
         else str(preferred_origin.earth_model_id).split("/")[1]
     )
-    ev_ndef = (
-        None
-        if preferred_origin.quality.used_phase_count is None
-        else preferred_origin.quality.used_phase_count
-    )
-    ev_nsta = (
-        None
-        if preferred_origin.quality.used_station_count is None
-        else preferred_origin.quality.used_station_count
-    )
-    std = (
-        None
-        if preferred_origin.quality.standard_error is None
-        else preferred_origin.quality.standard_error
-    )
+    quality = preferred_origin.quality
+    if quality is None:
+        ev_ndef = None
+        ev_nsta = None
+        std = None
+    else:
+        ev_ndef = None if quality.used_phase_count is None else quality.used_phase_count
+        ev_nsta = (
+            None if quality.used_station_count is None else quality.used_station_count
+        )
+        std = None if quality.standard_error is None else quality.standard_error
 
     pref_mag_type = preferred_magnitude.magnitude_type
 
