@@ -87,8 +87,8 @@ def fetch_event_line(event_cat: Event, event_id: str):
     preferred_origin = event_cat.preferred_origin()
     preferred_magnitude = event_cat.preferred_magnitude()
 
-    # If the preferred origin is None, return None
-    if preferred_origin is None:
+    # If the preferred origin or magnitude is None, return None
+    if preferred_origin is None or preferred_magnitude is None:
         return None
 
     # Extract basic info from the catalogue
