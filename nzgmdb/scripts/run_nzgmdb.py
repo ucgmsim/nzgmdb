@@ -996,7 +996,7 @@ def run_full_nzgmdb(
             only_sites,
             only_record_ids_ffp,
             real_time,
-            add_tmp_arrays,
+            add_tmp_arrays=add_tmp_arrays,
         )
 
     # Extract Waveforms

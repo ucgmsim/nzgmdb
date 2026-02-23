@@ -286,6 +286,27 @@ def fetch_sta_extraction(
     """
     config = cfg.Config()
 
+    # Get the provider and network codes
+    provider_networks = config.get_value("main_providers_networks")
+    provider_networks.update(config.get_value("tmp_array_providers_networks"))
+
+    provider = next(
+        (prov for prov, nets in provider_networks.items() if network.code in nets),
+        None,
+    )
+
+    if provider is None:
+        print(
+            f"Warning: No provider found for network {network.code}. Skipping station {station.code}."
+        )
+        skipped_reason = pd.DataFrame(
+            {
+                "record_id": [f"{event_id}_{station.code}"],
+                "skipped_reason": ["No provider found for network"],
+            }
+        )
+        return pd.DataFrame(), skipped_reason
+
     # Get the preferred_origin
     preferred_origin = event_cat.preferred_origin()
     ev_lat = preferred_origin.latitude
@@ -356,7 +377,7 @@ def fetch_sta_extraction(
         # Create the station_extraction_table
         station_extraction_table = pd.DataFrame(
             {
-                "provider": ["GEONET"],
+                "provider": [provider],
                 "net": [network.code],
                 "sta": [station.code],
                 "evid": [event_id],
