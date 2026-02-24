@@ -810,9 +810,13 @@ def extract_station_info(
         )
         location = site_only_record_ids["record_id"].str.split("_").str[-1].values[0]
 
-    # Get the Stream
-    client = FDSN_Client("GEONET")
-    st = get_station_window(station_extraction_row, client, channel_codes, location)
+    if provider == "GEONET":
+        # Get the Stream
+        client = FDSN_Client("GEONET")
+        st = get_station_window(station_extraction_row, client, channel_codes, location)
+    else:
+        # Get the stream from the tmp array storage location
+        st = None
 
     # Check that data was found
     if st is None:
