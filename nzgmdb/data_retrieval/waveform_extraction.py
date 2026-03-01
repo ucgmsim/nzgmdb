@@ -15,7 +15,7 @@ from typing import NamedTuple
 import numpy as np
 import pandas as pd
 import scipy as sp
-from obspy import Stream, Trace, UTCDateTime
+from obspy import Stream, Trace, UTCDateTime, read_inventory
 from obspy.clients.fdsn import Client as FDSN_Client
 from obspy.clients.fdsn.header import (
     FDSNNoDataException,
@@ -829,6 +829,12 @@ def extract_station_info(
             multi_event_records=multi_event_records,
         )
 
+    # Get the inventory xml file
+    xml_dir = file_structure.get_stationxml_dir(main_dir)
+    # Load the inventory information
+    inventory_file = xml_dir / f"{station}.xml"
+    inventory = read_inventory(inventory_file) if inventory_file.is_file() else None
+
     # Get the unique channels (Using first 2 keys) and locations
     unique_channels = set([(tr.stats.channel[:2], tr.stats.location) for tr in st])
 
@@ -933,7 +939,7 @@ def extract_station_info(
         # Check for multi-event flagging
         start_time, end_time, stalta_score, sync_event = (
             multi_event.compute_multi_event_scores(
-                mseed.copy(), sync_check_extraction_table
+                mseed.copy(), sync_check_extraction_table, inventory=inventory
             )
         )
         # Add to the multi_event_records list
