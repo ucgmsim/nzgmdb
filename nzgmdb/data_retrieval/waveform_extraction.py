@@ -739,6 +739,56 @@ def get_station_window(
     return get_inital_stream(start_time, end_time, channel_codes, loc, client, net, sta)
 
 
+# def get_tmp_array_stream(
+#     net: str,
+#     sta: str,
+#     tmp_array_dir: Path,
+#     start_time: UTCDateTime,
+#     end_time: UTCDateTime,
+# ):
+#     """
+#     Get the initial stream of waveforms for a station from the temporary array storage location.
+#
+#     Parameters
+#     ----------
+#     net : str
+#         The network code to retrieve waveforms for.
+#     sta : str
+#         The station code to retrieve waveforms for.
+#     tmp_array_dir : Path
+#         The directory where the temporary array waveform files are stored.
+#     start_time : UTCDateTime
+#         The start time of the waveform data to retrieve.
+#     end_time : UTCDateTime
+#         The end time of the waveform data to retrieve.
+#
+#     Returns
+#     -------
+#     Stream
+#         An ObsPy Stream object containing the waveform data for the specified station.
+#     """
+#     # Extract the parameters from the row
+#     event_id = station_extraction_row["evid"]
+#     station = station_extraction_row["sta"]
+#
+#     # Get the tmp array directory
+#     tmp_array_dir = file_structure.get_tmp_array_dir(main_dir)
+#     # Get the mseed file path
+#     mseed_file = tmp_array_dir / f"{event_id}_{station}.mseed"
+#
+#     if mseed_file.is_file():
+#         try:
+#             st = Stream()
+#             st += Trace.read(str(mseed_file))
+#             return st
+#         except Exception as e:  # noqa: BLE001
+#             print(f"Error reading mseed file for {event_id}_{station} from tmp array")
+#             print(e)
+#             return None
+#     else:
+#         return None
+
+
 def extract_station_info(
     station_extraction_row: pd.Series,
     main_dir: Path,
@@ -776,6 +826,7 @@ def extract_station_info(
         multi_event_records,
     ) = ([], [], [], [], [])
     # Extract the parameters from the row
+    provider = station_extraction_row["provider"]
     event_id = station_extraction_row["evid"]
     station = station_extraction_row["sta"]
     network = station_extraction_row["net"]
@@ -816,6 +867,7 @@ def extract_station_info(
         st = get_station_window(station_extraction_row, client, channel_codes, location)
     else:
         # Get the stream from the tmp array storage location
+        # st = get_tmp_array_stream
         st = None
 
     # Check that data was found
