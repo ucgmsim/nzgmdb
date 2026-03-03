@@ -261,9 +261,11 @@ def create_site_table_response(
 
     # Only compute thresholds for stations where Z1.0 is missing
     mask_missing_z1 = tect_merged_df["Z1.0"].isna()
-    if mask_missing_z1.any():
+    mask_q3 = tect_merged_df["Q_Z1.0"] == "Q3"
+    mask_to_compute = mask_missing_z1 | mask_q3
+    if mask_to_compute.any():
         # Prepare stations DataFrame for only missing rows, indexed by station code
-        stations = tect_merged_df.loc[mask_missing_z1, ["sta", "lon", "lat"]].set_index(
+        stations = tect_merged_df.loc[mask_to_compute, ["sta", "lon", "lat"]].set_index(
             "sta"
         )[["lon", "lat"]]
         try:
@@ -295,15 +297,15 @@ def create_site_table_response(
 
             # Set extra ref / quality fields
             tect_merged_df.loc[
-                mask_missing_z1, ["Z1.0_ref", "Z2.5_ref", "Q_Z1.0", "Q_Z2.5"]
+                mask_to_compute, ["Z1.0_ref", "Z2.5_ref", "Q_Z1.0", "Q_Z2.5"]
             ] = ["NZCVM (2026)", "NZCVM (2026)", "Q3", "Q3"]
 
             # Get the file path to the combined MVN GeoTIFF
-            NZGMDB_DATA.fetch("combined_mvn_wgs84.tif")
-            file_path = Path(NZGMDB_DATA.abspath) / "combined_mvn_wgs84.tif"
+            NZGMDB_DATA.fetch("nzcvm_v1.tif")
+            file_path = Path(NZGMDB_DATA.abspath) / "nzcvm_v1.tif"
 
             # Compute Vs30 for missing values
-            points = tect_merged_df.loc[mask_missing_z1, ["lat", "lon"]].to_numpy()
+            points = tect_merged_df.loc[mask_to_compute, ["lat", "lon"]].to_numpy()
             vs30_values = sample_points_from_geotiff(file_path, points).ravel()
 
             # Fill missing gaps in Vs30 using nearest-neighbour averaging
@@ -312,11 +314,11 @@ def create_site_table_response(
             vs30_values_filled_rounded = np.round(vs30_values_filled)
 
             # Update Vs30 and related fields
-            tect_merged_df.loc[mask_missing_z1, "Vs30"] = vs30_values_filled_rounded
+            tect_merged_df.loc[mask_to_compute, "Vs30"] = vs30_values_filled_rounded
 
             # Ensure reference and quality fields are set for Vs30 where filled
-            vs30_mask = mask_missing_z1 & ~tect_merged_df["Vs30"].isna()
-            tect_merged_df.loc[vs30_mask, "Vs30_Ref"] = "Foster et al. (2019)"
+            vs30_mask = mask_to_compute & ~tect_merged_df["Vs30"].isna()
+            tect_merged_df.loc[vs30_mask, "Vs30_Ref"] = "Vs30 Map v1.0 (2026)"
             tect_merged_df.loc[vs30_mask, "Q_Vs30"] = "Q3"
 
         except (FileNotFoundError, ValueError, RuntimeError):
