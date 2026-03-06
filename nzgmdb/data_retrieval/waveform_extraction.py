@@ -962,6 +962,21 @@ def extract_station_info(
                 )
             )
 
+        # Check for 3 component data, if not skip
+        if len(mseed) < 3:
+            stats = mseed[0].stats
+            skipped_records.append(
+                pd.DataFrame(
+                    {
+                        "record_id": [
+                            f"{event_id}_{stats.station}_{stats.channel}_{stats.location}"
+                        ],
+                        "reason": ["Less than 3 component traces"],
+                    }
+                )
+            )
+            continue
+
         # Calculate clip to determine if the record should be dropped
         clip = filtering.get_clip_probability(event_mag, r_hyp, mseed)
 
