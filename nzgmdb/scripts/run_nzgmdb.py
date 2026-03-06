@@ -1020,6 +1020,7 @@ def run_full_nzgmdb(
             extract_n_procs,
             only_record_ids_ffp,
             batch_size=geonet_batch_size,
+            tmp_array_dir=tmp_array_data_dir,
         )
 
     # Merge the tectonic domains

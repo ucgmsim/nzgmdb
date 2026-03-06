@@ -15,7 +15,7 @@ from typing import NamedTuple
 import numpy as np
 import pandas as pd
 import scipy as sp
-from obspy import Stream, Trace, UTCDateTime, read_inventory
+from obspy import Stream, Trace, UTCDateTime, read_inventory, read
 from obspy.clients.fdsn import Client as FDSN_Client
 from obspy.clients.fdsn.header import (
     FDSNNoDataException,
@@ -691,33 +691,21 @@ def check_trace_issues(st: Stream, record_id: str, station_extraction_row: pd.Se
 
 def get_station_window(
     station_extraction_row: pd.Series,
-    client: FDSN_Client,
-    channel_codes: str,
-    loc: str,
 ):
     """
-    Get the initial stream of waveforms for a station based on the extraction parameters.
+    Get the start and end time for the waveform extraction window for a station based on the parameters in the station extraction table.
 
     Parameters
     ----------
     station_extraction_row : pd.Series
         A row from the station extraction table containing the parameters for waveform extraction.
-    client : FDSN_Client
-        The FDSN client to use for retrieving waveforms.
-    channel_codes : str
-        The channel codes to retrieve, formatted as a comma-separated string.
-        e.g. "HN?,BN?,HH?".
-    loc : str
-        The location code to retrieve waveforms for, typically "*".
 
     Returns
     -------
-    Stream
-        An ObsPy Stream object containing the waveform data for the specified station.
+    tuple of UTCDateTime
+        A tuple containing the start time and end time for the waveform extraction window.
     """
     # Extract the parameters from the row
-    net = station_extraction_row["net"]
-    sta = station_extraction_row["sta"]
     r_hyp = station_extraction_row["r_hyp"]
     ptime_est = UTCDateTime(station_extraction_row["ptime_est"])
     ds_mean = station_extraction_row["ds_mean"]
@@ -736,57 +724,73 @@ def get_station_window(
     # Note: both ds_mean and ds_std are in logspace
     end_time = ptime_est + np.exp(ds_mean) * np.exp(ds_std_multiplier * ds_std)
 
-    return get_inital_stream(start_time, end_time, channel_codes, loc, client, net, sta)
+    return start_time, end_time
 
 
-# def get_tmp_array_stream(
-#     net: str,
-#     sta: str,
-#     tmp_array_dir: Path,
-#     start_time: UTCDateTime,
-#     end_time: UTCDateTime,
-# ):
-#     """
-#     Get the initial stream of waveforms for a station from the temporary array storage location.
-#
-#     Parameters
-#     ----------
-#     net : str
-#         The network code to retrieve waveforms for.
-#     sta : str
-#         The station code to retrieve waveforms for.
-#     tmp_array_dir : Path
-#         The directory where the temporary array waveform files are stored.
-#     start_time : UTCDateTime
-#         The start time of the waveform data to retrieve.
-#     end_time : UTCDateTime
-#         The end time of the waveform data to retrieve.
-#
-#     Returns
-#     -------
-#     Stream
-#         An ObsPy Stream object containing the waveform data for the specified station.
-#     """
-#     # Extract the parameters from the row
-#     event_id = station_extraction_row["evid"]
-#     station = station_extraction_row["sta"]
-#
-#     # Get the tmp array directory
-#     tmp_array_dir = file_structure.get_tmp_array_dir(main_dir)
-#     # Get the mseed file path
-#     mseed_file = tmp_array_dir / f"{event_id}_{station}.mseed"
-#
-#     if mseed_file.is_file():
-#         try:
-#             st = Stream()
-#             st += Trace.read(str(mseed_file))
-#             return st
-#         except Exception as e:  # noqa: BLE001
-#             print(f"Error reading mseed file for {event_id}_{station} from tmp array")
-#             print(e)
-#             return None
-#     else:
-#         return None
+def get_tmp_array_stream(
+    tmp_array_dir: Path,
+    net: str,
+    sta: str,
+    start_time: UTCDateTime,
+    end_time: UTCDateTime,
+):
+    """
+    Get the initial stream of waveforms for a station from the temporary array storage location.
+
+    Parameters
+    ----------
+    tmp_array_dir : Path
+        The directory where the temporary array waveform files are stored.
+    net : str
+        The network code to retrieve waveforms for.
+    sta : str
+        The station code to retrieve waveforms for.
+    start_time : UTCDateTime
+        The start time of the waveform data to retrieve.
+    end_time : UTCDateTime
+        The end time of the waveform data to retrieve.
+
+    Returns
+    -------
+    Stream
+        An ObsPy Stream object containing the waveform data for the specified station.
+    """
+    net_dir = tmp_array_dir / net
+    if not net_dir.is_dir():
+        return None
+
+    st = Stream()
+
+    pattern = f"{net}_{sta}_*"
+    selected_files = []
+    for sta_dir in sorted(p for p in net_dir.glob(pattern) if p.is_dir()):
+
+        for f in sta_dir.glob("*.mseed"):
+            # Example filename
+            # Y3.CASS..HHN__20090312T000000Z__20090411T000000Z.mseed
+            parts = f.name.split("__")
+
+            file_start = UTCDateTime(parts[1])
+            file_end = UTCDateTime(parts[2].replace(".mseed", ""))
+
+            # Check overlap
+            if file_end >= start_time and file_start <= end_time:
+                selected_files.append(f)
+
+    if not selected_files:
+        return None
+
+    # Read files
+    for f in sorted(selected_files):
+        st += read(str(f))
+
+    # Merge overlapping / adjacent segments
+    st.merge(method=1, fill_value=None)
+
+    # Trim to exact window
+    st.trim(start_time, end_time)
+
+    return st
 
 
 def extract_station_info(
@@ -795,6 +799,7 @@ def extract_station_info(
     event_catalogues: dict,
     extraction_table: pd.DataFrame,
     only_record_ids: pd.DataFrame = None,
+    tmp_array_dir: Path = None,
 ) -> StationExtractionResult:
     """
     Extract the waveform data for a single station based on the extraction parameters.
@@ -811,6 +816,8 @@ def extract_station_info(
         The full extraction table containing all extraction parameters.
     only_record_ids : pd.DataFrame, optional
         A DataFrame containing a subset of record IDs to use for extraction, if provided.
+    tmp_array_dir : Path, optional
+        The directory where the temporary array waveform files are stored, if using temporary array storage for waveforms.
 
     Returns
     -------
@@ -861,14 +868,19 @@ def extract_station_info(
         )
         location = site_only_record_ids["record_id"].str.split("_").str[-1].values[0]
 
+    start_time, end_time = get_station_window(station_extraction_row)
+    net = station_extraction_row["net"]
+    sta = station_extraction_row["sta"]
+
     if provider == "GEONET":
         # Get the Stream
         client = FDSN_Client("GEONET")
-        st = get_station_window(station_extraction_row, client, channel_codes, location)
+        st = get_inital_stream(
+            start_time, end_time, channel_codes, location, client, net, sta
+        )
     else:
         # Get the stream from the tmp array storage location
-        # st = get_tmp_array_stream
-        st = None
+        st = get_tmp_array_stream(tmp_array_dir, net, sta, start_time, end_time)
 
     # Check that data was found
     if st is None:
@@ -1067,6 +1079,7 @@ def extract_waveforms(
     n_procs: int = 1,
     only_record_ids_ffp: Path = None,
     batch_size: int = 1000,
+    tmp_array_dir: Path = None,
 ):
     """
     Extract waveforms for each station in the station extraction table.
@@ -1086,6 +1099,8 @@ def extract_waveforms(
         Full file path to the file containing a subset of record IDs to use for extraction, if provided.
     batch_size : int, optional
         The number of rows to process in each batch, by default 1000.
+    tmp_array_dir : Path, optional
+        The directory where the temporary array waveform files are stored, if using temporary array storage for waveforms.
     """
     station_extraction_table = pd.read_csv(
         station_extraction_table_ffp, dtype={"evid": str}
@@ -1165,6 +1180,7 @@ def extract_waveforms(
                         event_catalogues=catalog_dict,
                         extraction_table=station_extraction_table,
                         only_record_ids=only_record_ids,
+                        tmp_array_dir=tmp_array_dir,
                     ),
                     (row for _, row in batch_rows.iterrows()),
                 )
