@@ -9,7 +9,7 @@ import h5py
 import mseedlib
 import numpy as np
 import pandas as pd
-from obspy import Inventory, Stream, Trace, UTCDateTime
+from obspy import Inventory, Stream, Trace, UTCDateTime, read_inventory
 from obspy.clients.fdsn import Client as FDSN_Client
 from obspy.clients.fdsn.header import FDSNNoDataException
 
@@ -214,7 +214,8 @@ def process_mseed(
         inv = inventory
 
     try:
-        mseed = mseed.remove_response(inventory=inv, output="ACC")
+        output_type = "ACC" if channel[:2] in ["HN", "BN"] else "VEL"
+        mseed = mseed.remove_response(inventory=inv, output=output_type)
     except ValueError:
         skipped_record = pd.DataFrame(
             {
@@ -317,7 +318,12 @@ def process_mseed(
     )
 
 
-def run_phasenet(mseed_files_ffp: Path, output_dir: Path, bypass_ffp: Path = None):
+def run_phasenet(
+    mseed_files_ffp: Path,
+    output_dir: Path,
+    bypass_ffp: Path = None,
+    xml_dir: Path = None,
+):
     """
     Run PhaseNet on the mseed files.
 
@@ -329,6 +335,8 @@ def run_phasenet(mseed_files_ffp: Path, output_dir: Path, bypass_ffp: Path = Non
         Output directory for skipped records and phase arrival information.
     bypass_ffp : Path, optional
         Optional bypass file path with known p and s wave datetimes, by default None
+    xml_dir : Path, optional
+        Optional directory containing station xml files to use for sensitivity removal, by default None (Will try extract from FDSN if not provided)
     """
     # Read the .txt for the mseed files to process
     mseed_files = mseed_files_ffp.read_text().splitlines()
@@ -350,7 +358,15 @@ def run_phasenet(mseed_files_ffp: Path, output_dir: Path, bypass_ffp: Path = Non
             bypass_row = bypass_df.loc[bypass_df["record_id"] == mseed_file.stem].iloc[
                 0
             ]
-        phase_arrival, skipped_record = process_mseed(mseed_file, h5_ffp, bypass_row)
+        inventory = None
+        if xml_dir is not None:
+            station = mseed_file.stem.split("_")[1]
+            xml_file = xml_dir / f"{station}.xml"
+            if xml_file.exists():
+                inventory = read_inventory(xml_file)
+        phase_arrival, skipped_record = process_mseed(
+            mseed_file, h5_ffp, bypass_row, inventory=inventory
+        )
         if phase_arrival is not None:
             phase_arrival_table.append(phase_arrival)
         if skipped_record is not None:
@@ -395,5 +411,11 @@ if __name__ == "__main__":
         help="Optional bypass file path with known p and s wave datetimes.",
         default=None,
     )
+    parser.add_argument(
+        "--xml_dir",
+        type=Path,
+        help="Optional directory containing station xml files to use for sensitivity removal.",
+        default=None,
+    )
     args = parser.parse_args()
-    run_phasenet(args.mseed_files_ffp, args.output_dir, args.bypass_ffp)
+    run_phasenet(args.mseed_files_ffp, args.output_dir, args.bypass_ffp, args.xml_dir)

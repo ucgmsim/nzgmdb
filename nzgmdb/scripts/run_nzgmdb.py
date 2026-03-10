@@ -235,6 +235,7 @@ def make_phase_arrival_table(
         env_activate_command,
         n_procs,
         bypass_records_ffp,
+        xml_dir=file_structure.get_stationxml_dir(main_dir),
     )
 
 
@@ -588,11 +589,11 @@ def generate_site_table_basin(
     site_df, station_df = sites.create_site_table_response(add_tmp_arrays)
     site_df = sites.add_site_basins(site_df, nzcvm_data_ffp)
 
-    site_df.to_csv(
-        flatfile_dir / file_structure.PreFlatfileNames.SITE_TABLE, index=False
-    )
     station_df.to_csv(
         flatfile_dir / file_structure.PreFlatfileNames.STATION_TABLE, index=False
+    )
+    site_df.to_csv(
+        flatfile_dir / file_structure.PreFlatfileNames.SITE_TABLE, index=False
     )
 
 
@@ -1070,6 +1071,7 @@ def run_full_nzgmdb(
             gmc_activate,
             phase_n_procs,
             bypass_records_ffp,
+            xml_dir=file_structure.get_stationxml_dir(main_dir),
         )
 
     # Generate SNR

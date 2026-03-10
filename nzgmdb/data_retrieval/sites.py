@@ -343,6 +343,9 @@ def create_site_table_response(
             "end_time",
         ],
     ]
+    # Adjust any "" loc codes to be "00"
+    # based on the FDSN Source Indentifiers documentation (https://docs.fdsn.org/projects/source-identifiers/en/latest/location-codes.html)
+    station_df = station_df.replace({"loc": {"": "00"}})
 
     site_df = tect_merged_df.loc[
         :,

@@ -20,6 +20,7 @@ def process_batch(
     conda_sh: Path,
     env_activate_command: str,
     bypass_records_ffp: Path | None = None,
+    xml_dir: Path | None = None,
 ):
     """
     Process a single subfolder: run PhaseNet over mseeds.
@@ -36,6 +37,8 @@ def process_batch(
         The command to activate the environment for running PhaseNet.
     bypass_records_ffp : Path
         The full file path to the bypass records file, which includes a custom p_wave_datetime and/or s_wave_datetime
+    xml_dir: Path
+        The path to the station xml files. Used for reducing FDSN calls that require station information.
 
     Raises
     ------
@@ -59,7 +62,7 @@ def process_batch(
         print(f"Skipping run_phasenet for Batch {batch_num} as results already exist")
     else:
         # Activate phaseNet environment and run over mseeds for the subfolder
-        phasenet_command = f"python {run_phasenet_script_ffp} {batch_txt} {output_dir} {bypass_records_ffp if bypass_records_ffp is not None else ''}"
+        phasenet_command = f"python {run_phasenet_script_ffp} {batch_txt} {output_dir} {bypass_records_ffp if bypass_records_ffp is not None else ''} {xml_dir if xml_dir is not None else ''}"
         shell_commands.run_command(
             phasenet_command, conda_sh, env_activate_command, log_file_path_phasenet
         )
@@ -78,6 +81,7 @@ def generate_phase_arrival_table(
     env_activate_command: str,
     n_procs: int,
     bypass_records_ffp: Path = None,
+    xml_dir: Path = None,
 ):
     """
     Generate the phase arrival table utilizing phaseNet
@@ -97,6 +101,8 @@ def generate_phase_arrival_table(
         The number of processes to use
     bypass_records_ffp : Path
         The full file path to the bypass records file, which includes a custom p_wave_ix
+    xml_dir: Path
+        The path to the station xml files. Used for reducing FDSN calls that require station information.
     """
     # Get the Phase_arrival directory
     phase_dir = main_dir / "phase_arrival"
@@ -126,6 +132,7 @@ def generate_phase_arrival_table(
                 conda_sh=conda_sh,
                 env_activate_command=env_activate_command,
                 bypass_records_ffp=bypass_records_ffp,
+                xml_dir=xml_dir,
             ),
             batches,
         )
