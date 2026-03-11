@@ -24,7 +24,7 @@ priority_phase_list:
   - Pn
   - Pg
   - Pb
-channel_codes: "HN?,BN?,HH?,BH?"
+channel_codes: "HN?,BN?,HH?,BH?,EH?,DH?"
 percentage_gap_allowed: 0.1
 is_large_overlap: 0.5
 # Provider / Network Filters
@@ -33,9 +33,14 @@ main_providers_networks:
     - "IU"
     - "NZ"
 tmp_array_providers_networks:
+  AUSPASS:
+    - "2B"
+    - "2E"
+    - "6Y"
   IRIS:
     - "1U"
     - "2B"
+    - "2C"
     - "2L"
     - "2P"
     - "3C"
@@ -48,11 +53,14 @@ tmp_array_providers_networks:
     - "9G"
     - "QC"
     - "X2"
+    - "XA"
     - "XB"
     - "XH"
+    - "XO"
     - "XQ"
     - "Y3"
     - "YA"
+    - "YG"
     - "YO"
     - "YR"
     - "Z1"
@@ -60,6 +68,10 @@ tmp_array_providers_networks:
     - "ZP"
     - "ZT"
     - "ZX"
+  IRISPH5:
+    - "6B"
+  RASPISHAKE:
+    - "AM"
 # Mseed Variables
 vs30: 500
 pre_event_time_difference: 15
