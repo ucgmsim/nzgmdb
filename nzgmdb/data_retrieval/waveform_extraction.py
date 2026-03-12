@@ -1025,8 +1025,19 @@ def extract_station_info(
         year = event_cat.origins[0].time.year
         mseed_dir = file_structure.get_mseed_dir(main_dir, year, event_id)
 
-        # Write the mseed file
-        creation.write_mseed(mseed, event_id, station, mseed_dir)
+        try:
+            # Write the mseed file
+            creation.write_mseed(mseed, event_id, station, mseed_dir)
+        except Exception as e:
+            skipped_records.append(
+                pd.DataFrame(
+                    {
+                        "record_id": [record_id],
+                        "reason": [f"Error writing mseed file: {str(e)}"],
+                    }
+                )
+            )
+            continue
 
         for trace in mseed:
             chan = trace.stats.channel
