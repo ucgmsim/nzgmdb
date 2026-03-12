@@ -107,6 +107,13 @@ def process_single_mseed(
         }
         skipped_record = pd.DataFrame([skipped_record_dict])
         return skipped_record
+    except custom_errors.DetrendError:
+        skipped_record_dict = {
+            "record_id": mseed_file.stem,
+            "reason": "Unable to detrend record",
+        }
+        skipped_record = pd.DataFrame([skipped_record_dict])
+        return skipped_record
 
     # Get the GMC fmin values
     fmin_h = (

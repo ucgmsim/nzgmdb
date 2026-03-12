@@ -60,9 +60,15 @@ def initial_preprocessing(
     RotationError
         If the rotation fails
     """
-    # Small Processing
-    mseed.detrend("demean")
-    mseed.detrend("linear")
+    try:
+        # Small Processing
+        mseed.detrend("demean")
+        mseed.detrend("linear")
+    except NotImplementedError:
+        # This is an issue with extracted waveforms where the trace has masked values.
+        raise custom_errors.DetrendError(
+            f"Failed to demean and detrend the data for station {mseed[0].stats.station} with location {mseed[0].stats.location}"
+        )
 
     # Load config
     config = cfg.Config()
@@ -90,7 +96,11 @@ def initial_preprocessing(
         try:
             client_NZ = FDSN_Client(provider)
             inv = client_NZ.get_stations(
-                level="response", network=network, station=station, location=location, channel=f"{channel}?"
+                level="response",
+                network=network,
+                station=station,
+                location=location,
+                channel=f"{channel}?",
             )
         except FDSNNoDataException:
             raise custom_errors.InventoryNotFoundError(
