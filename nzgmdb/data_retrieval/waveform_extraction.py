@@ -785,7 +785,7 @@ def get_tmp_array_stream(
         st += read(str(f))
 
     # Merge overlapping / adjacent segments
-    st.merge(method=1, fill_value=None)
+    # st.merge(method=1, fill_value=None)
 
     # Trim to exact window
     st.trim(start_time, end_time)
