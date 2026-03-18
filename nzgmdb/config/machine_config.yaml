@@ -41,7 +41,7 @@ rch:
   phase_table: 16
   snr: 16
   fmax: 64
-  gmc: 16
+  gmc: 1
   process: 64
   im: 32
   distances: 64
