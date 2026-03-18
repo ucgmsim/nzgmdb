@@ -62,7 +62,11 @@ def process_batch(
         print(f"Skipping run_phasenet for Batch {batch_num} as results already exist")
     else:
         # Activate phaseNet environment and run over mseeds for the subfolder
-        phasenet_command = f"python {run_phasenet_script_ffp} {batch_txt} {output_dir} {bypass_records_ffp if bypass_records_ffp is not None else ''} {xml_dir if xml_dir is not None else ''}"
+        phasenet_command = f"python {run_phasenet_script_ffp} {batch_txt} {output_dir}"
+        if bypass_records_ffp is not None:
+            phasenet_command += f" --bypass_records_ffp {bypass_records_ffp}"
+        if xml_dir is not None:
+            phasenet_command += f" --xml_dir {xml_dir}"
         shell_commands.run_command(
             phasenet_command, conda_sh, env_activate_command, log_file_path_phasenet
         )
