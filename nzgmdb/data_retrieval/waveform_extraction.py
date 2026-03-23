@@ -1309,7 +1309,9 @@ def extract_waveforms(
     # Grab all the station xmls and write them as outputs
     unique_sites = station_extraction_table["sta"].unique()
     print(f"Fetching station XML metadata for {len(unique_sites)} unique sites")
-    inventory_xml.fetch_and_save_inventory(main_dir, unique_sites)
+    inventory_xml.fetch_and_save_inventory(
+        main_dir, unique_sites, add_tmp_arrays=tmp_array_dir is not None
+    )
     print("Station XML metadata fetching complete.")
 
     # Combine all the event and sta_mag dataframes

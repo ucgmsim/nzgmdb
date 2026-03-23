@@ -7,7 +7,7 @@ from pathlib import Path
 
 import pandas as pd
 from obspy.clients.fdsn import Client as FDSN_Client
-from obspy.clients.fdsn.header import FDSNNoDataException
+from obspy.clients.fdsn.header import FDSNException, FDSNNoDataException
 
 from nzgmdb.management import config as cfg
 from nzgmdb.management import file_structure
@@ -63,18 +63,25 @@ def get_provider_inventory(
             raise ValueError("Provider must be specified if not using real-time data.")
         client = FDSN_Client(provider)
     networks = "*" if networks is None else ",".join(networks)
-    return client.get_stations(
-        network=networks,
-        station=stations,
-        channel=channel_codes,
-        level=level,
-        maxlatitude=max_lat,
-        minlatitude=min_lat,
-        maxlongitude=max_lon,
-        minlongitude=min_lon,
-        starttime=starttime,
-        endtime=endtime,
-    )
+    try:
+        inv = client.get_stations(
+            network=networks,
+            station=stations,
+            channel=channel_codes,
+            level=level,
+            maxlatitude=max_lat,
+            minlatitude=min_lat,
+            maxlongitude=max_lon,
+            minlongitude=min_lon,
+            starttime=starttime,
+            endtime=endtime,
+        )
+    except FDSNException:
+        print(
+            f"No inventory data found for provider {provider} with the specified parameters."
+        )
+        inv = None
+    return inv
 
 
 def get_full_inventory(
@@ -127,6 +134,8 @@ def get_full_inventory(
             starttime=starttime,
             endtime=endtime,
         )
+        if inventory is None:
+            continue
         if return_inv is None:
             return_inv = inventory
         else:
@@ -206,6 +215,7 @@ def get_full_inventory(
 def fetch_and_save_inventory(
     main_dir: Path,
     stations: list[str],
+    add_tmp_arrays: bool = False,
     starttime: str = "2000-01-01",
     endtime: str = datetime.datetime.strftime(datetime.datetime.now(), "%Y-%m-%d"),
 ):
@@ -218,6 +228,8 @@ def fetch_and_save_inventory(
         The main directory where the StationXML files will be saved.
     stations : list[str]
         A list of station codes to fetch the inventory data for.
+    add_tmp_arrays : bool, optional
+        Whether to include temporary array providers in the inventory fetch, by default False.
     starttime : str, optional
         The start time for the inventory data, by default "2000-01-01".
     endtime : str, optional
@@ -230,6 +242,7 @@ def fetch_and_save_inventory(
 
     try:
         inv = get_full_inventory(
+            add_tmp_arrays=add_tmp_arrays,
             stations=all_stations,
             starttime=starttime,
             endtime=endtime,
@@ -243,3 +256,14 @@ def fetch_and_save_inventory(
             sel.write(fname, format="STATIONXML")
     except FDSNNoDataException:
         print("No inventory data found for the specified stations and time range.")
+
+
+df = pd.read_csv(
+    "/media/joel/data/nzgmdb/tmp_arrays/rch_run_template/flatfiles/station_table_all.csv"
+)
+df_chan = df[df["chan"].isin(["EH", "DH"])]
+unique_sites = df_chan["sta"].unique()
+main_dir = Path(
+    "/media/joel/data/nzgmdb/tmp_arrays/rch_run_template/flatfiles/dh_eh_xmls"
+)
+fetch_and_save_inventory(main_dir, unique_sites, add_tmp_arrays=True)
