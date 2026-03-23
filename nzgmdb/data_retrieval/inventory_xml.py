@@ -256,14 +256,3 @@ def fetch_and_save_inventory(
             sel.write(fname, format="STATIONXML")
     except FDSNNoDataException:
         print("No inventory data found for the specified stations and time range.")
-
-
-df = pd.read_csv(
-    "/media/joel/data/nzgmdb/tmp_arrays/rch_run_template/flatfiles/station_table_all.csv"
-)
-df_chan = df[df["chan"].isin(["EH", "DH"])]
-unique_sites = df_chan["sta"].unique()
-main_dir = Path(
-    "/media/joel/data/nzgmdb/tmp_arrays/rch_run_template/flatfiles/dh_eh_xmls"
-)
-fetch_and_save_inventory(main_dir, unique_sites, add_tmp_arrays=True)
