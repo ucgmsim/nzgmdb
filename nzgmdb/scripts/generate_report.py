@@ -1214,6 +1214,29 @@ def plot_site_table_image(
     )
 
 
+def parse_nzgmdb_version(value: str) -> NZGMDB_Versions:
+    """
+    Parse a string input into an NZGMDB_Versions enum member.
+
+    Parameters
+    ----------
+    value : str
+        The input string representing the NZGMDB version (e.g., "4p3", "4.3", "v4p3").
+
+    Returns
+    -------
+    NZGMDB_Versions
+        The corresponding NZGMDB_Versions enum member.
+    """
+    try:
+        return NZGMDB_Versions(value.strip().lower())
+    except ValueError as exc:
+        allowed = ", ".join(v.value for v in NZGMDB_Versions)
+        raise typer.BadParameter(
+            f"Invalid NZGMDB version: {value}. Allowed: {allowed}"
+        ) from exc
+
+
 @cli.from_docstring(app)
 def generate_report(
     new_version_directory: Annotated[
@@ -1235,21 +1258,17 @@ def generate_report(
         ),
     ] = None,
     new_version: Annotated[
-        Optional[NZGMDB_Versions],
+        str,
         typer.Option(
-            None,
-            help="The version for the new database (choose from the enum).",
             case_sensitive=False,
         ),
-    ] = NZGMDB_Versions.V4p3,
+    ] = "4p3",
     old_version: Annotated[
-        Optional[NZGMDB_Versions],
+        str,
         typer.Option(
-            None,
-            help="The version for the old database (choose from the enum).",
             case_sensitive=False,
         ),
-    ] = NZGMDB_Versions.V4p3,
+    ] = "4p3",
 ):
     """
     Generate a HTML report comparing the new version of the database to a previous version.
@@ -1265,10 +1284,13 @@ def generate_report(
         The Top Level directory containing the previous version of the database to compare against.
         If None, a summary of the new version will be generated instead and comparison plots will not be generated.
     new_version : NZGMDB_Versions | None
-        The version for the new database (choose from the enum). Default is NZGMDB_Versions.V4p3.
+        The version for the new database (e.g., "4p3", "4p4"). Used for labeling in the report.
     old_version : NZGMDB_Versions | None
-        The version for the old database (choose from the enum). Default is NZGMDB_Versions.V4p3.
+        The version for the old database (e.g., "4p3", "4p4"). Used for labeling in the report.
     """
+    new_version = parse_nzgmdb_version(new_version)
+    old_version = parse_nzgmdb_version(old_version)
+
     html_parts = []
     # Start of HTML
     html_parts.append(
@@ -2134,3 +2156,7 @@ def generate_report(
     # Save report
     with open(output_file, "w") as f:
         f.write("".join(html_parts))
+
+
+if __name__ == "__main__":
+    app()
