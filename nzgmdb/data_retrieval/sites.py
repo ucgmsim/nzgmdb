@@ -233,12 +233,25 @@ def create_site_table_response(
         }
     )
 
+    # Remove the duplicated stations between different networks
+    all_info_df = all_info_df.drop_duplicates(
+        subset=[
+            "sta",
+            "lat",
+            "lon",
+            "elev",
+            "chan",
+            "loc",
+            "loc_elev",
+            "start_time",
+            "end_time",
+        ]
+    )
+
     # separate into site and sta here to avoid merging issues exploding
     site_df = all_info_df[
         ["provider", "net", "sta", "lat", "lon", "elev", "creation_date", "end_date"]
     ]
-    # Remove duplicate stations (keep first occurrence)
-    site_df = site_df.drop_duplicates(subset=["provider", "net", "sta"])
 
     merged_df = site_df.merge(
         geo_meta_summary_df,

@@ -911,7 +911,7 @@ def extract_station_info(
     for chan, loc in unique_channels:
         # Each unique channel and location pair is a new mseed file
         st_new = st.select(location=loc, channel=f"{chan}?")
-        record_id = f"{event_id}_{st_new[0].stats.station}_{st_new[0].stats.channel[:2]}_{st_new[0].stats.location}"
+        record_id = f"{event_id}_{st_new[0].stats.station}_{st_new[0].stats.channel[:2]}_{'00' if st_new[0].stats.location == '' else st_new[0].stats.location}"
 
         # Check trace issues
         st_revised, skipped, issues = check_trace_issues(
@@ -934,29 +934,26 @@ def extract_station_info(
     ]
 
     for mseed in mseeds:
+        stats = mseed[0].stats
+        record_id = f"{event_id}_{stats.station}_{stats.channel[:2]}_{'00' if stats.location == '' else stats.location}"
         try:
             # Check the data is not all 0's
             if all([np.allclose(tr.data, 0) for tr in mseed]):
-                stats = mseed[0].stats
+
                 skipped_records.append(
                     pd.DataFrame(
                         {
-                            "record_id": [
-                                f"{event_id}_{stats.station}_{stats.channel}_{stats.location}"
-                            ],
+                            "record_id": [record_id],
                             "reason": ["All 0's"],
                         }
                     )
                 )
                 continue
         except TypeError:
-            stats = mseed[0].stats
             skipped_records.append(
                 pd.DataFrame(
                     {
-                        "record_id": [
-                            f"{event_id}_{stats.station}_{stats.channel}_{stats.location}"
-                        ],
+                        "record_id": [record_id],
                         "reason": ["TypeError when checking for all 0's"],
                     }
                 )
@@ -964,13 +961,10 @@ def extract_station_info(
 
         # Check for 3 component data, if not skip
         if len(mseed) < 3:
-            stats = mseed[0].stats
             skipped_records.append(
                 pd.DataFrame(
                     {
-                        "record_id": [
-                            f"{event_id}_{stats.station}_{stats.channel}_{stats.location}"
-                        ],
+                        "record_id": [record_id],
                         "reason": ["Less than 3 component traces"],
                     }
                 )
@@ -981,8 +975,6 @@ def extract_station_info(
         clip = filtering.get_clip_probability(event_mag, r_hyp, mseed)
 
         threshold = config.get_value("clip_threshold")
-        stats = mseed[0].stats
-        record_id = f"{event_id}_{stats.station}_{stats.channel[:2]}_{stats.location}"
 
         # Check if the record should be dropped
         if clip > threshold:
