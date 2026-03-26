@@ -233,6 +233,9 @@ def create_site_table_response(
         }
     )
 
+    for col in ("start_time", "end_time"):
+        all_info_df[col] = pd.to_datetime(all_info_df[col], format="ISO8601")
+
     # Remove the duplicated stations between different networks
     all_info_df = all_info_df.drop_duplicates(
         subset=[
