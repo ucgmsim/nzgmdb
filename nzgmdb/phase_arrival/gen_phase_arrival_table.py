@@ -64,7 +64,7 @@ def process_batch(
         # Activate phaseNet environment and run over mseeds for the subfolder
         phasenet_command = f"python {run_phasenet_script_ffp} {batch_txt} {output_dir}"
         if bypass_records_ffp is not None:
-            phasenet_command += f" --bypass_records_ffp {bypass_records_ffp}"
+            phasenet_command += f" --bypass_ffp {bypass_records_ffp}"
         if xml_dir is not None:
             phasenet_command += f" --xml_dir {xml_dir}"
         shell_commands.run_command(
