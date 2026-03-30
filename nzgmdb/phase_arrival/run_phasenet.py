@@ -355,9 +355,10 @@ def run_phasenet(
         mseed_file = Path(mseed_file)
         bypass_row = None
         if bypass_ffp is not None:
-            bypass_row = bypass_df.loc[bypass_df["record_id"] == mseed_file.stem].iloc[
-                0
-            ]
+            bypass_rows = bypass_df.loc[bypass_df["record_id"] == mseed_file.stem]
+            if len(bypass_rows) > 0:
+                bypass_row = bypass_rows.iloc[0]
+
         inventory = None
         if xml_dir is not None:
             station = mseed_file.stem.split("_")[1]
