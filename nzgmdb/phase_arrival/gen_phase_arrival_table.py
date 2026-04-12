@@ -84,6 +84,7 @@ def generate_phase_arrival_table(
     conda_sh: Path,
     env_activate_command: str,
     n_procs: int,
+    n_batches: int = None,
     bypass_records_ffp: Path = None,
     xml_dir: Path = None,
 ):
@@ -103,6 +104,8 @@ def generate_phase_arrival_table(
         The command to activate the environment for running PhaseNet.
     n_procs : int
         The number of processes to use
+    n_batches : int, optional
+        The number of batches to split the mseed files into. If None, it will be set to the number of processes. (Default is None)
     bypass_records_ffp : Path
         The full file path to the bypass records file, which includes a custom p_wave_ix
     xml_dir: Path
@@ -119,27 +122,42 @@ def generate_phase_arrival_table(
     mseed_files = list(main_dir.rglob("*.mseed"))
 
     # Split them into even batches based on number of mseeds and n_procs
-    # Ensure n_procs gets reduced if it is greater than the number of mseed files
+    # Ensure n_procs and n_batches gets reduced if it is greater than the number of mseed files
     n_procs = min(n_procs, len(mseed_files))
-    mseed_batches = np.array_split(mseed_files, n_procs)
+    n_batches = n_batches or n_procs
+    n_batches = min(n_batches, len(mseed_files))
+    mseed_batches = np.array_split(mseed_files, n_batches)
 
     batches = [
         (batch, (phase_dir / f"batch_{idx}")) for idx, batch in enumerate(mseed_batches)
     ]
 
-    # Fetch results
-    with mp.Pool(n_procs) as p:
-        p.map(
-            functools.partial(
-                process_batch,
-                run_phasenet_script_ffp=run_phasenet_script_ffp,
-                conda_sh=conda_sh,
-                env_activate_command=env_activate_command,
-                bypass_records_ffp=bypass_records_ffp,
-                xml_dir=xml_dir,
-            ),
-            batches,
-        )
+    # Checkpointing: only schedule batches that are missing outputs
+    pending_batches = []
+    for batch, out_dir in batches:
+        phase_table_ffp = out_dir / file_structure.FlatfileNames.PHASE_ARRIVAL_TABLE
+        if phase_table_ffp.exists():
+            batch_num = out_dir.name.split("_")[-1]
+            print(f"Skipping Batch {batch_num} (found existing phase arrival table)")
+            continue
+        pending_batches.append((batch, out_dir))
+
+    if not pending_batches:
+        print("All batches already have a phase arrival table; nothing to run.")
+    else:
+        # Fetch results (only for pending batches)
+        with mp.Pool(n_procs) as p:
+            p.map(
+                functools.partial(
+                    process_batch,
+                    run_phasenet_script_ffp=run_phasenet_script_ffp,
+                    conda_sh=conda_sh,
+                    env_activate_command=env_activate_command,
+                    bypass_records_ffp=bypass_records_ffp,
+                    xml_dir=xml_dir,
+                ),
+                pending_batches,
+            )
 
     # For each subfolder combine the phase_arrival_table.csv and skipped_records.csv into a single file
     phase_results = []

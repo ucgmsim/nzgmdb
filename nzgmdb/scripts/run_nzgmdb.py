@@ -197,6 +197,10 @@ def make_phase_arrival_table(
         typer.Argument(),
     ],
     n_procs: Annotated[int, typer.Option()] = 1,
+    n_batches: Annotated[
+        int,
+        typer.Option(),
+    ] = None,
     bypass_records_ffp: Annotated[
         Path,
         typer.Option(
@@ -223,6 +227,9 @@ def make_phase_arrival_table(
         The command to activate the environment for running PhaseNet.
     n_procs : int, optional
         Number of processes to use (default is 1).
+    n_batches : int, optional
+        The number of batches to split the mseed files into for processing.
+        If not provided, it will be determined automatically based on the number of mseed files and n_procs.
     bypass_records_ffp : Path, optional
         The full file path to the bypass records file for custom P-wave index values.
         This allows you to specify custom P-wave index values for records that may not be
@@ -234,6 +241,7 @@ def make_phase_arrival_table(
         conda_sh,
         env_activate_command,
         n_procs,
+        n_batches,
         bypass_records_ffp,
         xml_dir=file_structure.get_stationxml_dir(main_dir),
     )
@@ -847,6 +855,10 @@ def run_full_nzgmdb(
         int,
         typer.Option(),
     ] = 5000,
+    phase_arrival_n_batches: Annotated[
+        int,
+        typer.Option(),
+    ] = None,
     real_time: Annotated[
         bool,
         typer.Option(),
@@ -891,6 +903,7 @@ def run_full_nzgmdb(
 
     Steps Included:
     - Fetch Geonet data
+    - Waveform extraction
     - Merge tectonic domains
     - Generate phase arrival table
     - Calculate SNR
@@ -939,6 +952,9 @@ def run_full_nzgmdb(
         The batch size for Geonet data retrieval (default is 500).
     snr_batch_size : int, optional
         The batch size for the SNR calculation (default is 5000).
+    phase_arrival_n_batches : int, optional
+        The number of batches to split the phase arrival calculation into
+        (default is None, which will automatically determine the number of batches based on the number of records and n_procs).
     real_time : bool, optional
         If True, the function will run in real-time mode using a different client (default is False).
     upload : bool, optional
@@ -1070,6 +1086,7 @@ def run_full_nzgmdb(
             conda_sh,
             gmc_activate,
             phase_n_procs,
+            phase_arrival_n_batches,
             bypass_records_ffp,
             xml_dir=file_structure.get_stationxml_dir(main_dir),
         )
