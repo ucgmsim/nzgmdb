@@ -859,6 +859,10 @@ def run_full_nzgmdb(
         int,
         typer.Option(),
     ] = None,
+    gmc_n_batches: Annotated[
+        int,
+        typer.Option(),
+    ] = None,
     real_time: Annotated[
         bool,
         typer.Option(),
@@ -955,6 +959,9 @@ def run_full_nzgmdb(
     phase_arrival_n_batches : int, optional
         The number of batches to split the phase arrival calculation into
         (default is None, which will automatically determine the number of batches based on the number of records and n_procs).
+    gmc_n_batches : int, optional
+        The number of batches to split the GMC prediction step into
+        (default is None, which will automatically determine the number of batches based on the number of records and gmc_procs).
     real_time : bool, optional
         If True, the function will run in real-time mode using a different client (default is False).
     upload : bool, optional
@@ -1154,6 +1161,7 @@ def run_full_nzgmdb(
             gmc_activate,
             gmc_predict_activate,
             gmc_n_procs,
+            gmc_n_batches,
             bypass_records_ffp=bypass_records_ffp,
         )
 
