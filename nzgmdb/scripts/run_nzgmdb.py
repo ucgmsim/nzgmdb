@@ -117,6 +117,13 @@ def extract_waveforms(
         int,
         typer.Option(),
     ] = 1000,
+    tmp_array_dir: Annotated[
+        Path,
+        typer.Option(
+            exists=True,
+            file_okay=False,
+        ),
+    ] = None,
 ):
     """
     Extract waveforms using the station extraction table and save them as MiniSEED files.
@@ -134,9 +141,16 @@ def extract_waveforms(
         The full file path to a set of record IDs to only run for. If provided, only these records will be processed.
     batch_size : int, optional
         The batch size for how many extracted waveforms to process before checkpointing (default is 1000).
+    tmp_array_dir : Path, optional
+        The directory the saved temporary array data is to be used for waveform extraction.
     """
     waveform_extraction.extract_waveforms(
-        main_dir, station_extraction_table_ffp, n_procs, only_record_ids_ffp, batch_size
+        main_dir,
+        station_extraction_table_ffp,
+        n_procs,
+        only_record_ids_ffp,
+        batch_size,
+        tmp_array_dir,
     )
 
 
