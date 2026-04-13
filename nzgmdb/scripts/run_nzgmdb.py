@@ -819,10 +819,6 @@ def run_full_nzgmdb(
             file_okay=False,
         ),
     ],
-    gmc_procs: Annotated[
-        int,
-        typer.Option(),
-    ] = 1,
     n_procs: Annotated[int, typer.Option()] = 1,
     checkpoint: Annotated[
         bool,
@@ -906,6 +902,7 @@ def run_full_nzgmdb(
     This function orchestrates the full pipeline of NZGMDB, executing all necessary steps sequentially.
 
     Steps Included:
+    - Generate site table with basin information
     - Fetch Geonet data
     - Waveform extraction
     - Merge tectonic domains
@@ -940,8 +937,6 @@ def run_full_nzgmdb(
         Command to activate gmc_predict environment to run the predictions.
     ko_matrix_path : Path
         Path to the ko matrix directory
-    gmc_procs : int, optional
-        Number of processes to use for GMC (default is 1).
     n_procs : int, optional
         The number of processes to use (default is 1).
     checkpoint : bool, optional
@@ -1149,7 +1144,7 @@ def run_full_nzgmdb(
     ):
         print("Running GMC")
         gmc_n_procs = (
-            gmc_procs
+            n_procs
             if machine is None
             else config.get_n_procs(machine, cfg.WorkflowStep.GMC)
         )
