@@ -846,7 +846,7 @@ def run_full_nzgmdb(
     geonet_batch_size: Annotated[
         int,
         typer.Option(),
-    ] = 500,
+    ] = 100,
     snr_batch_size: Annotated[
         int,
         typer.Option(),
