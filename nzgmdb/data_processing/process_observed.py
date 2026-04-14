@@ -8,12 +8,10 @@ from pathlib import Path
 
 import numpy as np
 import pandas as pd
-from obspy.clients.fdsn import Client as FDSN_Client
-from obspy.core.inventory import Inventory
+from obspy import read_inventory
 
 import qcore.timeseries as ts
 from nzgmdb.data_processing import waveform_manipulation
-from nzgmdb.management import config as cfg
 from nzgmdb.management import custom_errors, file_structure
 from nzgmdb.mseed_management import reading
 
@@ -23,7 +21,7 @@ def process_single_mseed(
     gmc_df: pd.DataFrame | None = None,
     fmax_df: pd.DataFrame | None = None,
     bypass_df: pd.DataFrame | None = None,
-    inventory: Inventory | None = None,
+    xml_dir: Path | None = None,
 ):
     """
     Process a single mseed file and save the processed data to a txt file
@@ -42,8 +40,8 @@ def process_single_mseed(
         The Fmax values
     bypass_df : pd.DataFrame, optional
         The bypass records containing custom fmin, fmax values
-    inventory : Inventory, optional
-        The inventory information for the mseed file
+    xml_dir : Path, optional
+        The directory containing the station xml files for inventory information
 
     Returns
     -------
@@ -70,6 +68,13 @@ def process_single_mseed(
         }
         skipped_record = pd.DataFrame([skipped_record_dict])
         return skipped_record
+
+    inventory = None
+    if xml_dir:
+        # Load the inventory information
+        inventory_file = xml_dir / f"{station}.xml"
+        if inventory_file.is_file():
+            inventory = read_inventory(inventory_file)
 
     # Perform initial pre-processing
     try:
@@ -99,6 +104,13 @@ def process_single_mseed(
         skipped_record_dict = {
             "record_id": mseed_file.stem,
             "reason": "Unable to differentiate record",
+        }
+        skipped_record = pd.DataFrame([skipped_record_dict])
+        return skipped_record
+    except custom_errors.DetrendError:
+        skipped_record_dict = {
+            "record_id": mseed_file.stem,
+            "reason": "Unable to detrend record",
         }
         skipped_record = pd.DataFrame([skipped_record_dict])
         return skipped_record
@@ -223,6 +235,7 @@ def process_mseeds_to_txt(
     """
     # Get the raw waveform mseed files
     waveform_dir = file_structure.get_waveform_dir(main_dir)
+    xml_dir = file_structure.get_stationxml_dir(main_dir)
     mseed_files = waveform_dir.rglob("*.mseed")
 
     # Load the GMC, Fmax and bypass records
@@ -235,11 +248,6 @@ def process_mseeds_to_txt(
         )
     bypass_df = None if bypass_records_ffp is None else pd.read_csv(bypass_records_ffp)
 
-    config = cfg.Config()
-    channel_codes = config.get_value("channel_codes")
-    client = FDSN_Client("GEONET")
-    inventory = client.get_stations(channel=channel_codes, level="response")
-
     # Use multiprocessing to process the mseed files
     with multiprocessing.Pool(processes=n_procs) as pool:
         skipped_records = pool.map(
@@ -248,7 +256,7 @@ def process_mseeds_to_txt(
                 gmc_df=gmc_df,
                 fmax_df=fmax_df,
                 bypass_df=bypass_df,
-                inventory=inventory,
+                xml_dir=xml_dir,
             ),
             mseed_files,
         )

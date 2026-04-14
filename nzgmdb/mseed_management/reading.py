@@ -74,7 +74,7 @@ def create_waveform_from_mseed(
     pre_process: bool = False,
     apply_taper: bool = False,
     apply_zero_padding: bool = False,
-    inventory: Inventory = None,
+    inventory: Inventory | None = None,
 ):
     """
     Create a waveform object from a mseed file
@@ -91,9 +91,8 @@ def create_waveform_from_mseed(
         Whether to apply a taper to the data, by default False (Only used when pre_process is True)
     apply_zero_padding : bool (optional)
         Whether to apply zero padding to the data, by default False (Only used when pre_process is True)
-    inventory : Inventory (optional)
-        The inventory information for the mseed file, by default None
-        (Only used to improve performance when pre_process is True)
+    inventory : Inventory, optional
+        The inventory object to use for sensitivity removal, by default None (Will try to extract from FDSN if not provided)
 
     Returns
     -------
@@ -131,7 +130,7 @@ def create_waveform_from_mseed(
         data = np.stack([tr.data for tr in mseed], axis=1)
         data = data.astype(np.float32)
         # Reshape the waveform to have the correct shape for the IM calculation
-        reshaped_waveform = data[np.newaxis, :, :]
+        reshaped_waveform = data.T[:, None, :]
     except ValueError:
         raise custom_errors.InvalidTraceLengthError(
             f"Error reading data from {mseed_file}"

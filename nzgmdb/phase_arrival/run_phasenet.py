@@ -9,7 +9,7 @@ import h5py
 import mseedlib
 import numpy as np
 import pandas as pd
-from obspy import Stream, Trace, UTCDateTime
+from obspy import Inventory, Stream, Trace, UTCDateTime, read_inventory
 from obspy.clients.fdsn import Client as FDSN_Client
 from obspy.clients.fdsn.header import FDSNNoDataException
 
@@ -110,7 +110,12 @@ def run_phase_net(
     return p_wave_ix, s_wave_ix
 
 
-def process_mseed(mseed_file: Path, h5_ffp: Path, bypass_row: pd.Series = None):
+def process_mseed(
+    mseed_file: Path,
+    h5_ffp: Path,
+    bypass_row: pd.Series = None,
+    inventory: Inventory = None,
+):
     """
     Process an mseed file and return the phase arrival data.
 
@@ -122,6 +127,8 @@ def process_mseed(mseed_file: Path, h5_ffp: Path, bypass_row: pd.Series = None):
         Path to the HDF5 file to save the probability series.
     bypass_row : pd.Series, optional
         A row from the bypass file with known p and s wave datetimes, by default None
+    inventory : Inventory, optional
+        The inventory object to use for sensitivity removal, by default None (Will try extract from FDSN if not provided)
 
     Returns
     -------
@@ -186,34 +193,29 @@ def process_mseed(mseed_file: Path, h5_ffp: Path, bypass_row: pd.Series = None):
     # Get the inventory information
     station = mseed[0].stats.station
     location = mseed[0].stats.location
+    channel = mseed[0].stats.channel[:2]
 
-    # Get Station Information from geonet clients
-    # Fetching here instead of passing the inventory object as searching for the station, network, and channel
-    # information takes a long time as it's implemented in a for loop
-    try:
-        client_NZ = FDSN_Client("GEONET")
-        inv = client_NZ.get_stations(
-            level="response", network="NZ", station=station, location=location
-        )
-    except FDSNNoDataException:
-        skipped_record = pd.DataFrame(
-            {
-                "record_id": [mseed_file.stem],
-                "reason": ["Failed to find Inventory information"],
-            }
-        )
-        create_empty_h5_file(h5_ffp, mseed_file.stem)
-        return None, skipped_record
-
-    # Add the response (Same for all channels)
-    # this is done so that the sensitivity can be removed otherwise it tries to find the exact same channel
-    # which can fail when including the inventory information
-    response = next(cha.response for sta in inv.networks[0] for cha in sta.channels)
-    for tr in mseed:
-        tr.stats.response = response
+    if inventory is None:
+        try:
+            client_NZ = FDSN_Client("GEONET")
+            inv = client_NZ.get_stations(
+                level="response", network="NZ", station=station, location=location
+            )
+        except FDSNNoDataException:
+            skipped_record = pd.DataFrame(
+                {
+                    "record_id": [mseed_file.stem],
+                    "reason": ["Failed to find Inventory information"],
+                }
+            )
+            create_empty_h5_file(h5_ffp, mseed_file.stem)
+            return None, skipped_record
+    else:
+        inv = inventory
 
     try:
-        mseed = mseed.remove_sensitivity()
+        output_type = "ACC" if channel[:2] in ["HN", "BN"] else "VEL"
+        mseed = mseed.remove_response(inventory=inv, output=output_type)
     except ValueError:
         skipped_record = pd.DataFrame(
             {
@@ -223,6 +225,21 @@ def process_mseed(mseed_file: Path, h5_ffp: Path, bypass_row: pd.Series = None):
         )
         create_empty_h5_file(h5_ffp, mseed_file.stem)
         return None, skipped_record
+
+    # If the channel is not a Strong Motion station then we need to differentiate
+    if channel not in ["HN", "BN"]:
+        try:
+            # differentiate data i.e., m/s to m/s^2
+            mseed.differentiate()
+        except ValueError:
+            skipped_record = pd.DataFrame(
+                {
+                    "record_id": [mseed_file.stem],
+                    "reason": ["Unable to differentiate record"],
+                }
+            )
+            create_empty_h5_file(h5_ffp, mseed_file.stem)
+            return None, skipped_record
 
     try:
         p_wave_ix, s_wave_ix, p_prob_series, s_prob_series, p_prob, s_prob = (
@@ -302,7 +319,10 @@ def process_mseed(mseed_file: Path, h5_ffp: Path, bypass_row: pd.Series = None):
 
 
 def run_phasenet(
-    mseed_files_ffp: Path, output_dir: Path, bypass_ffp: Path | None = None
+    mseed_files_ffp: Path,
+    output_dir: Path,
+    bypass_ffp: Path = None,
+    xml_dir: Path = None,
 ):
     """
     Run PhaseNet on the mseed files.
@@ -315,6 +335,8 @@ def run_phasenet(
         Output directory for skipped records and phase arrival information.
     bypass_ffp : Path, optional
         Optional bypass file path with known p and s wave datetimes, by default None
+    xml_dir : Path, optional
+        Optional directory containing station xml files to use for sensitivity removal, by default None (Will try extract from FDSN if not provided)
     """
     # Read the .txt for the mseed files to process
     mseed_files = mseed_files_ffp.read_text().splitlines()
@@ -333,10 +355,19 @@ def run_phasenet(
         mseed_file = Path(mseed_file)
         bypass_row = None
         if bypass_ffp is not None:
-            bypass_row = bypass_df.loc[bypass_df["record_id"] == mseed_file.stem].iloc[
-                0
-            ]
-        phase_arrival, skipped_record = process_mseed(mseed_file, h5_ffp, bypass_row)
+            bypass_rows = bypass_df.loc[bypass_df["record_id"] == mseed_file.stem]
+            if len(bypass_rows) > 0:
+                bypass_row = bypass_rows.iloc[0]
+
+        inventory = None
+        if xml_dir is not None:
+            station = mseed_file.stem.split("_")[1]
+            xml_file = xml_dir / f"{station}.xml"
+            if xml_file.exists():
+                inventory = read_inventory(xml_file)
+        phase_arrival, skipped_record = process_mseed(
+            mseed_file, h5_ffp, bypass_row, inventory=inventory
+        )
         if phase_arrival is not None:
             phase_arrival_table.append(phase_arrival)
         if skipped_record is not None:
@@ -381,5 +412,11 @@ if __name__ == "__main__":
         help="Optional bypass file path with known p and s wave datetimes.",
         default=None,
     )
+    parser.add_argument(
+        "--xml_dir",
+        type=Path,
+        help="Optional directory containing station xml files to use for sensitivity removal.",
+        default=None,
+    )
     args = parser.parse_args()
-    run_phasenet(args.mseed_files_ffp, args.output_dir, args.bypass_ffp)
+    run_phasenet(args.mseed_files_ffp, args.output_dir, args.bypass_ffp, args.xml_dir)

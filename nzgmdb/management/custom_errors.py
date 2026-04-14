@@ -15,6 +15,12 @@ class DiffrentiateError(Exception):
     pass
 
 
+class DetrendError(Exception):
+    """Exception raised when detrend fails."""
+
+    pass
+
+
 class SensitivityRemovalError(Exception):
     """Exception raised when sensitivity removal fails."""
 

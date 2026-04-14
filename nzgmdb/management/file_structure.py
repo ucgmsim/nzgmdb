@@ -16,12 +16,14 @@ class PreFlatfileNames(StrEnum):
     EARTHQUAKE_SOURCE_TABLE_GEONET = "earthquake_source_table_geonet.csv"
     STATION_EXTRACTION_TABLE_GEONET = "station_extraction_table_geonet.csv"
     STATION_MAGNITUDE_TABLE_EXTRACTION = "station_magnitude_table_extraction.csv"
+    MULTI_EVENT_TABLE = "multi_event_table.csv"
     EARTHQUAKE_SOURCE_TABLE_TECTONIC = "earthquake_source_table_tectonic.csv"
     EARTHQUAKE_SOURCE_TABLE_DISTANCES = "earthquake_source_table_distances.csv"
     EARTHQUAKE_SOURCE_TABLE_AFTERSHOCKS = "earthquake_source_table_aftershocks.csv"
     EARTHQUAKE_SOURCE_GEOMETRY = "earthquake_source_geometry_all.csv"
     PHASE_ARRIVAL_TABLE = "phase_arrival_table_all.csv"
     SITE_TABLE = "site_table_all.csv"
+    STATION_TABLE = "station_table_all.csv"
     PROPAGATION_TABLE = "propagation_path_table_all.csv"
     GROUND_MOTION_IM_CATALOGUE = "ground_motion_im_catalogue.csv"
     PROB_SERIES = "prob_series.h5"
@@ -36,7 +38,9 @@ class FlatfileNames(StrEnum):
     EARTHQUAKE_SOURCE_GEOMETRY = "earthquake_source_geometry.csv"
     STATION_MAGNITUDE_TABLE = "station_magnitude_table.csv"
     STATION_EXTRACTION_TABLE = "station_extraction_table.csv"
+    MULTI_EVENT_TABLE = "multi_event_table.csv"
     SITE_TABLE = "site_table.csv"
+    STATION_TABLE = "station_table.csv"
     PHASE_ARRIVAL_TABLE = "phase_arrival_table.csv"
     PROPAGATION_TABLE = "propagation_path_table.csv"
     GMC_PREDICTIONS = "gmc_predictions.csv"
@@ -281,3 +285,20 @@ def get_gmc_dir(main_dir: Path) -> Path:
         The directory where GMC results are stored.
     """
     return main_dir / "gmc"
+
+
+def get_stationxml_dir(main_dir: Path) -> Path:
+    """
+    Get the directory for storing StationXML files.
+
+    Parameters
+    ----------
+    main_dir : Path
+        The main directory of the NZGMDB results.
+
+    Returns
+    -------
+    Path
+        The directory where StationXML files are stored.
+    """
+    return main_dir / "stationxml"

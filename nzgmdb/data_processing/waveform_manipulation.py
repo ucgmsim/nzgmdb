@@ -3,9 +3,9 @@ This module contains functions for the initial pre-processing of waveform data a
 """
 
 import numpy as np
+from obspy import Inventory
 from obspy.clients.fdsn import Client as FDSN_Client
 from obspy.clients.fdsn.header import FDSNNoDataException
-from obspy.core.inventory import Inventory
 from obspy.core.stream import Stream
 from scipy import integrate, signal
 
@@ -18,7 +18,9 @@ def initial_preprocessing(
     apply_taper: bool = True,
     apply_zero_padding: bool = True,
     inventory: Inventory = None,
-):
+    provider: str = "GEONET",
+    network: str = "NZ",
+) -> Stream:
     """
     Basic pre-processing of the waveform data
     This performs the following:
@@ -38,7 +40,11 @@ def initial_preprocessing(
     apply_zero_padding : bool, optional
         Whether to apply zero padding, by default True
     inventory : Inventory, optional
-        The inventory object containing the response information, by default None
+        The inventory object to use for sensitivity removal, by default None (Will try to extract from FDSN if not provided)
+    provider : str, optional
+        The FDSN provider to use if inventory is not provided, by default "GEONET"
+    network : str, optional
+        The network code to use if inventory is not provided, by default "NZ"
 
     Returns
     -------
@@ -54,9 +60,15 @@ def initial_preprocessing(
     RotationError
         If the rotation fails
     """
-    # Small Processing
-    mseed.detrend("demean")
-    mseed.detrend("linear")
+    try:
+        # Small Processing
+        mseed.detrend("demean")
+        mseed.detrend("linear")
+    except NotImplementedError:
+        # This is an issue with extracted waveforms where the trace has masked values.
+        raise custom_errors.DetrendError(
+            f"Failed to demean and detrend the data for station {mseed[0].stats.station} with location {mseed[0].stats.location}"
+        )
 
     # Load config
     config = cfg.Config()
@@ -77,20 +89,18 @@ def initial_preprocessing(
     # Get the inventory information
     station = mseed[0].stats.station
     location = mseed[0].stats.location
-    channel = mseed[0].stats.channel
+    channel = mseed[0].stats.channel[:2]
 
-    if inventory is not None:
-        # Select only the required station and location from the inventory
-        inv_selected = inventory.select(station=station, location=location)
-        if len(inv_selected) == 0:
-            raise custom_errors.InventoryNotFoundError(
-                f"No inventory information found for station {station} with location {location}"
-            )
-    else:
+    inv = inventory
+    if inv is None:
         try:
-            client_NZ = FDSN_Client("GEONET")
-            inv_selected = client_NZ.get_stations(
-                level="response", network="NZ", station=station, location=location
+            client_NZ = FDSN_Client(provider)
+            inv = client_NZ.get_stations(
+                level="response",
+                network=network,
+                station=station,
+                location=location,
+                channel=f"{channel}?",
             )
         except FDSNNoDataException:
             raise custom_errors.InventoryNotFoundError(
@@ -98,7 +108,9 @@ def initial_preprocessing(
             )
 
     try:
-        mseed = mseed.remove_sensitivity(inventory=inv_selected)
+        # Ensure we get the correct output type for strong motion vs broadband
+        output_type = "ACC" if channel[:2] in ["HN", "BN"] else "VEL"
+        mseed = mseed.remove_response(inventory=inv, output=output_type)
     except ValueError:
         raise custom_errors.SensitivityRemovalError(
             f"Failed to remove sensitivity for station {station} with location {location}"
@@ -106,7 +118,7 @@ def initial_preprocessing(
 
     # Rotate
     try:
-        mseed.rotate("->ZNE", inventory=inv_selected)
+        mseed.rotate("->ZNE", inventory=inv)
     except (
         Exception  # noqa: BLE001
     ):  # Due to obspy raising an Exception instead of a specific error
@@ -116,7 +128,7 @@ def initial_preprocessing(
         )
 
     # If the channel is not a Strong Motion station then we need to differentiate
-    if channel[:2] not in ["HN", "BN"]:
+    if channel not in ["HN", "BN"]:
         try:
             # differentiate data i.e., m/s to m/s^2
             mseed.differentiate()

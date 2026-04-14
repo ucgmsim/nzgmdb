@@ -13,9 +13,11 @@ gmprocess
 h5py
 pooch
 matplotlib
+rasterio
 oq_wrapper>=2025.12.3,
 qcore-utils>=2025.12.1,
 source_modelling>=2025.12.1,
-openquake-engine @ git+https://github.com/gem/oq-engine.git@v3.23.2
-IM_calculation @ git+https://github.com/ucgmsim/IM_calculation.git
-velocity_modelling @ git+https://github.com/ucgmsim/velocity_modelling.git
+openquake.engine==3.23.2,
+im-calculation>=2025.12.3,
+velocity-modelling>=2025.12.1
+cmt-solutions @ git+https://github.com/ucgmsim/cmt_solutions.git

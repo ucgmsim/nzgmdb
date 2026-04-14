@@ -75,7 +75,7 @@ Each MSEED file undergoes a comprehensive processing workflow:
 2. **Demean and Detrend** - Remove offset and linear trends
 3. **Taper Application** - Apply 5% Tukey taper to both ends
 4. **Zero Padding** - Add 5 seconds of zeros at start and end
-5. **Inventory Response Removal** - Remove instrument sensitivity using station metadata
+5. **Inventory Response Removal** - Remove instrument response using station metadata
 6. **Component Rotation** - Rotate horizontal components to North-East-Vertical (NEZ)
 7. **Gravity normalisation** - Divide acceleration data by the acceleration due to gravity (9.81 m/s²)
 
