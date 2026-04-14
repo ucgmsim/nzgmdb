@@ -107,9 +107,9 @@ def run_ccld_simulation(
     dip: float,
     rake: float,
     method: str,
-    strike2: float = None,
-    dip2: float = None,
-    rake2: float = None,
+    strike2: float | None = None,
+    dip2: float | None = None,
+    rake2: float | None = None,
 ) -> FocalMechanism:
     """
     Run the CCLD simulation for an event.
