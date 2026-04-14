@@ -86,7 +86,3 @@ checks = [
 
 [tool.ty]
 ignore = ["reportGeneralTypeIssues"]
-exclude = [
-  "setup.py",
-  "nzgmdb/CCLD/ccldpy.py",
-]
