@@ -1190,18 +1190,62 @@ def extract_waveforms(
                     print("Retrying in 120 seconds...")
                     time.sleep(120)  # Wait for 2 minutes before retrying
 
-            with mp.Pool(n_procs) as pool:
-                results = pool.map(
-                    functools.partial(
-                        extract_station_info,
-                        main_dir=main_dir,
-                        event_catalogues=catalog_dict,
-                        extraction_table=station_extraction_table,
-                        only_record_ids=only_record_ids,
-                        tmp_array_dir=tmp_array_dir,
-                    ),
-                    (row for _, row in batch_rows.iterrows()),
-                )
+            extract_fn = functools.partial(
+                extract_station_info,
+                main_dir=main_dir,
+                event_catalogues=catalog_dict,
+                extraction_table=station_extraction_table,
+                only_record_ids=only_record_ids,
+                tmp_array_dir=tmp_array_dir,
+            )
+
+            results = []
+            pool = mp.Pool(processes=n_procs)
+            timeout_s = 60 * 5  # 5 min
+            try:
+                for _, row in batch_rows.iterrows():
+                    job = pool.apply_async(extract_fn, (row,))
+                    record_id = f"{row['evid']}_{row['sta']}"
+                    try:
+                        results.append(job.get(timeout=timeout_s))
+                    except mp.TimeoutError:
+                        results.append(
+                            StationExtractionResult(
+                                sta_mag_line=[],
+                                skipped_records=[
+                                    pd.DataFrame(
+                                        {
+                                            "record_id": [record_id],
+                                            "reason": [
+                                                f"Hung (> {timeout_s // 60} min)"
+                                            ],
+                                        }
+                                    )
+                                ],
+                                clipped_records=[],
+                                multi_trace_issues=[],
+                                multi_event_records=[],
+                            )
+                        )
+                        pool.terminate()
+                        pool.join()
+                        pool = mp.Pool(processes=n_procs)
+            finally:
+                pool.close()
+                pool.join()
+
+            # with mp.Pool(n_procs) as pool:
+            #     results = pool.map(
+            #         functools.partial(
+            #             extract_station_info,
+            #             main_dir=main_dir,
+            #             event_catalogues=catalog_dict,
+            #             extraction_table=station_extraction_table,
+            #             only_record_ids=only_record_ids,
+            #             tmp_array_dir=tmp_array_dir,
+            #         ),
+            #         (row for _, row in batch_rows.iterrows()),
+            #     )
 
             # Extract the results
             (
