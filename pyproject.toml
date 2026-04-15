@@ -85,13 +85,14 @@ checks = [
 ]
 
 [tool.ty.rules]
-default = "ignore"
 no-matching-overload = "ignore"
-invalid-parameter-default = "error"
-invalid-argument-type = "error"
-invalid-type-form = "error"
-invalid-return-type = "error"
-missing-argument = "error"
-too-many-positional-arguments = "error"
-missing-return = "error"
-deprecated = "warn"
+unresolved-attribute = "ignore"
+not-subscriptable = "ignore"
+possibly-missing-submodule = "ignore"
+invalid-type-arguments = "ignore"
+unresolved-import = "ignore"
+#invalid-parameter-default = "error"
+#invalid-argument-type = "error"
+#invalid-type-form = "error"
+#invalid-return-type = "error"
+#too-many-positional-arguments = "error"

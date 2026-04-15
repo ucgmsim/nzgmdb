@@ -62,10 +62,10 @@ def get_provider_inventory(
         if provider is None:
             raise ValueError("Provider must be specified if not using real-time data.")
         client = FDSN_Client(provider)
-    networks = "*" if networks is None else ",".join(networks)
+    networks_str = "*" if networks is None else ",".join(networks)
     try:
         inv = client.get_stations(
-            network=networks,
+            network=networks_str,
             station=stations,
             channel=channel_codes,
             level=level,
