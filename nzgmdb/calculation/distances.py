@@ -361,7 +361,7 @@ def get_nodal_plane_info(
             The focal type that determined the nodal plane (ff, geonet_rm, cmt, cmt_unc, domain)
     """
     # Create the default return to be filled using defaultdict
-    nodal_plane_info = defaultdict(lambda: None)
+    nodal_plane_info: dict[str, object | None] = defaultdict(lambda: None)
     ccld_info = None
 
     # Split the cmt data into reviewed and unreviewed data
@@ -565,7 +565,7 @@ def get_nodal_plane_info(
                 ccld_info = run_ccld_simulation(
                     event_id, event_row, strike, dip, rake, "D"
                 )
-                nodal_plane_info.update(ccld_info)
+                nodal_plane_info.update(ccld_info)  # type: ignore[no-matching-overload]
                 return nodal_plane_info
 
             # Find the closest point in the table
@@ -596,7 +596,7 @@ def get_nodal_plane_info(
 
     if ccld_info is not None:
         # Update the nodal plane info with the ccld info
-        nodal_plane_info.update(ccld_info)
+        nodal_plane_info.update(ccld_info)  # type: ignore[no-matching-overload]
 
     return nodal_plane_info
 
@@ -613,7 +613,7 @@ def compute_distances_for_event(
     puy_objs: np.ndarray,
     nz_mech: dict,
     slab_faulting_geo: dict,
-) -> tuple[Optional[pd.DataFrame], Optional[pd.DataFrame]]:
+) -> tuple[Optional[pd.DataFrame], Optional[pd.DataFrame], Optional[pd.DataFrame]]:
     """
     Compute the distances for a given event
 
@@ -1012,7 +1012,7 @@ def perpendicular_height(
     point_vec = point - base_start
     cross = np.cross(base_vec, point_vec)
     base_len = np.linalg.norm(base_vec)
-    return np.linalg.norm(cross) / base_len if base_len else 0.0
+    return float(np.linalg.norm(cross) / base_len) if base_len else 0.0
 
 
 def inverse_square_integral(
@@ -1133,11 +1133,12 @@ def distance_in_taupo(
 
     # Loop through all the stations
     for station_index, station in sta_df.iterrows():
+        idx = int(station_index)
         # Create the line between the station and the event
         sta_transform = wgs2nztm.transform(station.lat, station.lon)
         line = LineString(
             [
-                [rrups_transform[0][station_index], rrups_transform[1][station_index]],
+                [rrups_transform[0][idx], rrups_transform[1][idx]],
                 [sta_transform[0], sta_transform[1]],
             ]
         )
@@ -1169,7 +1170,7 @@ def distance_in_taupo(
                     )
 
             line_points = line.intersection(taupo_polygon)
-            tvz_length = min(line_points.length / 1000 / r_epis[station_index], 1)
+            tvz_length = min(line_points.length / 1000 / r_epis[idx], 1)
 
         tvz_lengths.append(tvz_length)
         boundary_dists_rjb.append(boundary_dist_rjb)
@@ -1242,9 +1243,10 @@ def calc_distances(main_dir: Path, n_procs: int = 1):
     ll_num = config.get_value("ll_num")
     nztm_num = config.get_value("nztm_num")
     wgs2nztm = Transformer.from_crs(ll_num, nztm_num)
-    taupo_transform = np.dstack(
-        np.array(wgs2nztm.transform(tvz_points.latitude, tvz_points.longitude))
-    )[0]
+    x, y = wgs2nztm.transform(
+        tvz_points.latitude.to_numpy(), tvz_points.longitude.to_numpy()
+    )
+    taupo_transform = np.column_stack((x, y))
     taupo_polygon = Polygon(taupo_transform)
 
     # Go through the registry keys and check if they are .srf files to use

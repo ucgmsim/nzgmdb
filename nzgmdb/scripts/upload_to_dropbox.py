@@ -443,7 +443,7 @@ def download_dropbox_archive(
     if not ignore_xml:
         xml_dir.mkdir(exist_ok=True)
         zips_to_download.append(
-            f"{dropbox_version_dir}/{xml_zip}", zip_dir / xml_zip, xml_dir
+            (f"{dropbox_version_dir}/{xml_zip}", zip_dir / xml_zip, xml_dir)
         )
 
     # Ensure there is something to download

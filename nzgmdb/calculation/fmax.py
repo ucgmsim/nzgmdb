@@ -20,7 +20,7 @@ def run_full_fmax_calc(
     waveform_dir: Path,
     snr_fas_output_dir: Path,
     n_procs: int = 1,
-    bypass_records_ffp: Path = None,
+    bypass_records_ffp: Path | None = None,
 ):
     """
     Run the full procedure for each record to assess SNR produced from mseed files
