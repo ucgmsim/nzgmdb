@@ -86,6 +86,7 @@ checks = [
 
 [tool.ty.rules]
 default = "ignore"
+no-matching-overload = "ignore"
 invalid-parameter-default = "error"
 invalid-argument-type = "error"
 invalid-type-form = "error"
