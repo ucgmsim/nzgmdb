@@ -201,7 +201,7 @@ def process_mseed(
             inv = client_NZ.get_stations(
                 level="response", network="NZ", station=station, location=location
             )
-        except FDSNNoDataException:
+        except (FDSNNoDataException, TypeError):
             skipped_record = pd.DataFrame(
                 {
                     "record_id": [mseed_file.stem],
