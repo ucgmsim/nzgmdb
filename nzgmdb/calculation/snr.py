@@ -229,9 +229,9 @@ def compute_snr_for_mseed_data(
     snr_fas_output_dir: Path,
     ko_directory: Path,
     n_procs: int = 1,
-    common_frequency_vector: np.ndarray = None,
+    common_frequency_vector: np.ndarray | None = None,
     batch_size: int = 5000,
-    bypass_records_ffp: Path = None,
+    bypass_records_ffp: Path | None = None,
 ):
     """
     Compute the SNR for the data in the data_dir

@@ -187,9 +187,9 @@ def create_regions(
     fault_file: Path,
     d_s: float,
     d_d: float,
-    region_a_offshore: dict = None,
-    region_b_on: dict = None,
-    region_c_downdip: dict = None,
+    region_a_offshore: dict | None = None,
+    region_b_on: dict | None = None,
+    region_c_downdip: dict | None = None,
 ):
     """
     Determine an array of points on and offshore of a fault and divide them into regions.
@@ -257,10 +257,9 @@ def create_regions(
 
 def ngasub2020_tectclass(
     row: pd.Series,
-    region_a_offshore: dict = False,
-    region_b_on: dict = False,
-    region_c_downdip: dict = False,
-    fault_label: str = np.nan,
+    region_a_offshore: dict,
+    region_b_on: dict,
+    region_c_downdip: dict,
     h_thresh: float = 10,
     v_thresh: float = 10,
 ):
@@ -294,8 +293,6 @@ def ngasub2020_tectclass(
         Portion of faults in Region B (latitude, longitude, depth) as defined in NGA-SUB (2020).
     region_c_downdip : dict
         Portion of faults in Region C (latitude, longitude, depth) as defined in NGA-SUB (2020).
-    fault_label : str
-        The fault label associated with the event.
     h_thresh : float
         Horizontal distance threshold for classification.
     v_thresh : float
@@ -310,6 +307,7 @@ def ngasub2020_tectclass(
 
     """
     lat, lon, depth = row["lat"], row["lon"], row["depth"]
+    fault_label = np.nan
 
     # Initially classify as if farfield, correct later if neccessary
     if depth <= 30:

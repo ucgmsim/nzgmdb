@@ -326,7 +326,7 @@ def add_ground_level(
     return gm_im_df_flat
 
 
-def merge_flatfiles(main_dir: Path, bypass_records_ffp: Path = None):
+def merge_flatfiles(main_dir: Path, bypass_records_ffp: Path | None = None):
     """
     Merge the flatfiles into the final flatfiles, separating the components
     and ensuring that the data contains only the unique events and sites that made it to the IM calculation
@@ -335,7 +335,7 @@ def merge_flatfiles(main_dir: Path, bypass_records_ffp: Path = None):
     ----------
     main_dir : Path
         The main directory of the NZGMDB results (Highest level directory)
-    bypass_records_ffp : Path
+    bypass_records_ffp : Path, optional
         The full file path to the bypass records file, which includes a custom fmin, fmax, and p_wave_ix
     """
     # Get the flatfile directory

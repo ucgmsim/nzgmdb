@@ -17,7 +17,7 @@ def initial_preprocessing(
     mseed: Stream,
     apply_taper: bool = True,
     apply_zero_padding: bool = True,
-    inventory: Inventory = None,
+    inventory: Inventory | None = None,
     provider: str = "GEONET",
     network: str = "NZ",
 ) -> Stream:
@@ -211,10 +211,10 @@ def butter_bandpass_filter(
 def high_and_low_cut_processing(
     mseed: Stream,
     dt: float,
-    fmin_h: float = None,
-    fmin_v: float = None,
-    fmax_h: float = None,
-    fmax_v: float = None,
+    fmin_h: float | None = None,
+    fmin_v: float | None = None,
+    fmax_h: float | None = None,
+    fmax_v: float | None = None,
 ):
     """
     Process the waveform data by using the highcut and lowcut for the butter bandpass filter

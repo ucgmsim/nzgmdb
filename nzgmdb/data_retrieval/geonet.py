@@ -413,8 +413,8 @@ def fetch_event_data(
     inventory: Inventory,
     site_table: pd.DataFrame,
     mw_rrup_data: np.ndarray,
-    only_sites: list[str] = None,
-    only_record_ids: pd.DataFrame = None,
+    only_sites: list[str] | None = None,
+    only_record_ids: pd.DataFrame | None = None,
     n_procs: int = 1,
 ):
     """
@@ -524,8 +524,8 @@ def process_batch(
     site_table: pd.DataFrame,
     mw_rrup_data: np.ndarray,
     n_procs: int = 1,
-    only_sites: list[str] = None,
-    only_record_ids: pd.DataFrame = None,
+    only_sites: list[str] | None = None,
+    only_record_ids: pd.DataFrame | None = None,
     mp_sites: bool = False,
 ):
     """
@@ -656,8 +656,8 @@ def process_batch(
 
 
 def download_earthquake_data(
-    start_date: datetime,
-    end_date: datetime,
+    start_date: datetime.datetime,
+    end_date: datetime.datetime,
 ):
     """
     Download the earthquake data files from the geonet website
@@ -740,13 +740,13 @@ def download_earthquake_data(
 
 def parse_geonet_information(
     main_dir: Path,
-    start_date: datetime,
-    end_date: datetime,
+    start_date: datetime.datetime,
+    end_date: datetime.datetime,
     n_procs: int = 1,
     batch_size: int = 500,
-    only_event_ids: list[str] = None,
-    only_sites: list[str] = None,
-    only_record_ids_ffp: Path = None,
+    only_event_ids: list[str] | None = None,
+    only_sites: list[str] | None = None,
+    only_record_ids_ffp: Path | None = None,
     real_time: bool = False,
     mp_sites: bool = False,
     add_tmp_arrays: bool = False,

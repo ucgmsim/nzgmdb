@@ -14,8 +14,8 @@ from nzgmdb.management import file_structure
 
 
 def get_provider_inventory(
-    provider: str = None,
-    networks: list[str] = None,
+    provider: str | None = None,
+    networks: list[str] | None = None,
     channel_codes: str | None = None,
     stations: str = "*",
     level: str = "response",

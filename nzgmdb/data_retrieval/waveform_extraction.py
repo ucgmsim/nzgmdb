@@ -798,8 +798,8 @@ def extract_station_info(
     main_dir: Path,
     event_catalogues: dict,
     extraction_table: pd.DataFrame,
-    only_record_ids: pd.DataFrame = None,
-    tmp_array_dir: Path = None,
+    only_record_ids: pd.DataFrame | None = None,
+    tmp_array_dir: Path | None = None,
 ) -> StationExtractionResult:
     """
     Extract the waveform data for a single station based on the extraction parameters.
@@ -1095,9 +1095,9 @@ def extract_waveforms(
     main_dir: Path,
     station_extraction_table_ffp: Path,
     n_procs: int = 1,
-    only_record_ids_ffp: Path = None,
+    only_record_ids_ffp: Path | None = None,
     batch_size: int = 1000,
-    tmp_array_dir: Path = None,
+    tmp_array_dir: Path | None = None,
 ):
     """
     Extract waveforms for each station in the station extraction table.

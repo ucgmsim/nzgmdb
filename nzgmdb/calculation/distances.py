@@ -1133,7 +1133,7 @@ def distance_in_taupo(
 
     # Loop through all the stations
     for station_index, station in sta_df.iterrows():
-        idx = int(station_index)
+        idx = int(station_index)  # type: ignore
         # Create the line between the station and the event
         sta_transform = wgs2nztm.transform(station.lat, station.lon)
         line = LineString(

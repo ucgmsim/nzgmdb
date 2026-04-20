@@ -127,7 +127,9 @@ def filter_mag(catalogue: pd.DataFrame, mag_min: float):
     return skipped_records
 
 
-def filter_has_score_mean(catalogue: pd.DataFrame, bypass_records: np.ndarray = None):
+def filter_has_score_mean(
+    catalogue: pd.DataFrame, bypass_records: np.ndarray | None = None
+):
     """
     Filter the catalogue based on if there is a score from GMC.
 
@@ -166,7 +168,7 @@ def filter_has_score_mean(catalogue: pd.DataFrame, bypass_records: np.ndarray = 
 def filter_score_mean(
     catalogue: pd.DataFrame,
     score_min: float,
-    bypass_records: np.ndarray = None,
+    bypass_records: np.ndarray | None = None,
     include_z: bool = False,
 ):
     """
@@ -220,7 +222,7 @@ def filter_score_mean(
 def filter_multi_event(
     catalogue: pd.DataFrame,
     score_min: float,
-    bypass_records: np.ndarray = None,
+    bypass_records: np.ndarray | None = None,
 ):
     """
     Filter the catalogue based on the multi-event STA/LTA and sync event check.
@@ -262,7 +264,7 @@ def filter_multi_event(
 
 
 def filter_fmax(
-    catalogue: pd.DataFrame, fmax_min: float, bypass_records: np.ndarray = None
+    catalogue: pd.DataFrame, fmax_min: float, bypass_records: np.ndarray | None = None
 ):
     """
     Filter the catalogue based on the fmax_min value for the fmax_X and fmax_Y.
@@ -306,7 +308,7 @@ def filter_fmax(
 
 
 def filter_fmin(
-    catalogue: pd.DataFrame, fmin_max: float, bypass_records: np.ndarray = None
+    catalogue: pd.DataFrame, fmin_max: float, bypass_records: np.ndarray | None = None
 ):
     """
     Filter the catalogue based on the fmin max value for the fmin_X and fmin_Y.
@@ -385,7 +387,7 @@ def filter_missing_sta_info(
 
 
 def filter_ground_level_locations(
-    catalogue: pd.DataFrame, bypass_records: np.ndarray = None
+    catalogue: pd.DataFrame, bypass_records: np.ndarray | None = None
 ):
     """
     Filter the catalogue based on the ground level locations
@@ -425,7 +427,7 @@ def filter_ground_level_locations(
 
 def apply_clipNet_filter(
     clipped_records_ffp: Path,
-    bypass_records: np.ndarray = None,
+    bypass_records: np.ndarray | None = None,
 ):
     """
     Apply the ClipNet filter to the catalogue
@@ -471,7 +473,7 @@ def apply_clipNet_filter(
 
 def apply_jerk_filter(
     clipped_records_ffp: Path,
-    bypass_records: np.ndarray = None,
+    bypass_records: np.ndarray | None = None,
 ):
     """
     Apply the Jerk filter from ClipNet to the catalogue
@@ -516,7 +518,7 @@ def apply_jerk_filter(
 
 
 def filter_troublesome_sensitivity(
-    catalogue: pd.DataFrame, bypass_records: np.ndarray = None
+    catalogue: pd.DataFrame, bypass_records: np.ndarray | None = None
 ):
     """
     Filter the catalogue by removing records that are known to be troublesome for sensitivity analysis.
@@ -737,7 +739,7 @@ def filter_empirical_predictions(
 
 
 def filter_duplicate_channels(
-    catalogue: pd.DataFrame, bypass_records: np.ndarray = None
+    catalogue: pd.DataFrame, bypass_records: np.ndarray | None = None
 ):
     """
     Filter the catalogue by removing lower-priority duplicate channel records.
@@ -800,12 +802,12 @@ def filter_duplicate_channels(
 def apply_all_filters(
     catalogue: pd.DataFrame,
     clipped_records_ffp: Path,
-    bypass_records: np.ndarray = None,
-    score_min: float = None,
-    multi_score_min: float = None,
-    fmax_min: float = None,
-    fmin_max: float = None,
-    min_mag: float = None,
+    bypass_records: np.ndarray | None = None,
+    score_min: float | None = None,
+    multi_score_min: float | None = None,
+    fmax_min: float | None = None,
+    fmin_max: float | None = None,
+    min_mag: float | None = None,
 ):
     """
     Apply all the quality filters to the catalogue.
@@ -958,7 +960,7 @@ def apply_all_filters(
 
 def create_quality_db(
     main_dir: Path,
-    bypass_records_ffp: Path = None,
+    bypass_records_ffp: Path | None = None,
 ):
     """
     Create the quality database by running the following checks:
