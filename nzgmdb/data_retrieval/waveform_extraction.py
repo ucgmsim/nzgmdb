@@ -873,14 +873,23 @@ def extract_station_info(
     sta = station_extraction_row["sta"]
 
     if provider == "GEONET":
-        # Get the Stream
         client = FDSN_Client("GEONET")
         st = get_inital_stream(
             start_time, end_time, channel_codes, location, client, net, sta
         )
     else:
-        # Get the stream from the tmp array storage location
-        st = get_tmp_array_stream(tmp_array_dir, net, sta, start_time, end_time)
+        if tmp_array_dir is not None:
+            st = get_tmp_array_stream(tmp_array_dir, net, sta, start_time, end_time)
+        else:
+            try:
+                client = FDSN_Client(provider)
+                st = get_inital_stream(
+                    start_time, end_time, channel_codes, location, client, net, sta
+                )
+            except Exception as e:
+                raise ValueError(
+                    f"Failed to retrieve data for provider '{provider}': {e}"
+                )
 
     # Check that data was found
     if st is None:

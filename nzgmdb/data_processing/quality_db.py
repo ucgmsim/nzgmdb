@@ -772,7 +772,7 @@ def filter_duplicate_channels(
 
     # Step 2: Create bypass flag using record_id
     if bypass_records is None:
-        bypass_records = []
+        bypass_records = np.array([])
     catalogue["bypass"] = catalogue["record_id"].isin(bypass_records)
 
     # Step 3: Define priority levels
