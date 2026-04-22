@@ -140,7 +140,17 @@ def process_mseed(
     mseed = Stream()
     nptype = {"i": np.int32, "f": np.float32, "d": np.float64, "t": np.char}
     mstl = mseedlib.MSTraceList()
-    mstl.read_file(str(mseed_file), unpack_data=False, record_list=True)
+    try:
+        mstl.read_file(str(mseed_file), unpack_data=False, record_list=True)
+    except mseedlib.exceptions.MseedLibError:
+        skipped_record = pd.DataFrame(
+            {
+                "record_id": [mseed_file.stem],
+                "reason": ["Failed to read mseed file with mseedlib"],
+            }
+        )
+        create_empty_h5_file(h5_ffp, mseed_file.stem)
+        return None, skipped_record
 
     for traceid in mstl.traceids():
         for segment in traceid.segments():
