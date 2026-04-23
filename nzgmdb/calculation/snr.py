@@ -69,6 +69,14 @@ def compute_snr_for_single_mseed(
         inventory_file = xml_dir / f"{station}.xml"
         if inventory_file.is_file():
             inventory = read_inventory(inventory_file)
+        else:
+            # No Inventory found for the station, skip the file and add to the skipped records
+            skipped_record_dict = {
+                "record_id": mseed_file.stem,
+                "reason": "Failed to find inventory information",
+            }
+            skipped_record = pd.DataFrame([skipped_record_dict])
+            return None, skipped_record
 
     # Read mseed information
     try:
