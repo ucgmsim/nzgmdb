@@ -11,7 +11,7 @@ import numpy as np
 import pandas as pd
 
 from nzgmdb.management import config as cfg
-from nzgmdb.management import file_structure
+from nzgmdb.management import file_structure, custom_errors
 from nzgmdb.mseed_management import reading
 
 
@@ -124,7 +124,28 @@ def assess_snr_and_get_fmax(
     record_id = filename.stem
 
     # read the mseed file to get the delta
-    mseed = reading.read_mseed_to_stream(filename)
+    try:
+        mseed = reading.read_mseed_to_stream(filename)
+    except custom_errors.InvalidMseedFileError:
+        fmax_record = pd.DataFrame(
+            [
+                {
+                    "record_id": record_id,
+                    "fmax_000": np.nan,
+                    "fmax_090": np.nan,
+                    "fmax_ver": np.nan,
+                }
+            ]
+        )
+        skipped_record = pd.DataFrame(
+            [
+                {
+                    "record_id": record_id,
+                    "reason": "Invalid mseed file",
+                }
+            ]
+        )
+        return fmax_record, skipped_record
     dt = mseed[0].stats.delta
 
     # current_row["delta"] is a pd.Series() containing 1 float so .iloc[0]

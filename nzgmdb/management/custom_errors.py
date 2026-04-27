@@ -73,3 +73,9 @@ class NoStationsError(Exception):
     """Exception raised when no stations are computed for a given earthquake."""
 
     pass
+
+
+class InvalidMseedFileError(Exception):
+    """Exception raised when the mseed file is invalid."""
+
+    pass
