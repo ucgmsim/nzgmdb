@@ -359,7 +359,6 @@ def run_event(
         # Send a POST request to the endpoint
         response = requests.post(url)
 
-        # Check the response status
         if response.status_code == 200:
             print("Event added successfully")
             # Get updated values

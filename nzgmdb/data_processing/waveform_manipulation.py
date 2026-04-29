@@ -93,19 +93,19 @@ def initial_preprocessing(
 
     inv = inventory
     if inv is None:
-        try:
-            client_NZ = FDSN_Client(provider)
-            inv = client_NZ.get_stations(
-                level="response",
-                network=network,
-                station=station,
-                location=location,
-                channel=f"{channel}?",
-            )
-        except FDSNNoDataException:
-            raise custom_errors.InventoryNotFoundError(
-                f"No inventory information found for station {station} with location {location}"
-            )
+        # try:
+        #     client_NZ = FDSN_Client(provider)
+        #     inv = client_NZ.get_stations(
+        #         level="response",
+        #         network=network,
+        #         station=station,
+        #         location=location,
+        #         channel=f"{channel}?",
+        #     )
+        # except FDSNNoDataException:
+        raise custom_errors.InventoryNotFoundError(
+            f"No inventory information found for station {station} with location {location}"
+        )
 
     try:
         # Ensure we get the correct output type for strong motion vs broadband
