@@ -72,7 +72,7 @@ def process_single_mseed(
     inventory = None
     if xml_dir:
         # Load the inventory information
-        inventory_file = xml_dir / f"NZ.{station}.xml"
+        inventory_file = xml_dir / f"{station}.xml"
         if inventory_file.is_file():
             inventory = read_inventory(inventory_file)
 
@@ -104,6 +104,13 @@ def process_single_mseed(
         skipped_record_dict = {
             "record_id": mseed_file.stem,
             "reason": "Unable to differentiate record",
+        }
+        skipped_record = pd.DataFrame([skipped_record_dict])
+        return skipped_record
+    except custom_errors.DetrendError:
+        skipped_record_dict = {
+            "record_id": mseed_file.stem,
+            "reason": "Unable to detrend record",
         }
         skipped_record = pd.DataFrame([skipped_record_dict])
         return skipped_record

@@ -185,7 +185,7 @@ def resample_polygon_1km(rupture_polygons: list[Polygon]) -> list[MultiPoint]:
 
 def calculate_crjb(
     rupture_poly: Polygon, boundary_points: MultiPoint, centroids: np.ndarray
-) -> np.ndarray:
+) -> np.ndarray | float:
     """
     Calculates centroid Joyner-Boore (CRJB) distance for given earthquake centroids.
 
@@ -200,8 +200,8 @@ def calculate_crjb(
 
     Returns
     -------
-    numpy.ndarray
-        Array of min CRJB distances.
+    numpy.ndarray or float
+        Array of min CRJB distances for each centroid, or a single float if only one centroid is provided.
     """
     # Gather the points of the boundary
     points = np.array([(p.x, p.y) for p in boundary_points.geoms])

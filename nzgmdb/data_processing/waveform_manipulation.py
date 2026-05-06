@@ -17,8 +17,10 @@ def initial_preprocessing(
     mseed: Stream,
     apply_taper: bool = True,
     apply_zero_padding: bool = True,
-    inventory: Inventory = None,
-):
+    inventory: Inventory | None = None,
+    provider: str = "GEONET",
+    network: str = "NZ",
+) -> Stream:
     """
     Basic pre-processing of the waveform data
     This performs the following:
@@ -39,6 +41,10 @@ def initial_preprocessing(
         Whether to apply zero padding, by default True
     inventory : Inventory, optional
         The inventory object to use for sensitivity removal, by default None (Will try to extract from FDSN if not provided)
+    provider : str, optional
+        The FDSN provider to use if inventory is not provided, by default "GEONET"
+    network : str, optional
+        The network code to use if inventory is not provided, by default "NZ"
 
     Returns
     -------
@@ -54,9 +60,15 @@ def initial_preprocessing(
     RotationError
         If the rotation fails
     """
-    # Small Processing
-    mseed.detrend("demean")
-    mseed.detrend("linear")
+    try:
+        # Small Processing
+        mseed.detrend("demean")
+        mseed.detrend("linear")
+    except NotImplementedError:
+        # This is an issue with extracted waveforms where the trace has masked values.
+        raise custom_errors.DetrendError(
+            f"Failed to demean and detrend the data for station {mseed[0].stats.station} with location {mseed[0].stats.location}"
+        )
 
     # Load config
     config = cfg.Config()
@@ -82,9 +94,13 @@ def initial_preprocessing(
     inv = inventory
     if inv is None:
         try:
-            client_NZ = FDSN_Client("GEONET")
+            client_NZ = FDSN_Client(provider)
             inv = client_NZ.get_stations(
-                level="response", network="NZ", station=station, location=location, channel=f"{channel}?"
+                level="response",
+                network=network,
+                station=station,
+                location=location,
+                channel=f"{channel}?",
             )
         except FDSNNoDataException:
             raise custom_errors.InventoryNotFoundError(
@@ -195,10 +211,10 @@ def butter_bandpass_filter(
 def high_and_low_cut_processing(
     mseed: Stream,
     dt: float,
-    fmin_h: float = None,
-    fmin_v: float = None,
-    fmax_h: float = None,
-    fmax_v: float = None,
+    fmin_h: float | None = None,
+    fmin_v: float | None = None,
+    fmax_h: float | None = None,
+    fmax_v: float | None = None,
 ):
     """
     Process the waveform data by using the highcut and lowcut for the butter bandpass filter

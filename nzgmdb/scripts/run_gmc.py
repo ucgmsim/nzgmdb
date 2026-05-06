@@ -5,7 +5,7 @@ Script to run the GMC processing for the NZGMDB.
 import functools
 import multiprocessing
 from pathlib import Path
-from typing import Annotated
+from typing import Annotated, Optional
 
 import numpy as np
 import pandas as pd
@@ -73,6 +73,7 @@ def process_batch(
     gmc_predict_activate: str,
     phase_arrival_table_ffp: Path,
     prob_series_ffp: Path,
+    xml_dir: Path,
 ):
     """
     Process a single subfolder: extract features and run predictions.
@@ -99,6 +100,8 @@ def process_batch(
         The full file path to the phase arrival table
     prob_series_ffp : Path
         The full file path to the prob_series hdf5 file.
+    xml_dir : Path
+        The directory containing the stationxml files.
 
     Raises
     ------
@@ -128,7 +131,7 @@ def process_batch(
             )
         else:
             # Activate gmc environment and extract features for the subfolder
-            features_command = f"python {gmc_scripts_path}/extract_features.py {gmc_dir} {waveform_dir} mseed --ko_matrices_dir {ko_matrices_dir} --record_list_ffp {batch_txt} --phase_arrival_table {phase_arrival_table_ffp} --prob_series {prob_series_ffp}"
+            features_command = f"python {gmc_scripts_path}/extract_features.py {gmc_dir} {waveform_dir} mseed --ko_matrices_dir {ko_matrices_dir} --record_list_ffp {batch_txt} --phase_arrival_table {phase_arrival_table_ffp} --prob_series {prob_series_ffp} --xml_dir {xml_dir}"
             shell_commands.run_command(
                 features_command, conda_sh, gmc_activate, log_file_path_features
             )
@@ -195,22 +198,26 @@ def run_gmc_processing(
         int,
         typer.Option(),
     ] = 1,
+    gmc_n_batches: Annotated[
+        Optional[int],
+        typer.Option(),
+    ] = None,
     waveform_dir: Annotated[
-        Path,
+        Optional[Path],
         typer.Option(
             exists=True,
             file_okay=False,
         ),
     ] = None,
     output_dir: Annotated[
-        Path,
+        Optional[Path],
         typer.Option(
             exists=True,
             file_okay=False,
         ),
     ] = None,
     bypass_records_ffp: Annotated[
-        Path,
+        Optional[Path],
         typer.Option(),
     ] = None,
 ):
@@ -236,6 +243,9 @@ def run_gmc_processing(
         Command to activate the GMC predict environment to run predictions.
     n_procs : int, optional
         Number of processes to use for multiprocessing (default is 1).
+    gmc_n_batches : int, optional
+        Number of batches to split the mseed files into for processing.
+        If None, it will be set to the number of processes (default is None).
     waveform_dir : Path, optional
         Directory containing all waveform files.
     output_dir : Path, optional
@@ -270,11 +280,13 @@ def run_gmc_processing(
     # Get all the mseed files
     mseed_files = list(waveform_dir.rglob("*.mseed"))
 
-    # Ensure that n_procs is equal too or less than the number of mseed files
+    # Ensure that n_procs and n_batches is equal too or less than the number of mseed files
     n_procs = min(n_procs, len(mseed_files))
+    n_batches = gmc_n_batches or n_procs
+    n_batches = min(n_batches, len(mseed_files))
 
-    # Split them into even batches based on number of mseeds and n_procs
-    mseed_batches = np.array_split(mseed_files, n_procs)
+    # Split them into even batches based on number of mseeds and n_batches
+    mseed_batches = np.array_split(mseed_files, n_batches)
 
     # Create a partial function with common arguments pre-filled
     process_partial = functools.partial(
@@ -287,17 +299,26 @@ def run_gmc_processing(
         gmc_predict_activate=gmc_predict_activate,
         phase_arrival_table_ffp=phase_arrival_table_ffp,
         prob_series_ffp=prob_series_ffp,
+        xml_dir=file_structure.get_stationxml_dir(main_dir),
     )
 
-    # Use multiprocessing with starmap and the partial function
-    with multiprocessing.Pool(n_procs) as p:
-        p.starmap(
-            process_partial,
-            [
-                (batch, (gmc_dir / f"batch_{idx}"))
-                for idx, batch in enumerate(mseed_batches)
-            ],
-        )
+    pending_jobs = []
+    for idx, batch in enumerate(mseed_batches):
+        batch_dir = gmc_dir / f"batch_{idx}"
+        predictions_output = batch_dir / file_structure.FlatfileNames.GMC_PREDICTIONS
+
+        if predictions_output.exists():
+            print(f"Skipping Batch {idx} (found existing gmc_predictions.csv)")
+            continue
+
+        pending_jobs.append((list(batch), batch_dir))
+
+    if not pending_jobs:
+        print("All batches already have gmc_predictions.csv; nothing to run.")
+    else:
+        # Use multiprocessing with starmap and the partial function (pending only)
+        with multiprocessing.Pool(n_procs) as p:
+            p.starmap(process_partial, pending_jobs)
 
     # For each subfolder combine the gmc_predictions.csv into a single file
     dfs = []

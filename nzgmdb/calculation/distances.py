@@ -107,9 +107,9 @@ def run_ccld_simulation(
     dip: float,
     rake: float,
     method: str,
-    strike2: float = None,
-    dip2: float = None,
-    rake2: float = None,
+    strike2: float | None = None,
+    dip2: float | None = None,
+    rake2: float | None = None,
 ) -> FocalMechanism:
     """
     Run the CCLD simulation for an event.
@@ -361,7 +361,7 @@ def get_nodal_plane_info(
             The focal type that determined the nodal plane (ff, geonet_rm, cmt, cmt_unc, domain)
     """
     # Create the default return to be filled using defaultdict
-    nodal_plane_info = defaultdict(lambda: None)
+    nodal_plane_info: dict[str, object | None] = defaultdict(lambda: None)
     ccld_info = None
 
     # Split the cmt data into reviewed and unreviewed data
@@ -496,6 +496,7 @@ def get_nodal_plane_info(
         hik_strike_rbf, hik_dip_rbf, hik_footprint = hik_objs
         puy_strike_rbf, puy_dip_rbf, puy_footprint = puy_objs
         domain_no_backup = event_row["domain_no_backup"]
+        nodal_plane_info["f_type"] = "domain"
 
         if event_row["tect_class"] == "Crustal":
             # First assume strike-slip to estimate length
@@ -564,7 +565,7 @@ def get_nodal_plane_info(
                 ccld_info = run_ccld_simulation(
                     event_id, event_row, strike, dip, rake, "D"
                 )
-                nodal_plane_info.update(ccld_info)
+                nodal_plane_info.update(ccld_info)  # type: ignore[no-matching-overload]
                 return nodal_plane_info
 
             # Find the closest point in the table
@@ -595,7 +596,7 @@ def get_nodal_plane_info(
 
     if ccld_info is not None:
         # Update the nodal plane info with the ccld info
-        nodal_plane_info.update(ccld_info)
+        nodal_plane_info.update(ccld_info)  # type: ignore[no-matching-overload]
 
     return nodal_plane_info
 
@@ -603,7 +604,7 @@ def get_nodal_plane_info(
 def compute_distances_for_event(
     event_row: pd.Series,
     im_df: pd.DataFrame,
-    station_df: pd.DataFrame,
+    site_df: pd.DataFrame,
     cmt_df: pd.DataFrame,
     domain_focal_df: pd.DataFrame,
     taupo_polygon: Polygon,
@@ -612,7 +613,7 @@ def compute_distances_for_event(
     puy_objs: np.ndarray,
     nz_mech: dict,
     slab_faulting_geo: dict,
-) -> tuple[Optional[pd.DataFrame], Optional[pd.DataFrame]]:
+) -> tuple[Optional[pd.DataFrame], Optional[pd.DataFrame], Optional[pd.DataFrame]]:
     """
     Compute the distances for a given event
 
@@ -622,8 +623,8 @@ def compute_distances_for_event(
         The event row from the earthquake source table
     im_df : pd.DataFrame
         The full IM data from the catalogue
-    station_df : pd.DataFrame
-        The full station data
+    site_df : pd.DataFrame
+        The full site data
     cmt_df : pd.DataFrame
         The Centroid Moment Tensor data
     domain_focal_df : pd.DataFrame
@@ -660,8 +661,8 @@ def compute_distances_for_event(
     if im_event_df.empty:
         return None, None, None
 
-    # Get the station data
-    event_sta_df = station_df[station_df["sta"].isin(im_event_df["sta"])].reset_index()
+    # Get the site data
+    event_sta_df = site_df[site_df["sta"].isin(im_event_df["sta"])].reset_index()
     stations = event_sta_df[["lon", "lat", "depth"]].to_numpy()
 
     # Get the nodal plane information
@@ -870,6 +871,7 @@ def compute_distances_for_event(
                 [
                     {
                         "evid": event_id,
+                        "provider": station.provider,
                         "net": station.net,
                         "sta": station.sta,
                         "r_epi": r_epis[station_index],
@@ -1010,7 +1012,7 @@ def perpendicular_height(
     point_vec = point - base_start
     cross = np.cross(base_vec, point_vec)
     base_len = np.linalg.norm(base_vec)
-    return np.linalg.norm(cross) / base_len if base_len else 0.0
+    return float(np.linalg.norm(cross) / base_len) if base_len else 0.0
 
 
 def inverse_square_integral(
@@ -1131,11 +1133,12 @@ def distance_in_taupo(
 
     # Loop through all the stations
     for station_index, station in sta_df.iterrows():
+        idx = int(station_index)  # type: ignore
         # Create the line between the station and the event
         sta_transform = wgs2nztm.transform(station.lat, station.lon)
         line = LineString(
             [
-                [rrups_transform[0][station_index], rrups_transform[1][station_index]],
+                [rrups_transform[0][idx], rrups_transform[1][idx]],
                 [sta_transform[0], sta_transform[1]],
             ]
         )
@@ -1167,7 +1170,7 @@ def distance_in_taupo(
                     )
 
             line_points = line.intersection(taupo_polygon)
-            tvz_length = min(line_points.length / 1000 / r_epis[station_index], 1)
+            tvz_length = min(line_points.length / 1000 / r_epis[idx], 1)
 
         tvz_lengths.append(tvz_length)
         boundary_dists_rjb.append(boundary_dist_rjb)
@@ -1240,9 +1243,10 @@ def calc_distances(main_dir: Path, n_procs: int = 1):
     ll_num = config.get_value("ll_num")
     nztm_num = config.get_value("nztm_num")
     wgs2nztm = Transformer.from_crs(ll_num, nztm_num)
-    taupo_transform = np.dstack(
-        np.array(wgs2nztm.transform(tvz_points.latitude, tvz_points.longitude))
-    )[0]
+    x, y = wgs2nztm.transform(
+        tvz_points.latitude.to_numpy(), tvz_points.longitude.to_numpy()
+    )
+    taupo_transform = np.column_stack((x, y))
     taupo_polygon = Polygon(taupo_transform)
 
     # Go through the registry keys and check if they are .srf files to use
@@ -1260,38 +1264,24 @@ def calc_distances(main_dir: Path, n_procs: int = 1):
         usecols=["evid", "sta"],
     )
 
-    # Get the station information
-    client_NZ = FDSN_Client("GEONET")
-    channel_codes = config.get_value("channel_codes")
-    inventory = client_NZ.get_stations(channel=channel_codes, level="station")
-    station_info = []
-    for network in inventory:
-        for station in network:
-            station_info.append(
-                [
-                    network.code,
-                    station.code,
-                    station.latitude,
-                    station.longitude,
-                    station.elevation,
-                ]
-            )
-    station_df = pd.DataFrame(
-        station_info, columns=["net", "sta", "lat", "lon", "elev"]
+    # Get the site information
+    site_df = pd.read_csv(
+        flatfile_dir / file_structure.PreFlatfileNames.SITE_TABLE,
+        dtype={"sta": str},
     )
-    station_df = station_df.drop_duplicates().reset_index(drop=True)
+    site_df = site_df.loc[:, ["sta", "provider", "net", "lat", "lon", "elev"]]
 
     # Select unique stations from IM data and merge
     im_station_df = im_df[["sta"]].drop_duplicates()
-    station_df = pd.merge(im_station_df, station_df, on="sta", how="left")
-    station_df["depth"] = station_df["elev"] / -1000
+    site_df = pd.merge(im_station_df, site_df, on="sta", how="left")
+    site_df["depth"] = site_df["elev"] / -1000
 
     with mp.Pool(n_procs) as p:
         result_dfs = p.map(
             functools.partial(
                 compute_distances_for_event,
                 im_df=im_df,
-                station_df=station_df,
+                site_df=site_df,
                 cmt_df=cmt_df,
                 domain_focal_df=domain_focal_df,
                 taupo_polygon=taupo_polygon,

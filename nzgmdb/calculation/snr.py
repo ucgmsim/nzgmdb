@@ -66,7 +66,7 @@ def compute_snr_for_single_mseed(
     inventory = None
     if xml_dir:
         # Load the inventory information
-        inventory_file = xml_dir / f"NZ.{station}.xml"
+        inventory_file = xml_dir / f"{station}.xml"
         if inventory_file.is_file():
             inventory = read_inventory(inventory_file)
 
@@ -118,6 +118,13 @@ def compute_snr_for_single_mseed(
         skipped_record_dict = {
             "record_id": mseed_file.stem,
             "reason": "Unable to differentiate record",
+        }
+        skipped_record = pd.DataFrame([skipped_record_dict])
+        return None, skipped_record
+    except custom_errors.DetrendError:
+        skipped_record_dict = {
+            "record_id": mseed_file.stem,
+            "reason": "Unable to detrend record",
         }
         skipped_record = pd.DataFrame([skipped_record_dict])
         return None, skipped_record
@@ -222,9 +229,9 @@ def compute_snr_for_mseed_data(
     snr_fas_output_dir: Path,
     ko_directory: Path,
     n_procs: int = 1,
-    common_frequency_vector: np.ndarray = None,
+    common_frequency_vector: np.ndarray | None = None,
     batch_size: int = 5000,
-    bypass_records_ffp: Path = None,
+    bypass_records_ffp: Path | None = None,
 ):
     """
     Compute the SNR for the data in the data_dir

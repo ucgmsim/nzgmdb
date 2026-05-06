@@ -154,13 +154,16 @@ def merge_im_data(
 
 
 def add_ground_level(
+    station_df: pd.DataFrame,
     gm_im_df_flat: pd.DataFrame,
 ):
     """
-    Add in the ground level location elevation information to the gm_im_df_flat dataframe
+    Add in the is ground level location elevation information to the gm_im_df_flat dataframe
 
     Parameters
     ----------
+    station_df : pd.DataFrame
+        The station dataframe containing the station information such as loc_elev
     gm_im_df_flat : pd.DataFrame
         The ground motion IM dataframe to add the ground level information to
 
@@ -169,46 +172,6 @@ def add_ground_level(
     pd.DataFrame
         The ground motion IM dataframe with the ground level information added
     """
-    # Find the station location information with the inventory lat, lon and elev
-    config = cfg.Config()
-    channel_codes = config.get_value("channel_codes")
-    client_NZ = FDSN_Client("GEONET")
-    inventory = client_NZ.get_stations(channel=channel_codes, level="response")
-    station_info = [
-        [
-            station.code,
-            station.latitude,
-            station.longitude,
-            station.elevation,
-            channel.code[:2],
-            channel.location_code,
-            channel.depth,
-            channel.start_date,
-            channel.end_date,
-        ]
-        for network in inventory
-        for station in network
-        for channel in station.channels
-    ]
-    station_df = pd.DataFrame(
-        station_info,
-        columns=[
-            "sta",
-            "sta_lat",
-            "sta_lon",
-            "sta_elev",
-            "chan",
-            "loc",
-            "loc_elev",
-            "start_time",
-            "end_time",
-        ],
-    )
-    # Remove duplicates
-    station_df = station_df.drop_duplicates(
-        ["sta", "chan", "loc", "loc_elev"]
-    ).reset_index(drop=True)
-
     # Get the recorders information for location codes
     config = cfg.Config()
     locations_url = config.get_value("locations_url")
@@ -240,50 +203,56 @@ def add_ground_level(
     station_df["end_time"] = station_df["end_time"].fillna(pd.Timestamp.max)
 
     # Ensure datetime dtypes
-    def _to_py_datetime(val: object) -> object:
-        """
-        Convert UTCDateTime to python datetime.datetime if needed.
+    # def _to_py_datetime(val: object) -> object:
+    #     """
+    #     Convert UTCDateTime to python datetime.datetime if needed.
+    #
+    #     Parameters
+    #     ----------
+    #     val : object
+    #         The value to convert.
+    #
+    #     Returns
+    #     -------
+    #     object
+    #         The converted value.
+    #     """
+    #     if isinstance(val, UTCDateTime):
+    #         return val.datetime
+    #     return val
+    #
+    # station_df["start_time"] = station_df["start_time"].apply(_to_py_datetime)
+    # station_df["end_time"] = station_df["end_time"].apply(_to_py_datetime)
 
-        Parameters
-        ----------
-        val : object
-            The value to convert.
-
-        Returns
-        -------
-        object
-            The converted value.
-        """
-        if isinstance(val, UTCDateTime):
-            return val.datetime
-        return val
-
-    station_df["start_time"] = station_df["start_time"].apply(_to_py_datetime)
-    station_df["end_time"] = station_df["end_time"].apply(_to_py_datetime)
-
-    def ensure_utc(series: pd.Series) -> pd.Series:
-        """
-        Ensure a pandas Series of datetimes is timezone-aware in UTC.
-
-        Parameters
-        ----------
-        series : pd.Series
-            The pandas Series to ensure is timezone-aware in UTC.
-
-        Returns
-        -------
-        pd.Series
-            The timezone-aware pandas Series in UTC.
-        """
-        # coerce to datetime first, then ensure UTC tz (convert if already tz-aware, localize if naive)
-        s = pd.to_datetime(series, errors="coerce")
-        if pd.api.types.is_datetime64tz_dtype(s.dtype):
-            return s.dt.tz_convert("UTC")
-        return s.dt.tz_localize("UTC")
+    # def ensure_utc(series: pd.Series) -> pd.Series:
+    #     """
+    #     Ensure a pandas Series of datetimes is timezone-aware in UTC.
+    #
+    #     Parameters
+    #     ----------
+    #     series : pd.Series
+    #         The pandas Series to ensure is timezone-aware in UTC.
+    #
+    #     Returns
+    #     -------
+    #     pd.Series
+    #         The timezone-aware pandas Series in UTC.
+    #     """
+    #     # coerce to datetime first, then ensure UTC tz (convert if already tz-aware, localize if naive)
+    #     s = pd.to_datetime(series, errors="coerce")
+    #     if pd.api.types.is_datetime64tz_dtype(s.dtype):
+    #         return s.dt.tz_convert("UTC")
+    #     return s.dt.tz_localize("UTC")
 
     # Normalize both frames to UTC before sorting / merge_asof
-    station_df["start_time"] = ensure_utc(station_df["start_time"])
-    station_df["end_time"] = ensure_utc(station_df["end_time"])
+    # station_df["start_time"] = ensure_utc(station_df["start_time"])
+    # station_df["end_time"] = ensure_utc(station_df["end_time"])
+    station_df["start_time"] = pd.to_datetime(
+        station_df["start_time"], errors="coerce", utc=True
+    )
+    station_df["end_time"] = pd.to_datetime(
+        station_df["end_time"], errors="coerce", utc=True
+    )
 
     station_df["start_time"] = pd.to_datetime(station_df["start_time"])
     station_df["end_time"] = pd.to_datetime(station_df["end_time"])
@@ -354,37 +323,10 @@ def add_ground_level(
         ["is_ground_level", "loc_elev"],
     ] = [True, 0.0]
 
-    # remove duplicates of sta in the station_df
-    station_df = station_df.drop_duplicates(subset=["sta"])
-
-    # Merge missing station lat / lon / elev information into the gm_im_df_flat
-    gm_im_df_flat = gm_im_df_flat.merge(
-        station_df[["sta", "sta_lat", "sta_lon", "sta_elev"]],
-        on="sta",
-        how="left",
-        suffixes=("", "_new"),
-    )
-
-    # Find where sta_lat is nan and replace with the inventory's lat, lon and elev
-    gm_im_df_flat["sta_lat"] = gm_im_df_flat["sta_lat"].fillna(
-        gm_im_df_flat["sta_lat_new"]
-    )
-    gm_im_df_flat["sta_lon"] = gm_im_df_flat["sta_lon"].fillna(
-        gm_im_df_flat["sta_lon_new"]
-    )
-    gm_im_df_flat["sta_elev"] = gm_im_df_flat["sta_elev"].fillna(
-        gm_im_df_flat["sta_elev_new"]
-    )
-
-    # Drop the new columns
-    gm_im_df_flat = gm_im_df_flat.drop(
-        columns=["sta_lat_new", "sta_lon_new", "sta_elev_new"]
-    )
-
     return gm_im_df_flat
 
 
-def merge_flatfiles(main_dir: Path, bypass_records_ffp: Path = None):
+def merge_flatfiles(main_dir: Path, bypass_records_ffp: Path | None = None):
     """
     Merge the flatfiles into the final flatfiles, separating the components
     and ensuring that the data contains only the unique events and sites that made it to the IM calculation
@@ -393,7 +335,7 @@ def merge_flatfiles(main_dir: Path, bypass_records_ffp: Path = None):
     ----------
     main_dir : Path
         The main directory of the NZGMDB results (Highest level directory)
-    bypass_records_ffp : Path
+    bypass_records_ffp : Path, optional
         The full file path to the bypass records file, which includes a custom fmin, fmax, and p_wave_ix
     """
     # Get the flatfile directory
@@ -442,6 +384,9 @@ def merge_flatfiles(main_dir: Path, bypass_records_ffp: Path = None):
     site_basin_df = pd.read_csv(
         flatfile_dir / file_structure.PreFlatfileNames.SITE_TABLE
     )
+    station_df = pd.read_csv(
+        flatfile_dir / file_structure.PreFlatfileNames.STATION_TABLE
+    )
     station_extraction_df = pd.read_csv(
         flatfile_dir / file_structure.PreFlatfileNames.STATION_EXTRACTION_TABLE_GEONET,
         dtype={"evid": str},
@@ -471,6 +416,7 @@ def merge_flatfiles(main_dir: Path, bypass_records_ffp: Path = None):
     # Ensure that the site_basin_df only has the unique sites found in the im_df
     unique_sites = im_df["sta"].unique()
     site_basin_df = site_basin_df[site_basin_df["sta"].isin(unique_sites)]
+    station_df = station_df[station_df["sta"].isin(unique_sites)]
 
     # Ensure the station magnitude table only has values of events and station pairs available in the im_df
     unique_pairs_df = im_df[["evid", "sta"]].drop_duplicates()
@@ -578,7 +524,7 @@ def merge_flatfiles(main_dir: Path, bypass_records_ffp: Path = None):
     )
 
     # Add in the ground level location elevation information
-    gm_im_df_flat = add_ground_level(gm_im_df_flat)
+    gm_im_df_flat = add_ground_level(station_df, gm_im_df_flat)
 
     # Add in multi_event information
     gm_im_df_flat = gm_im_df_flat.merge(
@@ -845,6 +791,9 @@ def merge_flatfiles(main_dir: Path, bypass_records_ffp: Path = None):
     )
     site_basin_df.to_csv(
         flatfile_dir / file_structure.FlatfileNames.SITE_TABLE, index=False
+    )
+    station_df.to_csv(
+        flatfile_dir / file_structure.FlatfileNames.STATION_TABLE, index=False
     )
     prop_df.to_csv(
         flatfile_dir / file_structure.FlatfileNames.PROPAGATION_TABLE, index=False

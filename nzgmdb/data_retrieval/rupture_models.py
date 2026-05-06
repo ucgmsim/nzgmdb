@@ -33,7 +33,7 @@ class RuptureModel(TypedDict):
     """The average width of the rupture model."""
 
 
-def get_seismic_data_from_url(url: str) -> dict:
+def get_seismic_data_from_url(url: str) -> RuptureModel:
     """
     Fetch and process the seismic data from a URL.
 
@@ -51,7 +51,7 @@ def get_seismic_data_from_url(url: str) -> dict:
     df = pd.read_csv(url)
 
     # Define calculated data output variables
-    length = 0
+    length = 0.0
     widths = []
 
     # Group by segment
@@ -100,7 +100,7 @@ def get_seismic_data_from_url(url: str) -> dict:
         "strike": strike,
         "dip": dip,
         "rake": rake,
-        "length": length,
+        "length": float(length),
         "width": width,
     }
 

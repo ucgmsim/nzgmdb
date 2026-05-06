@@ -12,6 +12,10 @@ readme = "README.md"
 requires-python = "==3.12.*"
 dynamic = ["version", "dependencies"]
 
+[project.optional-dependencies]
+test = ["pytest"]
+dev = ["ty"]
+
 [tool.setuptools.dynamic]
 dependencies = {file = ["requirements.txt"]}
 
@@ -79,3 +83,11 @@ checks = [
   "RT04",
   "YD01",
 ]
+
+[tool.ty.rules]
+no-matching-overload = "ignore"
+unresolved-attribute = "ignore"
+not-subscriptable = "ignore"
+possibly-missing-submodule = "ignore"
+invalid-type-arguments = "ignore"
+unresolved-import = "ignore"

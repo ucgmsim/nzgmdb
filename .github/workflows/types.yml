@@ -1,0 +1,23 @@
+name: Type Check
+on: [pull_request]
+jobs:
+  typecheck:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v5
+        with:
+          enable-cache: true
+
+      - name: Install project with types
+        run: uv sync --all-extras --dev
+
+      - name: Run type checking with ty
+        run: uv run ty check --exclude setup.py --exclude nzgmdb/CCLD/ccldpy.py
