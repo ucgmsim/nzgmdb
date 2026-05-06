@@ -132,7 +132,7 @@ def apply_fmin_filter_df(df: pd.DataFrame, pre_4p3: bool = False) -> pd.DataFram
     return df
 
 
-def format_percentage(pct: float, allvals: list[float]):
+def format_percentage(pct: float, allvals: list[int | float]):
     """
     Function to format pie chart labels with both percentage and absolute values.
 
@@ -140,7 +140,7 @@ def format_percentage(pct: float, allvals: list[float]):
     ----------
     pct : float
         The percentage value.
-    allvals : list[float]
+    allvals : list[int | float]
         The list of all values to compute the absolute value.
 
     Returns
@@ -190,7 +190,7 @@ def plot_pie_chart(full_labels: list[str], full_sizes: list[int], title: str):
         colors=colors,
         autopct=lambda pct: format_percentage(pct, sizes),
         startangle=270,
-    )
+    )  # type: ignore
 
     ax.set_title(f"{title} ({total_records} total records)")
     ax.axis("equal")
@@ -236,7 +236,7 @@ def numpy_str_join(sep: str, *arrays: str | Sequence[str]) -> np.ndarray:
     numpy.ndarray
         The joined array.
     """
-    result = arrays[0]
+    result = np.array(arrays[0])
     for cur_array in arrays[1:]:
         result = np.char.add(result, sep)
         result = np.char.add(result, cur_array)
@@ -458,7 +458,7 @@ def get_residuals(
     pred_im_keys = numpy_str_join("_", ims, pred_suffix)
     res_df = pd.DataFrame(
         data=results.loc[:, ims].values - results.loc[:, pred_im_keys].values,
-        columns=ims,
+        columns=list(ims),
     )
 
     res_df.index = results.index
@@ -613,7 +613,7 @@ def plot_usable_period_records(
     df_full: pd.DataFrame,
     df_quality: pd.DataFrame,
     title: Optional[str] = None,
-) -> plt.Figure:
+) -> str:
     """
     Plot number of usable records vs period for Full and Quality datasets.
 
@@ -1251,7 +1251,7 @@ def generate_report(
         typer.Argument(),
     ],
     compare_version_directory: Annotated[
-        Path,
+        Optional[Path],
         typer.Option(
             exists=True,
             file_okay=False,
@@ -1672,7 +1672,7 @@ def generate_report(
                 else file_structure.PreFlatfileNames.STATION_MAGNITUDE_TABLE_EXTRACTION
             )
         )
-        / 3,
+        // 3,
         len(
             pd.read_csv(
                 new_flatfiles_dir / file_structure.PreFlatfileNames.PHASE_ARRIVAL_TABLE
@@ -1691,7 +1691,7 @@ def generate_report(
                     else file_structure.PreFlatfileNames.STATION_MAGNITUDE_TABLE_EXTRACTION
                 )
             )
-            / 3,
+            // 3,
             len(
                 pd.read_csv(
                     old_flatifles_dir

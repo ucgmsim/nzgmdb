@@ -4,7 +4,7 @@ File that contains the function scripts that can be called to run the NZGMDB pip
 
 from datetime import datetime
 from pathlib import Path
-from typing import Annotated
+from typing import Annotated, Optional
 
 import typer
 
@@ -29,13 +29,15 @@ def fetch_geonet_data(
     n_procs: Annotated[int, typer.Option()] = 1,
     batch_size: Annotated[int, typer.Option()] = 500,
     only_event_ids: Annotated[
-        list[str], typer.Option(callback=lambda x: [] if x is None else x[0].split(","))
+        Optional[list[str]],
+        typer.Option(callback=lambda x: [] if x is None else x[0].split(",")),
     ] = None,
     only_sites: Annotated[
-        list[str], typer.Option(callback=lambda x: [] if x is None else x[0].split(","))
+        Optional[list[str]],
+        typer.Option(callback=lambda x: [] if x is None else x[0].split(",")),
     ] = None,
     only_record_ids_ffp: Annotated[
-        Path, typer.Option(exists=True, dir_okay=False)
+        Optional[Path], typer.Option(exists=True, dir_okay=False)
     ] = None,
     real_time: Annotated[bool, typer.Option()] = False,
     mp_sites: Annotated[bool, typer.Option()] = False,
@@ -107,7 +109,7 @@ def extract_waveforms(
     ],
     n_procs: Annotated[int, typer.Option()] = 1,
     only_record_ids_ffp: Annotated[
-        Path,
+        Optional[Path],
         typer.Option(
             exists=True,
             dir_okay=False,
@@ -118,7 +120,7 @@ def extract_waveforms(
         typer.Option(),
     ] = 1000,
     tmp_array_dir: Annotated[
-        Path,
+        Optional[Path],
         typer.Option(
             exists=True,
             file_okay=False,
@@ -212,7 +214,7 @@ def make_phase_arrival_table(
     ],
     n_procs: Annotated[int, typer.Option()] = 1,
     n_batches: Annotated[
-        int,
+        Optional[int],
         typer.Option(),
     ] = None,
     bypass_records_ffp: Annotated[
@@ -839,7 +841,7 @@ def run_full_nzgmdb(
         typer.Option(),
     ] = False,
     only_event_ids: Annotated[
-        list[str],
+        Optional[list[str]],
         typer.Option(
             callback=lambda x: [] if x is None else x[0].split(","),
         ),

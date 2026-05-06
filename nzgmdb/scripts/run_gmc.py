@@ -5,7 +5,7 @@ Script to run the GMC processing for the NZGMDB.
 import functools
 import multiprocessing
 from pathlib import Path
-from typing import Annotated
+from typing import Annotated, Optional
 
 import numpy as np
 import pandas as pd
@@ -199,25 +199,25 @@ def run_gmc_processing(
         typer.Option(),
     ] = 1,
     gmc_n_batches: Annotated[
-        int,
+        Optional[int],
         typer.Option(),
     ] = None,
     waveform_dir: Annotated[
-        Path,
+        Optional[Path],
         typer.Option(
             exists=True,
             file_okay=False,
         ),
     ] = None,
     output_dir: Annotated[
-        Path,
+        Optional[Path],
         typer.Option(
             exists=True,
             file_okay=False,
         ),
     ] = None,
     bypass_records_ffp: Annotated[
-        Path,
+        Optional[Path],
         typer.Option(),
     ] = None,
 ):

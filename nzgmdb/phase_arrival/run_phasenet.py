@@ -48,7 +48,7 @@ def create_empty_h5_file(h5_ffp: Path, group_name: str):
 def run_phase_net(
     input_data: np.ndarray,
     dt: float,
-    t: np.ndarray = None,
+    t: np.ndarray | None = None,
     return_prob_series: bool = False,
 ):
     """
@@ -113,8 +113,8 @@ def run_phase_net(
 def process_mseed(
     mseed_file: Path,
     h5_ffp: Path,
-    bypass_row: pd.Series = None,
-    inventory: Inventory = None,
+    bypass_row: pd.Series | None = None,
+    inventory: Inventory | None = None,
 ):
     """
     Process an mseed file and return the phase arrival data.
@@ -321,8 +321,8 @@ def process_mseed(
 def run_phasenet(
     mseed_files_ffp: Path,
     output_dir: Path,
-    bypass_ffp: Path = None,
-    xml_dir: Path = None,
+    bypass_ffp: Path | None = None,
+    xml_dir: Path | None = None,
 ):
     """
     Run PhaseNet on the mseed files.

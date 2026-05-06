@@ -129,7 +129,7 @@ def reply_to_message_on_slack(thread_ts: str, reply_message: str):
 
 
 def download_earthquake_data(
-    start_date: datetime, end_date: datetime, mag_filter: float
+    start_date: datetime.datetime, end_date: datetime.datetime, mag_filter: float
 ) -> pd.DataFrame:
     """
     Download the earthquake data from the GeoNet API
@@ -237,9 +237,7 @@ def run_event(
     conda_sh: Annotated[Path, typer.Argument(exists=True, file_okay=True)],
     gmc_activate: Annotated[str, typer.Argument()],
     gmc_predict_activate: Annotated[str, typer.Argument()],
-    ko_matrix_path: Annotated[
-        Path, typer.Argument(exists=True, file_okay=False)
-    ],
+    ko_matrix_path: Annotated[Path, typer.Argument(exists=True, file_okay=False)],
     add_seismic_now: Annotated[bool, typer.Option(is_flag=True)] = False,
     machine: Annotated[
         cfg.MachineName,
@@ -510,7 +508,9 @@ def poll_earthquake_data(
     init_start_date = None
     while True:
         # Get the last 10 minutes worth of data and check if there are any new events
-        end_date = datetime.datetime.utcnow() - datetime.timedelta(minutes=1)
+        end_date = datetime.datetime.now(datetime.timezone.utc) - datetime.timedelta(
+            minutes=1
+        )
         # If an event was just executed, ensures we capture any events that may have been missed during the execution
         start_date = (
             end_date - datetime.timedelta(minutes=10)

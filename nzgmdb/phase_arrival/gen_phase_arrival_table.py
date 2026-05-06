@@ -84,9 +84,9 @@ def generate_phase_arrival_table(
     conda_sh: Path,
     env_activate_command: str,
     n_procs: int,
-    n_batches: int = None,
-    bypass_records_ffp: Path = None,
-    xml_dir: Path = None,
+    n_batches: int | None = None,
+    bypass_records_ffp: Path | None = None,
+    xml_dir: Path | None = None,
 ):
     """
     Generate the phase arrival table utilizing phaseNet

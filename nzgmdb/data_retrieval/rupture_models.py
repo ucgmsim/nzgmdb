@@ -100,7 +100,7 @@ def get_seismic_data_from_url(url: str) -> RuptureModel:
         "strike": strike,
         "dip": dip,
         "rake": rake,
-        "length": length,
+        "length": float(length),
         "width": width,
     }
 
