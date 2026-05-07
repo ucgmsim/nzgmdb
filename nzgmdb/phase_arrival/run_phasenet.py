@@ -14,37 +14,6 @@ from obspy.clients.fdsn import Client as FDSN_Client
 from obspy.clients.fdsn.header import FDSNNoDataException
 
 
-def create_empty_h5_file(h5_ffp: Path, group_name: str):
-    """
-    Create an empty HDF5 file with the specified group name.
-
-    Parameters
-    ----------
-    h5_ffp : Path
-        The full file path to the HDF5 file.
-    group_name : str
-        The name of the group to create in the HDF5 file (mseed file name).
-    """
-    # Create empty arrays with shape but no data
-    empty_shape = (0,)  # 0-length array
-    dtype = np.float32
-
-    with h5py.File(h5_ffp, "w") as f:
-        group = f.create_group(group_name)
-        group.create_dataset(
-            "p_prob_series",
-            shape=empty_shape,
-            dtype=dtype,
-            compression="lzf",
-        )
-        group.create_dataset(
-            "s_prob_series",
-            shape=empty_shape,
-            dtype=dtype,
-            compression="lzf",
-        )
-
-
 def run_phase_net(
     input_data: np.ndarray,
     dt: float,
@@ -149,7 +118,6 @@ def process_mseed(
                 "reason": ["Failed to read mseed file with mseedlib"],
             }
         )
-        create_empty_h5_file(h5_ffp, mseed_file.stem)
         return None, skipped_record
 
     for traceid in mstl.traceids():
@@ -193,7 +161,6 @@ def process_mseed(
                 "reason": ["File did not contain 3 components"],
             }
         )
-        create_empty_h5_file(h5_ffp, mseed_file.stem)
         return None, skipped_record
 
     # Small Processing
@@ -218,7 +185,6 @@ def process_mseed(
                     "reason": ["Failed to find Inventory information"],
                 }
             )
-            create_empty_h5_file(h5_ffp, mseed_file.stem)
             return None, skipped_record
     else:
         inv = inventory
@@ -233,7 +199,6 @@ def process_mseed(
                 "reason": ["Failed to remove sensitivity"],
             }
         )
-        create_empty_h5_file(h5_ffp, mseed_file.stem)
         return None, skipped_record
 
     # If the channel is not a Strong Motion station then we need to differentiate
@@ -248,7 +213,6 @@ def process_mseed(
                     "reason": ["Unable to differentiate record"],
                 }
             )
-            create_empty_h5_file(h5_ffp, mseed_file.stem)
             return None, skipped_record
 
     try:
@@ -266,7 +230,6 @@ def process_mseed(
                 "reason": ["Zero size array after re-sample"],
             }
         )
-        create_empty_h5_file(h5_ffp, mseed_file.stem)
         return None, skipped_record
 
     # Save the prob_series
@@ -354,6 +317,13 @@ def run_phasenet(
     skipped_records = []
     phase_arrival_table = []
     h5_ffp = output_dir / "prob_series.h5"
+
+    # Ensure output directory and HDF5 container exist before processing.
+    output_dir.mkdir(parents=True, exist_ok=True)
+    if not h5_ffp.exists():
+        # create an empty HDF5 file (no groups)
+        with h5py.File(h5_ffp, "w"):
+            pass
 
     if bypass_ffp is not None:
         # Read the bypass file
