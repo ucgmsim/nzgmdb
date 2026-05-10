@@ -173,19 +173,19 @@ def process_mseed(
     channel = mseed[0].stats.channel[:2]
 
     if inventory is None:
-        try:
-            client_NZ = FDSN_Client("GEONET")
-            inv = client_NZ.get_stations(
-                level="response", network="NZ", station=station, location=location
-            )
-        except (FDSNNoDataException, TypeError):
-            skipped_record = pd.DataFrame(
-                {
-                    "record_id": [mseed_file.stem],
-                    "reason": ["Failed to find Inventory information"],
-                }
-            )
-            return None, skipped_record
+        # try:
+        #     client_NZ = FDSN_Client("GEONET")
+        #     inv = client_NZ.get_stations(
+        #         level="response", network="NZ", station=station, location=location
+        #     )
+        # except (FDSNNoDataException, TypeError):
+        skipped_record = pd.DataFrame(
+            {
+                "record_id": [mseed_file.stem],
+                "reason": ["Failed to find Inventory information"],
+            }
+        )
+        return None, skipped_record
     else:
         inv = inventory
 
