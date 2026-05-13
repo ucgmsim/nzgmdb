@@ -1669,7 +1669,8 @@ def generate_report(
             pd.read_csv(
                 new_flatfiles_dir / "station_magnitude_table_geonet.csv"
                 if new_version == NZGMDB_Versions.V4p3
-                else file_structure.PreFlatfileNames.STATION_MAGNITUDE_TABLE_EXTRACTION
+                else new_flatfiles_dir
+                / file_structure.PreFlatfileNames.STATION_MAGNITUDE_TABLE_EXTRACTION
             )
         )
         / 3,
@@ -1688,7 +1689,8 @@ def generate_report(
                 pd.read_csv(
                     old_flatifles_dir / "station_magnitude_table_geonet.csv"
                     if old_version == NZGMDB_Versions.V4p3
-                    else file_structure.PreFlatfileNames.STATION_MAGNITUDE_TABLE_EXTRACTION
+                    else old_flatifles_dir
+                    / file_structure.PreFlatfileNames.STATION_MAGNITUDE_TABLE_EXTRACTION
                 )
             )
             / 3,

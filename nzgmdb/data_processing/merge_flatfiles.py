@@ -493,9 +493,12 @@ def merge_flatfiles(main_dir: Path, bypass_records_ffp: Path = None):
         columns={"lat": "ev_lat", "lon": "ev_lon", "depth": "ev_depth"}
     )
 
+    # Create the site basin df to merge with only 1 sta value
+    merge_site_table = site_basin_df.drop_duplicates(subset=["sta"])
+
     # Merge in the site data
     gm_im_df_flat = gm_im_df_flat.merge(
-        site_basin_df[
+        merge_site_table[
             [
                 "sta",
                 "lat",
