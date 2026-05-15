@@ -401,10 +401,7 @@ def calc_fmax(
             dir_okay=False,
         ),
     ] = None,
-    batch_size: Annotated[
-        int,
-        typer.Option()
-    ] = 20000
+    batch_size: Annotated[int, typer.Option()] = 20000,
 ):
     """
     Calculate the maximum usable frequency (fmax) for waveforms.
