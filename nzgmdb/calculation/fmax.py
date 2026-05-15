@@ -19,8 +19,10 @@ def run_full_fmax_calc(
     meta_output_dir: Path,
     waveform_dir: Path,
     snr_fas_output_dir: Path,
+    batches_dir: Path,
     n_procs: int = 1,
     bypass_records_ffp: Path = None,
+    batch_size: int = 20000,
 ):
     """
     Run the full procedure for each record to assess SNR produced from mseed files
@@ -34,69 +36,116 @@ def run_full_fmax_calc(
         Path to the directory containing the mseed files to process.
     snr_fas_output_dir : Path
         Path to the output directory for the SNR and FAS data.
+    batches_dir : Path
+        Path to the directory where batch results will be stored for checkpointing.
     n_procs : int, optional
         Number of processes to use, by default 1.
     bypass_records_ffp : Path, optional
         The full file path to the bypass records file, which includes a custom fmax
+    batch_size: int, optional
+        The number of mseed files to process in each batch, by default 20000.
     """
+    batches_dir.mkdir(parents=True, exist_ok=True)
+
     mseed_files = list(waveform_dir.rglob("*.mseed"))
+    total = len(mseed_files)
+    print(f"Total number of mseed files to process: {total}")
 
-    with mp.Pool(n_procs) as p:
-        results = p.map(
-            functools.partial(
-                assess_snr_and_get_fmax,
-                snr_fas_output_dir=snr_fas_output_dir,
-            ),
-            mseed_files,
-        )
+    # Create batches of mseed files for checkpointing
+    mseed_batches = np.array_split(mseed_files, np.ceil(len(mseed_files) / batch_size))
 
-    if len(results) == 0:
-        print("No records to process")
-        meta_dfs, skipped_record_dfs = [None], [None]
-    else:
-        # Unpack the results
-        meta_dfs, skipped_record_dfs = zip(*results)
+    for index, batch in enumerate(mseed_batches):
+        batch_dir = batches_dir / f"batch_{index + 1}"
+        batch_dir.mkdir(parents=True, exist_ok=True)
+        batch_fmax_file = batch_dir / file_structure.FlatfileNames.FMAX
+        if not batch_fmax_file.exists():
+            print(f"Processing batch {index + 1}/{len(mseed_batches)}")
+            with mp.Pool(n_procs) as p:
+                results = p.map(
+                    functools.partial(
+                        assess_snr_and_get_fmax,
+                        snr_fas_output_dir=snr_fas_output_dir,
+                    ),
+                    batch,
+                )
 
-    # Check that there are dataframes that are not None before concatenating
-    if not all(value is None for value in meta_dfs):
-        fmax_df = pd.concat(meta_dfs).reset_index(drop=True)
-    else:
-        fmax_df = pd.DataFrame(
-            columns=["record_id", "fmax_000", "fmax_090", "fmax_ver"]
-        )
-    if not all(value is None for value in skipped_record_dfs):
-        skipped_records_df = pd.concat(skipped_record_dfs).reset_index(drop=True)
-    else:
-        skipped_records_df = pd.DataFrame(columns=["record_id", "reason"])
+            if len(results) == 0:
+                print(f"Batch {index + 1}: No records to process")
+                meta_dfs, skipped_record_dfs = [None], [None]
+            else:
+                # Unpack the results
+                meta_dfs, skipped_record_dfs = zip(*results)
 
-    print(f"Skipped {len(skipped_records_df)} records")
-    skipped_records_df.to_csv(
+            # Check that there are dataframes that are not None before concatenating
+            if not all(value is None for value in meta_dfs):
+                fmax_df = pd.concat(meta_dfs).reset_index(drop=True)
+            else:
+                fmax_df = pd.DataFrame(
+                    columns=["record_id", "fmax_000", "fmax_090", "fmax_ver"]
+                )
+            if not all(value is None for value in skipped_record_dfs):
+                skipped_records_df = pd.concat(skipped_record_dfs).reset_index(
+                    drop=True
+                )
+            else:
+                skipped_records_df = pd.DataFrame(columns=["record_id", "reason"])
+
+            print(f"Batch {index + 1}: Skipped {len(skipped_records_df)} records")
+            skipped_records_df.to_csv(
+                batch_dir / file_structure.SkippedRecordFilenames.FMAX_SKIPPED_RECORDS,
+                index=False,
+            )
+
+            # Check if the bypass records file is provided
+            if bypass_records_ffp is not None:
+                # Add the bypass records to the fmax_df, or overwrite the fmax values if the record is in the bypass records
+                bypass_df = pd.read_csv(bypass_records_ffp)
+                fmax_df = fmax_df.merge(
+                    bypass_df[["record_id", "fmax_000", "fmax_090", "fmax_ver"]],
+                    on="record_id",
+                    how="left",
+                    suffixes=("", "_bypass"),
+                )
+                fmax_df["fmax_000"] = fmax_df["fmax_000_bypass"].fillna(
+                    fmax_df["fmax_000"]
+                )
+                fmax_df["fmax_090"] = fmax_df["fmax_090_bypass"].fillna(
+                    fmax_df["fmax_090"]
+                )
+                fmax_df["fmax_ver"] = fmax_df["fmax_ver_bypass"].fillna(
+                    fmax_df["fmax_ver"]
+                )
+                fmax_df = fmax_df.drop(
+                    columns=[
+                        "fmax_000_bypass",
+                        "fmax_090_bypass",
+                        "fmax_ver_bypass",
+                    ]
+                )
+
+            fmax_df.to_csv(batch_dir / file_structure.FlatfileNames.FMAX, index=False)
+
+    # For each batch_dir combine the dfs
+    all_skipped_records_df = pd.concat(
+        [
+            pd.read_csv(f)
+            for f in batches_dir.rglob("*.csv")
+            if file_structure.SkippedRecordFilenames.FMAX_SKIPPED_RECORDS in f.name
+        ],
+    )
+    all_fmax_df = pd.concat(
+        [
+            pd.read_csv(f)
+            for f in batches_dir.rglob("*.csv")
+            if file_structure.FlatfileNames.FMAX in f.name
+        ],
+    )
+
+    all_skipped_records_df.to_csv(
         meta_output_dir / file_structure.SkippedRecordFilenames.FMAX_SKIPPED_RECORDS,
         index=False,
     )
-
-    # Check if the bypass records file is provided
-    if bypass_records_ffp is not None:
-        # Add the bypass records to the fmax_df, or overwrite the fmax values if the record is in the bypass records
-        bypass_df = pd.read_csv(bypass_records_ffp)
-        fmax_df = fmax_df.merge(
-            bypass_df[["record_id", "fmax_000", "fmax_090", "fmax_ver"]],
-            on="record_id",
-            how="left",
-            suffixes=("", "_bypass"),
-        )
-        fmax_df["fmax_000"] = fmax_df["fmax_000_bypass"].fillna(fmax_df["fmax_000"])
-        fmax_df["fmax_090"] = fmax_df["fmax_090_bypass"].fillna(fmax_df["fmax_090"])
-        fmax_df["fmax_ver"] = fmax_df["fmax_ver_bypass"].fillna(fmax_df["fmax_ver"])
-        fmax_df = fmax_df.drop(
-            columns=[
-                "fmax_000_bypass",
-                "fmax_090_bypass",
-                "fmax_ver_bypass",
-            ]
-        )
-
-    fmax_df.to_csv(meta_output_dir / file_structure.FlatfileNames.FMAX, index=False)
+    all_fmax_df.to_csv(meta_output_dir / file_structure.FlatfileNames.FMAX, index=False)
 
 
 def assess_snr_and_get_fmax(

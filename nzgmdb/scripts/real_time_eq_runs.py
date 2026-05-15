@@ -412,7 +412,7 @@ def run_event(
         flatfile_dir,
         waveform_dir,
         snr_fas_output_dir,
-        config.get_n_procs(machine, cfg.WorkflowStep.FMAX),
+        n_procs=config.get_n_procs(machine, cfg.WorkflowStep.FMAX),
     )
 
     run_gmc.run_gmc_processing(
