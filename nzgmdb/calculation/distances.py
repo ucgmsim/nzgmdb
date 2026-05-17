@@ -391,22 +391,9 @@ def get_nodal_plane_info(
             srf_model.planes, avg_rake, plane_areas
         )
 
-        config = cfg.Config()
-        points_per_km = config.get_value("points_per_km")
-
-        srf_points = []
-        for plane in srf_model.planes:
-            corner_0, corner_1, corner_2, _ = plane.corners
-            # Utilise grid functions from qcore to get the mesh grid
-            plane_points = grid.coordinate_meshgrid(
-                corner_0, corner_1, corner_2, 1000 / points_per_km
-            )
-            # Reshape to (n, 3)
-            plane_points = plane_points.reshape(-1, 3)
-            srf_points.append(plane_points)
-        srf_points = np.vstack(srf_points)
-        # Swap the lat and lon for the srf points
-        nodal_plane_info["srf_points"] = srf_points[:, [1, 0, 2]]
+        nodal_plane_info["srf_points"] = srf_model.points.loc[
+            :, ["lon", "lat", "dep"]
+        ].to_numpy()
 
         # Generate the srf header
         nodal_plane_info["srf_header"] = (
@@ -975,12 +962,12 @@ def compute_distances_for_event(
                     "corner_1_lat": corner_1[0],
                     "corner_1_lon": corner_1[1],
                     "corner_1_depth": corner_1[2] / 1000.0,
-                    "corner_2_lat": corner_2[0],
-                    "corner_2_lon": corner_2[1],
-                    "corner_2_depth": corner_2[2] / 1000.0,
-                    "corner_3_lat": corner_3[0],
-                    "corner_3_lon": corner_3[1],
-                    "corner_3_depth": corner_3[2] / 1000.0,
+                    "corner_2_lat": corner_3[0],
+                    "corner_2_lon": corner_3[1],
+                    "corner_2_depth": corner_3[2] / 1000.0,
+                    "corner_3_lat": corner_2[0],
+                    "corner_3_lon": corner_2[1],
+                    "corner_3_depth": corner_2[2] / 1000.0,
                 }
             ]
         )
