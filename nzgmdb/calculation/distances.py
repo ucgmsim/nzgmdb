@@ -13,7 +13,6 @@ from typing import Optional, TypedDict
 import fiona
 import numpy as np
 import pandas as pd
-from obspy.clients.fdsn import Client as FDSN_Client
 from pyproj import Transformer
 from shapely.geometry import LineString, Point, Polygon
 
@@ -823,19 +822,31 @@ def compute_distances_for_event(
 
     r_epis = geo.get_distances(
         np.dstack([event_sta_df.lon.values, event_sta_df.lat.values])[0],
-        event_row["lon"],
-        event_row["lat"],
+        nodal_plane_info["hyp_lon"],
+        nodal_plane_info["hyp_lat"],
     )
-    r_hyps = np.sqrt(r_epis**2 + (event_row["depth"] - event_sta_df.depth.values) ** 2)
+    r_hyps = np.sqrt(
+        r_epis**2 + (nodal_plane_info["hyp_depth"] - event_sta_df.depth.values) ** 2
+    )
     azs = np.array(
         [
-            geo.ll_bearing(event_row["lon"], event_row["lat"], station[0], station[1])
+            geo.ll_bearing(
+                nodal_plane_info["hyp_lon"],
+                nodal_plane_info["hyp_lat"],
+                station[0],
+                station[1],
+            )
             for station in stations
         ]
     )
     b_azs = np.array(
         [
-            geo.ll_bearing(station[0], station[1], event_row["lon"], event_row["lat"])
+            geo.ll_bearing(
+                station[0],
+                station[1],
+                nodal_plane_info["hyp_lon"],
+                nodal_plane_info["hyp_lat"],
+            )
             for station in stations
         ]
     )
