@@ -54,6 +54,23 @@ def merge_NZSMDB_flatfile_on_events(
     return event_df
 
 
+def compute_mw_eq_7(mag_0: float):
+    """
+    Compute the moment magnitude (Mw) from the seismic moment (Mo)
+
+    Parameters
+    ----------
+    mag_0 : float
+        The seismic moment (Mo)
+
+    Returns
+    -------
+    float
+        The moment magnitude (Mw)
+    """
+    return (2 / 3) * np.log10(mag_0) - 10.73
+
+
 def replace_cmt_data_on_event(
     event_df: pd.DataFrame,
     cmt_df: pd.DataFrame,
@@ -75,6 +92,9 @@ def replace_cmt_data_on_event(
     pd.DataFrame
         The event dataframe with the CMT data merged
     """
+    # Ensure the Mw is computed using equation 7
+    cmt_df["Mw"] = cmt_df["Mo"].apply(compute_mw_eq_7)
+
     # Manage index and column renaming
     cmt_df = cmt_df.rename(
         columns={
@@ -113,6 +133,9 @@ def replace_cmt_data_on_event(
 
     # Drop the CMT columns
     event_df = event_df.drop(columns=["mag_cmt", "lat_cmt", "lon_cmt", "depth_cmt"])
+
+    # Ensure that mag is rounded to 2dp
+    event_df["mag"] = event_df.round(2)
 
     return event_df
 
