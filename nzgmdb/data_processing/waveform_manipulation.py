@@ -3,14 +3,58 @@ This module contains functions for the initial pre-processing of waveform data a
 """
 
 import numpy as np
-from obspy import Inventory
+from obspy import Inventory, UTCDateTime
 from obspy.clients.fdsn import Client as FDSN_Client
 from obspy.clients.fdsn.header import FDSNNoDataException
+from obspy.core.inventory.response import Response
 from obspy.core.stream import Stream
 from scipy import integrate, signal
 
 from nzgmdb.management import config as cfg
 from nzgmdb.management import custom_errors
+
+
+def check_sensitivity(
+    resp: Response,
+    threshold: float = 10.0,
+) -> tuple[bool, float]:
+    """
+    Returns True if full response removal is safe,
+    False if sensitivity mismatch suggests using remove_sensitivity().
+
+    Parameters
+    ----------
+    resp: Response
+        The response object to check the sensitivity of
+    threshold : float, optional
+        The percentage difference threshold to determine if the sensitivity mismatch is acceptable, by default 10.0
+
+    Returns
+    -------
+    bool
+        True if the percentage difference is less than or equal to the threshold, False otherwise
+    float
+        The percentage difference between the total sensitivity and the stage sensitivity
+
+    Reference
+    ----------
+        USGS gmprocess instrument-response helper:
+        https://ghsc.code-pages.usgs.gov/esi/groundmotion-processing/_modules/gmprocess/waveform_processing/instrument_response.html
+    """
+    stages = resp.response_stages
+
+    # Total sensitivity
+    total = resp.instrument_sensitivity.value
+
+    # Stage sensitivity (product of stage gains)
+    stage = 1.0
+    for s in stages:
+        stage *= s.stage_gain
+
+    # Percent difference
+    pct_diff = 200.0 * abs(total - stage) / (total + stage)
+
+    return pct_diff <= threshold, pct_diff
 
 
 def initial_preprocessing(
@@ -108,9 +152,33 @@ def initial_preprocessing(
         )
 
     try:
-        # Ensure we get the correct output type for strong motion vs broadband
-        output_type = "ACC" if channel[:2] in ["HN", "BN"] else "VEL"
-        mseed = mseed.remove_response(inventory=inv, output=output_type)
+        # Apply the correct sensitivity removal based on the check_sensitivity function
+        t = UTCDateTime(mseed[0].stats.starttime)
+        net = inv.networks[0]
+        resp = inv.get_response(f"{net}.{station}.{location}.{channel}", t)
+        ok, diff = check_sensitivity(resp)
+        paz = resp.get_paz()
+        has_paz = not (len(paz.poles) == 0 and len(paz.zeros) == 0)
+
+        # Checks that the response has poles and zeros and that the sensitivity mismatch is acceptable before applying the full remove_response method.
+        if has_paz and ok:
+            if channel[:2] in ["HN", "BN"]:
+                mseed = mseed.remove_response(inventory=inv, output="ACC")
+            else:
+                # We have a broadband record so need to apply some pre-filters
+                f_nyq = 0.5 / mseed[0].stats.delta
+                f3 = 0.9 * f_nyq
+                pre_filt = (0.01, 0.05, f3, f_nyq)
+                mseed = mseed.remove_response(
+                    inventory=inv,
+                    output="VEL",
+                    pre_filt=pre_filt,
+                    zero_mean=True,
+                    taper=True,
+                )
+        else:
+            # Now we must use remove sensitivity instead
+            mseed = mseed.remove_sensitivity(inventory=inv)
     except ValueError:
         raise custom_errors.SensitivityRemovalError(
             f"Failed to remove sensitivity for station {station} with location {location}"
