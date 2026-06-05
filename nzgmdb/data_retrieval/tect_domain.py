@@ -135,7 +135,7 @@ def replace_cmt_data_on_event(
     event_df = event_df.drop(columns=["mag_cmt", "lat_cmt", "lon_cmt", "depth_cmt"])
 
     # Ensure that mag is rounded to 2dp
-    event_df["mag"] = event_df.round(2)
+    event_df["mag"] = event_df["mag"].round(2)
 
     return event_df
 
