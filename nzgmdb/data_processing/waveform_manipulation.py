@@ -154,8 +154,7 @@ def initial_preprocessing(
     try:
         # Apply the correct sensitivity removal based on the check_sensitivity function
         t = UTCDateTime(mseed[0].stats.starttime)
-        net = inv.networks[0]
-        resp = inv.get_response(f"{net}.{station}.{location}.{channel}", t)
+        resp = inv.get_response(mseed[0].id, t)
         ok, diff = check_sensitivity(resp)
         paz = resp.get_paz()
         has_paz = not (len(paz.poles) == 0 and len(paz.zeros) == 0)
