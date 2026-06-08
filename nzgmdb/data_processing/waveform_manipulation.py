@@ -177,7 +177,10 @@ def initial_preprocessing(
                 )
         else:
             # Now we must use remove sensitivity instead
-            mseed = mseed.remove_sensitivity(inventory=inv)
+            if channel[:2] in ["HN", "BN"]:
+                mseed = mseed.remove_sensitivity(inventory=inv)
+            else:
+                mseed = mseed.remove_sensitivity(inventory=inv).differentiate()
     except ValueError:
         raise custom_errors.SensitivityRemovalError(
             f"Failed to remove sensitivity for station {station} with location {location}"
@@ -193,16 +196,6 @@ def initial_preprocessing(
         raise custom_errors.RotationError(
             f"Failed to rotate for station {station} with location {location}"
         )
-
-    # If the channel is not a Strong Motion station then we need to differentiate
-    if channel not in ["HN", "BN"]:
-        try:
-            # differentiate data i.e., m/s to m/s^2
-            mseed.differentiate()
-        except ValueError:
-            raise custom_errors.DiffrentiateError(
-                f"Failed to differentiate station {station} with location {location}"
-            )
 
     # Get constant gravity (g)
     g = config.get_value("g")
