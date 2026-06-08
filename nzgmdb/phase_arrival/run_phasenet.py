@@ -260,7 +260,7 @@ def process_mseed(
         else:
             # Now we must use remove sensitivity instead
             mseed = mseed.remove_sensitivity(inventory=inv)
-    except Exception: # noqa: BLE001
+    except Exception:  # noqa: BLE001
         skipped_record = pd.DataFrame(
             {
                 "record_id": [mseed_file.stem],

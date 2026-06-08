@@ -178,7 +178,7 @@ def initial_preprocessing(
         else:
             # Now we must use remove sensitivity instead
             mseed = mseed.remove_sensitivity(inventory=inv)
-    except Exception: # noqa: BLE001
+    except Exception:  # noqa: BLE001
         raise custom_errors.SensitivityRemovalError(
             f"Failed to remove sensitivity for station {station} with location {location}"
         )
