@@ -259,10 +259,7 @@ def process_mseed(
                 )
         else:
             # Now we must use remove sensitivity instead
-            if channel[:2] in ["HN", "BN"]:
-                mseed = mseed.remove_sensitivity(inventory=inv)
-            else:
-                mseed = mseed.remove_sensitivity(inventory=inv).differentiate()
+            mseed = mseed.remove_sensitivity(inventory=inv)
     except ValueError:
         skipped_record = pd.DataFrame(
             {
@@ -271,6 +268,21 @@ def process_mseed(
             }
         )
         return None, skipped_record
+
+    if channel[:2] not in ["HN", "BN"]:
+        try:
+            # differentiate data i.e., m/s to m/s^2
+            mseed.differentiate()
+        except ValueError:
+            skipped_record = pd.DataFrame(
+                {
+                    "record_id": [mseed_file.stem],
+                    "reason": [
+                        "Failed to differentiate data after sensitivity removal"
+                    ],
+                }
+            )
+            return None, skipped_record
 
     try:
         p_wave_ix, s_wave_ix, p_prob_series, s_prob_series, p_prob, s_prob = (
