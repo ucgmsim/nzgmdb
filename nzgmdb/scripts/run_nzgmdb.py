@@ -154,7 +154,7 @@ def extract_waveforms(
         only_record_ids_ffp,
         batch_size,
         tmp_array_dir,
-        real_time
+        real_time,
     )
 
 

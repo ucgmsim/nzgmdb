@@ -355,6 +355,11 @@ def run_event(
         run_nzgmdb.distances.calc_distances(
             event_dir, config.get_n_procs(machine, cfg.WorkflowStep.DISTANCES)
         )
+        # Calculate Aftershocks (Not valid, however is fast and needed for pipeline in marge flatfiles)
+        run_nzgmdb.calculate_aftershocks(
+            event_dir,
+        )
+
         # Merge the flatfiles
         run_nzgmdb.merge_flat_files(event_dir)
 
@@ -446,13 +451,21 @@ def run_event(
         ko_matrix_path,
         n_procs=config.get_n_procs(machine, cfg.WorkflowStep.IM),
     )
+    run_nzgmdb.merge_im_results(
+        im_dir,
+        flatfile_dir,
+        flatfile_dir / file_structure.FlatfileNames.GMC_PREDICTIONS,
+        flatfile_dir / file_structure.FlatfileNames.FMAX,
+    )
 
     # Calculate distances
     run_nzgmdb.distances.calc_distances(
         event_dir, config.get_n_procs(machine, cfg.WorkflowStep.DISTANCES)
     )
-
-    run_nzgmdb.merge_im_results(im_dir, flatfile_dir, None, None)
+    # Calculate Aftershocks (Not valid, however is fast and needed for pipeline in marge flatfiles)
+    run_nzgmdb.calculate_aftershocks(
+        event_dir,
+    )
 
     run_nzgmdb.merge_flat_files(event_dir)
 
