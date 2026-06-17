@@ -800,6 +800,7 @@ def extract_station_info(
     extraction_table: pd.DataFrame,
     only_record_ids: pd.DataFrame = None,
     tmp_array_dir: Path = None,
+    real_time: bool = False,
 ) -> StationExtractionResult:
     """
     Extract the waveform data for a single station based on the extraction parameters.
@@ -818,6 +819,8 @@ def extract_station_info(
         A DataFrame containing a subset of record IDs to use for extraction, if provided.
     tmp_array_dir : Path, optional
         The directory where the temporary array waveform files are stored, if using temporary array storage for waveforms.
+    real_time : bool, optional
+        A boolean indicating if the extraction is being performed in real-time, which will use a different client.
 
     Returns
     -------
@@ -874,7 +877,10 @@ def extract_station_info(
 
     if provider == "GEONET":
         # Get the Stream
-        client = FDSN_Client("GEONET")
+        if real_time:
+            client = FDSN_Client(base_url=config.get_value("real_time_url"))
+        else:
+            client = FDSN_Client("GEONET")
         st = get_inital_stream(
             start_time, end_time, channel_codes, location, client, net, sta
         )
@@ -1098,6 +1104,7 @@ def extract_waveforms(
     only_record_ids_ffp: Path = None,
     batch_size: int = 1000,
     tmp_array_dir: Path = None,
+    real_time: bool = False,
 ):
     """
     Extract waveforms for each station in the station extraction table.
@@ -1119,6 +1126,8 @@ def extract_waveforms(
         The number of rows to process in each batch, by default 1000.
     tmp_array_dir : Path, optional
         The directory where the temporary array waveform files are stored, if using temporary array storage for waveforms.
+    real_time: bool, optional
+        Whether to run in real-time mode so uses a different client
     """
     station_extraction_table = pd.read_csv(
         station_extraction_table_ffp, dtype={"evid": str}
@@ -1162,7 +1171,11 @@ def extract_waveforms(
         station_extraction_table.index,
         np.ceil(len(station_extraction_table) / batch_size),
     )
-    client = FDSN_Client("GEONET")
+    config = cfg.Config()
+    if real_time:
+        client = FDSN_Client(base_url=config.get_value("real_time_url"))
+    else:
+        client = FDSN_Client("GEONET")
 
     for batch_index, batch_indices in enumerate(index_batches):
         if batch_index not in processed_suffixes:
@@ -1197,6 +1210,7 @@ def extract_waveforms(
                 extraction_table=station_extraction_table,
                 only_record_ids=only_record_ids,
                 tmp_array_dir=tmp_array_dir,
+                real_time=real_time,
             )
 
             results = []

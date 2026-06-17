@@ -299,6 +299,16 @@ def run_event(
             real_time=True,
             mp_sites=True,
         )
+        flatfile_dir = file_structure.get_flatfile_dir(event_dir)
+
+        # Extract waveforms
+        run_nzgmdb.extract_waveforms(
+            event_dir,
+            flatfile_dir
+            / file_structure.PreFlatfileNames.STATION_EXTRACTION_TABLE_GEONET,
+            config.get_n_procs(machine, cfg.WorkflowStep.EXTRACTION),
+            real_time=True,
+        )
 
         if add_seismic_now:
             # Update with latest info
@@ -310,7 +320,6 @@ def run_event(
             message_ts = response["ts"]
 
         # Tectonic types
-        flatfile_dir = file_structure.get_flatfile_dir(event_dir)
         eq_source_ffp = (
             flatfile_dir
             / file_structure.PreFlatfileNames.EARTHQUAKE_SOURCE_TABLE_GEONET
@@ -326,7 +335,11 @@ def run_event(
         )
         # Process the records
         process_observed.process_mseeds_to_txt(
-            event_dir, None, None, None, config.get_n_procs(machine, cfg.WorkflowStep.PROCESS)
+            event_dir,
+            None,
+            None,
+            None,
+            config.get_n_procs(machine, cfg.WorkflowStep.PROCESS),
         )
         # Run IM_calculation
         im_dir = file_structure.get_im_dir(event_dir)

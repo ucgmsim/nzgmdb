@@ -124,6 +124,7 @@ def extract_waveforms(
             file_okay=False,
         ),
     ] = None,
+    real_time: Annotated[bool, typer.Option()] = False,
 ):
     """
     Extract waveforms using the station extraction table and save them as MiniSEED files.
@@ -143,6 +144,8 @@ def extract_waveforms(
         The batch size for how many extracted waveforms to process before checkpointing (default is 1000).
     tmp_array_dir : Path, optional
         The directory the saved temporary array data is to be used for waveform extraction.
+    real_time: bool, optional
+        If True, the function will run in real-time mode by using a different client (default is False).
     """
     waveform_extraction.extract_waveforms(
         main_dir,
@@ -151,6 +154,7 @@ def extract_waveforms(
         only_record_ids_ffp,
         batch_size,
         tmp_array_dir,
+        real_time
     )
 
 
