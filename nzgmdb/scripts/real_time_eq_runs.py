@@ -517,7 +517,7 @@ def poll_earthquake_data(
         init_start_date = None
 
         try:
-            geonet_df = download_earthquake_data(start_date, end_date, mag_filter=4.0)
+            geonet_df = download_earthquake_data(start_date, end_date, mag_filter=3.5)
         except ValueError:
             # Server down temporarily edge case
             print("Could not get the earthquake data, waiting for 1 minute")

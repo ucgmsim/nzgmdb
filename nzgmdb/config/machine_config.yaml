@@ -24,14 +24,14 @@ mantle:
   upload: 28
 hypocentre:
   geonet: 44
-  extraction: 32
+  extraction: 44
   tec_domain: 44
   phase_table: 44
-  snr: 18
+  snr: 22
   fmax: 44
-  gmc: 12
+  gmc: 11
   process: 44
-  im: 12
+  im: 22
   distances: 44
   upload: 44
 rch:
