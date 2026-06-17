@@ -16,6 +16,7 @@ import requests
 import typer
 
 from IM import ims
+from nzgmdb.data_processing import process_observed
 from nzgmdb.management import config as cfg
 from nzgmdb.management import custom_errors, file_structure
 from nzgmdb.scripts import run_gmc, run_nzgmdb
@@ -324,8 +325,8 @@ def run_event(
             config.get_n_procs(machine, cfg.WorkflowStep.TEC_DOMAIN),
         )
         # Process the records
-        run_nzgmdb.process_records(
-            event_dir, n_procs=config.get_n_procs(machine, cfg.WorkflowStep.PROCESS)
+        process_observed.process_mseeds_to_txt(
+            event_dir, None, None, None, config.get_n_procs(machine, cfg.WorkflowStep.PROCESS)
         )
         # Run IM_calculation
         im_dir = file_structure.get_im_dir(event_dir)
