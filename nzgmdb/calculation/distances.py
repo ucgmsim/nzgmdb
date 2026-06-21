@@ -770,8 +770,8 @@ def compute_distances_for_event(
         srf_points = srf_points[:, [1, 0, 2]]
 
         # Generate the srf header
-        nstrike = int(round(length * points_per_km))
-        ndip = int(round(dip_dist * points_per_km))
+        nstrike = max(int(round(length * points_per_km)), 1)
+        ndip = max(int(round(dip_dist * points_per_km)), 1)
         srf_header = [
             {
                 "nstrike": nstrike,
