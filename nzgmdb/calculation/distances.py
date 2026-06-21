@@ -791,9 +791,10 @@ def compute_distances_for_event(
     )
     try:
         rxs, rys = src_site_dist.calc_rx_ry(srf_points, srf_header, stations)
-    except IndexError:
+    except Exception:
         print(f"Event ID {event_id}")
         print(srf_header)
+        raise Exception(f"Event ID {event_id}")
     rrups_lon, rrups_lat = rrup_points[:, 0], rrup_points[:, 1]
 
     # Get the segment corners for the srf or corners
