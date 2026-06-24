@@ -255,6 +255,7 @@ def create_site_table_response(
     site_df = all_info_df[
         ["provider", "net", "sta", "lat", "lon", "elev", "creation_date", "end_date"]
     ]
+    site_df = site_df.drop_duplicates(subset=["sta"])
 
     merged_df = site_df.merge(
         geo_meta_summary_df,
