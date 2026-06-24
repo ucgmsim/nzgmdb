@@ -489,6 +489,13 @@ def poll_earthquake_data(
     gmc_activate: Annotated[str, typer.Argument()],
     gmc_predict_activate: Annotated[str, typer.Argument()],
     ko_matrix_path: Annotated[Path, typer.Argument(exists=True, file_okay=False)],
+    nzcvm_data_ffp: Annotated[
+        Path,
+        typer.Argument(
+            exists=True,
+            file_okay=False,
+        ),
+    ],
     add_seismic_now: Annotated[bool, typer.Option(is_flag=True)] = False,
     machine: Annotated[
         cfg.MachineName,
@@ -514,6 +521,8 @@ def poll_earthquake_data(
         Command to activate gmc_predict environment.
     ko_matrix_path : Path
         Path to the KO matrix directory.
+    nzcvm_data_ffp : Path
+        File path to the nzcvm data directory.
     add_seismic_now : bool, optional
         Whether to add the event to SeismicNow (default is False).
     machine : cfg.MachineName, optional
@@ -566,6 +575,7 @@ def poll_earthquake_data(
                     gmc_activate,
                     gmc_predict_activate,
                     ko_matrix_path,
+                    nzcvm_data_ffp,
                     add_seismic_now,
                     machine,
                 )
