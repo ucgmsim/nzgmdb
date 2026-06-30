@@ -15,7 +15,6 @@ import pandas as pd
 import requests
 import typer
 
-from IM import ims
 from nzgmdb.data_processing import process_observed
 from nzgmdb.management import config as cfg
 from nzgmdb.management import custom_errors, file_structure
@@ -24,9 +23,7 @@ from qcore import cli
 
 app = typer.Typer(pretty_exceptions_enable=False)
 
-SEISMIC_NOW_URL = (
-    "https://quakecoresoft.canterbury.ac.nz/seismicnow/api/earthquakes/add"
-)
+SEISMIC_NOW_URL = "https://quakecoresoft.canterbury.ac.nz/seismicnow/api/"
 SLACK_BOT_TOKEN = os.getenv("SLACK_BOT_TOKEN")
 SLACK_CHANNEL = os.getenv("SLACK_CHANNEL")
 
@@ -175,6 +172,44 @@ def download_earthquake_data(
     return df
 
 
+def fetch_geonet_update(event_id: str):
+    """
+    Fetch the earthquake data from the GeoNet API for the latest update
+    on location and magnitude with quality.
+
+    Parameters
+    ----------
+    event_id : str
+        The event ID to check.
+
+    Returns
+    -------
+    lon : float
+        Longitude of the event.
+    lat : float
+        Latitude of the event.
+    mag : float
+        Magnitude of the event.
+    depth : float
+        Depth of the event.
+    quality : str
+        Quality of the event.
+    """
+    url = f"https://api.geonet.org.nz/quake/{event_id}"
+    headers = {"Accept": "application/vnd.geo+json;version=2"}
+
+    r = requests.get(url, headers=headers)
+    feature = r.json()["features"][0]
+
+    lon = feature["geometry"]["coordinates"][0]
+    lat = feature["geometry"]["coordinates"][1]
+    quality = feature["properties"]["quality"]
+    mag = feature["properties"]["magnitude"]
+    depth = feature["properties"]["depth"]
+
+    return lon, lat, mag, depth, quality
+
+
 def update_eq_source_table(
     event_dir: Path,
 ):
@@ -198,36 +233,22 @@ def update_eq_source_table(
     )
     eq_source_df = pd.read_csv(eq_source_ffp)
 
-    # Get the datetime of the event
-    datetime_evid = eq_source_df["datetime"].values[0]
-    datetime_evid = pd.to_datetime(datetime_evid)
+    evid = eq_source_df["evid"].values[0]
 
     # Get the latest data
-    geonet_df = download_earthquake_data(
-        datetime_evid - timedelta(minutes=2),
-        datetime_evid + timedelta(minutes=2),
-        mag_filter=0.0,
-    )
-
-    # Get the new data for this event
-    new_data = geonet_df[geonet_df["publicid"] == eq_source_df["evid"].values[0]]
+    lon, lat, mag, depth, quality = fetch_geonet_update(evid)
 
     # Update the data
-    eq_source_df["mag"] = new_data["magnitude"].values[0]
-    eq_source_df["lat"] = new_data["latitude"].values[0]
-    eq_source_df["lon"] = new_data["longitude"].values[0]
-    eq_source_df["depth"] = new_data["depth"].values[0]
+    eq_source_df["mag"] = mag
+    eq_source_df["lat"] = lat
+    eq_source_df["lon"] = lon
+    eq_source_df["depth"] = depth
 
     # Save the updated data
     eq_source_df.to_csv(eq_source_ffp, index=False)
 
-    # return the new data values
-    return (
-        eq_source_df["mag"].values[0],
-        eq_source_df["lat"].values[0],
-        eq_source_df["lon"].values[0],
-        eq_source_df["depth"].values[0],
-    )
+    # return the new data values with quality
+    return (mag, lat, lon, depth, quality)
 
 
 @cli.from_docstring(app)
@@ -312,7 +333,15 @@ def run_event(
 
         if add_seismic_now:
             # Update with latest info
-            mag, lat, lon, depth = update_eq_source_table(event_dir)
+            mag, lat, lon, depth, quality = update_eq_source_table(event_dir)
+
+            # Check if quality is best and magnitude is above threshold
+            if quality == "best" and mag < 3.5:
+                print(
+                    f"Event {event_id} has quality 'best' but magnitude {mag:.1f} is below threshold, skipping"
+                )
+                return False
+
             # Send a message to slack to indicate the event is being processed
             response = send_message_to_slack(
                 f"Event ID: {event_id} started processing for SeismicNow: Mag: {mag:.1f}; Depth: {depth:.1f} km; Lat: {lat:.2f}; Lon: {lon:.2f}",
@@ -370,16 +399,23 @@ def run_event(
         return False
 
     if add_seismic_now:
+        # Get updated values
+        mag, lat, lon, depth, quality = update_eq_source_table(event_dir)
+        # Check if quality is best and magnitude is above threshold
+        if quality == "best" and mag < 3.5:
+            print(
+                f"Event {event_id} has quality 'best' but magnitude {mag:.1f} is below threshold, skipping"
+            )
+            return False
+
         # Define the URL for the endpoint
-        url = f"{SEISMIC_NOW_URL}?earthquake_id={event_id}"
+        url = f"{SEISMIC_NOW_URL}earthquakes/add?earthquake_id={event_id}"
 
         # Send a POST request to the endpoint
         response = requests.post(url)
 
         if response.status_code == 200:
             print("Event added successfully")
-            # Get updated values
-            mag, lat, lon, depth = update_eq_source_table(event_dir)
             # Add a new message to slack
             response = reply_to_message_on_slack(
                 message_ts,
@@ -471,12 +507,63 @@ def run_event(
 
     if add_seismic_now:
         # Get updated values
-        mag, lat, lon, depth = update_eq_source_table(event_dir)
-        # Reply to the slack message for final results
-        reply_to_message_on_slack(
-            message_ts,
-            f"Event ID: {event_id} completed final processing: Mag: {mag:.1f}; Depth: {depth:.1f} km; Lat: {lat:.2f}; Lon: {lon:.2f}",
-        )
+        mag, lat, lon, depth, quality = update_eq_source_table(event_dir)
+        # Check if quality is best and magnitude is above threshold
+        if quality == "best" and mag < 3.5:
+            print(
+                f"Event {event_id} has quality 'best' but magnitude {mag:.1f} is below threshold, skipping"
+            )
+            # Send the delete request to SeismicNow
+            url = f"{SEISMIC_NOW_URL}/earthquakes/delete"
+
+            payload = {"earthquake_id": event_id}
+
+            response = requests.delete(url, json=payload)
+
+            if response.status_code == 200:
+                print("Event removed successfully")
+                # Reply to the slack message for final results
+                reply_to_message_on_slack(
+                    message_ts,
+                    f"Event ID: {event_id} falls below the magnitude threshold at 'best' quality and so has been removed.",
+                )
+
+            else:
+                print(f"Failed to remove event. Status code: {response.status_code}")
+                print(f"Response: {response.text}")
+                # Add a new message to slack
+                reply_to_message_on_slack(
+                    message_ts,
+                    f"Failed to remove event {event_id} from SeismicNow for falling below the magnitude threshold, SW team investigate",
+                )
+
+            return False
+
+        url = f"{SEISMIC_NOW_URL}earthquakes/update"
+
+        # Create the JSON body
+        payload = {"earthquake_id": event_id}
+
+        # Send the POST request with JSON body
+        response = requests.post(url, json=payload)
+
+        if response.status_code == 200:
+            print("Event added successfully")
+            # Reply to the slack message for final results
+            reply_to_message_on_slack(
+                message_ts,
+                f"Event ID: {event_id} completed final processing: Mag: {mag:.1f}; Depth: {depth:.1f} km; Lat: {lat:.2f}; Lon: {lon:.2f}",
+            )
+
+        else:
+            print(f"Failed to add event. Status code: {response.status_code}")
+            print(f"Response: {response.text}")
+            # Add a new message to slack
+            reply_to_message_on_slack(
+                message_ts,
+                f"Failed to update event {event_id} for SeismicNow, SW team investigate",
+            )
+            return False
 
     return True
 
@@ -540,7 +627,7 @@ def poll_earthquake_data(
     init_start_date = None
     while True:
         # Get the last 10 minutes worth of data and check if there are any new events
-        end_date = datetime.datetime.utcnow() - datetime.timedelta(minutes=1)
+        end_date = datetime.datetime.now(datetime.UTC) - datetime.timedelta(minutes=1)
         # If an event was just executed, ensures we capture any events that may have been missed during the execution
         start_date = (
             end_date - datetime.timedelta(minutes=10)
