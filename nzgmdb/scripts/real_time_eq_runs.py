@@ -476,6 +476,7 @@ def run_event(
         gmc_activate,
         gmc_predict_activate,
         config.get_n_procs(machine, cfg.WorkflowStep.GMC),
+        allow_empty=True,
     )
 
     run_nzgmdb.process_records(

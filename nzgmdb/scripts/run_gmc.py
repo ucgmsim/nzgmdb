@@ -10,6 +10,7 @@ from typing import Annotated
 import numpy as np
 import pandas as pd
 import typer
+from sphinx.cmd.quickstart import allow_empty
 
 from nzgmdb.management import file_structure, shell_commands
 from qcore import cli
@@ -74,6 +75,7 @@ def process_batch(
     phase_arrival_table_ffp: Path,
     prob_series_ffp: Path,
     xml_dir: Path,
+    allow_empty: bool = False,
 ):
     """
     Process a single subfolder: extract features and run predictions.
@@ -102,6 +104,8 @@ def process_batch(
         The full file path to the prob_series hdf5 file.
     xml_dir : Path
         The directory containing the stationxml files.
+    allow_empty: bool, optional
+        Whether to allow an empty run if records are not able to be processed.
 
     Raises
     ------
@@ -142,6 +146,29 @@ def process_batch(
                     f"Failed to extract features for Batch {batch_num}. Please check logs in this folder or try a re-run"
                 )
 
+            if allow_empty:
+                # Check the length of the features_comp csv file
+                features_file = gmc_dir / "features_comp_Z.csv"
+                if pd.read_csv(features_file).empty:
+                    print(
+                        f"Features file is empty for batch {batch_num}, allow empty is True so will create empty predictions file"
+                    )
+                    # Create an empty gmc_predicitons.csv file
+                    pd.DataFrame(
+                        columns=[
+                            "record_id",
+                            "score_mean",
+                            "score_std",
+                            "fmin_mean",
+                            "fmin_std",
+                            "multi_mean",
+                            "multi_std",
+                            "record",
+                            "component",
+                            "station",
+                            "event_id",
+                        ]
+                    ).to_csv(predictions_output, index=False)
         # Check if the gmc_predictions.csv file already exists
         if predictions_output.exists():
             print(f"Skipping Batch {batch_num} as gmc_predictions.csv already exists")
@@ -220,6 +247,7 @@ def run_gmc_processing(
         Path,
         typer.Option(),
     ] = None,
+    allow_empty: Annotated[bool, typer.Option()] = False,
 ):
     """
     Run GMC processing for the NZGMDB pipeline.
@@ -252,6 +280,8 @@ def run_gmc_processing(
         Output directory for the GMC predictions.
     bypass_records_ffp : Path, optional
         The full file path to the bypass records file, which includes a custom fmin.
+    allow_empty : bool, optional
+        Whether to allow an empty run if records are not able to be processed (default is False).
     """
     # Obtain other paths
     gmc_dir = file_structure.get_gmc_dir(main_dir)
@@ -300,6 +330,7 @@ def run_gmc_processing(
         phase_arrival_table_ffp=phase_arrival_table_ffp,
         prob_series_ffp=prob_series_ffp,
         xml_dir=file_structure.get_stationxml_dir(main_dir),
+        allow_empty=allow_empty,
     )
 
     pending_jobs = []
