@@ -10,7 +10,6 @@ from typing import Annotated
 import numpy as np
 import pandas as pd
 import typer
-from sphinx.cmd.quickstart import allow_empty
 
 from nzgmdb.management import file_structure, shell_commands
 from qcore import cli
