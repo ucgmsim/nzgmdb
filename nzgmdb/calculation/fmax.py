@@ -203,8 +203,14 @@ def assess_snr_and_get_fmax(
         (1 / dt) * 0.5 * config.get_value("nyquist_freq_scaling_factor")
     )
 
-    snr_filename = next(snr_fas_output_dir.rglob(f"{record_id}_snr_fas.csv"), None)
-    if snr_filename is None:
+    snr_filename = (
+        snr_fas_output_dir
+        / filename.parent.parent.parent.stem
+        / filename.parent.parent.stem
+        / f"{record_id}_snr_fas.csv"
+    )
+
+    if not snr_filename.exists():
         # Use the Nyquist frequency as the fmax
         fmax_record = pd.DataFrame(
             [
