@@ -27,6 +27,18 @@ class PreFlatfileNames(StrEnum):
     PROPAGATION_TABLE = "propagation_path_table_all.csv"
     GROUND_MOTION_IM_CATALOGUE = "ground_motion_im_catalogue.csv"
     PROB_SERIES = "prob_series.h5"
+    IM_MERGE_000 = "im_merge_000.parquet"
+    IM_MERGE_000_FAS = "im_merge_000_fas.parquet"
+    IM_MERGE_090 = "im_merge_090.parquet"
+    IM_MERGE_090_FAS = "im_merge_090_fas.parquet"
+    IM_MERGE_VER = "im_merge_ver.parquet"
+    IM_MERGE_VER_FAS = "im_merge_ver_fas.parquet"
+    IM_MERGE_GEOM = "im_merge_geom.parquet"
+    IM_MERGE_GEOM_FAS = "im_merge_geom_fas.parquet"
+    IM_MERGE_ROTD0 = "im_merge_rotd0.parquet"
+    IM_MERGE_ROTD50 = "im_merge_rotd50.parquet"
+    IM_MERGE_ROTD100 = "im_merge_rotd100.parquet"
+    IM_MERGE_EAS_FAS = "im_merge_eas_fas.parquet"
 
 
 class FlatfileNames(StrEnum):

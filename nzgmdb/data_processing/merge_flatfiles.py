@@ -5,8 +5,6 @@ This module contains the functions to merge different flatfiles together to crea
 from pathlib import Path
 
 import pandas as pd
-from obspy.clients.fdsn import Client as FDSN_Client
-from obspy.core.utcdatetime import UTCDateTime
 
 from nzgmdb.management import config as cfg
 from nzgmdb.management import file_structure
@@ -15,142 +13,102 @@ from nzgmdb.management import file_structure
 def merge_im_data(
     im_dir: Path,
     output_dir: Path,
-    gmc_ffp: Path | None = None,
-    fmax_ffp: Path | None = None,
+    is_parquet: bool = False,
 ):
     """
-    Merge the IM data into a single flatfile. Also merges in the GMC and fmax data and
-    filters out records that are below the Ds595 lower bound
-    and then saves the skipped records to a separate file.
+    Merge the IM data into component / fas split files.
 
     Parameters
     ----------
     im_dir : Path
         The directory where the IM files are stored
     output_dir : Path
-        The directory to save the final IM flatfile and the skipped records
-    gmc_ffp : Path, optional
-        The file path to the GMC results
-    fmax_ffp : Path, optional
-        The file path to the fmax results
+        The directory to save the final IM flatfiles and the skipped records
+    is_parquet : bool, optional
+        Whether the IM files are in parquet format (default is False, meaning CSV format)
     """
-    # Load the GMC file
-    if gmc_ffp is None:
-        new_df = pd.DataFrame(
-            columns=[
-                "record",
-                "score_mean_X",
-                "fmin_mean_X",
-                "multi_mean_X",
-                "score_mean_Y",
-                "fmin_mean_Y",
-                "multi_mean_Y",
-                "score_mean_Z",
-                "fmin_mean_Z",
-                "multi_mean_Z",
-            ]
-        )
-    else:
-        gmc_results = pd.read_csv(gmc_ffp)
+    # Read IM files one-by-one
+    pattern = "*IM.parquet" if is_parquet else "*IM.csv"
+    im_dfs = []
 
-        # Define the columns to be grouped
-        columns = ["score_mean", "fmin_mean", "multi_mean"]
+    for im_file in sorted(im_dir.rglob(pattern)):
+        if is_parquet:
+            df = pd.read_parquet(im_file)
+        else:
+            df = pd.read_csv(im_file)
+        im_dfs.append(df)
 
-        # Group by 'record' and 'component', then aggregate the columns
-        new_df = gmc_results.groupby(["record", "component"])[columns].mean().unstack()
+    im_all = pd.concat(im_dfs, ignore_index=True)
 
-        # Join the column names to score_mean_X etc.
-        new_df.columns = ["_".join(col) for col in new_df.columns]
+    # Identify spectral columns
+    psa_columns = [c for c in im_all.columns if c.startswith("pSA")]
+    fas_columns = [c for c in im_all.columns if c.startswith("FAS")]
+    scalar_columns = ["PGA", "PGV", "PGD", "CAV", "CAV5", "AI", "Ds575", "Ds595"]
 
-        new_df = new_df.reset_index()
+    # Fix potential FAS value issues
+    for col in fas_columns:
+        im_all[col] = im_all[col].astype(str).str.replace("e/", "e-", regex=False)
 
-    fmax_results = (
-        pd.DataFrame(columns=["record_id", "fmax_000", "fmax_090", "fmax_ver"])
-        if fmax_ffp is None or not fmax_ffp.stat().st_size
-        else pd.read_csv(fmax_ffp)
-    )
+    # Record metadata
+    new_cols = im_all["record_id"].str.split("_", expand=True)
+    new_cols.columns = ["evid", "sta", "chan", "loc"]
 
-    # Find all the IM files
-    im_files = im_dir.rglob("*IM.csv")
+    im_all = pd.concat([im_all, new_cols], axis=1)
 
-    # Concat all the IM files
-    im_all = pd.concat([pd.read_csv(file) for file in im_files])
+    components = ["000", "090", "ver", "geom", "rotd0", "rotd50", "rotd100", "eas"]
+    fas_comps = ["000", "090", "ver", "geom", "eas"]
+    psa_comps = ["000", "090", "ver", "geom"]
+    rotd_comps = ["rotd0", "rotd50", "rotd100"]
 
-    # Merge the gm_all and new_df on record
-    gm_final = pd.merge(
-        im_all,
-        new_df,
-        left_on="record_id",
-        right_on="record",
-        how="left",
-    )
+    columns_remove_rotd = [
+        "CAV",
+        "CAV5",
+        "AI",
+        "Ds575",
+        "Ds595",
+    ] + fas_columns
+    columns_remove_fas = scalar_columns + psa_columns
+    filename_mapping = {
+        "000_psa": file_structure.PreFlatfileNames.IM_MERGE_000,
+        "000_fas": file_structure.PreFlatfileNames.IM_MERGE_000_FAS,
+        "090_psa": file_structure.PreFlatfileNames.IM_MERGE_090,
+        "090_fas": file_structure.PreFlatfileNames.IM_MERGE_090_FAS,
+        "ver_psa": file_structure.PreFlatfileNames.IM_MERGE_VER,
+        "ver_fas": file_structure.PreFlatfileNames.IM_MERGE_VER_FAS,
+        "geom_psa": file_structure.PreFlatfileNames.IM_MERGE_GEOM,
+        "geom_fas": file_structure.PreFlatfileNames.IM_MERGE_GEOM_FAS,
+        "rotd0_psa": file_structure.PreFlatfileNames.IM_MERGE_ROTD0,
+        "rotd50_psa": file_structure.PreFlatfileNames.IM_MERGE_ROTD50,
+        "rotd100_psa": file_structure.PreFlatfileNames.IM_MERGE_ROTD100,
+        "eas_fas": file_structure.PreFlatfileNames.IM_MERGE_EAS_FAS,
+    }
 
-    # Add the chan, loc and rename event_id and station across the entire series
-    gm_final[["evid", "sta", "chan", "loc"]] = gm_final["record_id"].str.split(
-        "_", expand=True
-    )
+    for comp in components:
+        comp_rows = im_all[im_all["component"] == comp]
 
-    # remove the record column
-    gm_final = gm_final.drop(columns=["record"])
+        if comp in fas_comps:
+            comp_rows_fas = comp_rows.drop(columns=columns_remove_fas)
+            comp_rows_fas.to_parquet(
+                output_dir / filename_mapping[f"{comp}_fas"],
+                index=False,
+                compression="gzip",
+            )
 
-    # Merge in fmax
-    gm_final = pd.merge(
-        gm_final,
-        fmax_results,
-        left_on="record_id",
-        right_on="record_id",
-        how="left",
-    )
-    # Rename fmax columns
-    gm_final = gm_final.rename(
-        columns={
-            "fmax_000": "fmax_mean_X",
-            "fmax_090": "fmax_mean_Y",
-            "fmax_ver": "fmax_mean_Z",
-        }
-    )
+        if comp in psa_comps:
+            comp_rows_psa = comp_rows.drop(columns=fas_columns)
+            comp_rows_psa.to_parquet(
+                output_dir / filename_mapping[f"{comp}_psa"],
+                index=False,
+                compression="gzip",
+            )
 
-    # Sort columns nicely
-    psa_columns = gm_final.columns[gm_final.columns.str.contains("pSA")].tolist()
-    fas_columns = gm_final.columns[gm_final.columns.str.contains("FAS")].tolist()
-    gm_final = gm_final[
-        [
-            "record_id",
-            "evid",
-            "sta",
-            "loc",
-            "chan",
-            "component",
-            "PGA",
-            "PGV",
-            "PGD",
-            "CAV",
-            "CAV5",
-            "AI",
-            "Ds575",
-            "Ds595",
-            "score_mean_X",
-            "fmin_mean_X",
-            "fmax_mean_X",
-            "multi_mean_X",
-            "score_mean_Y",
-            "fmin_mean_Y",
-            "fmax_mean_Y",
-            "multi_mean_Y",
-            "score_mean_Z",
-            "fmin_mean_Z",
-            "fmax_mean_Z",
-            "multi_mean_Z",
-        ]
-        + psa_columns
-        + fas_columns
-    ]
-
-    # Save the ground_motion_im_catalogue.csv
-    gm_final.to_csv(
-        output_dir / file_structure.PreFlatfileNames.GROUND_MOTION_IM_CATALOGUE,
-        index=False,
-    )
+        if comp in rotd_comps:
+            comp_rows = comp_rows.drop(columns=columns_remove_rotd)
+            comp_rows.to_parquet(
+                output_dir / filename_mapping[f"{comp}_psa"],
+                index=False,
+                compression="gzip",
+            )
 
 
 def add_ground_level(
@@ -342,6 +300,40 @@ def merge_flatfiles(main_dir: Path, bypass_records_ffp: Path = None):
     flatfile_dir = file_structure.get_flatfile_dir(main_dir)
 
     # Load the files
+    # if gmc_ffp is None:
+    #     new_df = pd.DataFrame(
+    #         columns=[
+    #             "record",
+    #             "score_mean_X",
+    #             "fmin_mean_X",
+    #             "multi_mean_X",
+    #             "score_mean_Y",
+    #             "fmin_mean_Y",
+    #             "multi_mean_Y",
+    #             "score_mean_Z",
+    #             "fmin_mean_Z",
+    #             "multi_mean_Z",
+    #         ]
+    #     )
+    # else:
+    #     gmc_results = pd.read_csv(gmc_ffp)
+    #
+    #     # Define the columns to be grouped
+    #     columns = ["score_mean", "fmin_mean", "multi_mean"]
+    #
+    #     # Group by 'record' and 'component', then aggregate the columns
+    #     new_df = gmc_results.groupby(["record", "component"])[columns].mean().unstack()
+    #
+    #     # Join the column names to score_mean_X etc.
+    #     new_df.columns = ["_".join(col) for col in new_df.columns]
+    #
+    #     new_df = new_df.reset_index()
+    #
+    # fmax_results = (
+    #     pd.DataFrame(columns=["record_id", "fmax_000", "fmax_090", "fmax_ver"])
+    #     if fmax_ffp is None or not fmax_ffp.stat().st_size
+    #     else pd.read_csv(fmax_ffp)
+    # )
     event_df = pd.read_csv(
         flatfile_dir
         / file_structure.PreFlatfileNames.EARTHQUAKE_SOURCE_TABLE_AFTERSHOCKS,

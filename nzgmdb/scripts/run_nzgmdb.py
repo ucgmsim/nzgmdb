@@ -702,20 +702,6 @@ def merge_im_results(
         Path,
         typer.Argument(file_okay=False),
     ],
-    gmc_ffp: Annotated[
-        Path,
-        typer.Option(
-            readable=True,
-            exists=True,
-        ),
-    ] = None,
-    fmax_ffp: Annotated[
-        Path,
-        typer.Option(
-            readable=True,
-            exists=True,
-        ),
-    ] = None,
 ):
     """
     Merge IM results together into one flatfile and perform a filter for Ds595.
@@ -729,12 +715,8 @@ def merge_im_results(
         The directory containing the IM results to merge.
     output_dir : Path
         The directory to save the merged IM file.
-    gmc_ffp : Path
-        The full file path to the GMC predictions file.
-    fmax_ffp : Path
-        The full file path to the Fmax file.
     """
-    merge_flatfiles.merge_im_data(im_dir, output_dir, gmc_ffp, fmax_ffp)
+    merge_flatfiles.merge_im_data(im_dir, output_dir)
 
 
 @cli.from_docstring(app)
@@ -1230,7 +1212,7 @@ def run_full_nzgmdb(
         ).exists()
     ):
         print("Merging IM results")
-        merge_im_results(im_dir, flatfile_dir, gmc_ffp, fmax_ffp)
+        merge_im_results(im_dir, flatfile_dir)
 
     # Calculate distances
     if not (
