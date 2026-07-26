@@ -1198,18 +1198,24 @@ def run_full_nzgmdb(
     # Run IM calculation
     im_dir = file_structure.get_im_dir(main_dir)
     im_dir.mkdir(parents=True, exist_ok=True)
-    print("Calculating IMs")
-    im_n_procs = (
-        n_procs if machine is None else config.get_n_procs(machine, cfg.WorkflowStep.IM)
-    )
-    run_im_calculation(main_dir, ko_matrix_path, im_dir, im_n_procs, checkpoint)
+    if not (
+        checkpoint
+        and (
+            flatfile_dir / file_structure.SkippedRecordFilenames.IM_CALC_SKIPPED_RECORDS
+        ).exists()
+    ):
+        im_n_procs = (
+            n_procs
+            if machine is None
+            else config.get_n_procs(machine, cfg.WorkflowStep.IM)
+        )
+        print("Calculating IMs")
+        run_im_calculation(main_dir, ko_matrix_path, im_dir, im_n_procs, checkpoint)
 
     # Merge IM results
     if not (
         checkpoint
-        and (
-            flatfile_dir / file_structure.PreFlatfileNames.GROUND_MOTION_IM_CATALOGUE
-        ).exists()
+        and (flatfile_dir / file_structure.PreFlatfileNames.IM_MERGE_EAS_FAS).exists()
     ):
         print("Merging IM results")
         merge_im_results(im_dir, flatfile_dir)
