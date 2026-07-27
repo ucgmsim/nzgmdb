@@ -8,7 +8,7 @@ import itertools
 import multiprocessing as mp
 import time
 import warnings
-from datetime import datetime
+from datetime import timedelta
 from pathlib import Path
 from typing import NamedTuple
 
@@ -45,8 +45,8 @@ class StationExtractionResult(NamedTuple):
 
 
 def get_inital_stream(
-    start_time: datetime,
-    end_time: datetime,
+    start_time: UTCDateTime,
+    end_time: UTCDateTime,
     channel_codes: str,
     location: str,
     client: FDSN_Client,
@@ -58,9 +58,9 @@ def get_inital_stream(
 
     Parameters
     ----------
-    start_time : datetime
+    start_time : UTCDateTime
         The start time of the waveform data to retrieve.
-    end_time : datetime
+    end_time : UTCDateTime
         The end time of the waveform data to retrieve.
     channel_codes : str
         The channel codes to retrieve, formatted as a comma-separated string.
@@ -79,6 +79,11 @@ def get_inital_stream(
     Stream
         An ObsPy Stream object containing the waveform data for the specified parameters.
     """
+    # Ensure the end_time is at least 30 seconds in the past before running extraction
+    time_threshold = UTCDateTime.utcnow() - timedelta(seconds=30)
+    if end_time > time_threshold:
+        time.sleep(end_time - time_threshold)
+
     # Get the waveforms with multiple retries when IncompleteReadError occurs
     max_retries = 3
     for attempt in range(max_retries):
