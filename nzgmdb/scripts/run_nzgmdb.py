@@ -18,8 +18,6 @@ from nzgmdb.phase_arrival import gen_phase_arrival_table
 from nzgmdb.scripts import run_gmc, upload_to_dropbox
 from qcore import cli
 
-from p_wave.ipa_model import n_procs
-
 app = typer.Typer(pretty_exceptions_enable=False)
 
 
@@ -1207,6 +1205,7 @@ def run_full_nzgmdb(
     # Run IM calculation
     im_dir = file_structure.get_im_dir(main_dir)
     im_dir.mkdir(parents=True, exist_ok=True)
+    print("Checking Im Calculations")
     if not (
         checkpoint
         and (
@@ -1222,6 +1221,7 @@ def run_full_nzgmdb(
         run_im_calculation(main_dir, ko_matrix_path, im_dir, im_n_procs, checkpoint)
 
     # Merge IM results
+    print("Checking Im Merge")
     if not (
         checkpoint
         and (flatfile_dir / file_structure.PreFlatfileNames.IM_MERGE_EAS_FAS).exists()
