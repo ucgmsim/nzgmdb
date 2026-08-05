@@ -18,6 +18,8 @@ from nzgmdb.phase_arrival import gen_phase_arrival_table
 from nzgmdb.scripts import run_gmc, upload_to_dropbox
 from qcore import cli
 
+from p_wave.ipa_model import n_procs
+
 app = typer.Typer(pretty_exceptions_enable=False)
 
 
@@ -702,12 +704,15 @@ def merge_im_results(
         Path,
         typer.Argument(file_okay=False),
     ],
+    records_ffp: Annotated[
+        Path,
+        typer.Argument(dir_okay=False),
+    ],
+    n_procs: Annotated[int, typer.Option()] = 1,
+    batch_size: Annotated[int, typer.Option()] = 50000,
 ):
     """
-    Merge IM results together into one flatfile and perform a filter for Ds595.
-
-    This function consolidates individual IM result files into a single comprehensive
-    dataset, ensuring consistency and filtering for the Ds595 parameter.
+    Merge IM results together into individual component files.
 
     Parameters
     ----------
@@ -715,8 +720,12 @@ def merge_im_results(
         The directory containing the IM results to merge.
     output_dir : Path
         The directory to save the merged IM file.
+    records_ffp : Path
+        The full file path to the records file, which contains all the record ids.
     """
-    merge_flatfiles.merge_im_data(im_dir, output_dir)
+    merge_flatfiles.merge_im_data(
+        im_dir, output_dir, records_ffp, n_procs=n_procs, batch_size=batch_size
+    )
 
 
 @cli.from_docstring(app)
@@ -1217,8 +1226,14 @@ def run_full_nzgmdb(
         checkpoint
         and (flatfile_dir / file_structure.PreFlatfileNames.IM_MERGE_EAS_FAS).exists()
     ):
+        records_ffp = flatfile_dir / "records.csv"
+        im_merge_n_procs = (
+            n_procs
+            if machine is None
+            else config.get_n_procs(machine, cfg.WorkflowStep.IM_MERGE)
+        )
         print("Merging IM results")
-        merge_im_results(im_dir, flatfile_dir)
+        merge_im_results(im_dir, flatfile_dir, records_ffp, im_merge_n_procs)
 
     # Calculate distances
     if not (

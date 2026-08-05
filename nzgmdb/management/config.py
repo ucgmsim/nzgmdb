@@ -34,6 +34,7 @@ class WorkflowStep(StrEnum):
     GMC = "gmc"
     PROCESS = "process"
     IM = "im"
+    IM_MERGE = "im_merge"
     DISTANCES = "distances"
     UPLOAD = "upload"
     DEFAULT = "default"

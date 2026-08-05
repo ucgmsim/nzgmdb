@@ -1259,10 +1259,9 @@ def calc_distances(main_dir: Path, n_procs: int = 1):
             srf_files[Path(file).stem] = Path(NZGMDB_DATA.abspath) / file
 
     # Get the IM data to know what stations to calculate the distances for each event
-    im_df = pd.read_csv(
-        flatfile_dir / file_structure.PreFlatfileNames.GROUND_MOTION_IM_CATALOGUE,
-        dtype={"evid": str},
-        usecols=["evid", "sta"],
+    im_df = pd.read_parquet(
+        flatfile_dir / "im_merge_rotd50.parquet",
+        columns=["evid", "sta"],
     )
 
     # Get the site information

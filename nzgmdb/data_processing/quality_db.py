@@ -959,6 +959,7 @@ def apply_all_filters(
 def create_quality_db(
     main_dir: Path,
     bypass_records_ffp: Path = None,
+    output_csv: bool = False,
 ):
     """
     Create the quality database by running the following checks:
@@ -982,6 +983,8 @@ def create_quality_db(
         The main directory of the NZGMDB results (Highest level directory)
     bypass_records_ffp : Path, optional
         The file path to the records that will bypass the quality checks
+    output_csv : bool, optional
+        Whether to output the quality database as a CSV file, by default False which will use parquet format.
     """
     # Make the quality db directory
     output_dir = file_structure.get_quality_db_dir(main_dir)
@@ -989,10 +992,17 @@ def create_quality_db(
 
     # Load the ground motion im catalogue
     flatfile_dir = file_structure.get_flatfile_dir(main_dir)
-    gm_df = pd.read_csv(
-        flatfile_dir / file_structure.FlatfileNames.GROUND_MOTION_IM_ROTD50_FLAT,
-        dtype={"evid": str},
-    )
+    if output_csv:
+        gm_df = pd.read_csv(
+            (
+                flatfile_dir / file_structure.FlatfileNames.GROUND_MOTION_IM_ROTD50_FLAT
+            ).with_suffix(".csv"),
+            dtype={"evid": str},
+        )
+    else:
+        gm_df = pd.read_parquet(
+            flatfile_dir / file_structure.FlatfileNames.GROUND_MOTION_IM_ROTD50_FLAT,
+        )
 
     # Get the clipped records
     clipped_records_ffp = (
@@ -1015,11 +1025,13 @@ def create_quality_db(
     filter_flatfiles_on_catalouge(flatfile_dir, output_dir, gm_df)
 
     # Save the gm_df and skipped_records
-    gm_df.to_csv(
-        output_dir / file_structure.FlatfileNames.GROUND_MOTION_IM_ROTD50_FLAT,
-        index=False,
-    )
-    skipped_records.to_csv(
-        flatfile_dir / file_structure.SkippedRecordFilenames.QUALITY_SKIPPED_RECORDS,
-        index=False,
-    )
+    if output_csv:
+        gm_df.to_csv(
+            output_dir / file_structure.FlatfileNames.GROUND_MOTION_IM_ROTD50_FLAT,
+            index=False,
+        )
+        skipped_records.to_csv(
+            flatfile_dir
+            / file_structure.SkippedRecordFilenames.QUALITY_SKIPPED_RECORDS,
+            index=False,
+        )

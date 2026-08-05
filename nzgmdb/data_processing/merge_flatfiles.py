@@ -2,73 +2,30 @@
 This module contains the functions to merge different flatfiles together to create the final flatfiles
 """
 
+import multiprocessing as mp
 from pathlib import Path
 
 import numpy as np
 import pandas as pd
+import pyarrow as pa
+import pyarrow.parquet as pq
 
 from nzgmdb.management import config as cfg
 from nzgmdb.management import file_structure
 
 
-def merge_im_data(
+def process_im_batch(
+    batch_files: list[str],
+    batch_id: int,
     im_dir: Path,
-    output_dir: Path,
-    is_parquet: bool = False,
+    tmp_dir: Path,
+    is_parquet: bool,
+    fas_columns: list[str],
 ):
-    """
-    Merge the IM data into component / fas split files.
-
-    Parameters
-    ----------
-    im_dir : Path
-        The directory where the IM files are stored
-    output_dir : Path
-        The directory to save the final IM flatfiles and the skipped records
-    is_parquet : bool, optional
-        Whether the IM files are in parquet format (default is False, meaning CSV format)
-    """
-    # Read IM files one-by-one
-    pattern = "*IM.parquet" if is_parquet else "*IM.csv"
-    im_dfs = []
-
-    for im_file in sorted(im_dir.rglob(pattern)):
-        if is_parquet:
-            df = pd.read_parquet(im_file)
-        else:
-            df = pd.read_csv(im_file)
-        im_dfs.append(df)
-
-    im_all = pd.concat(im_dfs, ignore_index=True)
-
-    # Identify spectral columns
-    psa_columns = [c for c in im_all.columns if c.startswith("pSA")]
-    fas_columns = [c for c in im_all.columns if c.startswith("FAS")]
-    scalar_columns = ["PGA", "PGV", "PGD", "CAV", "CAV5", "AI", "Ds575", "Ds595"]
-
-    # Fix potential FAS value issues
-    for col in fas_columns:
-        im_all[col] = im_all[col].astype(str).str.replace("e/", "e-", regex=False)
-
-    # Record metadata
-    new_cols = im_all["record_id"].str.split("_", expand=True)
-    new_cols.columns = ["evid", "sta", "chan", "loc"]
-
-    im_all = pd.concat([im_all, new_cols], axis=1)
-
-    components = ["000", "090", "ver", "geom", "rotd0", "rotd50", "rotd100", "eas"]
     fas_comps = ["000", "090", "ver", "geom", "eas"]
     psa_comps = ["000", "090", "ver", "geom"]
     rotd_comps = ["rotd0", "rotd50", "rotd100"]
 
-    columns_remove_rotd = [
-        "CAV",
-        "CAV5",
-        "AI",
-        "Ds575",
-        "Ds595",
-    ] + fas_columns
-    columns_remove_fas = scalar_columns + psa_columns
     filename_mapping = {
         "000_psa": file_structure.PreFlatfileNames.IM_MERGE_000,
         "000_fas": file_structure.PreFlatfileNames.IM_MERGE_000_FAS,
@@ -83,33 +40,262 @@ def merge_im_data(
         "rotd100_psa": file_structure.PreFlatfileNames.IM_MERGE_ROTD100,
         "eas_fas": file_structure.PreFlatfileNames.IM_MERGE_EAS_FAS,
     }
+    scalar_columns = [
+        "PGA",
+        "PGV",
+        "PGD",
+        "CAV",
+        "CAV5",
+        "AI",
+        "Ds575",
+        "Ds595",
+    ]
 
-    for comp in components:
-        comp_rows = im_all[im_all["component"] == comp]
+    batch_dir = tmp_dir / f"batch_{batch_id}"
+    batch_dir.mkdir(parents=True, exist_ok=True)
 
-        if comp in fas_comps:
-            comp_rows_fas = comp_rows.drop(columns=columns_remove_fas)
-            comp_rows_fas.to_parquet(
-                output_dir / filename_mapping[f"{comp}_fas"],
-                index=False,
-                compression="gzip",
+    writers = {}
+
+    def write_chunk(df: pd.DataFrame, output_file: Path):
+        if df.empty:
+            return
+
+        table = pa.Table.from_pandas(df, preserve_index=False)
+
+        if output_file not in writers:
+            writers[output_file] = pq.ParquetWriter(
+                output_file,
+                table.schema,
+                compression="zstd",
             )
 
-        if comp in psa_comps:
-            comp_rows_psa = comp_rows.drop(columns=fas_columns)
-            comp_rows_psa.to_parquet(
-                output_dir / filename_mapping[f"{comp}_psa"],
-                index=False,
-                compression="gzip",
+        writers[output_file].write_table(table)
+
+    try:
+        for rel_path in batch_files:
+
+            im_file = im_dir / rel_path
+
+            if not im_file.exists():
+                continue
+
+            if is_parquet:
+                df = pd.read_parquet(im_file)
+            else:
+                df = pd.read_csv(im_file)
+
+            # Split the record id into evid, sta, chan, loc
+            record_parts = df["record_id"].str.split(
+                "_",
+                n=3,
+                expand=True,
+            )
+            record_parts.columns = [
+                "evid",
+                "sta",
+                "chan",
+                "loc",
+            ]
+            df = pd.concat(
+                [df, record_parts],
+                axis=1,
             )
 
-        if comp in rotd_comps:
-            comp_rows = comp_rows.drop(columns=columns_remove_rotd)
-            comp_rows.to_parquet(
-                output_dir / filename_mapping[f"{comp}_psa"],
-                index=False,
-                compression="gzip",
+            psa_columns = [c for c in df.columns if c.startswith("pSA")]
+
+            existing_fas_cols = [c for c in df.columns if c.startswith("FAS_")]
+
+            fas_df = {}
+
+            for col in existing_fas_cols:
+                freq = float(col.removeprefix("FAS_"))
+                new_col = f"FAS_{freq:.6g}"
+
+                s = df[col]
+
+                if s.dtype == object:
+                    s = pd.to_numeric(
+                        s.astype(str).str.replace("e/", "e-", regex=False),
+                        errors="coerce",
+                    )
+
+                fas_df[new_col] = s
+
+            if existing_fas_cols:
+                df = df.drop(columns=existing_fas_cols)
+
+            if fas_df:
+                df = pd.concat(
+                    [
+                        df,
+                        pd.DataFrame(
+                            fas_df,
+                            index=df.index,
+                        ),
+                    ],
+                    axis=1,
+                )
+
+            non_fas_cols = [c for c in df.columns if not c.startswith("FAS_")]
+
+            df = df.reindex(
+                columns=[
+                    *non_fas_cols,
+                    *fas_columns,
+                ]
             )
+
+            columns_remove_rotd = [
+                "CAV",
+                "CAV5",
+                "AI",
+                "Ds575",
+                "Ds595",
+            ] + fas_columns
+
+            columns_remove_fas = scalar_columns + psa_columns
+
+            for comp, comp_rows in df.groupby("component"):
+
+                if comp in fas_comps:
+
+                    comp_rows_fas = comp_rows.drop(
+                        columns=columns_remove_fas,
+                        errors="ignore",
+                    )
+
+                    write_chunk(
+                        comp_rows_fas,
+                        batch_dir / filename_mapping[f"{comp}_fas"],
+                    )
+
+                if comp in psa_comps:
+
+                    comp_rows_psa = comp_rows.drop(
+                        columns=fas_columns,
+                        errors="ignore",
+                    )
+
+                    write_chunk(
+                        comp_rows_psa,
+                        batch_dir / filename_mapping[f"{comp}_psa"],
+                    )
+
+                if comp in rotd_comps:
+
+                    comp_rows_rotd = comp_rows.drop(
+                        columns=columns_remove_rotd,
+                        errors="ignore",
+                    )
+
+                    write_chunk(
+                        comp_rows_rotd,
+                        batch_dir / filename_mapping[f"{comp}_psa"],
+                    )
+
+    finally:
+        for writer in writers.values():
+            writer.close()
+
+
+def merge_component_files(
+    component_name: str,
+    tmp_dir: Path,
+    output_file: Path,
+):
+    files = sorted(tmp_dir.glob(f"batch_*/*{component_name}.parquet"))
+
+    writer = None
+
+    try:
+        for ffp in files:
+
+            table = pq.read_table(ffp)
+
+            if writer is None:
+                writer = pq.ParquetWriter(
+                    output_file,
+                    table.schema,
+                    compression="zstd",
+                )
+
+            writer.write_table(table)
+
+    finally:
+        if writer:
+            writer.close()
+
+
+def merge_im_data(
+    im_dir: Path,
+    output_dir: Path,
+    records_ffp: Path,
+    n_procs: int = 1,
+    batch_size: int = 50000,
+    is_parquet: bool = False,
+):
+    """
+    Merge the IM data into component / fas split files.
+    """
+
+    records_df = pd.read_csv(records_ffp)
+
+    suffix = "parquet" if is_parquet else "csv"
+
+    records_df["evid"] = records_df["record_id"].str.partition("_")[0]
+
+    records_df["im_file"] = (
+        records_df["evid"] + "/" + records_df["record_id"] + f"_IM.{suffix}"
+    )
+
+    batches = [
+        records_df["im_file"].iloc[i : i + batch_size].tolist()
+        for i in range(0, len(records_df), batch_size)
+    ]
+
+    config = cfg.Config()
+    fas_frequencies = np.logspace(
+        np.log10(config.get_value("common_frequency_start")),
+        np.log10(config.get_value("common_frequency_end")),
+        num=config.get_value("common_frequency_num"),
+    )
+    fas_columns = [f"FAS_{freq:.6g}" for freq in fas_frequencies]
+
+    with mp.Pool(n_procs) as pool:
+        pool.starmap(
+            process_im_batch,
+            [
+                (
+                    batch,
+                    batch_id,
+                    im_dir,
+                    output_dir / "im_merge_batch_dir",
+                    is_parquet,
+                    fas_columns,
+                )
+                for batch_id, batch in enumerate(batches)
+            ],
+        )
+
+    for component in [
+        "000",
+        "000_fas",
+        "090",
+        "090_fas",
+        "ver",
+        "ver_fas",
+        "geom",
+        "geom_fas",
+        "rotd0",
+        "rotd50",
+        "rotd100",
+        "eas_fas",
+    ]:
+        merge_component_files(
+            component,
+            output_dir / "im_merge_batch_dir",
+            output_dir / f"im_merge_{component}.parquet",
+        )
 
 
 def add_ground_level(
@@ -300,6 +486,12 @@ def merge_flatfiles(main_dir: Path, bypass_records_ffp: Path = None):
     # Get the flatfile directory
     flatfile_dir = file_structure.get_flatfile_dir(main_dir)
     flatfile_dir = main_dir / "tmp"
+
+    # Split record_id
+    # new_cols = df["record_id"].str.split("_", expand=True)
+    # new_cols.columns = ["evid", "sta", "chan", "loc"]
+    #
+    # df = pd.concat([df, new_cols], axis=1)
 
     # Load the files
     gmc_ffp = flatfile_dir / file_structure.FlatfileNames.GMC_PREDICTIONS
