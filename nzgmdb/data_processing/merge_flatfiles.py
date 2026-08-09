@@ -985,7 +985,7 @@ def merge_flatfiles(main_dir: Path, bypass_records_ffp: Path = None):
 
     for im_merge, final_output in filename_mapping.items():
         # Read parquet
-        df = pd.read_parquet(flatfile_dir / "im_merge_batch_dir" / im_merge)
+        df = pd.read_parquet(flatfile_dir / "im_merge_batch_dir" / Path(im_merge).stem)
 
         # Drop component column
         df = df.drop(columns=["component"])
