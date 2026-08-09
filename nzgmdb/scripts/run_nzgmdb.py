@@ -1222,18 +1222,18 @@ def run_full_nzgmdb(
 
     # Merge IM results
     print("Checking Im Merge")
-    if not (
-        checkpoint
-        and (flatfile_dir / file_structure.PreFlatfileNames.IM_MERGE_EAS_FAS).exists()
-    ):
-        records_ffp = flatfile_dir / "records.csv"
-        im_merge_n_procs = (
-            n_procs
-            if machine is None
-            else config.get_n_procs(machine, cfg.WorkflowStep.IM_MERGE)
-        )
-        print("Merging IM results")
-        merge_im_results(im_dir, flatfile_dir, records_ffp, im_merge_n_procs)
+    # if not (
+    #     checkpoint
+    #     and (flatfile_dir / file_structure.PreFlatfileNames.IM_MERGE_EAS_FAS).exists()
+    # ):
+    #     records_ffp = flatfile_dir / "records.csv"
+    #     im_merge_n_procs = (
+    #         n_procs
+    #         if machine is None
+    #         else config.get_n_procs(machine, cfg.WorkflowStep.IM_MERGE)
+    #     )
+    #     print("Merging IM results")
+    #     merge_im_results(im_dir, flatfile_dir, records_ffp, im_merge_n_procs)
 
     # Calculate distances
     if not (

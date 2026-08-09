@@ -1260,9 +1260,11 @@ def calc_distances(main_dir: Path, n_procs: int = 1):
 
     # Get the IM data to know what stations to calculate the distances for each event
     im_df = pd.read_parquet(
-        flatfile_dir / "im_merge_rotd50.parquet",
+        flatfile_dir / "im_merge_batch_dir" / "im_merge_rotd50.parquet",
         columns=["evid", "sta"],
     )
+
+    print(f"Length of im_df: {len(im_df)}")
 
     # Get the site information
     site_df = pd.read_csv(

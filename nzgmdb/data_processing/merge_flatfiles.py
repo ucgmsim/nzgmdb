@@ -485,7 +485,7 @@ def merge_flatfiles(main_dir: Path, bypass_records_ffp: Path = None):
     """
     # Get the flatfile directory
     flatfile_dir = file_structure.get_flatfile_dir(main_dir)
-    flatfile_dir = main_dir / "tmp"
+    # flatfile_dir = main_dir / "tmp"
 
     # Split record_id
     # new_cols = df["record_id"].str.split("_", expand=True)
@@ -566,7 +566,9 @@ def merge_flatfiles(main_dir: Path, bypass_records_ffp: Path = None):
         dtype={"evid": str},
     )
     im_df = pd.read_parquet(
-        flatfile_dir / file_structure.PreFlatfileNames.IM_MERGE_ROTD50,
+        flatfile_dir
+        / "im_merge_batch_dir"
+        / file_structure.PreFlatfileNames.IM_MERGE_ROTD50,
         columns=["record_id", "evid", "sta", "chan", "loc"],
     )
     site_basin_df = pd.read_csv(
@@ -983,7 +985,7 @@ def merge_flatfiles(main_dir: Path, bypass_records_ffp: Path = None):
 
     for im_merge, final_output in filename_mapping.items():
         # Read parquet
-        df = pd.read_parquet(flatfile_dir / im_merge)
+        df = pd.read_parquet(flatfile_dir / "im_merge_batch_dir" / im_merge)
 
         # Drop component column
         df = df.drop(columns=["component"])

@@ -41,12 +41,16 @@ def filter_flatfiles_on_catalouge(
         file_structure.FlatfileNames.GMC_PREDICTIONS,
         file_structure.FlatfileNames.SNR_METADATA,
         file_structure.FlatfileNames.GROUND_MOTION_IM_000_FLAT,
+        file_structure.FlatfileNames.GROUND_MOTION_IM_000_FAS_FLAT,
         file_structure.FlatfileNames.GROUND_MOTION_IM_090_FLAT,
+        file_structure.FlatfileNames.GROUND_MOTION_IM_090_FAS_FLAT,
         file_structure.FlatfileNames.GROUND_MOTION_IM_VER_FLAT,
+        file_structure.FlatfileNames.GROUND_MOTION_IM_VER_FAS_FLAT,
         file_structure.FlatfileNames.GROUND_MOTION_IM_ROTD0_FLAT,
         file_structure.FlatfileNames.GROUND_MOTION_IM_ROTD100_FLAT,
         file_structure.FlatfileNames.GROUND_MOTION_IM_GEOM_FLAT,
-        file_structure.FlatfileNames.GROUND_MOTION_IM_EAS_FLAT,
+        file_structure.FlatfileNames.GROUND_MOTION_IM_GEOM_FAS_FLAT,
+        file_structure.FlatfileNames.GROUND_MOTION_IM_EAS_FAS_FLAT,
     ]
 
     for file in file_to_filter:
