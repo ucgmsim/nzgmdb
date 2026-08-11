@@ -707,7 +707,7 @@ def merge_im_results(
         typer.Argument(dir_okay=False),
     ],
     n_procs: Annotated[int, typer.Option()] = 1,
-    batch_size: Annotated[int, typer.Option()] = 50000,
+    batch_size: Annotated[int, typer.Option()] = 5000,
 ):
     """
     Merge IM results together into individual component files.
@@ -1221,19 +1221,19 @@ def run_full_nzgmdb(
         run_im_calculation(main_dir, ko_matrix_path, im_dir, im_n_procs, checkpoint)
 
     # Merge IM results
-    print("Checking Im Merge")
+    # print("Checking Im Merge")
     # if not (
     #     checkpoint
     #     and (flatfile_dir / file_structure.PreFlatfileNames.IM_MERGE_EAS_FAS).exists()
     # ):
-    #     records_ffp = flatfile_dir / "records.csv"
-    #     im_merge_n_procs = (
-    #         n_procs
-    #         if machine is None
-    #         else config.get_n_procs(machine, cfg.WorkflowStep.IM_MERGE)
-    #     )
-    #     print("Merging IM results")
-    #     merge_im_results(im_dir, flatfile_dir, records_ffp, im_merge_n_procs)
+    records_ffp = flatfile_dir / "records.csv"
+    im_merge_n_procs = (
+        n_procs
+        if machine is None
+        else config.get_n_procs(machine, cfg.WorkflowStep.IM_MERGE)
+    )
+    print("Merging IM results")
+    merge_im_results(im_dir, flatfile_dir, records_ffp, im_merge_n_procs)
 
     # Calculate distances
     if not (
