@@ -429,7 +429,6 @@ def merge_flatfiles(main_dir: Path, bypass_records_ffp: Path = None):
     """
     # Get the flatfile directory
     flatfile_dir = file_structure.get_flatfile_dir(main_dir)
-    flatfile_dir = main_dir / "tmp"
 
     # Load the files
     gmc_ffp = flatfile_dir / file_structure.FlatfileNames.GMC_PREDICTIONS
