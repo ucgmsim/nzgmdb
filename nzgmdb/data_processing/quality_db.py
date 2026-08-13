@@ -102,7 +102,7 @@ def filter_flatfiles_on_catalouge(
             df_filtered = df[df["record"].isin(rotd50_flat["record_id"])]
         else:
             df_filtered = df[df["record_id"].isin(rotd50_flat["record_id"])]
-        df_filtered.to_csv(final_output / file, index=False)
+        df_filtered.to_csv((final_output / file).with_suffix(".csv"), index=False)
 
 
 def filter_mag(catalogue: pd.DataFrame, mag_min: float):
@@ -1033,13 +1033,12 @@ def create_quality_db(
     filter_flatfiles_on_catalouge(flatfile_dir, output_dir, gm_df)
 
     # Save the gm_df and skipped_records
-    if output_csv:
-        gm_df.to_csv(
-            output_dir / file_structure.FlatfileNames.GROUND_MOTION_IM_ROTD50_FLAT,
-            index=False,
-        )
-        skipped_records.to_csv(
-            flatfile_dir
-            / file_structure.SkippedRecordFilenames.QUALITY_SKIPPED_RECORDS,
-            index=False,
-        )
+    # if output_csv:
+    gm_df.to_csv(
+        (output_dir / file_structure.FlatfileNames.GROUND_MOTION_IM_ROTD50_FLAT).with_suffix(".csv"),
+        index=False,
+    )
+    skipped_records.to_csv(
+        flatfile_dir / file_structure.SkippedRecordFilenames.QUALITY_SKIPPED_RECORDS,
+        index=False,
+    )
