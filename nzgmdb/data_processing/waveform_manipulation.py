@@ -3,9 +3,10 @@ This module contains functions for the initial pre-processing of waveform data a
 """
 
 import numpy as np
-from obspy import Inventory
+from obspy import Inventory, UTCDateTime
 from obspy.clients.fdsn import Client as FDSN_Client
 from obspy.clients.fdsn.header import FDSNNoDataException
+from obspy.core.inventory.response import Response
 from obspy.core.stream import Stream
 from scipy import integrate, signal
 
@@ -13,12 +14,57 @@ from nzgmdb.management import config as cfg
 from nzgmdb.management import custom_errors
 
 
+def check_sensitivity(
+    resp: Response,
+    threshold: float = 10.0,
+) -> tuple[bool, float]:
+    """
+    Returns True if full response removal is safe,
+    False if sensitivity mismatch suggests using remove_sensitivity().
+
+    Parameters
+    ----------
+    resp: Response
+        The response object to check the sensitivity of
+    threshold : float, optional
+        The percentage difference threshold to determine if the sensitivity mismatch is acceptable, by default 10.0
+
+    Returns
+    -------
+    bool
+        True if the percentage difference is less than or equal to the threshold, False otherwise
+    float
+        The percentage difference between the total sensitivity and the stage sensitivity
+
+    Reference
+    ----------
+        USGS gmprocess instrument-response helper:
+        https://ghsc.code-pages.usgs.gov/esi/groundmotion-processing/_modules/gmprocess/waveform_processing/instrument_response.html
+    """
+    stages = resp.response_stages
+
+    # Total sensitivity
+    total = resp.instrument_sensitivity.value
+
+    # Stage sensitivity (product of stage gains)
+    stage = 1.0
+    for s in stages:
+        stage *= s.stage_gain
+
+    # Percent difference
+    pct_diff = 200.0 * abs(total - stage) / (total + stage)
+
+    return pct_diff <= threshold, pct_diff
+
+
 def initial_preprocessing(
     mseed: Stream,
     apply_taper: bool = True,
     apply_zero_padding: bool = True,
     inventory: Inventory = None,
-):
+    provider: str = "GEONET",
+    network: str = "NZ",
+) -> Stream:
     """
     Basic pre-processing of the waveform data
     This performs the following:
@@ -39,6 +85,10 @@ def initial_preprocessing(
         Whether to apply zero padding, by default True
     inventory : Inventory, optional
         The inventory object to use for sensitivity removal, by default None (Will try to extract from FDSN if not provided)
+    provider : str, optional
+        The FDSN provider to use if inventory is not provided, by default "GEONET"
+    network : str, optional
+        The network code to use if inventory is not provided, by default "NZ"
 
     Returns
     -------
@@ -54,9 +104,15 @@ def initial_preprocessing(
     RotationError
         If the rotation fails
     """
-    # Small Processing
-    mseed.detrend("demean")
-    mseed.detrend("linear")
+    try:
+        # Small Processing
+        mseed.detrend("demean")
+        mseed.detrend("linear")
+    except NotImplementedError:
+        # This is an issue with extracted waveforms where the trace has masked values.
+        raise custom_errors.DetrendError(
+            f"Failed to demean and detrend the data for station {mseed[0].stats.station} with location {mseed[0].stats.location}"
+        )
 
     # Load config
     config = cfg.Config()
@@ -81,24 +137,61 @@ def initial_preprocessing(
 
     inv = inventory
     if inv is None:
-        try:
-            client_NZ = FDSN_Client("GEONET")
-            inv = client_NZ.get_stations(
-                level="response", network="NZ", station=station, location=location, channel=f"{channel}?"
-            )
-        except FDSNNoDataException:
-            raise custom_errors.InventoryNotFoundError(
-                f"No inventory information found for station {station} with location {location}"
-            )
+        # try:
+        #     client_NZ = FDSN_Client(provider)
+        #     inv = client_NZ.get_stations(
+        #         level="response",
+        #         network=network,
+        #         station=station,
+        #         location=location,
+        #         channel=f"{channel}?",
+        #     )
+        # except FDSNNoDataException:
+        raise custom_errors.InventoryNotFoundError(
+            f"No inventory information found for station {station} with location {location}"
+        )
 
     try:
-        # Ensure we get the correct output type for strong motion vs broadband
-        output_type = "ACC" if channel[:2] in ["HN", "BN"] else "VEL"
-        mseed = mseed.remove_response(inventory=inv, output=output_type)
-    except ValueError:
+        # Apply the correct sensitivity removal based on the check_sensitivity function
+        t = UTCDateTime(mseed[0].stats.starttime)
+        resp = inv.get_response(mseed[0].id, t)
+        ok, diff = check_sensitivity(resp)
+        paz = resp.get_paz()
+        has_paz = not (len(paz.poles) == 0 and len(paz.zeros) == 0)
+
+        # Checks that the response has poles and zeros and that the sensitivity mismatch is acceptable before applying the full remove_response method.
+        if has_paz and ok:
+            if channel[:2] in ["HN", "BN"]:
+                mseed = mseed.remove_response(inventory=inv, output="ACC")
+            else:
+                # We have a broadband record so need to apply some pre-filters
+                f_nyq = 0.5 / mseed[0].stats.delta
+                f3 = 0.9 * f_nyq
+                pre_filt = (0.01, 0.05, f3, f_nyq)
+                mseed = mseed.remove_response(
+                    inventory=inv,
+                    output="VEL",
+                    pre_filt=pre_filt,
+                    zero_mean=True,
+                    taper=True,
+                )
+        else:
+            # Now we must use remove sensitivity instead
+            mseed = mseed.remove_sensitivity(inventory=inv)
+    except Exception:  # noqa: BLE001
         raise custom_errors.SensitivityRemovalError(
             f"Failed to remove sensitivity for station {station} with location {location}"
         )
+
+    # If the channel is not a Strong Motion station then we need to differentiate
+    if channel[:2] not in ["HN", "BN"]:
+        try:
+            # differentiate data i.e., m/s to m/s^2
+            mseed.differentiate()
+        except ValueError:
+            raise custom_errors.DiffrentiateError(
+                f"Failed to differentiate station {station} with location {location}"
+            )
 
     # Rotate
     try:
@@ -110,16 +203,6 @@ def initial_preprocessing(
         raise custom_errors.RotationError(
             f"Failed to rotate for station {station} with location {location}"
         )
-
-    # If the channel is not a Strong Motion station then we need to differentiate
-    if channel not in ["HN", "BN"]:
-        try:
-            # differentiate data i.e., m/s to m/s^2
-            mseed.differentiate()
-        except ValueError:
-            raise custom_errors.DiffrentiateError(
-                f"Failed to differentiate station {station} with location {location}"
-            )
 
     # Get constant gravity (g)
     g = config.get_value("g")

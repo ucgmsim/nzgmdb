@@ -30,7 +30,12 @@ def read_mseed_to_stream(file_path: Path):
     stream = Stream()
     nptype = {"i": np.int32, "f": np.float32, "d": np.float64, "t": np.char}
     mstl = mseedlib.MSTraceList()
-    mstl.read_file(str(file_path), unpack_data=False, record_list=True)
+    try:
+        mstl.read_file(str(file_path), unpack_data=False, record_list=True)
+    except mseedlib.exceptions.MseedLibError:
+        raise custom_errors.InvalidMseedFileError(
+            f"Error reading MiniSEED file {file_path}"
+        )
 
     for traceid in mstl.traceids():
         for segment in traceid.segments():
@@ -130,7 +135,7 @@ def create_waveform_from_mseed(
         data = np.stack([tr.data for tr in mseed], axis=1)
         data = data.astype(np.float32)
         # Reshape the waveform to have the correct shape for the IM calculation
-        reshaped_waveform = data[np.newaxis, :, :]
+        reshaped_waveform = data.T[:, None, :]
     except ValueError:
         raise custom_errors.InvalidTraceLengthError(
             f"Error reading data from {mseed_file}"

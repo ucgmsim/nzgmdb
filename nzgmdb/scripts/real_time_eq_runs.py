@@ -237,9 +237,7 @@ def run_event(
     conda_sh: Annotated[Path, typer.Argument(exists=True, file_okay=True)],
     gmc_activate: Annotated[str, typer.Argument()],
     gmc_predict_activate: Annotated[str, typer.Argument()],
-    ko_matrix_path: Annotated[
-        Path, typer.Argument(exists=True, file_okay=False)
-    ],
+    ko_matrix_path: Annotated[Path, typer.Argument(exists=True, file_okay=False)],
     add_seismic_now: Annotated[bool, typer.Option(is_flag=True)] = False,
     machine: Annotated[
         cfg.MachineName,
@@ -361,7 +359,6 @@ def run_event(
         # Send a POST request to the endpoint
         response = requests.post(url)
 
-        # Check the response status
         if response.status_code == 200:
             print("Event added successfully")
             # Get updated values
@@ -415,7 +412,7 @@ def run_event(
         flatfile_dir,
         waveform_dir,
         snr_fas_output_dir,
-        config.get_n_procs(machine, cfg.WorkflowStep.FMAX),
+        n_procs=config.get_n_procs(machine, cfg.WorkflowStep.FMAX),
     )
 
     run_gmc.run_gmc_processing(
@@ -550,8 +547,10 @@ def poll_earthquake_data(
                 )
 
                 if not result:
-                    # remove the event directory
-                    shutil.rmtree(event_dir)
+                    # Check if the event directory exists before trying to remove it, in case the error happened before the directory was created
+                    if event_dir.exists():
+                        # remove the event directory
+                        shutil.rmtree(event_dir)
                     # add the event to the no stations events
                     no_stations_events.append(event_id)
                 init_start_date = end_date

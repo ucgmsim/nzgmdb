@@ -15,6 +15,12 @@ class DiffrentiateError(Exception):
     pass
 
 
+class DetrendError(Exception):
+    """Exception raised when detrend fails."""
+
+    pass
+
+
 class SensitivityRemovalError(Exception):
     """Exception raised when sensitivity removal fails."""
 
@@ -65,5 +71,11 @@ class InvalidTraceLengthError(Exception):
 
 class NoStationsError(Exception):
     """Exception raised when no stations are computed for a given earthquake."""
+
+    pass
+
+
+class InvalidMseedFileError(Exception):
+    """Exception raised when the mseed file is invalid."""
 
     pass

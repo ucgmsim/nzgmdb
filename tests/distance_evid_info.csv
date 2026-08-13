@@ -1,0 +1,5 @@
+evid,datetime,lat,lon,depth,loc_type,loc_grid,mag,mag_type,mag_method,mag_unc,mag_orig,mag_orig_type,mag_orig_unc,ndef,nsta,nmag,t_res,reloc,tect_class,tect_method,domain_no,domain_type
+2016p427356,2016-06-07T02:55:22.569106Z,-45.1922,166.9065,36.0,CMT,CMT,5.5,Mw,CMT,0.252359007,5.75868198,M,,23.0,14.0,62,0.6081794909,no,Slab,puy_slab2_dep_02.26.18,23.0,Crustal block
+2016p459109,2016-06-18T20:53:41.588186Z,-39.34806824,177.624527,37.18935394,LOCSAT,iasp91,4.673438207,ML,uncorrected,0.2706830811,4.269658002,M,,27.0,16.0,16,0.3024584697,no,Slab,hik_kerm_fault_300km_wgs84_poslon,0.0,Oceanic
+2016p659242,2016-08-31T22:04:35.392362Z,-37.0774,179.2152,15.0,CMT,CMT,5.8,Mw,CMT,0.1428174861,5.700174726,M,,44.0,29.0,27,0.7072177507,no,Interface,hik_kerm_fault_300km_wgs84_poslon,6.0,Crustal block
+2016p858000,2016-11-13T11:02:56.346094Z,-42.6925,173.0221,16.0,CMT,CMT,7.8,Mw,CMT,0.4,7.820379733,Mw(mB),0.4,94.0,93.0,0,1.822964596,no,Crustal,NZSMDB,17.0,Contractional

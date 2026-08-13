@@ -73,15 +73,15 @@ def merge_aftershocks(main_dir: Path):
             lon_values = [
                 geo_row["corner_0_lon"],
                 geo_row["corner_1_lon"],
-                geo_row["corner_3_lon"],
                 geo_row["corner_2_lon"],
+                geo_row["corner_3_lon"],
                 geo_row["corner_0_lon"],
             ]
             lat_values = [
                 geo_row["corner_0_lat"],
                 geo_row["corner_1_lat"],
-                geo_row["corner_3_lat"],
                 geo_row["corner_2_lat"],
+                geo_row["corner_3_lat"],
                 geo_row["corner_0_lat"],
             ]
 

@@ -2,165 +2,257 @@
 This module contains the functions to merge different flatfiles together to create the final flatfiles
 """
 
+import multiprocessing as mp
 from pathlib import Path
 
+import numpy as np
 import pandas as pd
-from obspy.clients.fdsn import Client as FDSN_Client
-from obspy.core.utcdatetime import UTCDateTime
+import pyarrow as pa
+import pyarrow.parquet as pq
 
 from nzgmdb.management import config as cfg
 from nzgmdb.management import file_structure
 
 
+def process_im_batch(
+    batch_files: list[str],
+    batch_id: int,
+    im_dir: Path,
+    tmp_dir: Path,
+    is_parquet: bool,
+    fas_columns: list[str],
+):
+    fas_comps = ["000", "090", "ver", "geom", "eas"]
+    psa_comps = ["000", "090", "ver", "geom"]
+    rotd_comps = ["rotd0", "rotd50", "rotd100"]
+
+    scalar_columns = [
+        "PGA",
+        "PGV",
+        "PGD",
+        "CAV",
+        "CAV5",
+        "AI",
+        "Ds575",
+        "Ds595",
+    ]
+
+    writers = {}
+
+    def write_chunk(df: pd.DataFrame, output_file: Path):
+        if df.empty:
+            return
+
+        table = pa.Table.from_pandas(df, preserve_index=False)
+
+        if output_file not in writers:
+            writers[output_file] = pq.ParquetWriter(
+                output_file,
+                table.schema,
+                compression="zstd",
+            )
+
+        writers[output_file].write_table(table)
+
+    # Read all the IM files
+    dfs = []
+    for rel_path in batch_files:
+        im_file = im_dir / rel_path
+        if not im_file.exists():
+            continue
+        if is_parquet:
+            df = pd.read_parquet(im_file)
+        else:
+            df = pd.read_csv(im_file)
+        dfs.append(df)
+    df = pd.concat(dfs)
+
+    # Split the record id into evid, sta, chan, loc
+    record_parts = df["record_id"].str.split(
+        "_",
+        n=3,
+        expand=True,
+    )
+    record_parts.columns = [
+        "evid",
+        "sta",
+        "chan",
+        "loc",
+    ]
+    df = pd.concat(
+        [df, record_parts],
+        axis=1,
+    )
+
+    psa_columns = [c for c in df.columns if c.startswith("pSA")]
+    existing_fas_cols = [c for c in df.columns if c.startswith("FAS_")]
+
+    fas_df = {}
+
+    for col in existing_fas_cols:
+        freq = float(col.removeprefix("FAS_"))
+        new_col = f"FAS_{freq:.6g}"
+
+        s = df[col]
+
+        if s.dtype == object:
+            s = pd.to_numeric(
+                s.astype(str).str.replace("e/", "e-", regex=False),
+                errors="coerce",
+            )
+
+        fas_df[new_col] = s
+
+    if existing_fas_cols:
+        df = df.drop(columns=existing_fas_cols)
+
+    if fas_df:
+        df = pd.concat(
+            [
+                df,
+                pd.DataFrame(
+                    fas_df,
+                    index=df.index,
+                ),
+            ],
+            axis=1,
+        )
+
+    non_fas_cols = [c for c in df.columns if not c.startswith("FAS_")]
+    df = df.reindex(
+        columns=[
+            *non_fas_cols,
+            *fas_columns,
+        ]
+    )
+    columns_remove_rotd = [
+        "CAV",
+        "CAV5",
+        "AI",
+        "Ds575",
+        "Ds595",
+    ] + fas_columns
+    columns_remove_fas = scalar_columns + psa_columns
+
+    for comp, comp_rows in df.groupby("component"):
+
+        if comp in fas_comps:
+            comp_rows_fas = comp_rows.drop(
+                columns=columns_remove_fas,
+                errors="ignore",
+            )
+            comp_rows_fas.to_parquet(
+                tmp_dir / f"im_merge_{comp}_fas" / f"batch_{batch_id}.parquet",
+                compression="gzip",
+                index=False,
+            )
+
+        if comp in psa_comps:
+            comp_rows_psa = comp_rows.drop(
+                columns=fas_columns,
+                errors="ignore",
+            )
+            comp_rows_psa.to_parquet(
+                tmp_dir / f"im_merge_{comp}" / f"batch_{batch_id}.parquet",
+                compression="gzip",
+                index=False,
+            )
+
+        if comp in rotd_comps:
+            comp_rows_rotd = comp_rows.drop(
+                columns=columns_remove_rotd,
+                errors="ignore",
+            )
+            comp_rows_rotd.to_parquet(
+                tmp_dir / f"im_merge_{comp}" / f"batch_{batch_id}.parquet",
+                compression="gzip",
+                index=False,
+            )
+
+
 def merge_im_data(
     im_dir: Path,
     output_dir: Path,
-    gmc_ffp: Path | None = None,
-    fmax_ffp: Path | None = None,
+    records_ffp: Path,
+    n_procs: int = 1,
+    batch_size: int = 5000,
+    is_parquet: bool = False,
 ):
     """
-    Merge the IM data into a single flatfile. Also merges in the GMC and fmax data and
-    filters out records that are below the Ds595 lower bound
-    and then saves the skipped records to a separate file.
-
-    Parameters
-    ----------
-    im_dir : Path
-        The directory where the IM files are stored
-    output_dir : Path
-        The directory to save the final IM flatfile and the skipped records
-    gmc_ffp : Path, optional
-        The file path to the GMC results
-    fmax_ffp : Path, optional
-        The file path to the fmax results
+    Merge the IM data into component / fas split files.
     """
-    # Load the GMC file
-    if gmc_ffp is None:
-        new_df = pd.DataFrame(
-            columns=[
-                "record",
-                "score_mean_X",
-                "fmin_mean_X",
-                "multi_mean_X",
-                "score_mean_Y",
-                "fmin_mean_Y",
-                "multi_mean_Y",
-                "score_mean_Z",
-                "fmin_mean_Z",
-                "multi_mean_Z",
-            ]
-        )
-    else:
-        gmc_results = pd.read_csv(gmc_ffp)
 
-        # Define the columns to be grouped
-        columns = ["score_mean", "fmin_mean", "multi_mean"]
+    records_df = pd.read_csv(records_ffp)
 
-        # Group by 'record' and 'component', then aggregate the columns
-        new_df = gmc_results.groupby(["record", "component"])[columns].mean().unstack()
+    suffix = "parquet" if is_parquet else "csv"
 
-        # Join the column names to score_mean_X etc.
-        new_df.columns = ["_".join(col) for col in new_df.columns]
+    records_df["evid"] = records_df["record_id"].str.partition("_")[0]
 
-        new_df = new_df.reset_index()
-
-    fmax_results = (
-        pd.DataFrame(columns=["record_id", "fmax_000", "fmax_090", "fmax_ver"])
-        if fmax_ffp is None or not fmax_ffp.stat().st_size
-        else pd.read_csv(fmax_ffp)
+    records_df["im_file"] = (
+        records_df["evid"] + "/" + records_df["record_id"] + f"_IM.{suffix}"
     )
 
-    # Find all the IM files
-    im_files = im_dir.rglob("*IM.csv")
-
-    # Concat all the IM files
-    im_all = pd.concat([pd.read_csv(file) for file in im_files])
-
-    # Merge the gm_all and new_df on record
-    gm_final = pd.merge(
-        im_all,
-        new_df,
-        left_on="record_id",
-        right_on="record",
-        how="left",
-    )
-
-    # Add the chan, loc and rename event_id and station across the entire series
-    gm_final[["evid", "sta", "chan", "loc"]] = gm_final["record_id"].str.split(
-        "_", expand=True
-    )
-
-    # remove the record column
-    gm_final = gm_final.drop(columns=["record"])
-
-    # Merge in fmax
-    gm_final = pd.merge(
-        gm_final,
-        fmax_results,
-        left_on="record_id",
-        right_on="record_id",
-        how="left",
-    )
-    # Rename fmax columns
-    gm_final = gm_final.rename(
-        columns={
-            "fmax_000": "fmax_mean_X",
-            "fmax_090": "fmax_mean_Y",
-            "fmax_ver": "fmax_mean_Z",
-        }
-    )
-
-    # Sort columns nicely
-    psa_columns = gm_final.columns[gm_final.columns.str.contains("pSA")].tolist()
-    fas_columns = gm_final.columns[gm_final.columns.str.contains("FAS")].tolist()
-    gm_final = gm_final[
-        [
-            "record_id",
-            "evid",
-            "sta",
-            "loc",
-            "chan",
-            "component",
-            "PGA",
-            "PGV",
-            "PGD",
-            "CAV",
-            "CAV5",
-            "AI",
-            "Ds575",
-            "Ds595",
-            "score_mean_X",
-            "fmin_mean_X",
-            "fmax_mean_X",
-            "multi_mean_X",
-            "score_mean_Y",
-            "fmin_mean_Y",
-            "fmax_mean_Y",
-            "multi_mean_Y",
-            "score_mean_Z",
-            "fmin_mean_Z",
-            "fmax_mean_Z",
-            "multi_mean_Z",
-        ]
-        + psa_columns
-        + fas_columns
+    batches = [
+        records_df["im_file"].iloc[i : i + batch_size].tolist()
+        for i in range(0, len(records_df), batch_size)
     ]
 
-    # Save the ground_motion_im_catalogue.csv
-    gm_final.to_csv(
-        output_dir / file_structure.PreFlatfileNames.GROUND_MOTION_IM_CATALOGUE,
-        index=False,
+    config = cfg.Config()
+    fas_frequencies = np.logspace(
+        np.log10(config.get_value("common_frequency_start")),
+        np.log10(config.get_value("common_frequency_end")),
+        num=config.get_value("common_frequency_num"),
     )
+    fas_columns = [f"FAS_{freq:.6g}" for freq in fas_frequencies]
+
+    batch_comps = [
+        "000",
+        "000_fas",
+        "090",
+        "090_fas",
+        "ver",
+        "ver_fas",
+        "geom",
+        "geom_fas",
+        "rotd0",
+        "rotd50",
+        "rotd100",
+        "eas_fas",
+    ]
+
+    # Create the batch component dirs
+    for comp in batch_comps:
+        comp_dir = output_dir / "im_merge_batch_dir" / f"im_merge_{comp}"
+        comp_dir.mkdir(parents=True, exist_ok=True)
+
+    with mp.Pool(n_procs) as pool:
+        pool.starmap(
+            process_im_batch,
+            [
+                (
+                    batch,
+                    batch_id,
+                    im_dir,
+                    output_dir / "im_merge_batch_dir",
+                    is_parquet,
+                    fas_columns,
+                )
+                for batch_id, batch in enumerate(batches)
+            ],
+        )
 
 
 def add_ground_level(
+    station_df: pd.DataFrame,
     gm_im_df_flat: pd.DataFrame,
 ):
     """
-    Add in the ground level location elevation information to the gm_im_df_flat dataframe
+    Add in the is ground level location elevation information to the gm_im_df_flat dataframe
 
     Parameters
     ----------
+    station_df : pd.DataFrame
+        The station dataframe containing the station information such as loc_elev
     gm_im_df_flat : pd.DataFrame
         The ground motion IM dataframe to add the ground level information to
 
@@ -169,46 +261,6 @@ def add_ground_level(
     pd.DataFrame
         The ground motion IM dataframe with the ground level information added
     """
-    # Find the station location information with the inventory lat, lon and elev
-    config = cfg.Config()
-    channel_codes = config.get_value("channel_codes")
-    client_NZ = FDSN_Client("GEONET")
-    inventory = client_NZ.get_stations(channel=channel_codes, level="response")
-    station_info = [
-        [
-            station.code,
-            station.latitude,
-            station.longitude,
-            station.elevation,
-            channel.code[:2],
-            channel.location_code,
-            channel.depth,
-            channel.start_date,
-            channel.end_date,
-        ]
-        for network in inventory
-        for station in network
-        for channel in station.channels
-    ]
-    station_df = pd.DataFrame(
-        station_info,
-        columns=[
-            "sta",
-            "sta_lat",
-            "sta_lon",
-            "sta_elev",
-            "chan",
-            "loc",
-            "loc_elev",
-            "start_time",
-            "end_time",
-        ],
-    )
-    # Remove duplicates
-    station_df = station_df.drop_duplicates(
-        ["sta", "chan", "loc", "loc_elev"]
-    ).reset_index(drop=True)
-
     # Get the recorders information for location codes
     config = cfg.Config()
     locations_url = config.get_value("locations_url")
@@ -240,50 +292,56 @@ def add_ground_level(
     station_df["end_time"] = station_df["end_time"].fillna(pd.Timestamp.max)
 
     # Ensure datetime dtypes
-    def _to_py_datetime(val: object) -> object:
-        """
-        Convert UTCDateTime to python datetime.datetime if needed.
+    # def _to_py_datetime(val: object) -> object:
+    #     """
+    #     Convert UTCDateTime to python datetime.datetime if needed.
+    #
+    #     Parameters
+    #     ----------
+    #     val : object
+    #         The value to convert.
+    #
+    #     Returns
+    #     -------
+    #     object
+    #         The converted value.
+    #     """
+    #     if isinstance(val, UTCDateTime):
+    #         return val.datetime
+    #     return val
+    #
+    # station_df["start_time"] = station_df["start_time"].apply(_to_py_datetime)
+    # station_df["end_time"] = station_df["end_time"].apply(_to_py_datetime)
 
-        Parameters
-        ----------
-        val : object
-            The value to convert.
-
-        Returns
-        -------
-        object
-            The converted value.
-        """
-        if isinstance(val, UTCDateTime):
-            return val.datetime
-        return val
-
-    station_df["start_time"] = station_df["start_time"].apply(_to_py_datetime)
-    station_df["end_time"] = station_df["end_time"].apply(_to_py_datetime)
-
-    def ensure_utc(series: pd.Series) -> pd.Series:
-        """
-        Ensure a pandas Series of datetimes is timezone-aware in UTC.
-
-        Parameters
-        ----------
-        series : pd.Series
-            The pandas Series to ensure is timezone-aware in UTC.
-
-        Returns
-        -------
-        pd.Series
-            The timezone-aware pandas Series in UTC.
-        """
-        # coerce to datetime first, then ensure UTC tz (convert if already tz-aware, localize if naive)
-        s = pd.to_datetime(series, errors="coerce")
-        if pd.api.types.is_datetime64tz_dtype(s.dtype):
-            return s.dt.tz_convert("UTC")
-        return s.dt.tz_localize("UTC")
+    # def ensure_utc(series: pd.Series) -> pd.Series:
+    #     """
+    #     Ensure a pandas Series of datetimes is timezone-aware in UTC.
+    #
+    #     Parameters
+    #     ----------
+    #     series : pd.Series
+    #         The pandas Series to ensure is timezone-aware in UTC.
+    #
+    #     Returns
+    #     -------
+    #     pd.Series
+    #         The timezone-aware pandas Series in UTC.
+    #     """
+    #     # coerce to datetime first, then ensure UTC tz (convert if already tz-aware, localize if naive)
+    #     s = pd.to_datetime(series, errors="coerce")
+    #     if pd.api.types.is_datetime64tz_dtype(s.dtype):
+    #         return s.dt.tz_convert("UTC")
+    #     return s.dt.tz_localize("UTC")
 
     # Normalize both frames to UTC before sorting / merge_asof
-    station_df["start_time"] = ensure_utc(station_df["start_time"])
-    station_df["end_time"] = ensure_utc(station_df["end_time"])
+    # station_df["start_time"] = ensure_utc(station_df["start_time"])
+    # station_df["end_time"] = ensure_utc(station_df["end_time"])
+    station_df["start_time"] = pd.to_datetime(
+        station_df["start_time"], errors="coerce", utc=True
+    )
+    station_df["end_time"] = pd.to_datetime(
+        station_df["end_time"], errors="coerce", utc=True
+    )
 
     station_df["start_time"] = pd.to_datetime(station_df["start_time"])
     station_df["end_time"] = pd.to_datetime(station_df["end_time"])
@@ -354,33 +412,6 @@ def add_ground_level(
         ["is_ground_level", "loc_elev"],
     ] = [True, 0.0]
 
-    # remove duplicates of sta in the station_df
-    station_df = station_df.drop_duplicates(subset=["sta"])
-
-    # Merge missing station lat / lon / elev information into the gm_im_df_flat
-    gm_im_df_flat = gm_im_df_flat.merge(
-        station_df[["sta", "sta_lat", "sta_lon", "sta_elev"]],
-        on="sta",
-        how="left",
-        suffixes=("", "_new"),
-    )
-
-    # Find where sta_lat is nan and replace with the inventory's lat, lon and elev
-    gm_im_df_flat["sta_lat"] = gm_im_df_flat["sta_lat"].fillna(
-        gm_im_df_flat["sta_lat_new"]
-    )
-    gm_im_df_flat["sta_lon"] = gm_im_df_flat["sta_lon"].fillna(
-        gm_im_df_flat["sta_lon_new"]
-    )
-    gm_im_df_flat["sta_elev"] = gm_im_df_flat["sta_elev"].fillna(
-        gm_im_df_flat["sta_elev_new"]
-    )
-
-    # Drop the new columns
-    gm_im_df_flat = gm_im_df_flat.drop(
-        columns=["sta_lat_new", "sta_lon_new", "sta_elev_new"]
-    )
-
     return gm_im_df_flat
 
 
@@ -400,6 +431,42 @@ def merge_flatfiles(main_dir: Path, bypass_records_ffp: Path = None):
     flatfile_dir = file_structure.get_flatfile_dir(main_dir)
 
     # Load the files
+    gmc_ffp = flatfile_dir / file_structure.FlatfileNames.GMC_PREDICTIONS
+    if not gmc_ffp.exists():
+        gmc_df = pd.DataFrame(
+            columns=[
+                "record",
+                "score_mean_X",
+                "fmin_mean_X",
+                "multi_mean_X",
+                "score_mean_Y",
+                "fmin_mean_Y",
+                "multi_mean_Y",
+                "score_mean_Z",
+                "fmin_mean_Z",
+                "multi_mean_Z",
+            ]
+        )
+    else:
+        gmc_df = pd.read_csv(gmc_ffp)
+
+        # Define the columns to be grouped
+        columns = ["score_mean", "fmin_mean", "multi_mean"]
+
+        # Group by 'record' and 'component', then aggregate the columns
+        gmc_df = gmc_df.groupby(["record", "component"])[columns].mean().unstack()
+
+        # Join the column names to score_mean_X etc.
+        gmc_df.columns = ["_".join(col) for col in gmc_df.columns]
+
+        gmc_df = gmc_df.reset_index()
+
+    fmax_ffp = flatfile_dir / file_structure.FlatfileNames.FMAX
+    fmax_df = (
+        pd.DataFrame(columns=["record_id", "fmax_000", "fmax_090", "fmax_ver"])
+        if fmax_ffp is None or not fmax_ffp.stat().st_size
+        else pd.read_csv(fmax_ffp)
+    )
     event_df = pd.read_csv(
         flatfile_dir
         / file_structure.PreFlatfileNames.EARTHQUAKE_SOURCE_TABLE_AFTERSHOCKS,
@@ -435,12 +502,15 @@ def merge_flatfiles(main_dir: Path, bypass_records_ffp: Path = None):
         flatfile_dir / file_structure.PreFlatfileNames.PROPAGATION_TABLE,
         dtype={"evid": str},
     )
-    im_df = pd.read_csv(
-        flatfile_dir / file_structure.PreFlatfileNames.GROUND_MOTION_IM_CATALOGUE,
-        dtype={"loc": str, "evid": str},
+    im_df = pd.read_parquet(
+        flatfile_dir / "im_merge_batch_dir" / "im_merge_rotd50",
+        columns=["record_id", "evid", "sta", "chan", "loc"],
     )
     site_basin_df = pd.read_csv(
         flatfile_dir / file_structure.PreFlatfileNames.SITE_TABLE
+    )
+    station_df = pd.read_csv(
+        flatfile_dir / file_structure.PreFlatfileNames.STATION_TABLE
     )
     station_extraction_df = pd.read_csv(
         flatfile_dir / file_structure.PreFlatfileNames.STATION_EXTRACTION_TABLE_GEONET,
@@ -471,6 +541,7 @@ def merge_flatfiles(main_dir: Path, bypass_records_ffp: Path = None):
     # Ensure that the site_basin_df only has the unique sites found in the im_df
     unique_sites = im_df["sta"].unique()
     site_basin_df = site_basin_df[site_basin_df["sta"].isin(unique_sites)]
+    station_df = station_df[station_df["sta"].isin(unique_sites)]
 
     # Ensure the station magnitude table only has values of events and station pairs available in the im_df
     unique_pairs_df = im_df[["evid", "sta"]].drop_duplicates()
@@ -489,9 +560,10 @@ def merge_flatfiles(main_dir: Path, bypass_records_ffp: Path = None):
         flatfile_dir / file_structure.SkippedRecordFilenames.MISSING_SITES, index=False
     )
 
-    # Rename all the gmc column names to remove the middle _mean
-    im_df = im_df.rename(
+    # Merge in the gmc df
+    gmc_df = gmc_df.rename(
         columns={
+            "record": "record_id",
             "score_mean_X": "score_X",
             "fmin_mean_X": "fmin_X",
             "fmax_mean_X": "fmax_X",
@@ -506,6 +578,17 @@ def merge_flatfiles(main_dir: Path, bypass_records_ffp: Path = None):
             "multi_mean_Z": "multi_Z",
         }
     )
+    im_df = im_df.merge(gmc_df, on="record_id", how="left")
+
+    # Merge in the fmax df
+    fmax_df = fmax_df.rename(
+        columns={
+            "fmax_000": "fmax_X",
+            "fmax_090": "fmax_Y",
+            "fmax_ver": "fmax_Z",
+        }
+    )
+    im_df = im_df.merge(fmax_df, on="record_id", how="left")
 
     # Merge event data with the IM data
     gm_im_df_flat = im_df.merge(
@@ -547,10 +630,15 @@ def merge_flatfiles(main_dir: Path, bypass_records_ffp: Path = None):
         columns={"lat": "ev_lat", "lon": "ev_lon", "depth": "ev_depth"}
     )
 
+    # Create the site basin df to merge with only 1 sta value
+    merge_site_table = site_basin_df.drop_duplicates(subset=["sta"])
+
     # Merge in the site data
     gm_im_df_flat = gm_im_df_flat.merge(
-        site_basin_df[
+        merge_site_table[
             [
+                "provider",
+                "net",
                 "sta",
                 "lat",
                 "lon",
@@ -578,7 +666,7 @@ def merge_flatfiles(main_dir: Path, bypass_records_ffp: Path = None):
     )
 
     # Add in the ground level location elevation information
-    gm_im_df_flat = add_ground_level(gm_im_df_flat)
+    gm_im_df_flat = add_ground_level(station_df, gm_im_df_flat)
 
     # Add in multi_event information
     gm_im_df_flat = gm_im_df_flat.merge(
@@ -681,16 +769,48 @@ def merge_flatfiles(main_dir: Path, bypass_records_ffp: Path = None):
     gm_im_df_flat["LPF_h"] = gm_im_df_flat[["fmax_X", "fmax_Y"]].min(axis=1)
     gm_im_df_flat["LPF_v"] = gm_im_df_flat["fmax_Z"]
 
-    # Sort the rows
-    gm_im_df_flat = gm_im_df_flat.sort_values(["datetime", "sta", "component"])
+    # Save final outputs
+    event_df.to_csv(
+        flatfile_dir / file_structure.FlatfileNames.EARTHQUAKE_SOURCE_TABLE, index=False
+    )
+    geo_df.to_csv(
+        flatfile_dir / file_structure.FlatfileNames.EARTHQUAKE_SOURCE_GEOMETRY,
+        index=False,
+    )
+    sta_mag_df.to_csv(
+        flatfile_dir / file_structure.FlatfileNames.STATION_MAGNITUDE_TABLE, index=False
+    )
+    station_extraction_df.to_csv(
+        flatfile_dir / file_structure.FlatfileNames.STATION_EXTRACTION_TABLE,
+        index=False,
+    )
+    multi_event_df.to_csv(
+        flatfile_dir / file_structure.FlatfileNames.MULTI_EVENT_TABLE, index=False
+    )
+    phase_table_df.to_csv(
+        flatfile_dir / file_structure.FlatfileNames.PHASE_ARRIVAL_TABLE, index=False
+    )
+    site_basin_df.to_csv(
+        flatfile_dir / file_structure.FlatfileNames.SITE_TABLE, index=False
+    )
+    station_df.to_csv(
+        flatfile_dir / file_structure.FlatfileNames.STATION_TABLE, index=False
+    )
+    prop_df.to_csv(
+        flatfile_dir / file_structure.FlatfileNames.PROPAGATION_TABLE, index=False
+    )
 
-    # Re-sort the columns
-    psa_columns = gm_im_df_flat.columns[
-        gm_im_df_flat.columns.str.contains("pSA")
-    ].tolist()
-    fas_columns = gm_im_df_flat.columns[
-        gm_im_df_flat.columns.str.contains("FAS")
-    ].tolist()
+    # Sort the rows
+    gm_im_df_flat = gm_im_df_flat.sort_values(["datetime", "sta"])
+
+    psa_periods = np.asarray(config.get_value("psa_periods"))
+    fas_frequencies = np.logspace(
+        np.log10(config.get_value("common_frequency_start")),
+        np.log10(config.get_value("common_frequency_end")),
+        num=config.get_value("common_frequency_num"),
+    )
+    psa_columns = [f"pSA_{p}" for p in psa_periods]
+    fas_columns = [f"FAS_{f}" for f in fas_frequencies]
     columns = (
         [
             "record_id",
@@ -699,7 +819,8 @@ def merge_flatfiles(main_dir: Path, bypass_records_ffp: Path = None):
             "sta",
             "loc",
             "chan",
-            "component",
+            "provider",
+            "net",
             "ev_lat",
             "ev_lon",
             "ev_depth",
@@ -782,105 +903,47 @@ def merge_flatfiles(main_dir: Path, bypass_records_ffp: Path = None):
         + psa_columns
         + fas_columns
     )
-    gm_im_df_flat = gm_im_df_flat[columns]
 
-    # Separate into different component files
-    (
-        df_000_flat,
-        df_090_flat,
-        df_ver_flat,
-        df_geomean_flat,
-        df_rotd0_flat,
-        df_rotd50_flat,
-        df_rotd100_flat,
-        df_eas_flat,
-    ) = (
-        gm_im_df_flat[gm_im_df_flat.component == "000"],
-        gm_im_df_flat[gm_im_df_flat.component == "090"],
-        gm_im_df_flat[gm_im_df_flat.component == "ver"],
-        gm_im_df_flat[gm_im_df_flat.component == "geom"],
-        gm_im_df_flat[gm_im_df_flat.component == "rotd0"],
-        gm_im_df_flat[gm_im_df_flat.component == "rotd50"],
-        gm_im_df_flat[gm_im_df_flat.component == "rotd100"],
-        gm_im_df_flat[gm_im_df_flat.component == "eas"],
-    )
+    filename_mapping = {
+        "im_merge_000": file_structure.FlatfileNames.GROUND_MOTION_IM_000_FLAT,
+        "im_merge_000_fas": file_structure.FlatfileNames.GROUND_MOTION_IM_000_FAS_FLAT,
+        "im_merge_090": file_structure.FlatfileNames.GROUND_MOTION_IM_090_FLAT,
+        "im_merge_090_fas": file_structure.FlatfileNames.GROUND_MOTION_IM_090_FAS_FLAT,
+        "im_merge_ver": file_structure.FlatfileNames.GROUND_MOTION_IM_VER_FLAT,
+        "im_merge_ver_fas": file_structure.FlatfileNames.GROUND_MOTION_IM_VER_FAS_FLAT,
+        "im_merge_geom": file_structure.FlatfileNames.GROUND_MOTION_IM_GEOM_FLAT,
+        "im_merge_geom_fas": file_structure.FlatfileNames.GROUND_MOTION_IM_GEOM_FAS_FLAT,
+        "im_merge_rotd0": file_structure.FlatfileNames.GROUND_MOTION_IM_ROTD0_FLAT,
+        "im_merge_rotd50": file_structure.FlatfileNames.GROUND_MOTION_IM_ROTD50_FLAT,
+        "im_merge_rotd100": file_structure.FlatfileNames.GROUND_MOTION_IM_ROTD100_FLAT,
+        "im_merge_eas_fas": file_structure.FlatfileNames.GROUND_MOTION_IM_EAS_FAS_FLAT,
+    }
 
-    # Remove NaN columns from the flatfiles with invalid components
-    columns_remove_rotd = ["CAV", "CAV5", "AI", "Ds575", "Ds595"] + fas_columns
-    columns_remove_eas = [
-        "PGA",
-        "PGV",
-        "PGD",
-        "CAV",
-        "CAV5",
-        "AI",
-        "Ds575",
-        "Ds595",
-    ] + psa_columns
-    df_rotd0_flat = df_rotd0_flat.drop(columns=columns_remove_rotd)
-    df_rotd50_flat = df_rotd50_flat.drop(columns=columns_remove_rotd)
-    df_rotd100_flat = df_rotd100_flat.drop(columns=columns_remove_rotd)
-    df_eas_flat = df_eas_flat.drop(columns=columns_remove_eas)
+    # Save the flatfiles
+    gm_im_df_flat = gm_im_df_flat.drop(columns=["evid", "sta", "chan", "loc"])
 
-    # Save final outputs
-    event_df.to_csv(
-        flatfile_dir / file_structure.FlatfileNames.EARTHQUAKE_SOURCE_TABLE, index=False
-    )
-    geo_df.to_csv(
-        flatfile_dir / file_structure.FlatfileNames.EARTHQUAKE_SOURCE_GEOMETRY,
-        index=False,
-    )
-    sta_mag_df.to_csv(
-        flatfile_dir / file_structure.FlatfileNames.STATION_MAGNITUDE_TABLE, index=False
-    )
-    station_extraction_df.to_csv(
-        flatfile_dir / file_structure.FlatfileNames.STATION_EXTRACTION_TABLE,
-        index=False,
-    )
-    multi_event_df.to_csv(
-        flatfile_dir / file_structure.FlatfileNames.MULTI_EVENT_TABLE, index=False
-    )
-    phase_table_df.to_csv(
-        flatfile_dir / file_structure.FlatfileNames.PHASE_ARRIVAL_TABLE, index=False
-    )
-    site_basin_df.to_csv(
-        flatfile_dir / file_structure.FlatfileNames.SITE_TABLE, index=False
-    )
-    prop_df.to_csv(
-        flatfile_dir / file_structure.FlatfileNames.PROPAGATION_TABLE, index=False
-    )
-    df_000_flat.to_csv(
-        flatfile_dir / file_structure.FlatfileNames.GROUND_MOTION_IM_000_FLAT,
-        index=False,
-    )
-    df_090_flat.to_csv(
-        flatfile_dir / file_structure.FlatfileNames.GROUND_MOTION_IM_090_FLAT,
-        index=False,
-    )
-    df_ver_flat.to_csv(
-        flatfile_dir / file_structure.FlatfileNames.GROUND_MOTION_IM_VER_FLAT,
-        index=False,
-    )
-    df_geomean_flat.to_csv(
-        flatfile_dir / file_structure.FlatfileNames.GROUND_MOTION_IM_GEOM_FLAT,
-        index=False,
-    )
-    df_rotd0_flat.to_csv(
-        flatfile_dir / file_structure.FlatfileNames.GROUND_MOTION_IM_ROTD0_FLAT,
-        index=False,
-    )
-    df_rotd50_flat.to_csv(
-        flatfile_dir / file_structure.FlatfileNames.GROUND_MOTION_IM_ROTD50_FLAT,
-        index=False,
-    )
-    df_rotd100_flat.to_csv(
-        flatfile_dir / file_structure.FlatfileNames.GROUND_MOTION_IM_ROTD100_FLAT,
-        index=False,
-    )
-    df_eas_flat.to_csv(
-        flatfile_dir / file_structure.FlatfileNames.GROUND_MOTION_IM_EAS_FLAT,
-        index=False,
-    )
+    for im_merge, final_output in filename_mapping.items():
+        # Read parquet
+        df = pd.read_parquet(flatfile_dir / "im_merge_batch_dir" / im_merge)
+
+        # Drop component column
+        df = df.drop(columns=["component"])
+
+        # Merge in the gm_im_df_flat columns
+        df = df.merge(gm_im_df_flat, on="record_id", how="left")
+
+        # Keep only columns that exist in the dataframe
+        existing_columns = [col for col in columns if col in df.columns]
+
+        # Reorder columns
+        df = df[existing_columns]
+
+        # Save with gzip compression
+        df.to_parquet(
+            flatfile_dir / final_output,
+            compression="gzip",
+            index=False,
+        )
 
 
 def merge_dbs(

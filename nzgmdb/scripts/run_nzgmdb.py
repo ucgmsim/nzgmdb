@@ -39,6 +39,12 @@ def fetch_geonet_data(
     ] = None,
     real_time: Annotated[bool, typer.Option()] = False,
     mp_sites: Annotated[bool, typer.Option()] = False,
+    add_tmp_arrays: Annotated[
+        bool,
+        typer.Option(
+            is_flag=True,
+        ),
+    ] = False,
 ):
     """
     Fetch earthquake data from Geonet and generate the earthquake source and station magnitude tables.
@@ -65,6 +71,8 @@ def fetch_geonet_data(
         If True, the function will run in real-time mode by using a different client (default is False).
     mp_sites : bool, optional
         If True, the function will use multiprocessing over sites instead of events (default is False).
+    add_tmp_arrays : bool, optional
+        If True, temporary arrays will be added to the database run (default is False).
     """
     geonet.parse_geonet_information(
         main_dir,
@@ -77,6 +85,7 @@ def fetch_geonet_data(
         only_record_ids_ffp,
         real_time,
         mp_sites,
+        add_tmp_arrays,
     )
 
 
@@ -108,6 +117,13 @@ def extract_waveforms(
         int,
         typer.Option(),
     ] = 1000,
+    tmp_array_dir: Annotated[
+        Path,
+        typer.Option(
+            exists=True,
+            file_okay=False,
+        ),
+    ] = None,
 ):
     """
     Extract waveforms using the station extraction table and save them as MiniSEED files.
@@ -125,9 +141,16 @@ def extract_waveforms(
         The full file path to a set of record IDs to only run for. If provided, only these records will be processed.
     batch_size : int, optional
         The batch size for how many extracted waveforms to process before checkpointing (default is 1000).
+    tmp_array_dir : Path, optional
+        The directory the saved temporary array data is to be used for waveform extraction.
     """
     waveform_extraction.extract_waveforms(
-        main_dir, station_extraction_table_ffp, n_procs, only_record_ids_ffp, batch_size
+        main_dir,
+        station_extraction_table_ffp,
+        n_procs,
+        only_record_ids_ffp,
+        batch_size,
+        tmp_array_dir,
     )
 
 
@@ -188,6 +211,10 @@ def make_phase_arrival_table(
         typer.Argument(),
     ],
     n_procs: Annotated[int, typer.Option()] = 1,
+    n_batches: Annotated[
+        int,
+        typer.Option(),
+    ] = None,
     bypass_records_ffp: Annotated[
         Path,
         typer.Option(
@@ -214,6 +241,9 @@ def make_phase_arrival_table(
         The command to activate the environment for running PhaseNet.
     n_procs : int, optional
         Number of processes to use (default is 1).
+    n_batches : int, optional
+        The number of batches to split the mseed files into for processing.
+        If not provided, it will be determined automatically based on the number of mseed files and n_procs.
     bypass_records_ffp : Path, optional
         The full file path to the bypass records file for custom P-wave index values.
         This allows you to specify custom P-wave index values for records that may not be
@@ -225,7 +255,9 @@ def make_phase_arrival_table(
         conda_sh,
         env_activate_command,
         n_procs,
+        n_batches,
         bypass_records_ffp,
+        xml_dir=file_structure.get_stationxml_dir(main_dir),
     )
 
 
@@ -354,6 +386,12 @@ def calc_fmax(
             file_okay=False,
         ),
     ] = None,
+    batches_dir: Annotated[
+        Path,
+        typer.Option(
+            file_okay=False,
+        ),
+    ] = None,
     n_procs: Annotated[int, typer.Option()] = 1,
     bypass_records_ffp: Annotated[
         Path,
@@ -363,6 +401,7 @@ def calc_fmax(
             dir_okay=False,
         ),
     ] = None,
+    batch_size: Annotated[int, typer.Option()] = 20000,
 ):
     """
     Calculate the maximum usable frequency (fmax) for waveforms.
@@ -380,10 +419,14 @@ def calc_fmax(
         Path to the directory containing the mseed files to process. Defaults to the expected location.
     snr_fas_output_dir : Path, optional
         Path to the output directory for the SNR and FAS data. Defaults to the expected location.
+    batches_dir : Path, optional
+        Path to the directory to save the batch files for processing. Defaults to a "fmax" directory within the main directory.
     n_procs : int, optional
         Number of processes to use (default is 1).
     bypass_records_ffp : Path, optional
         The full file path to the bypass records file for custom fmax values.
+    batch_size : int, optional
+        The number of mseed files to process in each batch, by default 20000.
     """
     if meta_output_dir is None:
         meta_output_dir = file_structure.get_flatfile_dir(main_dir)
@@ -391,9 +434,17 @@ def calc_fmax(
         waveform_dir = file_structure.get_waveform_dir(main_dir)
     if snr_fas_output_dir is None:
         snr_fas_output_dir = file_structure.get_snr_fas_dir(main_dir)
+    if batches_dir is None:
+        batches_dir = main_dir / "fmax"
 
     fmax.run_full_fmax_calc(
-        meta_output_dir, waveform_dir, snr_fas_output_dir, n_procs, bypass_records_ffp
+        meta_output_dir,
+        waveform_dir,
+        snr_fas_output_dir,
+        batches_dir,
+        n_procs,
+        bypass_records_ffp,
+        batch_size,
     )
 
 
@@ -493,9 +544,17 @@ def run_im_calculation(
         ),
     ] = False,
     intensity_measures: Annotated[
-        list[IM],
+        str | None,
         typer.Option(
-            callback=lambda x: [IM(i) for i in x[0].split(",")],
+            callback=lambda x: (
+                None
+                if x is None or (isinstance(x, (list, tuple)) and not x)
+                else [
+                    IM(i.strip())
+                    for i in (x[0] if isinstance(x, (list, tuple)) else x).split(",")
+                    if i.strip()
+                ]
+            ),
         ),
     ] = None,
 ):
@@ -542,6 +601,12 @@ def generate_site_table_basin(
             file_okay=False,
         ),
     ],
+    add_tmp_arrays: Annotated[
+        bool,
+        typer.Option(
+            is_flag=True,
+        ),
+    ] = False,
 ):
     """
     Generate the site table basin flatfile.
@@ -554,15 +619,20 @@ def generate_site_table_basin(
         The main directory of the NZGMDB results (Highest level directory).
     nzcvm_data_ffp : Path
         The full file path to the nzcvm_data repository that stores the basin information.
+    add_tmp_arrays : bool, optional
+        If True, temporary arrays will be added to the site table (default is False).
     """
     main_dir.mkdir(parents=True, exist_ok=True)
     # Generate the site basin flatfile
     flatfile_dir = file_structure.get_flatfile_dir(main_dir)
     flatfile_dir.mkdir(parents=True, exist_ok=True)
 
-    site_df = sites.create_site_table_response()
+    site_df, station_df = sites.create_site_table_response(add_tmp_arrays)
     site_df = sites.add_site_basins(site_df, nzcvm_data_ffp)
 
+    station_df.to_csv(
+        flatfile_dir / file_structure.PreFlatfileNames.STATION_TABLE, index=False
+    )
     site_df.to_csv(
         flatfile_dir / file_structure.PreFlatfileNames.SITE_TABLE, index=False
     )
@@ -632,26 +702,15 @@ def merge_im_results(
         Path,
         typer.Argument(file_okay=False),
     ],
-    gmc_ffp: Annotated[
+    records_ffp: Annotated[
         Path,
-        typer.Option(
-            readable=True,
-            exists=True,
-        ),
-    ] = None,
-    fmax_ffp: Annotated[
-        Path,
-        typer.Option(
-            readable=True,
-            exists=True,
-        ),
-    ] = None,
+        typer.Argument(dir_okay=False),
+    ],
+    n_procs: Annotated[int, typer.Option()] = 1,
+    batch_size: Annotated[int, typer.Option()] = 5000,
 ):
     """
-    Merge IM results together into one flatfile and perform a filter for Ds595.
-
-    This function consolidates individual IM result files into a single comprehensive
-    dataset, ensuring consistency and filtering for the Ds595 parameter.
+    Merge IM results together into individual component files.
 
     Parameters
     ----------
@@ -659,12 +718,12 @@ def merge_im_results(
         The directory containing the IM results to merge.
     output_dir : Path
         The directory to save the merged IM file.
-    gmc_ffp : Path
-        The full file path to the GMC predictions file.
-    fmax_ffp : Path
-        The full file path to the Fmax file.
+    records_ffp : Path
+        The full file path to the records file, which contains all the record ids.
     """
-    merge_flatfiles.merge_im_data(im_dir, output_dir, gmc_ffp, fmax_ffp)
+    merge_flatfiles.merge_im_data(
+        im_dir, output_dir, records_ffp, n_procs=n_procs, batch_size=batch_size
+    )
 
 
 @cli.from_docstring(app)
@@ -782,10 +841,6 @@ def run_full_nzgmdb(
             file_okay=False,
         ),
     ],
-    gmc_procs: Annotated[
-        int,
-        typer.Option(),
-    ] = 1,
     n_procs: Annotated[int, typer.Option()] = 1,
     checkpoint: Annotated[
         bool,
@@ -813,11 +868,19 @@ def run_full_nzgmdb(
     geonet_batch_size: Annotated[
         int,
         typer.Option(),
-    ] = 500,
+    ] = 100,
     snr_batch_size: Annotated[
         int,
         typer.Option(),
     ] = 5000,
+    phase_arrival_n_batches: Annotated[
+        int,
+        typer.Option(),
+    ] = None,
+    gmc_n_batches: Annotated[
+        int,
+        typer.Option(),
+    ] = None,
     real_time: Annotated[
         bool,
         typer.Option(),
@@ -837,6 +900,17 @@ def run_full_nzgmdb(
             dir_okay=False,
         ),
     ] = None,
+    add_tmp_arrays: Annotated[
+        bool,
+        typer.Option(),
+    ] = False,
+    tmp_array_data_dir: Annotated[
+        Path,
+        typer.Option(
+            exists=True,
+            file_okay=False,
+        ),
+    ] = None,
     machine: Annotated[
         cfg.MachineName,
         typer.Option(
@@ -850,7 +924,9 @@ def run_full_nzgmdb(
     This function orchestrates the full pipeline of NZGMDB, executing all necessary steps sequentially.
 
     Steps Included:
+    - Generate site table with basin information
     - Fetch Geonet data
+    - Waveform extraction
     - Merge tectonic domains
     - Generate phase arrival table
     - Calculate SNR
@@ -883,8 +959,6 @@ def run_full_nzgmdb(
         Command to activate gmc_predict environment to run the predictions.
     ko_matrix_path : Path
         Path to the ko matrix directory
-    gmc_procs : int, optional
-        Number of processes to use for GMC (default is 1).
     n_procs : int, optional
         The number of processes to use (default is 1).
     checkpoint : bool, optional
@@ -899,6 +973,12 @@ def run_full_nzgmdb(
         The batch size for Geonet data retrieval (default is 500).
     snr_batch_size : int, optional
         The batch size for the SNR calculation (default is 5000).
+    phase_arrival_n_batches : int, optional
+        The number of batches to split the phase arrival calculation into
+        (default is None, which will automatically determine the number of batches based on the number of records and n_procs).
+    gmc_n_batches : int, optional
+        The number of batches to split the GMC prediction step into
+        (default is None, which will automatically determine the number of batches based on the number of records and gmc_procs).
     real_time : bool, optional
         If True, the function will run in real-time mode using a different client (default is False).
     upload : bool, optional
@@ -907,11 +987,21 @@ def run_full_nzgmdb(
         If True, the function will create a quality database (default is False).
     bypass_records_ffp : Path, optional
         The full file path to the bypass records file, if applicable.
+    add_tmp_arrays : bool, optional
+        If True, temporary arrays will be added to the database run (default is False).
+    tmp_array_data_dir : Path, optional
+        The directory containing temporary array data, required if add_tmp_arrays is True.
     machine : cfg.MachineName, optional
         The machine name to use for process configuration (default is None).
     """
     main_dir.mkdir(parents=True, exist_ok=True)
     config = cfg.Config()
+
+    # Check that if add_tmp_arrays is True, tmp_array_data_dir is provided
+    if add_tmp_arrays and tmp_array_data_dir is None:
+        raise ValueError(
+            "tmp_array_data_dir must be provided if add_tmp_arrays is True."
+        )
 
     # Generate the site basin flatfile
     flatfile_dir = file_structure.get_flatfile_dir(main_dir)
@@ -921,7 +1011,7 @@ def run_full_nzgmdb(
         and (flatfile_dir / file_structure.PreFlatfileNames.SITE_TABLE).exists()
     ):
         print("Generating site table basin flatfile")
-        generate_site_table_basin(main_dir, nzcvm_data_ffp)
+        generate_site_table_basin(main_dir, nzcvm_data_ffp, add_tmp_arrays)
 
     # Fetch the Geonet data
     if not (
@@ -947,6 +1037,7 @@ def run_full_nzgmdb(
             only_sites,
             only_record_ids_ffp,
             real_time,
+            add_tmp_arrays=add_tmp_arrays,
         )
 
     # Extract Waveforms
@@ -970,6 +1061,7 @@ def run_full_nzgmdb(
             extract_n_procs,
             only_record_ids_ffp,
             batch_size=geonet_batch_size,
+            tmp_array_dir=tmp_array_data_dir,
         )
 
     # Merge the tectonic domains
@@ -1018,7 +1110,9 @@ def run_full_nzgmdb(
             conda_sh,
             gmc_activate,
             phase_n_procs,
+            phase_arrival_n_batches,
             bypass_records_ffp,
+            xml_dir=file_structure.get_stationxml_dir(main_dir),
         )
 
     # Generate SNR
@@ -1061,8 +1155,8 @@ def run_full_nzgmdb(
             flatfile_dir,
             waveform_dir,
             snr_fas_output_dir,
-            fmax_n_procs,
-            bypass_records_ffp,
+            n_procs=fmax_n_procs,
+            bypass_records_ffp=bypass_records_ffp,
         )
 
     # Run GMC
@@ -1072,7 +1166,7 @@ def run_full_nzgmdb(
     ):
         print("Running GMC")
         gmc_n_procs = (
-            gmc_procs
+            n_procs
             if machine is None
             else config.get_n_procs(machine, cfg.WorkflowStep.GMC)
         )
@@ -1084,6 +1178,7 @@ def run_full_nzgmdb(
             gmc_activate,
             gmc_predict_activate,
             gmc_n_procs,
+            gmc_n_batches,
             bypass_records_ffp=bypass_records_ffp,
         )
 
@@ -1110,21 +1205,35 @@ def run_full_nzgmdb(
     # Run IM calculation
     im_dir = file_structure.get_im_dir(main_dir)
     im_dir.mkdir(parents=True, exist_ok=True)
-    print("Calculating IMs")
-    im_n_procs = (
-        n_procs if machine is None else config.get_n_procs(machine, cfg.WorkflowStep.IM)
-    )
-    run_im_calculation(main_dir, ko_matrix_path, im_dir, im_n_procs, checkpoint)
-
-    # Merge IM results
+    print("Checking Im Calculations")
     if not (
         checkpoint
         and (
-            flatfile_dir / file_structure.PreFlatfileNames.GROUND_MOTION_IM_CATALOGUE
+            flatfile_dir / file_structure.SkippedRecordFilenames.IM_CALC_SKIPPED_RECORDS
         ).exists()
     ):
-        print("Merging IM results")
-        merge_im_results(im_dir, flatfile_dir, gmc_ffp, fmax_ffp)
+        im_n_procs = (
+            n_procs
+            if machine is None
+            else config.get_n_procs(machine, cfg.WorkflowStep.IM)
+        )
+        print("Calculating IMs")
+        run_im_calculation(main_dir, ko_matrix_path, im_dir, im_n_procs, checkpoint)
+
+    # Merge IM results
+    # print("Checking Im Merge")
+    # if not (
+    #     checkpoint
+    #     and (flatfile_dir / file_structure.PreFlatfileNames.IM_MERGE_EAS_FAS).exists()
+    # ):
+    # records_ffp = flatfile_dir / "records.csv"
+    # im_merge_n_procs = (
+    #     n_procs
+    #     if machine is None
+    #     else config.get_n_procs(machine, cfg.WorkflowStep.IM_MERGE)
+    # )
+    # print("Merging IM results")
+    # merge_im_results(im_dir, flatfile_dir, records_ffp, im_merge_n_procs)
 
     # Calculate distances
     if not (
@@ -1157,7 +1266,7 @@ def run_full_nzgmdb(
     if not (
         checkpoint
         and (
-            flatfile_dir / file_structure.FlatfileNames.GROUND_MOTION_IM_ROTD100_FLAT
+            flatfile_dir / file_structure.FlatfileNames.GROUND_MOTION_IM_EAS_FAS_FLAT
         ).exists()
     ):
         print("Merging flat files")

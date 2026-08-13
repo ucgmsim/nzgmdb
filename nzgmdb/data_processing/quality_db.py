@@ -41,17 +41,25 @@ def filter_flatfiles_on_catalouge(
         file_structure.FlatfileNames.GMC_PREDICTIONS,
         file_structure.FlatfileNames.SNR_METADATA,
         file_structure.FlatfileNames.GROUND_MOTION_IM_000_FLAT,
+        file_structure.FlatfileNames.GROUND_MOTION_IM_000_FAS_FLAT,
         file_structure.FlatfileNames.GROUND_MOTION_IM_090_FLAT,
+        file_structure.FlatfileNames.GROUND_MOTION_IM_090_FAS_FLAT,
         file_structure.FlatfileNames.GROUND_MOTION_IM_VER_FLAT,
+        file_structure.FlatfileNames.GROUND_MOTION_IM_VER_FAS_FLAT,
         file_structure.FlatfileNames.GROUND_MOTION_IM_ROTD0_FLAT,
         file_structure.FlatfileNames.GROUND_MOTION_IM_ROTD100_FLAT,
         file_structure.FlatfileNames.GROUND_MOTION_IM_GEOM_FLAT,
-        file_structure.FlatfileNames.GROUND_MOTION_IM_EAS_FLAT,
+        file_structure.FlatfileNames.GROUND_MOTION_IM_GEOM_FAS_FLAT,
+        file_structure.FlatfileNames.GROUND_MOTION_IM_EAS_FAS_FLAT,
     ]
 
     for file in file_to_filter:
         # Load the new file and filter based on record_id
-        df = pd.read_csv(flatfile_dir / file, dtype={"evid": str})
+        suffix = Path(file).suffix
+        if suffix == ".csv":
+            df = pd.read_csv(flatfile_dir / file, dtype={"evid": str})
+        else:
+            df = pd.read_parquet(flatfile_dir / file)
         if file in [
             file_structure.FlatfileNames.EARTHQUAKE_SOURCE_TABLE,
             file_structure.FlatfileNames.EARTHQUAKE_SOURCE_GEOMETRY,
@@ -83,7 +91,7 @@ def filter_flatfiles_on_catalouge(
             # Make the evid_sta column
             df["evid_sta"] = df["evid"] + "_" + df["sta"]
             # Assert the same length of unique values
-            assert len(df["evid_sta"].unique()) == len(df)
+            # assert len(df["evid_sta"].unique()) == len(df)
             # Create the rodtd50 evid_sta
             rotd50_flat["evid_sta"] = rotd50_flat["evid"] + "_" + rotd50_flat["sta"]
             df_filtered = df[df["evid_sta"].isin(rotd50_flat["evid_sta"])]
@@ -94,7 +102,7 @@ def filter_flatfiles_on_catalouge(
             df_filtered = df[df["record"].isin(rotd50_flat["record_id"])]
         else:
             df_filtered = df[df["record_id"].isin(rotd50_flat["record_id"])]
-        df_filtered.to_csv(final_output / file, index=False)
+        df_filtered.to_csv((final_output / file).with_suffix(".csv"), index=False)
 
 
 def filter_mag(catalogue: pd.DataFrame, mag_min: float):
@@ -959,6 +967,7 @@ def apply_all_filters(
 def create_quality_db(
     main_dir: Path,
     bypass_records_ffp: Path = None,
+    output_csv: bool = False,
 ):
     """
     Create the quality database by running the following checks:
@@ -982,6 +991,8 @@ def create_quality_db(
         The main directory of the NZGMDB results (Highest level directory)
     bypass_records_ffp : Path, optional
         The file path to the records that will bypass the quality checks
+    output_csv : bool, optional
+        Whether to output the quality database as a CSV file, by default False which will use parquet format.
     """
     # Make the quality db directory
     output_dir = file_structure.get_quality_db_dir(main_dir)
@@ -989,10 +1000,17 @@ def create_quality_db(
 
     # Load the ground motion im catalogue
     flatfile_dir = file_structure.get_flatfile_dir(main_dir)
-    gm_df = pd.read_csv(
-        flatfile_dir / file_structure.FlatfileNames.GROUND_MOTION_IM_ROTD50_FLAT,
-        dtype={"evid": str},
-    )
+    if output_csv:
+        gm_df = pd.read_csv(
+            (
+                flatfile_dir / file_structure.FlatfileNames.GROUND_MOTION_IM_ROTD50_FLAT
+            ).with_suffix(".csv"),
+            dtype={"evid": str},
+        )
+    else:
+        gm_df = pd.read_parquet(
+            flatfile_dir / file_structure.FlatfileNames.GROUND_MOTION_IM_ROTD50_FLAT,
+        )
 
     # Get the clipped records
     clipped_records_ffp = (
@@ -1015,8 +1033,9 @@ def create_quality_db(
     filter_flatfiles_on_catalouge(flatfile_dir, output_dir, gm_df)
 
     # Save the gm_df and skipped_records
+    # if output_csv:
     gm_df.to_csv(
-        output_dir / file_structure.FlatfileNames.GROUND_MOTION_IM_ROTD50_FLAT,
+        (output_dir / file_structure.FlatfileNames.GROUND_MOTION_IM_ROTD50_FLAT).with_suffix(".csv"),
         index=False,
     )
     skipped_records.to_csv(

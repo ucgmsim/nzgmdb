@@ -11,6 +11,7 @@ from pathlib import Path
 from typing import Annotated, Optional
 
 import matplotlib.pyplot as plt
+import matplotlib.ticker as mticker
 import numpy as np
 import pandas as pd
 import typer
@@ -608,6 +609,139 @@ def important_set_figures(
     return bar_img_base64, pie_imgs_base64
 
 
+def plot_usable_period_records(
+    df_full: pd.DataFrame,
+    df_quality: pd.DataFrame,
+    title: Optional[str] = None,
+) -> plt.Figure:
+    """
+    Plot number of usable records vs period for Full and Quality datasets.
+
+    Parameters
+    ----------
+    df_full : pd.DataFrame
+        Full dataset DataFrame containing columns for fmin_X, fmin_Y, fmax_X, fmax_Y, and pSA_{period} columns.
+    df_quality : pd.DataFrame
+        Quality dataset DataFrame containing columns for fmin_X, fmin_Y, fmax_X, fmax_Y, and pSA_{period} columns.
+    title : Optional[str], optional
+        Title for the plot, by default None.
+
+    Returns
+    -------
+    str
+        Base64 encoded string of the plot image.
+    """
+
+    def extract_periods_from_columns(df: pd.DataFrame):
+        """
+        Extracts periods from column names that start with "pSA_".
+
+        Parameters
+        ----------
+        df : pd.DataFrame
+            DataFrame containing columns with names like "pSA_{period}".
+
+        Returns
+        -------
+        np.ndarray
+            Sorted array of periods extracted from the column names.
+        """
+        psa_cols = [c for c in df.columns if c.startswith("pSA_")]
+        periods = []
+        for c in psa_cols:
+            periods.append(float(c.split("_")[1]))
+        return np.array(sorted(periods))
+
+    def count_usable_records(df: pd.DataFrame, periods: np.ndarray) -> np.ndarray:
+        """
+        Count usable records per period using BOTH fmin and fmax.
+
+        A record is usable if:
+            1/fmax <= T <= 1/fmin
+
+        Parameters
+        ----------
+        df : pandas.DataFrame
+            Input dataframe containing `fmin_X`, `fmin_Y`, `fmax_X`, and `fmax_Y`.
+        periods : numpy.ndarray
+            Periods (s) to evaluate.
+
+        Returns
+        -------
+        numpy.ndarray
+            Array of counts for each period in `periods`.
+        """
+
+        fmin_max = np.maximum(df["fmin_X"].to_numpy(), df["fmin_Y"].to_numpy())
+        fmax_min = np.minimum(df["fmax_X"].to_numpy(), df["fmax_Y"].to_numpy())
+
+        T_upper = 1.0 / fmin_max  # long-period limit
+        T_lower = 1.0 / fmax_min  # short-period limit
+
+        # Vectorised evaluation
+        T_lower = T_lower[:, None]
+        T_upper = T_upper[:, None]
+
+        usable = (periods >= T_lower) & (periods <= T_upper)
+        return usable.sum(axis=0)
+
+    required_cols = ["fmin_X", "fmin_Y", "fmax_X", "fmax_Y"]
+
+    df_full = df_full.dropna(subset=required_cols)
+    df_quality = df_quality.dropna(subset=required_cols)
+
+    periods = extract_periods_from_columns(df_full)
+
+    counts_full = count_usable_records(df_full, periods)
+    counts_quality = count_usable_records(df_quality, periods)
+
+    fig, ax = plt.subplots(figsize=(8, 6))
+
+    ax.plot(
+        periods,
+        counts_full,
+        label="Full Database",
+        linewidth=2,
+        drawstyle="steps-post",
+    )
+
+    ax.plot(
+        periods,
+        counts_quality,
+        label="Quality Database",
+        linewidth=2,
+        drawstyle="steps-post",
+    )
+
+    ax.set_xscale("log")
+    ax.set_xlim(0.01, 10)
+
+    ax.xaxis.set_major_locator(mticker.FixedLocator([0.01, 0.1, 1.0, 10.0]))
+
+    ax.xaxis.set_major_formatter(
+        mticker.FuncFormatter(
+            lambda x, _: {0.01: "0.01", 0.1: "0.1", 1.0: "1", 10.0: "10"}.get(x, "")
+        )
+    )
+
+    ax.xaxis.set_minor_formatter(mticker.NullFormatter())
+
+    ax.set_xlabel("Period (s)")
+    ax.set_ylabel("Number of Records")
+    if title:
+        ax.set_title(title)
+    ax.legend()
+    ax.grid(True, which="both", linestyle="--", alpha=0.4)
+
+    fig.tight_layout()
+
+    buf = BytesIO()
+    fig.savefig(buf, format="png", bbox_inches="tight", dpi=300)
+    plt.close(fig)
+    buf.seek(0)
+    return base64.b64encode(buf.read()).decode("utf-8")
+
+
 def skipped_reason_overlap_barplot(skipped_df: pd.DataFrame, title: str):
     """
     Generate a bar plot showing the overlap of skipped reasons.
@@ -1080,6 +1214,29 @@ def plot_site_table_image(
     )
 
 
+def parse_nzgmdb_version(value: str) -> NZGMDB_Versions:
+    """
+    Parse a string input into an NZGMDB_Versions enum member.
+
+    Parameters
+    ----------
+    value : str
+        The input string representing the NZGMDB version (e.g., "4p3", "4.3", "v4p3").
+
+    Returns
+    -------
+    NZGMDB_Versions
+        The corresponding NZGMDB_Versions enum member.
+    """
+    try:
+        return NZGMDB_Versions(value.strip().lower())
+    except ValueError as exc:
+        allowed = ", ".join(v.value for v in NZGMDB_Versions)
+        raise typer.BadParameter(
+            f"Invalid NZGMDB version: {value}. Allowed: {allowed}"
+        ) from exc
+
+
 @cli.from_docstring(app)
 def generate_report(
     new_version_directory: Annotated[
@@ -1101,21 +1258,17 @@ def generate_report(
         ),
     ] = None,
     new_version: Annotated[
-        Optional[NZGMDB_Versions],
+        str,
         typer.Option(
-            None,
-            help="The version for the new database (choose from the enum).",
             case_sensitive=False,
         ),
-    ] = NZGMDB_Versions.V4p3,
+    ] = "4p3",
     old_version: Annotated[
-        Optional[NZGMDB_Versions],
+        str,
         typer.Option(
-            None,
-            help="The version for the old database (choose from the enum).",
             case_sensitive=False,
         ),
-    ] = NZGMDB_Versions.V4p3,
+    ] = "4p3",
 ):
     """
     Generate a HTML report comparing the new version of the database to a previous version.
@@ -1131,10 +1284,13 @@ def generate_report(
         The Top Level directory containing the previous version of the database to compare against.
         If None, a summary of the new version will be generated instead and comparison plots will not be generated.
     new_version : NZGMDB_Versions | None
-        The version for the new database (choose from the enum). Default is NZGMDB_Versions.V4p3.
+        The version for the new database (e.g., "4p3", "4p4"). Used for labeling in the report.
     old_version : NZGMDB_Versions | None
-        The version for the old database (choose from the enum). Default is NZGMDB_Versions.V4p3.
+        The version for the old database (e.g., "4p3", "4p4"). Used for labeling in the report.
     """
+    new_version = parse_nzgmdb_version(new_version)
+    old_version = parse_nzgmdb_version(old_version)
+
     html_parts = []
     # Start of HTML
     html_parts.append(
@@ -1513,7 +1669,8 @@ def generate_report(
             pd.read_csv(
                 new_flatfiles_dir / "station_magnitude_table_geonet.csv"
                 if new_version == NZGMDB_Versions.V4p3
-                else file_structure.PreFlatfileNames.STATION_MAGNITUDE_TABLE_EXTRACTION
+                else new_flatfiles_dir
+                / file_structure.PreFlatfileNames.STATION_MAGNITUDE_TABLE_EXTRACTION
             )
         )
         / 3,
@@ -1532,7 +1689,8 @@ def generate_report(
                 pd.read_csv(
                     old_flatifles_dir / "station_magnitude_table_geonet.csv"
                     if old_version == NZGMDB_Versions.V4p3
-                    else file_structure.PreFlatfileNames.STATION_MAGNITUDE_TABLE_EXTRACTION
+                    else old_flatifles_dir
+                    / file_structure.PreFlatfileNames.STATION_MAGNITUDE_TABLE_EXTRACTION
                 )
             )
             / 3,
@@ -1862,154 +2020,72 @@ def generate_report(
             html_parts.append("</div>")
 
     # Add psa count Comparison
-    html_parts.append("<h2>Quality pSA Record Count Comparison</h2>")
-    html_parts.append('<div class="fig-single">')
+    html_parts.append("<h2>pSA Record Count Comparison</h2>")
 
-    fig, ax = plt.subplots(figsize=(16, 6), dpi=300)
+    img_base64_new = plot_usable_period_records(full_new, quality_new, "New NZGMDB")
 
-    # Generate fmin plots
     if compare_version_directory:
-        filtered_quality_old = apply_fmin_filter_df(quality_old, pre_4p3=False)
-        old_record_count = (~filtered_quality_old[PSA_KEYS].isna()).sum(axis=0)
-        ax.plot(
-            PERIODS,
-            old_record_count.loc[PSA_KEYS],
-            label="Old NZGMDB",
+        img_base64_old = plot_usable_period_records(full_old, quality_old, "Old NZGMDB")
+        html_parts.append("<div class='fig-grid'>")
+        html_parts.append(f'<img src="data:image/png;base64,{img_base64_old}">')
+        html_parts.append(f'<img src="data:image/png;base64,{img_base64_new}">')
+        html_parts.append("</div>")
+    else:
+        html_parts.append('<div class="fig-single">')
+        html_parts.append(f'<img src="data:image/png;base64,{img_base64_new}">')
+        html_parts.append("</div>")
+
+    if compare_version_directory:
+        # Add IM Compare
+        html_parts.append("<h2>IM Comparison</h2>")
+        html_parts.append('<div class="fig-single">')
+
+        quality_old_record_index = quality_old.set_index("record_id")
+        quality_new_record_index = quality_new.set_index("record_id")
+
+        # IM Compare
+        shared_record_ids = np.intersect1d(
+            quality_old_record_index.index.values.astype(str),
+            quality_new_record_index.index.values.astype(str),
         )
 
-    filtered_quality_new = apply_fmin_filter_df(quality_new)
-    new_record_count = (~filtered_quality_new[PSA_KEYS].isna()).sum(axis=0)
-    ax.plot(
-        PERIODS,
-        new_record_count.loc[PSA_KEYS],
-        label="New NZGMDB",
-    )
+        plot_ims = [
+            "PGV",
+            "PGA",
+            "pSA_0.01",
+            "pSA_0.1",
+            "pSA_0.5",
+            "pSA_1.0",
+            "pSA_3.0",
+            "pSA_10.0",
+        ]
 
-    ax.set_xlabel("Period (s)")
-    ax.set_xscale("log")
-    ax.set_ylabel("Count")
-    ax.set_xlim(0.01, 10.0)
-    ax.legend()
-    ax.grid(linewidth=0.5, alpha=0.5, linestyle="--")
+        fig, axs = get_fig_axes(len(plot_ims), 2, -1, ind_figsize=(8, 6))
 
-    fig.tight_layout()
+        for i, (cur_im, cur_ax) in enumerate(zip(plot_ims, axs)):
+            cur_old = quality_old_record_index.loc[shared_record_ids, cur_im]
+            cur_new = quality_new_record_index.loc[shared_record_ids, cur_im]
 
-    # Convert to base64
-    buf = BytesIO()
-    fig.savefig(buf, format="png", bbox_inches="tight")
-    plt.close(fig)
-    buf.seek(0)
-    img_base64 = base64.b64encode(buf.read()).decode("utf-8")
-    # Embed in HTML
-    html_parts.append(f'<img src="data:image/png;base64,{img_base64}">')
-    html_parts.append("</div>")
+            cur_max = max(cur_old.max(), cur_new.max())
 
-    # Add IM Compare
-    html_parts.append("<h2>IM Comparison</h2>")
-    html_parts.append('<div class="fig-single">')
+            cur_ax.scatter(cur_old, cur_new, s=1)
+            cur_ax.set_xlabel("Old NZGMDB")
+            cur_ax.set_ylabel("New NZGMDB")
+            cur_ax.set_title(cur_im)
+            cur_ax.plot(
+                [0, cur_max], [0, cur_max], color="black", linestyle="--", linewidth=0.5
+            )
+            cur_ax.set_xlim(0, cur_max)
+            cur_ax.set_ylim(0, cur_max)
 
-    quality_old_record_index = quality_old.set_index("record_id")
-    quality_new_record_index = quality_new.set_index("record_id")
+            # If the cur_im is PGA or includes pSA, set the x and y scales to log
+            if cur_im == "PGA" or cur_im.startswith("pSA_"):
+                cur_ax.set_xscale("log")
+                cur_ax.set_yscale("log")
+                cur_ax.set_xlim(0.001, cur_max)
+                cur_ax.set_ylim(0.001, cur_max)
 
-    # IM Compare
-    shared_record_ids = np.intersect1d(
-        quality_old_record_index.index.values.astype(str),
-        quality_new_record_index.index.values.astype(str),
-    )
-
-    plot_ims = [
-        "PGV",
-        "PGA",
-        "pSA_0.01",
-        "pSA_0.1",
-        "pSA_0.5",
-        "pSA_1.0",
-        "pSA_3.0",
-        "pSA_10.0",
-    ]
-
-    fig, axs = get_fig_axes(len(plot_ims), 2, -1, ind_figsize=(8, 6))
-
-    for i, (cur_im, cur_ax) in enumerate(zip(plot_ims, axs)):
-        cur_old = quality_old_record_index.loc[shared_record_ids, cur_im]
-        cur_new = quality_new_record_index.loc[shared_record_ids, cur_im]
-
-        cur_max = max(cur_old.max(), cur_new.max())
-
-        cur_ax.scatter(cur_old, cur_new, s=1)
-        cur_ax.set_xlabel("Old NZGMDB")
-        cur_ax.set_ylabel("New NZGMDB")
-        cur_ax.set_title(cur_im)
-        cur_ax.plot(
-            [0, cur_max], [0, cur_max], color="black", linestyle="--", linewidth=0.5
-        )
-        cur_ax.set_xlim(0, cur_max)
-        cur_ax.set_ylim(0, cur_max)
-
-        # If the cur_im is PGA or includes pSA, set the x and y scales to log
-        if cur_im == "PGA" or cur_im.startswith("pSA_"):
-            cur_ax.set_xscale("log")
-            cur_ax.set_yscale("log")
-            cur_ax.set_xlim(0.001, cur_max)
-            cur_ax.set_ylim(0.001, cur_max)
-
-        cur_ax.grid(which="both", linewidth=0.5, alpha=0.5, linestyle="--")
-
-    # Convert to base64
-    buf = BytesIO()
-    fig.savefig(buf, format="png", bbox_inches="tight")
-    plt.close(fig)
-    buf.seek(0)
-    img_base64 = base64.b64encode(buf.read()).decode("utf-8")
-    # Embed in HTML
-    html_parts.append(f'<img src="data:image/png;base64,{img_base64}">')
-    html_parts.append("</div>")
-
-    html_parts.append(
-        """
-    <h2>GMM Input Comparison</h2>
-    <div class="fig-grid">
-    """
-    )
-    # GMM Input comparison
-    input_cols = [
-        "ev_lat",
-        "ev_lon",
-        "ev_depth",
-        "mag",
-        "strike",
-        "dip",
-        "rake",
-        "z_tor",
-        "r_jb",
-        "r_rup",
-        "r_x",
-        "Vs30",
-        "Z1.0",
-        "Z2.5",
-    ]
-    # Generate figures and embed as base64
-    for i, col in enumerate(input_cols):
-        cur_x_data = quality_old_record_index.loc[shared_record_ids, col].values
-        cur_y_data = quality_new_record_index.loc[shared_record_ids, col].values
-        nan_mask = np.isnan(cur_x_data) | np.isnan(cur_y_data)
-        cur_x_data = cur_x_data[~nan_mask]
-        cur_y_data = cur_y_data[~nan_mask]
-        lims = (
-            np.quantile(cur_x_data, 0.01),
-            np.quantile(cur_x_data, 0.99),
-        )
-        fig, ax = plt.subplots(figsize=(8, 6), dpi=300)
-        ax.scatter(cur_x_data, cur_y_data, alpha=0.5, s=1)
-        ax.plot(lims, lims, color="k")
-        ax.set_xlabel("Old NZGMDB")
-        ax.set_ylabel("New NZGMDB")
-        ax.grid(linewidth=0.5, alpha=0.5, linestyle="--")
-        ax.set_xlim(lims)
-        ax.set_ylim(lims)
-        ax.set_aspect("equal")
-        ax.set_title(f"{col} - N: {len(cur_x_data)}")
-        fig.tight_layout()
+            cur_ax.grid(which="both", linewidth=0.5, alpha=0.5, linestyle="--")
 
         # Convert to base64
         buf = BytesIO()
@@ -2019,6 +2095,62 @@ def generate_report(
         img_base64 = base64.b64encode(buf.read()).decode("utf-8")
         # Embed in HTML
         html_parts.append(f'<img src="data:image/png;base64,{img_base64}">')
+        html_parts.append("</div>")
+
+        html_parts.append(
+            """
+        <h2>GMM Input Comparison</h2>
+        <div class="fig-grid">
+        """
+        )
+        # GMM Input comparison
+        input_cols = [
+            "ev_lat",
+            "ev_lon",
+            "ev_depth",
+            "mag",
+            "strike",
+            "dip",
+            "rake",
+            "z_tor",
+            "r_jb",
+            "r_rup",
+            "r_x",
+            "Vs30",
+            "Z1.0",
+            "Z2.5",
+        ]
+        # Generate figures and embed as base64
+        for i, col in enumerate(input_cols):
+            cur_x_data = quality_old_record_index.loc[shared_record_ids, col].values
+            cur_y_data = quality_new_record_index.loc[shared_record_ids, col].values
+            nan_mask = np.isnan(cur_x_data) | np.isnan(cur_y_data)
+            cur_x_data = cur_x_data[~nan_mask]
+            cur_y_data = cur_y_data[~nan_mask]
+            lims = (
+                np.quantile(cur_x_data, 0.01),
+                np.quantile(cur_x_data, 0.99),
+            )
+            fig, ax = plt.subplots(figsize=(8, 6), dpi=300)
+            ax.scatter(cur_x_data, cur_y_data, alpha=0.5, s=1)
+            ax.plot(lims, lims, color="k")
+            ax.set_xlabel("Old NZGMDB")
+            ax.set_ylabel("New NZGMDB")
+            ax.grid(linewidth=0.5, alpha=0.5, linestyle="--")
+            ax.set_xlim(lims)
+            ax.set_ylim(lims)
+            ax.set_aspect("equal")
+            ax.set_title(f"{col} - N: {len(cur_x_data)}")
+            fig.tight_layout()
+
+            # Convert to base64
+            buf = BytesIO()
+            fig.savefig(buf, format="png", bbox_inches="tight")
+            plt.close(fig)
+            buf.seek(0)
+            img_base64 = base64.b64encode(buf.read()).decode("utf-8")
+            # Embed in HTML
+            html_parts.append(f'<img src="data:image/png;base64,{img_base64}">')
     # End of Section
     html_parts.append("</div>")
 
@@ -2026,3 +2158,7 @@ def generate_report(
     # Save report
     with open(output_file, "w") as f:
         f.write("".join(html_parts))
+
+
+if __name__ == "__main__":
+    app()
