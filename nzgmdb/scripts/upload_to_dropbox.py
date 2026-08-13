@@ -108,14 +108,57 @@ def main(
     """
     output_dir = input_dir / "zips"
     output_dir.mkdir(parents=True, exist_ok=True)
-    dropbox_version_dir = f"{DROPBOX_PATH}/{version}"
+    failed_files = []
 
     if version is None:
         version = input_dir.name
+    dropbox_version_dir = f"{DROPBOX_PATH}/{version}"
 
     flatfiles_dir = file_structure.get_flatfile_dir(input_dir)
     snr_fas_dir = file_structure.get_snr_fas_dir(input_dir)
     waveforms_dir = file_structure.get_waveform_dir(input_dir)
+
+    # Check if there is a quality_db directory and zip it
+    quality_db_dir = file_structure.get_quality_db_dir(input_dir)
+    if quality_db_dir.exists():
+        quality_db_files = list(quality_db_dir.rglob("*.csv"))
+        quality_db_zip = zip_files(
+            quality_db_files, output_dir, f"quality_flatfiles_{version}"
+        )
+
+        # Upload quality_db zip to Dropbox
+        failed_files.append(upload_zip_to_dropbox(quality_db_zip, dropbox_version_dir))
+
+    # 2) Zip flatfiles_{ver}.zip
+    flatfiles = [flatfiles_dir / file for file in file_structure.FlatfileNames]
+    flatfiles_zip = zip_files(flatfiles, output_dir, f"flatfiles_{version}")
+    failed_files.append(upload_zip_to_dropbox(flatfiles_zip, dropbox_version_dir))
+
+    # 6) Zip XML inventory files if they exist
+    stationxml_dir = file_structure.get_stationxml_dir(input_dir)
+    if stationxml_dir.exists():
+        xml_files = list(stationxml_dir.rglob("*.xml"))
+        xml_zip = zip_files(xml_files, output_dir, f"stationxml_{version}")
+        # Upload XML zip to Dropbox
+        failed_files.append(upload_zip_to_dropbox(xml_zip, dropbox_version_dir))
+
+    # 3) Zip skipped_{ver}.zip
+    skipped_files = [
+        flatfiles_dir / file
+        for file in file_structure.SkippedRecordFilenames
+        if quality_db_dir.exists()
+        or file != file_structure.SkippedRecordFilenames.QUALITY_SKIPPED_RECORDS
+    ]
+    skipped_zip = zip_files(skipped_files, output_dir, f"skipped_{version}")
+    failed_files.append(upload_zip_to_dropbox(skipped_zip, dropbox_version_dir))
+
+    # 4) Zip pre_flatfiles_{ver}.zip
+    pre_flatfiles = [flatfiles_dir / file for file in file_structure.PreFlatfileNames]
+    pre_flatfiles_zip = zip_files(pre_flatfiles, output_dir, f"pre_flatfiles_{version}")
+
+    # 5) Zip snr_fas_{ver}.zip
+    snr_files = list(snr_fas_dir.rglob("*.csv"))
+    snr_fas_zip = zip_files(snr_files, output_dir, f"snr_fas_{version}")
 
     # 1) Zip the waveforms per year
     waveform_output_dir = output_dir / "waveforms"
@@ -145,52 +188,9 @@ def main(
             )
         event_zips[year_folder.name] = year_event_zips
 
-    # 2) Zip flatfiles_{ver}.zip
-    flatfiles = [flatfiles_dir / file for file in file_structure.FlatfileNames]
-    # flatfiles_zip = zip_files(flatfiles, output_dir, f"flatfiles_{version}")
-
-    # Check if there is a quality_db directory and zip it
-    quality_db_dir = file_structure.get_quality_db_dir(input_dir)
-    if quality_db_dir.exists():
-        quality_db_files = list(quality_db_dir.rglob("*.csv"))
-        # quality_db_zip = zip_files(
-        #     quality_db_files, output_dir, f"quality_flatfiles_{version}"
-        # )
-
-        # Upload quality_db zip to Dropbox
-        # upload_zip_to_dropbox(quality_db_zip, dropbox_version_dir)
-
-    # 3) Zip skipped_{ver}.zip
-    skipped_files = [
-        flatfiles_dir / file
-        for file in file_structure.SkippedRecordFilenames
-        if quality_db_dir.exists()
-        or file != file_structure.SkippedRecordFilenames.QUALITY_SKIPPED_RECORDS
-    ]
-    # skipped_zip = zip_files(skipped_files, output_dir, f"skipped_{version}")
-
-    # 4) Zip pre_flatfiles_{ver}.zip
-    pre_flatfiles = [flatfiles_dir / file for file in file_structure.PreFlatfileNames]
-    # pre_flatfiles_zip = zip_files(pre_flatfiles, output_dir, f"pre_flatfiles_{version}")
-
-    # 5) Zip snr_fas_{ver}.zip
-    snr_files = list(snr_fas_dir.rglob("*.csv"))
-    # snr_fas_zip = zip_files(snr_files, output_dir, f"snr_fas_{version}")
-
-    # 6) Zip XML inventory files if they exist
-    stationxml_dir = file_structure.get_stationxml_dir(input_dir)
-    if stationxml_dir.exists():
-        xml_files = list(stationxml_dir.rglob("*.xml"))
-        # xml_zip = zip_files(xml_files, output_dir, f"stationxml_{version}")
-        # Upload XML zip to Dropbox
-        # upload_zip_to_dropbox(xml_zip, dropbox_version_dir)
-
     # Upload everything to Dropbox
-    failed_files = []
-    # failed_files.append(upload_zip_to_dropbox(flatfiles_zip, dropbox_version_dir))
-    # failed_files.append(upload_zip_to_dropbox(skipped_zip, dropbox_version_dir))
-    # failed_files.append(upload_zip_to_dropbox(pre_flatfiles_zip, dropbox_version_dir))
-    # failed_files.append(upload_zip_to_dropbox(snr_fas_zip, dropbox_version_dir))
+    failed_files.append(upload_zip_to_dropbox(pre_flatfiles_zip, dropbox_version_dir))
+    failed_files.append(upload_zip_to_dropbox(snr_fas_zip, dropbox_version_dir))
 
     dropbox_waveforms_path = f"{dropbox_version_dir}/waveforms"
     # Upload waveform year zips

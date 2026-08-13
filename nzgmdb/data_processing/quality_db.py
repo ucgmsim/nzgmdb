@@ -55,7 +55,11 @@ def filter_flatfiles_on_catalouge(
 
     for file in file_to_filter:
         # Load the new file and filter based on record_id
-        df = pd.read_csv(flatfile_dir / file, dtype={"evid": str})
+        suffix = Path(file).suffix
+        if suffix == ".csv":
+            df = pd.read_csv(flatfile_dir / file, dtype={"evid": str})
+        else:
+            df = pd.read_parquet(flatfile_dir / file)
         if file in [
             file_structure.FlatfileNames.EARTHQUAKE_SOURCE_TABLE,
             file_structure.FlatfileNames.EARTHQUAKE_SOURCE_GEOMETRY,
