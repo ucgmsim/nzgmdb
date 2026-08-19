@@ -344,7 +344,7 @@ def run_event(
 
             # Send a message to slack to indicate the event is being processed
             response = send_message_to_slack(
-                f"Event ID: {event_id} started processing for SeismicNow: Mag: {mag:.1f}; Depth: {depth:.1f} km; Lat: {lat:.2f}; Lon: {lon:.2f}",
+                f"Event ID: {event_id} started processing for SeismicNow: Mag: {mag:.2f}; Depth: {depth:.2f} km; Lat: {lat:.4f}; Lon: {lon:.4f}",
             )
             message_ts = response["ts"]
 
@@ -404,7 +404,7 @@ def run_event(
         # Check if quality is best and magnitude is above threshold
         if quality == "best" and mag < 3.5:
             print(
-                f"Event {event_id} has quality 'best' but magnitude {mag:.1f} is below threshold, skipping"
+                f"Event {event_id} has quality 'best' but magnitude {mag:.2f} is below threshold, skipping"
             )
             return False
 
@@ -419,7 +419,7 @@ def run_event(
             # Add a new message to slack
             response = reply_to_message_on_slack(
                 message_ts,
-                f"Event ID: {event_id} added to SeismicNow (Basic Processing): Mag: {mag:.1f}; Depth: {depth:.1f} km; Lat: {lat:.2f}; Lon: {lon:.2f}",
+                f"Event ID: {event_id} added to SeismicNow (Basic Processing): Mag: {mag:.2f}; Depth: {depth:.2f} km; Lat: {lat:.4f}; Lon: {lon:.4f}",
             )
             message_ts = response["ts"]
 
@@ -512,7 +512,7 @@ def run_event(
         # Check if quality is best and magnitude is above threshold
         if quality == "best" and mag < 3.5:
             print(
-                f"Event {event_id} has quality 'best' but magnitude {mag:.1f} is below threshold, skipping"
+                f"Event {event_id} has quality 'best' but magnitude {mag:.2f} is below threshold, skipping"
             )
             # Send the delete request to SeismicNow
             url = f"{SEISMIC_NOW_URL}/earthquakes/delete"
@@ -553,7 +553,7 @@ def run_event(
             # Reply to the slack message for final results
             reply_to_message_on_slack(
                 message_ts,
-                f"Event ID: {event_id} completed final processing: Mag: {mag:.1f}; Depth: {depth:.1f} km; Lat: {lat:.2f}; Lon: {lon:.2f}",
+                f"Event ID: {event_id} completed final processing: Mag: {mag:.2f}; Depth: {depth:.2f} km; Lat: {lat:.4f}; Lon: {lon:.4f}",
             )
 
         else:
