@@ -1,20 +1,20 @@
-typer>0.12.3
-pandas
-numpy<2.0.0
-obspy
-mseedlib
-scipy
-requests
-fiona
-pyproj
-pyyaml
-shapely
-gmprocess
-h5py
-pooch
-oq_wrapper @ git+https://github.com/ucgmsim/Empirical_Engine.git#subdirectory=oq_wrapper
+typer==0.27.1
+pandas==3.0.5
+numpy==1.26.4
+obspy==1.5.0
+mseedlib==0.0.10
+scipy==1.17.1
+requests==2.34.2
+fiona==1.10.1
+pyproj==3.7.2
+pyyaml==6.0.3
+shapely==2.1.2
+gmprocess==2.7.0
+h5py==3.16.0
+pooch==1.9.0
+oq_wrapper @ git+https://github.com/ucgmsim/Empirical_Engine.git@v2025.12.3#subdirectory=oq_wrapper
 openquake-engine @ git+https://github.com/gem/oq-engine.git@v3.23.2
-qcore @ git+https://github.com/ucgmsim/qcore.git
-IM_calculation @ git+https://github.com/ucgmsim/IM_calculation.git
-velocity_modelling @ git+https://github.com/ucgmsim/velocity_modelling.git@5d1d6ef
-source-modelling @ git+https://github.com/ucgmsim/source_modelling.git
+qcore @ git+https://github.com/ucgmsim/qcore.git@2672a3b
+IM_calculation @ git+https://github.com/ucgmsim/IM_calculation.git@v2025.12.1
+velocity_modelling @ git+https://github.com/ucgmsim/velocity_modelling.git@nzgmdb_4p3
+source-modelling @ git+https://github.com/ucgmsim/source_modelling.git@1671e58

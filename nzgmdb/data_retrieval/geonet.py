@@ -456,7 +456,7 @@ def fetch_sta_mag_line(
 def fetch_event_data(
     event_id: str,
     main_dir: Path,
-    client_NZ: FDSN_Client,
+    real_time: bool,
     inventory: Inventory,
     site_table: pd.DataFrame,
     mw_rrup_data: np.ndarray,
@@ -473,8 +473,8 @@ def fetch_event_data(
         The event id to fetch the data for
     main_dir : Path
         The main directory of the NZGMDB results (Highest level directory)
-    client_NZ : FDSN_Client
-        The geonet client to fetch the data from New Zealand
+    real_time : bool
+        If the function is being used in real time use a different client
     inventory : Inventory
         The inventory of the stations from all networks to extract the stations from
     site_table : pd.DataFrame
@@ -494,6 +494,13 @@ def fetch_event_data(
         The parsed event data.
     """
     # Get the catalogue information
+    # Set constants
+    config = cfg.Config()
+    if real_time:
+        client_NZ = FDSN_Client(base_url=config.get_value("real_time_url"))
+    else:
+        # Get Station Information from geonet clients
+        client_NZ = FDSN_Client("GEONET")
     cat = client_NZ.get_events(eventid=event_id)
     event_cat = cat[0]
 
@@ -579,7 +586,7 @@ def process_batch(
     batch_events: np.ndarray[str],
     batch_index: int,
     main_dir: Path,
-    client_NZ: FDSN_Client,
+    real_time: bool,
     inventory: Inventory,
     site_table: pd.DataFrame,
     mw_rrup_data: np.ndarray,
@@ -599,8 +606,8 @@ def process_batch(
         The index of the current batch
     main_dir : Path
         The main directory of the NZGMDB results (Highest level directory)
-    client_NZ : FDSN_Client
-        The geonet client to fetch the data from New Zealand
+    real_time : bool
+        If the function is being used in real time use a different client
     inventory : Inventory
         The inventory of the stations from all networks to extract the stations from
     site_table : pd.DataFrame
@@ -622,7 +629,7 @@ def process_batch(
             fetch_event_data(
                 event_id,
                 main_dir,
-                client_NZ,
+                real_time,
                 inventory,
                 site_table,
                 mw_rrup_data,
@@ -633,15 +640,12 @@ def process_batch(
             for event_id in batch_events
         ]
     else:
-        # This is a fix for multiprocessing issues with SSLContext
-        mp.set_start_method("spawn", force=True)
-
         with mp.Pool(n_procs) as p:
             results = p.map(
                 functools.partial(
                     fetch_event_data,
                     main_dir=main_dir,
-                    client_NZ=client_NZ,
+                    real_time=real_time,
                     inventory=inventory,
                     site_table=site_table,
                     mw_rrup_data=mw_rrup_data,
@@ -651,9 +655,6 @@ def process_batch(
                 ),
                 batch_events,
             )
-
-        # Reset the start method to default
-        mp.set_start_method("fork", force=True)
 
     # Extract the results
     event_data, sta_mag_data, skipped_records, clipped_records = [], [], [], []
@@ -931,7 +932,7 @@ def parse_geonet_information(
                 batch,
                 index,
                 main_dir,
-                client_NZ,
+                real_time,
                 inventory,
                 site_table,
                 mw_rrup_data,
