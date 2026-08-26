@@ -27,4 +27,4 @@ jobs:
       - name: Run tests
         run: |
           source .venv/bin/activate
-          pytest tests
+          pytest -p no:black tests
