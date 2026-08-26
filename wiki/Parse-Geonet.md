@@ -87,7 +87,7 @@ The preferred magnitude selection follows a hierarchical approach:
 For each earthquake, stations are selected within a distance-dependant radius:
 
 - **Distance calculation:** Based on the `Mw_rrup.txt` lookup table
-![](images/mw_rrup.png)
+![](images/mw_rrup_cutoff_plot.png)
 - **Interpolation:** Uses cubic interpolation between magnitude and distance values
 - **Radius conversion:** Converts distance to degrees using ObsPy's geodetic functions
 - **Station filtering:** Uses ObsPy inventory selection with latitude, longitude, and maximum radius

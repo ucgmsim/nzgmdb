@@ -7,7 +7,7 @@ REGISTRY = {
     "Geonet_Metadata_Summary_v1.4.csv": "sha256:7884422c3fcae0810c02948ba1a3bd39ba5793ba28189e90d730541be1c207c0",
     "puy_slab2_dep_02.26.18.xyz": "sha256:9ebe4feab4ee3b80e3fe403f2d873f94e4d7f06d937d721cc9e154ecee83e3c0",
     "reyners_relocations.csv": "sha256:7795c60dae67af14eb590b0d919fa850e2f2fe2fb3beb077cbac14d27eb8faf5",
-    "focal_mech_tectonic_domain_v1.csv": "sha256:1f1e0c4b7f9ca1b87fb2ca4883e587f330fe82b5bbf9ebb6eb8f4d12aa2e1936",
+    "focal_mech_tectonic_domain_v1.csv": "sha256:80d5f5d628cddf1be380bb793eb4e0620ac02ddf01b6cb3c47b8f88806b783e3",
     "GeoNet_CMT_solutions_20201129_PreferredNodalPlane_v1.csv": "sha256:16596bfdbd0019bad22eed31a0cbeabba7d58d9e569a450ae4139222a473c296",
     "Mw_rrup.txt": "sha256:016cf1bd6d99278a8cda917596cf8d817ef5b6249daad9cf3d6c4d9cc224f204",
     "3366146.srf": "sha256:21fa6c9f1f729167dcd78020e80f94a726d22ec784b90f338fb28cf830c034a0",
@@ -27,7 +27,7 @@ REGISTRY = {
 }
 
 URLS = {
-    "focal_mech_tectonic_domain_v1.csv": "https://www.dropbox.com/scl/fi/zseg304cbjmti7gg5tdyv/focal_mech_tectonic_domain_v1.csv?rlkey=kfb9ttvnv9yi9zftixw6kmz4v&st=4j9pgpgj&dl=1",
+    "focal_mech_tectonic_domain_v1.csv": "https://www.dropbox.com/scl/fi/zseg304cbjmti7gg5tdyv/focal_mech_tectonic_domain_v1.csv?rlkey=kfb9ttvnv9yi9zftixw6kmz4v&st=22cqetno&dl=1",
     "Geonet_Metadata_Summary_v1.4.csv": "https://www.dropbox.com/scl/fi/iev7qmoqqzvc5quhf8mk8/Geonet-Metadata-Summary_v1.4.csv?rlkey=7twwwck5iy5zao7lwao6xodvm&st=6m3elzuu&dl=1",
     "GeoNet_CMT_solutions_20201129_PreferredNodalPlane_v1.csv": "https://www.dropbox.com/scl/fi/fq28jx8jlbozj0d1x5tnq/GeoNet_CMT_solutions_20201129_PreferredNodalPlane_v1.csv?rlkey=30xj6n7ara0vz4t8kg4pz8w5s&st=63x7nr3j&dl=1",
     "hik_kerm_fault_300km_wgs84_poslon.txt": "https://www.dropbox.com/scl/fi/ig3ajufpv4xg2qjfxxuup/hik_kerm_fault_300km_wgs84_poslon.txt?rlkey=9jajfkq2elrzwzzgh6px17k8e&st=6ham2oox&dl=1",
