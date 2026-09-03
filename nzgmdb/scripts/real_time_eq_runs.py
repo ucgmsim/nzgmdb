@@ -4,7 +4,6 @@ Script to run the NZGMDB pipeline for a specific event in near-real-time mode.
 
 import datetime
 import io
-import os
 import shutil
 import time
 from datetime import timedelta
@@ -18,112 +17,14 @@ import typer
 from nzgmdb.data_processing import process_observed
 from nzgmdb.management import config as cfg
 from nzgmdb.management import custom_errors, file_structure
+from nzgmdb.management.slack import reply_to_message_on_slack, send_message_to_slack
 from nzgmdb.scripts import run_gmc, run_nzgmdb
+from nzgmdb.scripts.cmt_background import launch_cmt_background
 from qcore import cli
 
 app = typer.Typer(pretty_exceptions_enable=False)
 
 SEISMIC_NOW_URL = "https://quakecoresoft.canterbury.ac.nz/seismicnow/api/"
-SLACK_BOT_TOKEN = os.getenv("SLACK_BOT_TOKEN")
-SLACK_CHANNEL = os.getenv("SLACK_CHANNEL")
-
-
-def send_message_to_slack(message: str):
-    """
-    Send a message to a Slack channel.
-
-    Parameters
-    ----------
-    message : str
-        The message to send.
-
-    Returns
-    -------
-    dict
-        The response from the Slack API, containing the message timestamp.
-
-    Raises
-    ------
-    ValueError:
-        If SLACK_CHANNEL or SLACK_BOT_TOKEN is not set in the environment.
-        Or if the response from Slack is not successful.
-    """
-    if not SLACK_CHANNEL:
-        raise ValueError(
-            "No slack channel provided from the environment var SLACK_CHANNEL"
-        )
-    if not SLACK_BOT_TOKEN:
-        raise ValueError(
-            "No slack bot token provided from the environment var SLACK_BOT_TOKEN"
-        )
-    url = "https://slack.com/api/chat.postMessage"
-    data = {
-        "channel": SLACK_CHANNEL,
-        "text": message,
-    }
-    headers = {
-        "Authorization": f"Bearer {SLACK_BOT_TOKEN}",
-        "Content-Type": "application/json",
-    }
-
-    response = requests.post(url, headers=headers, json=data)
-    response_data = response.json()
-
-    if not response_data.get("ok"):
-        raise ValueError(f"Error sending message: {response_data}")
-
-    return response_data
-
-
-def reply_to_message_on_slack(thread_ts: str, reply_message: str):
-    """
-    Reply to a message in Slack (threaded reply).
-
-    Parameters
-    ----------
-    thread_ts : str
-        The timestamp of the message to reply to.
-    reply_message : str
-        The reply text.
-
-    Returns
-    -------
-    dict
-        The response JSON containing the message timestamp (ts)
-
-    Raises
-    ------
-    ValueError
-        If SLACK_CHANNEL or SLACK_BOT_TOKEN is not set in the environment.
-        Or if the response from Slack is not successful.
-    """
-    if not SLACK_CHANNEL:
-        raise ValueError(
-            "No slack channel provided from the environment var SLACK_CHANNEL"
-        )
-    if not SLACK_BOT_TOKEN:
-        raise ValueError(
-            "No slack bot token provided from the environment var SLACK_BOT_TOKEN"
-        )
-
-    url = "https://slack.com/api/chat.postMessage"
-    data = {
-        "channel": SLACK_CHANNEL,
-        "text": reply_message,
-        "thread_ts": thread_ts,  # This ensures it's a threaded reply
-    }
-    headers = {
-        "Authorization": f"Bearer {SLACK_BOT_TOKEN}",
-        "Content-Type": "application/json",
-    }
-
-    response = requests.post(url, headers=headers, json=data)
-    response_data = response.json()
-
-    if not response_data.get("ok"):
-        raise ValueError(f"Error sending reply: {response_data}")
-
-    return response_data
 
 
 def download_earthquake_data(
@@ -554,6 +455,25 @@ def run_event(
             reply_to_message_on_slack(
                 message_ts,
                 f"Event ID: {event_id} completed final processing: Mag: {mag:.2f}; Depth: {depth:.2f} km; Lat: {lat:.4f}; Lon: {lon:.4f}",
+            )
+
+            # Event is finalised and confirmed in SeismicNow - launch the
+            # 1-D CMT inversion now, as a detached background process. It
+            # can take hours, so we deliberately don't wait on it here:
+            # poll_earthquake_data() keeps searching for new events
+            # immediately after this call returns. A background thread
+            # (inside launch_cmt_background) waits on it separately and
+            # posts a Slack reply into this same thread once it finishes.
+            cmt_output_dir = event_dir / "cmt_1d"
+            launch_cmt_background(
+                event_id,
+                eq_source_ffp,
+                cmt_output_dir,
+                slack_thread_ts=message_ts,
+                mag=mag,
+                lat=lat,
+                lon=lon,
+                depth=depth,
             )
 
         else:
