@@ -19,7 +19,7 @@ app = typer.Typer(pretty_exceptions_enable=False)
 
 # 3-D NZ velocity model used to build station/path-specific 1-D Axitra
 # models. Override with --nz-3dvm-path if a different local copy is used.
-DEFAULT_NZ_3DVM_PATH = Path("/home/joel/code/BayesISOLA/examples/vm/nz3dvm_2p3.csv")
+DEFAULT_NZ_3DVM_PATH = Path("/scratch/SeismicNow/data/cmt_1d_data/nz3dvm_2p3.csv")
 DEFAULT_THREADS = 8  # tune to the number of cores available on the machine this runs on
 
 
