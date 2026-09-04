@@ -204,7 +204,12 @@ def run_cmt_1d(
     print("\nRunning CMT inversion against local waveform data...")
 
     run = run_auto_cmt(
-        event_id, event_time, lon_event, lat_event, depth_km, mag_event,
+        event_id,
+        event_time,
+        lon_event,
+        lat_event,
+        depth_km,
+        mag_event,
         output_dir=output_dir,
         velocity_model=nz_grid_ll,
         gf_source="axitra",
@@ -236,6 +241,7 @@ def run_cmt_1d(
         plot=True,
         plot_preset="summary",
         show=False,
+        write_report=True,
     )
 
     print("Complete")
@@ -246,6 +252,44 @@ def run_cmt_1d(
     print(results["centroid"])
     print("\nSummary:")
     print(results["summary"])
+
+    # -----------------------------------------------------------------
+    # Write a flat cmt_solution.csv summary, matching the GeoNet regional
+    # CMT catalogue column layout: PublicID, Date, Latitude, Longitude,
+    # strike1, dip1, rake1, strike2, dip2, rake2, ML, Mw, Mo, CD.
+    # -----------------------------------------------------------------
+
+    centroid_row = results["centroid"].iloc[0]
+    summary_row = results["summary"].iloc[0]
+
+    # ML is GeoNet's own catalogue magnitude, carried over only when the
+    # event was actually reported with local magnitude - BayesISOLA itself
+    # only produces Mw (moment magnitude), never ML.
+    mag_type = str(event_df["mag_type"].values[0]) if "mag_type" in event_df.columns else ""
+    ml_value = round(float(mag_event), 1) if mag_type.strip().upper() == "ML" else None
+
+    cmt_solution_df = pd.DataFrame([{
+        "PublicID": event_id,
+        "Date": str(centroid_row["origin_time"]),
+        "Latitude": round(float(centroid_row["centroid_lat"]), 3),
+        "Longitude": round(float(centroid_row["centroid_lon"]), 3),
+        "strike1": round(float(summary_row["NP1_strike_deg"])),
+        "dip1": round(float(summary_row["NP1_dip_deg"])),
+        "rake1": round(float(summary_row["NP1_rake_deg"])),
+        "strike2": round(float(summary_row["NP2_strike_deg"])),
+        "dip2": round(float(summary_row["NP2_dip_deg"])),
+        "rake2": round(float(summary_row["NP2_rake_deg"])),
+        "ML": ml_value,
+        "Mw": round(float(summary_row["Mw"]), 2),
+        # BayesISOLA reports M0_Nm in Newton-metres; the GeoNet CMT
+        # catalogue format expects dyne-cm (1 Nm = 1e7 dyne-cm).
+        "Mo": float(summary_row["M0_Nm"]) * 1e7,
+        "CD": round(float(centroid_row["centroid_depth_km"]), 1),
+    }])
+
+    cmt_solution_path = output_dir / "cmt_solution.csv"
+    cmt_solution_df.to_csv(cmt_solution_path, index=False)
+    print(f"\nWrote CMT solution summary to {cmt_solution_path}")
 
     return run
 
