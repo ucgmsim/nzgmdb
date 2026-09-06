@@ -176,9 +176,9 @@ def run_cmt_1d(
         ground_level=True,
         channels=("HH?", "BH?", "LH?"),
         channel_priority=("HH", "BH", "LH"),
-        time_unc_s=2.0,
-        min_depth_km=5.0,
-        min_depth_multiplier=0.5,
+        time_unc_s=3.0,
+        min_depth_km=3.0,
+        min_depth_multiplier=0.3,
         max_depth_multiplier=3.0,
         rupture_velocity_m_s=1000.0,
         velocity_slowest_m_s=1000.0,
@@ -202,7 +202,8 @@ def run_cmt_1d(
     # -----------------------------------------------------------------
 
     print("\nRunning CMT inversion against local waveform data...")
-
+    # determine step size
+    step_x_km = 1.0 if mag_event < 6.0 else 2.0
     run = run_auto_cmt(
         event_id,
         event_time,
@@ -220,17 +221,21 @@ def run_cmt_1d(
         ground_level=True,
         channels=("HH?", "BH?", "LH?"),
         channel_priority=("HH", "BH", "LH"),
-        location_unc_km=0.0,
-        time_unc_s=2.0,
-        min_depth_km=5.0,
-        min_depth_multiplier=0.5,
+        location_unc_km=1.0,
+        time_unc_s=3.0,
+        min_depth_km=3.0,
+        min_depth_multiplier=0.3,
         max_depth_multiplier=3.0,
-        step_x_km=2.0,
+        step_x_km=step_x_km,
         step_z_km=1.0,
         max_grid_points=5000,
         add_rupture_length=True,
         rupture_velocity_m_s=1000.0,
         velocity_slowest_m_s=1000.0,
+        adaptive_grid_search={
+            "adaptive_grid": True,
+            "adaptive_refine_factor": 0,
+        },
         freqmin=0.02,
         freqmax=0.05,
         threads=threads,
