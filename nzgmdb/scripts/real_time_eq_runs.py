@@ -6,7 +6,6 @@ import datetime
 import io
 import shutil
 import time
-from datetime import timedelta
 from pathlib import Path
 from typing import Annotated
 
@@ -17,9 +16,9 @@ import typer
 from nzgmdb.data_processing import process_observed
 from nzgmdb.management import config as cfg
 from nzgmdb.management import custom_errors, file_structure
+from nzgmdb.management.background import launch_cmt_background
 from nzgmdb.management.slack import reply_to_message_on_slack, send_message_to_slack
 from nzgmdb.scripts import run_gmc, run_nzgmdb
-from nzgmdb.scripts.cmt_background import launch_cmt_background
 from qcore import cli
 
 app = typer.Typer(pretty_exceptions_enable=False)
@@ -458,22 +457,13 @@ def run_event(
             )
 
             # Event is finalised and confirmed in SeismicNow - launch the
-            # 1-D CMT inversion now, as a detached background process. It
-            # can take hours, so we deliberately don't wait on it here:
-            # poll_earthquake_data() keeps searching for new events
-            # immediately after this call returns. A background thread
-            # (inside launch_cmt_background) waits on it separately and
-            # posts a Slack reply into this same thread once it finishes.
+            # 1-D CMT inversion now, as a detached background process.
             cmt_output_dir = event_dir / "cmt_1d"
             launch_cmt_background(
                 event_id,
                 eq_source_ffp,
                 cmt_output_dir,
                 slack_thread_ts=message_ts,
-                mag=mag,
-                lat=lat,
-                lon=lon,
-                depth=depth,
             )
 
         else:

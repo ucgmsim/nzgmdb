@@ -1,6 +1,6 @@
 """
-Launch the near-real-time 1-D CMT inversion (run_cmt_1d) as a detached
-background subprocess, and notify Slack when it finishes.
+Launch the 1-D CMT inversion as a detached background subprocess, and notify
+Slack when it finishes.
 """
 
 import subprocess
@@ -8,10 +8,15 @@ import sys
 import threading
 from pathlib import Path
 
+import pandas as pd
+
 from nzgmdb.management.slack import reply_to_message_on_slack
 
-CMT_MODULE = "nzgmdb.scripts.run_cmt_1d"
+CMT_MODULE = "auto_cmt.run_cmt"
 LOG_TAIL_LINES = 20
+
+# Written by auto_cmt.run_cmt into its output_dir once a run completes.
+CMT_SOLUTION_FILENAME = "cmt_solution.csv"
 
 
 def _tail(path: Path, n_lines: int = LOG_TAIL_LINES) -> str:
@@ -38,23 +43,50 @@ def _tail(path: Path, n_lines: int = LOG_TAIL_LINES) -> str:
     return "\n".join(lines[-n_lines:])
 
 
+def _read_cmt_result_location(output_dir: Path) -> tuple[float, float, float, float] | None:
+    """
+    Read the moment magnitude, latitude, longitude, and centroid depth from
+    a completed CMT run's cmt_solution.csv.
+
+    Parameters
+    ----------
+    output_dir : Path
+        Directory the CMT run wrote its results to.
+
+    Returns
+    -------
+    tuple of float, optional
+        ``(mag, lat, lon, depth)`` read from cmt_solution.csv's ``Mw``,
+        ``Latitude``, ``Longitude``, and ``CD`` columns, or None if the file
+        is missing or can't be parsed.
+    """
+    cmt_solution_path = output_dir / CMT_SOLUTION_FILENAME
+    try:
+        row = pd.read_csv(cmt_solution_path).iloc[0]
+        return (
+            float(row["Mw"]),
+            float(row["Latitude"]),
+            float(row["Longitude"]),
+            float(row["CD"]),
+        )
+    except (OSError, KeyError, IndexError, ValueError) as exc:
+        print(f"[management.background] could not read {cmt_solution_path}: {exc}")
+        return None
+
+
 def _watch_and_notify(
     process: subprocess.Popen,
     event_id: str,
     output_dir: Path,
     log_path: Path,
     slack_thread_ts: str | None,
-    mag: float | None,
-    lat: float | None,
-    lon: float | None,
-    depth: float | None,
 ) -> None:
     """
     Wait for the CMT subprocess to exit and post a Slack reply reporting
     success or failure.
 
-    Runs in a background daemon thread started by launch_cmt_background,
-    so the ``process.wait()`` call here does not block the caller.
+    Runs in a background daemon thread started by launch_cmt_background, so
+    the ``process.wait()`` call here does not block the caller.
 
     Parameters
     ----------
@@ -69,34 +101,26 @@ def _watch_and_notify(
     slack_thread_ts : str, optional
         Slack thread timestamp to reply into. If None, no Slack message is
         sent.
-    mag : float, optional
-        Event magnitude, included in the Slack message text.
-    lat : float, optional
-        Event latitude, included in the Slack message text.
-    lon : float, optional
-        Event longitude, included in the Slack message text.
-    depth : float, optional
-        Event depth (km), included in the Slack message text.
     """
     returncode = process.wait()
 
     if slack_thread_ts is None:
         return
 
-    location = (
-        f"Mag: {mag:.2f}; Depth: {depth:.2f} km; Lat: {lat:.4f}; Lon: {lon:.4f}"
-        if None not in (mag, lat, lon, depth)
-        else ""
-    )
-
     if returncode == 0:
+        result = _read_cmt_result_location(output_dir)
+        if result is not None:
+            mag, lat, lon, depth = result
+            location = f"Mag: {mag:.2f}; Depth: {depth:.2f} km; Lat: {lat:.4f}; Lon: {lon:.4f}"
+        else:
+            location = ""
         message = (
             f"CMT inversion completed for Event ID: {event_id} ({location}). "
             f"Results: {output_dir}"
         )
     else:
         message = (
-            f"CMT inversion FAILED for Event ID: {event_id} ({location}), "
+            f"CMT inversion FAILED for Event ID: {event_id}, "
             f"exit code {returncode}. Log: {log_path}\n"
             f"Last {LOG_TAIL_LINES} log lines:\n```{_tail(log_path)}```"
         )
@@ -104,31 +128,29 @@ def _watch_and_notify(
     try:
         reply_to_message_on_slack(slack_thread_ts, message)
     except ValueError as exc:
-        print(f"[cmt_background] failed to post CMT completion to Slack: {exc}")
+        print(f"[management.background] failed to post CMT completion to Slack: {exc}")
 
 
 def launch_cmt_background(
     event_id: str,
     event_csv_path: Path,
     output_dir: Path,
-    *,
-    python_executable: str = sys.executable,
     nz_3dvm_path: Path | None = None,
+    real_time: bool = True,
+    python_executable: str = sys.executable,
     threads: int | None = None,
     slack_thread_ts: str | None = None,
-    mag: float | None = None,
-    lat: float | None = None,
-    lon: float | None = None,
-    depth: float | None = None,
 ) -> subprocess.Popen:
     """
     Launch the 1-D CMT inversion for one event as a detached background process.
 
-    The subprocess is started in its own session (``start_new_session=True``),
-    so it keeps running even if the caller's process is later interrupted. A
-    daemon thread waits on it in the background and, once it exits, posts a
-    Slack reply reporting success or failure - this call itself never blocks
-    or waits on the run.
+    The inversion itself runs from the ``cmt_solutions`` package's
+    ``auto_cmt.run_cmt`` module (``python -m auto_cmt.run_cmt``), so this
+    function only launches and reports on it. The subprocess is started in
+    its own session (``start_new_session=True``), so it keeps running even
+    if the caller's process is later interrupted. A daemon thread waits on
+    it in the background and, once it exits, posts a Slack reply reporting
+    success or failure - this call itself never blocks or waits on the run.
 
     Parameters
     ----------
@@ -142,25 +164,23 @@ def launch_cmt_background(
     output_dir : Path
         Directory CMT results/figures/raw data get written to (created if
         missing), e.g. ``event_dir / "cmt_1d"``.
+    nz_3dvm_path : Path, optional
+        3-D NZ velocity model CSV.
+    real_time : bool, optional
+        Passed through as ``auto_cmt.run_cmt --real-time`` - defaults to
+        True since NZGMDB only calls this once an event has already been
+        confirmed in near-real-time and may not have propagated to GeoNet's
+        standard FDSN archive yet.
     python_executable : str, optional
         Interpreter to run the CMT module with. Defaults to the interpreter
-        running the caller, so it inherits whatever venv real_time_eq_runs.py
-        is already running under (must have BayesISOLA installed).
-    nz_3dvm_path : Path, optional
-        Override the default 3-D velocity model CSV.
+        running the caller.
     threads : int, optional
         Override the default Axitra thread count.
     slack_thread_ts : str, optional
         Slack thread timestamp to reply into once the run finishes. If
-        omitted, no Slack notification is sent.
-    mag : float, optional
-        Event magnitude, included in the Slack notification text.
-    lat : float, optional
-        Event latitude, included in the Slack notification text.
-    lon : float, optional
-        Event longitude, included in the Slack notification text.
-    depth : float, optional
-        Event depth (km), included in the Slack notification text.
+        omitted, no Slack notification is sent. On success, the magnitude,
+        latitude, longitude, and depth included in that message are read
+        back from the run's own cmt_solution.csv.
 
     Returns
     -------
@@ -176,8 +196,10 @@ def launch_cmt_background(
         python_executable, "-m", CMT_MODULE,
         event_id, str(event_csv_path), str(output_dir),
     ]
-    if nz_3dvm_path is not None:
-        cmd += ["--nz-3dvm-path", str(nz_3dvm_path)]
+    if nz_3dvm_path:
+        cmd += ["--nz-3dvm-path", str(nz_3dvm_path),]
+    if real_time:
+        cmd.append("--real-time")
     if threads is not None:
         cmd += ["--threads", str(threads)]
 
@@ -189,16 +211,16 @@ def launch_cmt_background(
         stdout=log_file,
         stderr=subprocess.STDOUT,
         stdin=subprocess.DEVNULL,
-        start_new_session=True,  # detach from this process's session/group
+        start_new_session=True,
     )
-    log_file.close()  # the child keeps its own duplicated file descriptor
+    log_file.close()
 
-    print(f"[cmt_background] launched CMT run for {event_id} "
+    print(f"[management.background] launched CMT run for {event_id} "
           f"(pid={process.pid}), logging to {log_path}")
 
     watcher = threading.Thread(
         target=_watch_and_notify,
-        args=(process, event_id, output_dir, log_path, slack_thread_ts, mag, lat, lon, depth),
+        args=(process, event_id, output_dir, log_path, slack_thread_ts),
         daemon=True,
     )
     watcher.start()
