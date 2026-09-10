@@ -473,7 +473,6 @@ def run_event(
                 eq_source_ffp,
                 cmt_output_dir,
                 deviatoric=True,
-                slack_thread_ts=message_ts,
             )
 
 
