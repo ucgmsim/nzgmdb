@@ -137,6 +137,7 @@ def launch_cmt_background(
     output_dir: Path,
     nz_3dvm_path: Path | None = None,
     real_time: bool = True,
+    deviatoric: bool = False,
     python_executable: str = sys.executable,
     threads: int | None = None,
     slack_thread_ts: str | None = None,
@@ -171,6 +172,8 @@ def launch_cmt_background(
         True since NZGMDB only calls this once an event has already been
         confirmed in near-real-time and may not have propagated to GeoNet's
         standard FDSN archive yet.
+    deviatoric : bool, optional
+        Invert for a deviatoric moment tensor only (no isotropic component).
     python_executable : str, optional
         Interpreter to run the CMT module with. Defaults to the interpreter
         running the caller.
@@ -200,6 +203,8 @@ def launch_cmt_background(
         cmd += ["--nz-3dvm-path", str(nz_3dvm_path),]
     if real_time:
         cmd.append("--real-time")
+    if deviatoric:
+        cmd.append("--deviatoric")
     if threads is not None:
         cmd += ["--threads", str(threads)]
 

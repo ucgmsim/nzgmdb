@@ -465,6 +465,17 @@ def run_event(
                 cmt_output_dir,
                 slack_thread_ts=message_ts,
             )
+            # Also launch the deviatoric CMT inversion in a separate background process.
+            # (Just for testing purposes for now, but could be useful in the future.)
+            cmt_output_dir = event_dir / "cmt_1d_deviatoric"
+            launch_cmt_background(
+                event_id,
+                eq_source_ffp,
+                cmt_output_dir,
+                deviatoric=True,
+                slack_thread_ts=message_ts,
+            )
+
 
         else:
             print(f"Failed to add event. Status code: {response.status_code}")
