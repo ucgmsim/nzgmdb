@@ -2,9 +2,13 @@
 This module contains the functions to merge different flatfiles together to create the final flatfiles
 """
 
+import multiprocessing as mp
 from pathlib import Path
 
+import numpy as np
 import pandas as pd
+import pyarrow as pa
+import pyarrow.parquet as pq
 from obspy.clients.fdsn import Client as FDSN_Client
 from obspy.core.utcdatetime import UTCDateTime
 
@@ -12,145 +16,232 @@ from nzgmdb.management import config as cfg
 from nzgmdb.management import file_structure
 
 
+def process_im_batch(
+    batch_files: list[str],
+    batch_id: int,
+    im_dir: Path,
+    tmp_dir: Path,
+    is_parquet: bool,
+    fas_columns: list[str],
+):
+    fas_comps = ["000", "090", "ver", "geom", "eas"]
+    psa_comps = ["000", "090", "ver", "geom"]
+    rotd_comps = ["rotd0", "rotd50", "rotd100"]
+
+    scalar_columns = [
+        "PGA",
+        "PGV",
+        "PGD",
+        "CAV",
+        "CAV5",
+        "AI",
+        "Ds575",
+        "Ds595",
+    ]
+
+    writers = {}
+
+    def write_chunk(df: pd.DataFrame, output_file: Path):
+        if df.empty:
+            return
+
+        table = pa.Table.from_pandas(df, preserve_index=False)
+
+        if output_file not in writers:
+            writers[output_file] = pq.ParquetWriter(
+                output_file,
+                table.schema,
+                compression="zstd",
+            )
+
+        writers[output_file].write_table(table)
+
+    # Read all the IM files
+    dfs = []
+    for rel_path in batch_files:
+        im_file = im_dir / rel_path
+        if not im_file.exists():
+            continue
+        if is_parquet:
+            df = pd.read_parquet(im_file)
+        else:
+            df = pd.read_csv(im_file)
+        dfs.append(df)
+    df = pd.concat(dfs)
+
+    # Split the record id into evid, sta, chan, loc
+    record_parts = df["record_id"].str.split(
+        "_",
+        n=3,
+        expand=True,
+    )
+    record_parts.columns = [
+        "evid",
+        "sta",
+        "chan",
+        "loc",
+    ]
+    df = pd.concat(
+        [df, record_parts],
+        axis=1,
+    )
+
+    psa_columns = [c for c in df.columns if c.startswith("pSA")]
+    existing_fas_cols = [c for c in df.columns if c.startswith("FAS_")]
+
+    fas_df = {}
+
+    for col in existing_fas_cols:
+        freq = float(col.removeprefix("FAS_"))
+        new_col = f"FAS_{freq:.6g}"
+
+        s = df[col]
+
+        if s.dtype == object:
+            s = pd.to_numeric(
+                s.astype(str).str.replace("e/", "e-", regex=False),
+                errors="coerce",
+            )
+
+        fas_df[new_col] = s
+
+    if existing_fas_cols:
+        df = df.drop(columns=existing_fas_cols)
+
+    if fas_df:
+        df = pd.concat(
+            [
+                df,
+                pd.DataFrame(
+                    fas_df,
+                    index=df.index,
+                ),
+            ],
+            axis=1,
+        )
+
+    non_fas_cols = [c for c in df.columns if not c.startswith("FAS_")]
+    df = df.reindex(
+        columns=[
+            *non_fas_cols,
+            *fas_columns,
+        ]
+    )
+    columns_remove_rotd = [
+        "CAV",
+        "CAV5",
+        "AI",
+        "Ds575",
+        "Ds595",
+    ] + fas_columns
+    columns_remove_fas = scalar_columns + psa_columns
+
+    for comp, comp_rows in df.groupby("component"):
+
+        if comp in fas_comps:
+            comp_rows_fas = comp_rows.drop(
+                columns=columns_remove_fas,
+                errors="ignore",
+            )
+            comp_rows_fas.to_parquet(
+                tmp_dir / f"im_merge_{comp}_fas" / f"batch_{batch_id}.parquet",
+                compression="gzip",
+                index=False,
+            )
+
+        if comp in psa_comps:
+            comp_rows_psa = comp_rows.drop(
+                columns=fas_columns,
+                errors="ignore",
+            )
+            comp_rows_psa.to_parquet(
+                tmp_dir / f"im_merge_{comp}" / f"batch_{batch_id}.parquet",
+                compression="gzip",
+                index=False,
+            )
+
+        if comp in rotd_comps:
+            comp_rows_rotd = comp_rows.drop(
+                columns=columns_remove_rotd,
+                errors="ignore",
+            )
+            comp_rows_rotd.to_parquet(
+                tmp_dir / f"im_merge_{comp}" / f"batch_{batch_id}.parquet",
+                compression="gzip",
+                index=False,
+            )
+
+
 def merge_im_data(
     im_dir: Path,
     output_dir: Path,
-    gmc_ffp: Path | None = None,
-    fmax_ffp: Path | None = None,
+    records_ffp: Path,
+    n_procs: int = 1,
+    batch_size: int = 5000,
+    is_parquet: bool = False,
 ):
     """
-    Merge the IM data into a single flatfile. Also merges in the GMC and fmax data and
-    filters out records that are below the Ds595 lower bound
-    and then saves the skipped records to a separate file.
-
-    Parameters
-    ----------
-    im_dir : Path
-        The directory where the IM files are stored
-    output_dir : Path
-        The directory to save the final IM flatfile and the skipped records
-    gmc_ffp : Path, optional
-        The file path to the GMC results
-    fmax_ffp : Path, optional
-        The file path to the fmax results
+    Merge the IM data into component / fas split files.
     """
-    # Load the GMC file
-    if gmc_ffp is None:
-        new_df = pd.DataFrame(
-            columns=[
-                "record",
-                "score_mean_X",
-                "fmin_mean_X",
-                "multi_mean_X",
-                "score_mean_Y",
-                "fmin_mean_Y",
-                "multi_mean_Y",
-                "score_mean_Z",
-                "fmin_mean_Z",
-                "multi_mean_Z",
-            ]
-        )
-    else:
-        gmc_results = pd.read_csv(gmc_ffp)
 
-        # Define the columns to be grouped
-        columns = ["score_mean", "fmin_mean", "multi_mean"]
+    records_df = pd.read_csv(records_ffp)
 
-        # Group by 'record' and 'component', then aggregate the columns
-        new_df = gmc_results.groupby(["record", "component"])[columns].mean().unstack()
+    suffix = "parquet" if is_parquet else "csv"
 
-        # Join the column names to score_mean_X etc.
-        new_df.columns = ["_".join(col) for col in new_df.columns]
+    records_df["evid"] = records_df["record_id"].str.partition("_")[0]
 
-        new_df = new_df.reset_index()
-
-    fmax_results = (
-        pd.DataFrame(columns=["record_id", "fmax_000", "fmax_090", "fmax_ver"])
-        if fmax_ffp is None or not fmax_ffp.stat().st_size
-        else pd.read_csv(fmax_ffp)
+    records_df["im_file"] = (
+        records_df["evid"] + "/" + records_df["record_id"] + f"_IM.{suffix}"
     )
 
-    # Find all the IM files
-    im_files = im_dir.rglob("*IM.csv")
-
-    # Concat all the IM files
-    im_all = pd.concat([pd.read_csv(file) for file in im_files])
-
-    # Merge the gm_all and new_df on record
-    gm_final = pd.merge(
-        im_all,
-        new_df,
-        left_on="record_id",
-        right_on="record",
-        how="left",
-    )
-
-    # Add the chan, loc and rename event_id and station across the entire series
-    gm_final[["evid", "sta", "chan", "loc"]] = gm_final["record_id"].str.split(
-        "_", expand=True
-    )
-
-    # remove the record column
-    gm_final = gm_final.drop(columns=["record"])
-
-    # Merge in fmax
-    gm_final = pd.merge(
-        gm_final,
-        fmax_results,
-        left_on="record_id",
-        right_on="record_id",
-        how="left",
-    )
-    # Rename fmax columns
-    gm_final = gm_final.rename(
-        columns={
-            "fmax_000": "fmax_mean_X",
-            "fmax_090": "fmax_mean_Y",
-            "fmax_ver": "fmax_mean_Z",
-        }
-    )
-
-    # Sort columns nicely
-    psa_columns = gm_final.columns[gm_final.columns.str.contains("pSA")].tolist()
-    fas_columns = gm_final.columns[gm_final.columns.str.contains("FAS")].tolist()
-    gm_final = gm_final[
-        [
-            "record_id",
-            "evid",
-            "sta",
-            "loc",
-            "chan",
-            "component",
-            "PGA",
-            "PGV",
-            "PGD",
-            "CAV",
-            "CAV5",
-            "AI",
-            "Ds575",
-            "Ds595",
-            "score_mean_X",
-            "fmin_mean_X",
-            "fmax_mean_X",
-            "multi_mean_X",
-            "score_mean_Y",
-            "fmin_mean_Y",
-            "fmax_mean_Y",
-            "multi_mean_Y",
-            "score_mean_Z",
-            "fmin_mean_Z",
-            "fmax_mean_Z",
-            "multi_mean_Z",
-        ]
-        + psa_columns
-        + fas_columns
+    batches = [
+        records_df["im_file"].iloc[i : i + batch_size].tolist()
+        for i in range(0, len(records_df), batch_size)
     ]
 
-    # Save the ground_motion_im_catalogue.csv
-    gm_final.to_csv(
-        output_dir / file_structure.PreFlatfileNames.GROUND_MOTION_IM_CATALOGUE,
-        index=False,
+    config = cfg.Config()
+    fas_frequencies = np.logspace(
+        np.log10(config.get_value("common_frequency_start")),
+        np.log10(config.get_value("common_frequency_end")),
+        num=config.get_value("common_frequency_num"),
     )
+    fas_columns = [f"FAS_{freq:.6g}" for freq in fas_frequencies]
+
+    batch_comps = [
+        "000",
+        "000_fas",
+        "090",
+        "090_fas",
+        "ver",
+        "ver_fas",
+        "geom",
+        "geom_fas",
+        "rotd0",
+        "rotd50",
+        "rotd100",
+        "eas_fas",
+    ]
+
+    # Create the batch component dirs
+    for comp in batch_comps:
+        comp_dir = output_dir / "im_merge_batch_dir" / f"im_merge_{comp}"
+        comp_dir.mkdir(parents=True, exist_ok=True)
+
+    with mp.Pool(n_procs) as pool:
+        pool.starmap(
+            process_im_batch,
+            [
+                (
+                    batch,
+                    batch_id,
+                    im_dir,
+                    output_dir / "im_merge_batch_dir",
+                    is_parquet,
+                    fas_columns,
+                )
+                for batch_id, batch in enumerate(batches)
+            ],
+        )
 
 
 def add_ground_level(
