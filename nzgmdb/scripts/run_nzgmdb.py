@@ -1266,7 +1266,7 @@ def run_full_nzgmdb(
     if not (
         checkpoint
         and (
-            flatfile_dir / file_structure.FlatfileNames.GROUND_MOTION_IM_ROTD100_FLAT
+            flatfile_dir / file_structure.FlatfileNames.GROUND_MOTION_IM_EAS_FAS_FLAT
         ).exists()
     ):
         print("Merging flat files")
