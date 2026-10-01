@@ -21,6 +21,7 @@ python -m nzgmdb.scripts.run_nzgmdb extract-waveforms <main_dir> <station_extrac
 - **`--n-procs`** \- Number of processes to run (default: 1)
 - **`--batch-size`** \- Size of processing batches (default: 1000)
 - **`--only-record-ids-ffp`** \- Path to file containing specific record IDs to process
+- **`--tmp-array-dir`** \- Path to the directory of previously downloaded waveform arrays to use to extract waveforms from instead of downloading again
 
 **Example:**
 ```bash
