@@ -60,6 +60,13 @@ def calculate_im_for_record(
         }
         skipped_record = pd.DataFrame([skipped_record_dict])
         return skipped_record
+    except ValueError:
+        skipped_record_dict = {
+            "record_id": record_id,
+            "reason": "Components contain NaN values",
+        }
+        skipped_record = pd.DataFrame([skipped_record_dict])
+        return skipped_record
 
     print(f"Calculating IMs for {record_id}")
 
