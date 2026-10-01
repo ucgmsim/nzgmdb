@@ -386,6 +386,12 @@ def calc_fmax(
             file_okay=False,
         ),
     ] = None,
+    batches_dir: Annotated[
+        Path,
+        typer.Option(
+            file_okay=False,
+        ),
+    ] = None,
     n_procs: Annotated[int, typer.Option()] = 1,
     bypass_records_ffp: Annotated[
         Path,
@@ -395,6 +401,7 @@ def calc_fmax(
             dir_okay=False,
         ),
     ] = None,
+    batch_size: Annotated[int, typer.Option()] = 20000,
 ):
     """
     Calculate the maximum usable frequency (fmax) for waveforms.
@@ -412,10 +419,14 @@ def calc_fmax(
         Path to the directory containing the mseed files to process. Defaults to the expected location.
     snr_fas_output_dir : Path, optional
         Path to the output directory for the SNR and FAS data. Defaults to the expected location.
+    batches_dir : Path, optional
+        Path to the directory to save the batch files for processing. Defaults to a "fmax" directory within the main directory.
     n_procs : int, optional
         Number of processes to use (default is 1).
     bypass_records_ffp : Path, optional
         The full file path to the bypass records file for custom fmax values.
+    batch_size : int, optional
+        The number of mseed files to process in each batch, by default 20000.
     """
     if meta_output_dir is None:
         meta_output_dir = file_structure.get_flatfile_dir(main_dir)
@@ -423,9 +434,17 @@ def calc_fmax(
         waveform_dir = file_structure.get_waveform_dir(main_dir)
     if snr_fas_output_dir is None:
         snr_fas_output_dir = file_structure.get_snr_fas_dir(main_dir)
+    if batches_dir is None:
+        batches_dir = main_dir / "fmax"
 
     fmax.run_full_fmax_calc(
-        meta_output_dir, waveform_dir, snr_fas_output_dir, n_procs, bypass_records_ffp
+        meta_output_dir,
+        waveform_dir,
+        snr_fas_output_dir,
+        batches_dir,
+        n_procs,
+        bypass_records_ffp,
+        batch_size,
     )
 
 
@@ -825,10 +844,6 @@ def run_full_nzgmdb(
             file_okay=False,
         ),
     ],
-    gmc_procs: Annotated[
-        int,
-        typer.Option(),
-    ] = 1,
     n_procs: Annotated[int, typer.Option()] = 1,
     checkpoint: Annotated[
         bool,
@@ -947,8 +962,6 @@ def run_full_nzgmdb(
         Command to activate gmc_predict environment to run the predictions.
     ko_matrix_path : Path
         Path to the ko matrix directory
-    gmc_procs : int, optional
-        Number of processes to use for GMC (default is 1).
     n_procs : int, optional
         The number of processes to use (default is 1).
     checkpoint : bool, optional
@@ -1145,8 +1158,8 @@ def run_full_nzgmdb(
             flatfile_dir,
             waveform_dir,
             snr_fas_output_dir,
-            fmax_n_procs,
-            bypass_records_ffp,
+            n_procs=fmax_n_procs,
+            bypass_records_ffp=bypass_records_ffp,
         )
 
     # Run GMC
@@ -1156,7 +1169,7 @@ def run_full_nzgmdb(
     ):
         print("Running GMC")
         gmc_n_procs = (
-            gmc_procs
+            n_procs
             if machine is None
             else config.get_n_procs(machine, cfg.WorkflowStep.GMC)
         )
@@ -1168,6 +1181,7 @@ def run_full_nzgmdb(
             gmc_activate,
             gmc_predict_activate,
             gmc_n_procs,
+            gmc_n_batches,
             bypass_records_ffp=bypass_records_ffp,
         )
 
