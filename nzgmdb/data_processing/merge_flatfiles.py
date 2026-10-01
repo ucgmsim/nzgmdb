@@ -7,8 +7,6 @@ from pathlib import Path
 
 import numpy as np
 import pandas as pd
-import pyarrow as pa
-import pyarrow.parquet as pq
 from obspy.clients.fdsn import Client as FDSN_Client
 from obspy.core.utcdatetime import UTCDateTime
 

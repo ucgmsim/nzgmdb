@@ -13,7 +13,6 @@ from typing import Optional, TypedDict
 import fiona
 import numpy as np
 import pandas as pd
-from obspy.clients.fdsn import Client as FDSN_Client
 from pyproj import Transformer
 from shapely.geometry import LineString, Point, Polygon
 
@@ -391,22 +390,9 @@ def get_nodal_plane_info(
             srf_model.planes, avg_rake, plane_areas
         )
 
-        config = cfg.Config()
-        points_per_km = config.get_value("points_per_km")
-
-        srf_points = []
-        for plane in srf_model.planes:
-            corner_0, corner_1, corner_2, _ = plane.corners
-            # Utilise grid functions from qcore to get the mesh grid
-            plane_points = grid.coordinate_meshgrid(
-                corner_0, corner_1, corner_2, 1000 / points_per_km
-            )
-            # Reshape to (n, 3)
-            plane_points = plane_points.reshape(-1, 3)
-            srf_points.append(plane_points)
-        srf_points = np.vstack(srf_points)
-        # Swap the lat and lon for the srf points
-        nodal_plane_info["srf_points"] = srf_points[:, [1, 0, 2]]
+        nodal_plane_info["srf_points"] = srf_model.points.loc[
+            :, ["lon", "lat", "dep"]
+        ].to_numpy()
 
         # Generate the srf header
         nodal_plane_info["srf_header"] = (
@@ -496,6 +482,7 @@ def get_nodal_plane_info(
         hik_strike_rbf, hik_dip_rbf, hik_footprint = hik_objs
         puy_strike_rbf, puy_dip_rbf, puy_footprint = puy_objs
         domain_no_backup = event_row["domain_no_backup"]
+        nodal_plane_info["f_type"] = "domain"
 
         if event_row["tect_class"] == "Crustal":
             # First assume strike-slip to estimate length
@@ -603,7 +590,7 @@ def get_nodal_plane_info(
 def compute_distances_for_event(
     event_row: pd.Series,
     im_df: pd.DataFrame,
-    station_df: pd.DataFrame,
+    site_df: pd.DataFrame,
     cmt_df: pd.DataFrame,
     domain_focal_df: pd.DataFrame,
     taupo_polygon: Polygon,
@@ -622,8 +609,8 @@ def compute_distances_for_event(
         The event row from the earthquake source table
     im_df : pd.DataFrame
         The full IM data from the catalogue
-    station_df : pd.DataFrame
-        The full station data
+    site_df : pd.DataFrame
+        The full site data
     cmt_df : pd.DataFrame
         The Centroid Moment Tensor data
     domain_focal_df : pd.DataFrame
@@ -660,8 +647,8 @@ def compute_distances_for_event(
     if im_event_df.empty:
         return None, None, None
 
-    # Get the station data
-    event_sta_df = station_df[station_df["sta"].isin(im_event_df["sta"])].reset_index()
+    # Get the site data
+    event_sta_df = site_df[site_df["sta"].isin(im_event_df["sta"])].reset_index()
     stations = event_sta_df[["lon", "lat", "depth"]].to_numpy()
 
     # Get the nodal plane information
@@ -783,8 +770,8 @@ def compute_distances_for_event(
         srf_points = srf_points[:, [1, 0, 2]]
 
         # Generate the srf header
-        nstrike = int(round(length * points_per_km))
-        ndip = int(round(dip_dist * points_per_km))
+        nstrike = max(int(round(length * points_per_km)), 1)
+        ndip = max(int(round(dip_dist * points_per_km)), 1)
         srf_header = [
             {
                 "nstrike": nstrike,
@@ -802,7 +789,12 @@ def compute_distances_for_event(
     rrups, rjbs, rrup_points = src_site_dist.calc_rrup_rjb(
         srf_points, stations, return_rrup_points=True
     )
-    rxs, rys = src_site_dist.calc_rx_ry(srf_points, srf_header, stations)
+    try:
+        rxs, rys = src_site_dist.calc_rx_ry(srf_points, srf_header, stations)
+    except Exception:
+        print(f"Event ID {event_id}")
+        print(srf_header)
+        raise Exception(f"Event ID {event_id}")
     rrups_lon, rrups_lat = rrup_points[:, 0], rrup_points[:, 1]
 
     # Get the segment corners for the srf or corners
@@ -835,19 +827,31 @@ def compute_distances_for_event(
 
     r_epis = geo.get_distances(
         np.dstack([event_sta_df.lon.values, event_sta_df.lat.values])[0],
-        event_row["lon"],
-        event_row["lat"],
+        nodal_plane_info["hyp_lon"],
+        nodal_plane_info["hyp_lat"],
     )
-    r_hyps = np.sqrt(r_epis**2 + (event_row["depth"] - event_sta_df.depth.values) ** 2)
+    r_hyps = np.sqrt(
+        r_epis**2 + (nodal_plane_info["hyp_depth"] - event_sta_df.depth.values) ** 2
+    )
     azs = np.array(
         [
-            geo.ll_bearing(event_row["lon"], event_row["lat"], station[0], station[1])
+            geo.ll_bearing(
+                nodal_plane_info["hyp_lon"],
+                nodal_plane_info["hyp_lat"],
+                station[0],
+                station[1],
+            )
             for station in stations
         ]
     )
     b_azs = np.array(
         [
-            geo.ll_bearing(station[0], station[1], event_row["lon"], event_row["lat"])
+            geo.ll_bearing(
+                station[0],
+                station[1],
+                nodal_plane_info["hyp_lon"],
+                nodal_plane_info["hyp_lat"],
+            )
             for station in stations
         ]
     )
@@ -870,6 +874,7 @@ def compute_distances_for_event(
                 [
                     {
                         "evid": event_id,
+                        "provider": station.provider,
                         "net": station.net,
                         "sta": station.sta,
                         "r_epi": r_epis[station_index],
@@ -973,12 +978,12 @@ def compute_distances_for_event(
                     "corner_1_lat": corner_1[0],
                     "corner_1_lon": corner_1[1],
                     "corner_1_depth": corner_1[2] / 1000.0,
-                    "corner_2_lat": corner_2[0],
-                    "corner_2_lon": corner_2[1],
-                    "corner_2_depth": corner_2[2] / 1000.0,
-                    "corner_3_lat": corner_3[0],
-                    "corner_3_lon": corner_3[1],
-                    "corner_3_depth": corner_3[2] / 1000.0,
+                    "corner_2_lat": corner_3[0],
+                    "corner_2_lon": corner_3[1],
+                    "corner_2_depth": corner_3[2] / 1000.0,
+                    "corner_3_lat": corner_2[0],
+                    "corner_3_lon": corner_2[1],
+                    "corner_3_depth": corner_2[2] / 1000.0,
                 }
             ]
         )
@@ -1254,44 +1259,31 @@ def calc_distances(main_dir: Path, n_procs: int = 1):
             srf_files[Path(file).stem] = Path(NZGMDB_DATA.abspath) / file
 
     # Get the IM data to know what stations to calculate the distances for each event
-    im_df = pd.read_csv(
-        flatfile_dir / file_structure.PreFlatfileNames.GROUND_MOTION_IM_CATALOGUE,
-        dtype={"evid": str},
-        usecols=["evid", "sta"],
+    im_df = pd.read_parquet(
+        flatfile_dir / "im_merge_batch_dir" / "im_merge_rotd50",
+        columns=["evid", "sta"],
     )
 
-    # Get the station information
-    client_NZ = FDSN_Client("GEONET")
-    channel_codes = config.get_value("channel_codes")
-    inventory = client_NZ.get_stations(channel=channel_codes, level="station")
-    station_info = []
-    for network in inventory:
-        for station in network:
-            station_info.append(
-                [
-                    network.code,
-                    station.code,
-                    station.latitude,
-                    station.longitude,
-                    station.elevation,
-                ]
-            )
-    station_df = pd.DataFrame(
-        station_info, columns=["net", "sta", "lat", "lon", "elev"]
+    print(f"Length of im_df: {len(im_df)}")
+
+    # Get the site information
+    site_df = pd.read_csv(
+        flatfile_dir / file_structure.PreFlatfileNames.SITE_TABLE,
+        dtype={"sta": str},
     )
-    station_df = station_df.drop_duplicates().reset_index(drop=True)
+    site_df = site_df.loc[:, ["sta", "provider", "net", "lat", "lon", "elev"]]
 
     # Select unique stations from IM data and merge
     im_station_df = im_df[["sta"]].drop_duplicates()
-    station_df = pd.merge(im_station_df, station_df, on="sta", how="left")
-    station_df["depth"] = station_df["elev"] / -1000
+    site_df = pd.merge(im_station_df, site_df, on="sta", how="left")
+    site_df["depth"] = site_df["elev"] / -1000
 
     with mp.Pool(n_procs) as p:
         result_dfs = p.map(
             functools.partial(
                 compute_distances_for_event,
                 im_df=im_df,
-                station_df=station_df,
+                site_df=site_df,
                 cmt_df=cmt_df,
                 domain_focal_df=domain_focal_df,
                 taupo_polygon=taupo_polygon,
