@@ -64,6 +64,11 @@ def write_mseed(mseed: Stream, event_id: str, station: str, output_directory: Pa
     channel = mseed[0].stats.channel[:2]
     location = mseed[0].stats.location
 
+    # If the location is empty, set it to "00" as the default value
+    # based on the FDSN Source Indentifiers documentation (https://docs.fdsn.org/projects/source-identifiers/en/latest/location-codes.html)
+    if location is None or location == "":
+        location = "00"
+
     # Create the filename and add it to the output directory
     filename = f"{event_id}_{station}_{channel}_{location}.mseed"
     mseed_ffp = output_directory / filename
