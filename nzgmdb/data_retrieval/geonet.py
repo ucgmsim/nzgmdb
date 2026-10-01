@@ -21,6 +21,7 @@ from obspy.taup import TauPyModel
 from pandas.errors import EmptyDataError
 from scipy.interpolate import interp1d
 
+from nzgmdb.data_retrieval import inventory_xml
 from nzgmdb.management import config as cfg
 from nzgmdb.management import custom_errors, file_structure
 from nzgmdb.management.data_registry import NZGMDB_DATA
@@ -86,8 +87,8 @@ def fetch_event_line(event_cat: Event, event_id: str):
     preferred_origin = event_cat.preferred_origin()
     preferred_magnitude = event_cat.preferred_magnitude()
 
-    # If the preferred origin is None, return None
-    if preferred_origin is None:
+    # If the preferred origin or magnitude is None, return None
+    if preferred_origin is None or preferred_magnitude is None:
         return None
 
     # Extract basic info from the catalogue
@@ -105,21 +106,17 @@ def fetch_event_line(event_cat: Event, event_id: str):
         if preferred_origin.earth_model_id is None
         else str(preferred_origin.earth_model_id).split("/")[1]
     )
-    ev_ndef = (
-        None
-        if preferred_origin.quality.used_phase_count is None
-        else preferred_origin.quality.used_phase_count
-    )
-    ev_nsta = (
-        None
-        if preferred_origin.quality.used_station_count is None
-        else preferred_origin.quality.used_station_count
-    )
-    std = (
-        None
-        if preferred_origin.quality.standard_error is None
-        else preferred_origin.quality.standard_error
-    )
+    quality = preferred_origin.quality
+    if quality is None:
+        ev_ndef = None
+        ev_nsta = None
+        std = None
+    else:
+        ev_ndef = None if quality.used_phase_count is None else quality.used_phase_count
+        ev_nsta = (
+            None if quality.used_station_count is None else quality.used_station_count
+        )
+        std = None if quality.standard_error is None else quality.standard_error
 
     pref_mag_type = preferred_magnitude.magnitude_type
 
@@ -289,6 +286,27 @@ def fetch_sta_extraction(
     """
     config = cfg.Config()
 
+    # Get the provider and network codes
+    provider_networks = config.get_value("main_providers_networks")
+    provider_networks.update(config.get_value("tmp_array_providers_networks"))
+
+    provider = next(
+        (prov for prov, nets in provider_networks.items() if network.code in nets),
+        None,
+    )
+
+    if provider is None:
+        print(
+            f"Warning: No provider found for network {network.code}. Skipping station {station.code}."
+        )
+        skipped_reason = pd.DataFrame(
+            {
+                "record_id": [f"{event_id}_{station.code}"],
+                "skipped_reason": ["No provider found for network"],
+            }
+        )
+        return pd.DataFrame(), skipped_reason
+
     # Get the preferred_origin
     preferred_origin = event_cat.preferred_origin()
     ev_lat = preferred_origin.latitude
@@ -359,6 +377,7 @@ def fetch_sta_extraction(
         # Create the station_extraction_table
         station_extraction_table = pd.DataFrame(
             {
+                "provider": [provider],
                 "net": [network.code],
                 "sta": [station.code],
                 "evid": [event_id],
@@ -730,6 +749,7 @@ def parse_geonet_information(
     only_record_ids_ffp: Path = None,
     real_time: bool = False,
     mp_sites: bool = False,
+    add_tmp_arrays: bool = False,
 ):
     """
     Read the geonet information and manage the fetching of more data to create the mseed files
@@ -756,6 +776,8 @@ def parse_geonet_information(
         If the function is being used in real time use a different client, default is False
     mp_sites : bool (optional)
         Whether to multiprocess over sites (when not using mp over events)
+    add_tmp_arrays : bool (optional)
+        Whether to add temporary array stations to the inventory, default is False
     """
     if only_record_ids_ffp:
         # Read the only record ids file
@@ -780,13 +802,16 @@ def parse_geonet_information(
         only_record_ids = None
 
     config = cfg.Config()
-    channel_codes = config.get_value("channel_codes")
     if real_time:
+        inventory = inventory_xml.get_provider_inventory(
+            real_time=True, level="station"
+        )
         client_NZ = FDSN_Client(base_url=config.get_value("real_time_url"))
     else:
-        # Get Station Information from geonet clients
+        inventory = inventory_xml.get_full_inventory(
+            add_tmp_arrays=add_tmp_arrays, level="station"
+        )
         client_NZ = FDSN_Client("GEONET")
-    inventory = client_NZ.get_stations(channel=channel_codes, level="station")
 
     # Get the rrup data
     mw_rrup_data = np.loadtxt(NZGMDB_DATA.fetch("Mw_rrup.txt"))
