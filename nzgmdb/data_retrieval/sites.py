@@ -9,11 +9,10 @@ import fiona
 import numpy as np
 import pandas as pd
 import rasterio
-from obspy.clients.fdsn import Client as FDSN_Client
 from pyproj import Transformer
 from scipy.spatial import cKDTree
 
-from nzgmdb.data_retrieval import tect_domain
+from nzgmdb.data_retrieval import tect_domain, inventory_xml
 from nzgmdb.management import config as cfg
 from nzgmdb.management.data_registry import NZGMDB_DATA
 from qcore import point_in_polygon
@@ -181,61 +180,32 @@ def sample_points_from_geotiff(
     return samples.reshape(-1, 1)
 
 
-def create_site_table_response() -> pd.DataFrame:
+def create_site_table_response(
+    add_tmp_arrays: bool = False,
+) -> tuple[pd.DataFrame, pd.DataFrame]:
     """
     Create the site table for the NZGMDB. This function fetches the station information from the FDSN clients, and the
     Geonet metadata summary information. It then merges the two dataframes and determines the tectonic domain for each
     station. The final dataframe is saved as a csv file in the flatfile directory.
+
+    Parameters
+    ----------
+    add_tmp_arrays : bool, optional
+        Whether to add temporary arrays to the station information, by default False
 
     Returns
     -------
     pd.DataFrame
         The site table dataframe with all Z, vs30, domain and location values for each site
         used in the NZGMDB
+    pd.DataFrame
+        The station table dataframe with all channel and location values for each site
     """
     # Fetch the client station information
-    client_NZ = FDSN_Client("GEONET")
     config = cfg.Config()
-    channel_codes = config.get_value("channel_codes")
-    inventory = client_NZ.get_stations(channel=channel_codes, level="station")
-    station_info = []
-    for network in inventory:
-        for station in network:
-            station_info.append(
-                [
-                    network.code,
-                    station.code,
-                    station.latitude,
-                    station.longitude,
-                    station.elevation,
-                    station.creation_date,
-                    station.end_date,
-                ]
-            )
-    sta_df = pd.DataFrame(
-        station_info,
-        columns=["net", "sta", "lat", "lon", "elev", "creation_date", "end_date"],
+    all_info_df = inventory_xml.get_full_inventory(
+        add_tmp_arrays=add_tmp_arrays, return_df=True
     )
-    sta_df = sta_df.drop_duplicates(["net", "sta"])
-
-    bbox = config.get_value("bbox")  # [min_lon, min_lat, max_lon, max_lat]
-    min_lon, min_lat, max_lon, max_lat = bbox
-
-    # Ensure lat/lon are present and within latitude bounds
-    mask_lat = (
-        sta_df["lat"].notna()
-        & sta_df["lon"].notna()
-        & (sta_df["lat"] >= min_lat)
-        & (sta_df["lat"] <= max_lat)
-    )
-
-    # Handle antimeridian crossing: if min_lon > max_lon use OR
-    if min_lon <= max_lon:
-        mask_lon = (sta_df["lon"] >= min_lon) & (sta_df["lon"] <= max_lon)
-    else:
-        mask_lon = (sta_df["lon"] >= min_lon) | (sta_df["lon"] <= max_lon)
-
-    sta_df = sta_df.loc[mask_lat & mask_lon]
 
     # Get the Geonet metadata summary information
     geo_meta_summary_df = pd.read_csv(
@@ -263,15 +233,36 @@ def create_site_table_response() -> pd.DataFrame:
         }
     )
 
-    merged_df = geo_meta_summary_df.merge(
-        sta_df[["net", "sta", "lat", "lon", "elev", "creation_date", "end_date"]],
-        on="sta",
-        how="outer",
+    for col in ("start_time", "end_time"):
+        all_info_df[col] = pd.to_datetime(all_info_df[col], format="ISO8601")
+
+    # Remove the duplicated stations between different networks
+    all_info_df = all_info_df.drop_duplicates(
+        subset=[
+            "sta",
+            "lat",
+            "lon",
+            "elev",
+            "chan",
+            "loc",
+            "loc_elev",
+            "start_time",
+            "end_time",
+        ]
     )
-    # Fill Lat, Lon, Elevation NaN values from sta_df
-    merged_df["elev"] = merged_df["Elevation"].combine_first(merged_df["elev"])
-    merged_df["lat"] = merged_df["Lat"].combine_first(merged_df["lat"])
-    merged_df["lon"] = merged_df["Long"].combine_first(merged_df["lon"])
+
+    # separate into site and sta here to avoid merging issues exploding
+    site_df = all_info_df[
+        ["provider", "net", "sta", "lat", "lon", "elev", "creation_date", "end_date"]
+    ]
+    site_df = site_df.drop_duplicates(subset=["sta"])
+
+    merged_df = site_df.merge(
+        geo_meta_summary_df,
+        on="sta",
+        how="left",
+    )
+
     # Specify the required files for fiona
     NZGMDB_DATA.fetch("nt_domains_kiran.shp")
     NZGMDB_DATA.fetch("nt_domains_kiran.dbf")
@@ -287,9 +278,11 @@ def create_site_table_response() -> pd.DataFrame:
 
     # Only compute thresholds for stations where Z1.0 is missing
     mask_missing_z1 = tect_merged_df["Z1.0"].isna()
-    if mask_missing_z1.any():
+    mask_q3 = tect_merged_df["Q_Z1.0"] == "Q3"
+    mask_to_compute = mask_missing_z1 | mask_q3
+    if mask_to_compute.any():
         # Prepare stations DataFrame for only missing rows, indexed by station code
-        stations = tect_merged_df.loc[mask_missing_z1, ["sta", "lon", "lat"]].set_index(
+        stations = tect_merged_df.loc[mask_to_compute, ["sta", "lon", "lat"]].set_index(
             "sta"
         )[["lon", "lat"]]
         try:
@@ -321,15 +314,15 @@ def create_site_table_response() -> pd.DataFrame:
 
             # Set extra ref / quality fields
             tect_merged_df.loc[
-                mask_missing_z1, ["Z1.0_ref", "Z2.5_ref", "Q_Z1.0", "Q_Z2.5"]
+                mask_to_compute, ["Z1.0_ref", "Z2.5_ref", "Q_Z1.0", "Q_Z2.5"]
             ] = ["NZCVM (2026)", "NZCVM (2026)", "Q3", "Q3"]
 
             # Get the file path to the combined MVN GeoTIFF
-            NZGMDB_DATA.fetch("combined_mvn_wgs84.tif")
-            file_path = Path(NZGMDB_DATA.abspath) / "combined_mvn_wgs84.tif"
+            NZGMDB_DATA.fetch("nzcvm_v1.tif")
+            file_path = Path(NZGMDB_DATA.abspath) / "nzcvm_v1.tif"
 
             # Compute Vs30 for missing values
-            points = tect_merged_df.loc[mask_missing_z1, ["lat", "lon"]].to_numpy()
+            points = tect_merged_df.loc[mask_to_compute, ["lat", "lon"]].to_numpy()
             vs30_values = sample_points_from_geotiff(file_path, points).ravel()
 
             # Fill missing gaps in Vs30 using nearest-neighbour averaging
@@ -338,11 +331,11 @@ def create_site_table_response() -> pd.DataFrame:
             vs30_values_filled_rounded = np.round(vs30_values_filled)
 
             # Update Vs30 and related fields
-            tect_merged_df.loc[mask_missing_z1, "Vs30"] = vs30_values_filled_rounded
+            tect_merged_df.loc[mask_to_compute, "Vs30"] = vs30_values_filled_rounded
 
             # Ensure reference and quality fields are set for Vs30 where filled
-            vs30_mask = mask_missing_z1 & ~tect_merged_df["Vs30"].isna()
-            tect_merged_df.loc[vs30_mask, "Vs30_Ref"] = "Foster et al. (2019)"
+            vs30_mask = mask_to_compute & ~tect_merged_df["Vs30"].isna()
+            tect_merged_df.loc[vs30_mask, "Vs30_Ref"] = "Vs30 Map v1.0 (2026)"
             tect_merged_df.loc[vs30_mask, "Q_Vs30"] = "Q3"
 
         except (FileNotFoundError, ValueError, RuntimeError):
@@ -350,9 +343,31 @@ def create_site_table_response() -> pd.DataFrame:
                 "Could not compute thresholds for missing Z1.0 values, check correct setup for NZCVM"
             )
 
-    # Select specific columns
-    site_df = tect_merged_df[
+    # Split into station and site dfs
+    station_df = all_info_df.loc[
+        :,
         [
+            "provider",
+            "net",
+            "sta",
+            "lat",
+            "lon",
+            "elev",
+            "chan",
+            "loc",
+            "loc_elev",
+            "start_time",
+            "end_time",
+        ],
+    ]
+    # Adjust any "" loc codes to be "00"
+    # based on the FDSN Source Indentifiers documentation (https://docs.fdsn.org/projects/source-identifiers/en/latest/location-codes.html)
+    station_df = station_df.replace({"loc": {"": "00"}})
+
+    site_df = tect_merged_df.loc[
+        :,
+        [
+            "provider",
             "net",
             "sta",
             "lat",
@@ -379,12 +394,12 @@ def create_site_table_response() -> pd.DataFrame:
             "Q_Z2.5",
             "Z2.5_ref",
             "site_domain_no",
-        ]
+        ],
     ]
     site_df = site_df.astype({"Z2.5": float})
     site_df.loc[:, "Z2.5"] /= 1000.0
 
-    return site_df
+    return site_df, station_df
 
 
 def add_site_basins(site_df: pd.DataFrame, nzcvm_data_ffp: Path) -> pd.DataFrame:
