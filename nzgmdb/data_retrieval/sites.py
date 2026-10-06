@@ -9,13 +9,14 @@ import fiona
 import numpy as np
 import pandas as pd
 import rasterio
+import shapely
+from obspy.clients.fdsn import Client as FDSN_Client
 from pyproj import Transformer
 from scipy.spatial import cKDTree
 
 from nzgmdb.data_retrieval import tect_domain, inventory_xml
 from nzgmdb.management import config as cfg
 from nzgmdb.management.data_registry import NZGMDB_DATA
-from qcore import point_in_polygon
 from velocity_modelling import registry, threshold
 
 
@@ -117,7 +118,6 @@ def sample_points_from_geotiff(
 
     # ---- Open raster ----
     with rasterio.open(file_path) as ds:
-
         if ds.crs is None:
             raise ValueError("Raster CRS is undefined.")
 
@@ -445,11 +445,12 @@ def add_site_basins(site_df: pd.DataFrame, nzcvm_data_ffp: Path) -> pd.DataFrame
         # Get the boundaries
         boundaries = basin_dict[basin_name]
         for boundary in boundaries:
-            basin_outline = cvm_registry.load_basin_boundary(boundary)
+            basin_outline = shapely.Polygon(cvm_registry.load_basin_boundary(boundary))
+            shapely.prepare(basin_outline)
 
-            # Find sites within basin
-            is_inside_basin = point_in_polygon.is_inside_postgis_parallel(
-                ll_points, basin_outline
+            # Find sites within basin (points on the boundary count as inside)
+            is_inside_basin = shapely.intersects_xy(
+                basin_outline, ll_points[:, 0], ll_points[:, 1]
             )
             # Ensure we only update the basin of a site if it either doesn't have a basin or is in a priority basin
             mask_has_basin = site_df["basin"].notna()

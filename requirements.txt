@@ -8,14 +8,15 @@ requests
 fiona
 pyproj
 pyyaml
-shapely
+shapely>=2.0
 gmprocess
 h5py
 pooch
 matplotlib
 rasterio
 oq_wrapper>=2025.12.3,
-qcore-utils>=2025.12.1,
+# Upper bound only because velocity_modelling still imports qcore.point_in_polygon (removed in 2026.10.1)
+qcore-utils>=2025.12.1,<2026.10.1
 source_modelling>=2025.12.1,
 openquake.engine==3.23.2,
 im-calculation>=2025.12.3,

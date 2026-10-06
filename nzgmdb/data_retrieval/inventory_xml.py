@@ -6,66 +6,94 @@ import datetime
 from pathlib import Path
 
 import pandas as pd
+from obspy import Inventory
 from obspy.clients.fdsn import Client as FDSN_Client
-from obspy.clients.fdsn.header import FDSNException, FDSNNoDataException
+from obspy.clients.fdsn.header import FDSNException
 
 from nzgmdb.management import config as cfg
-from nzgmdb.management import file_structure
+from nzgmdb.management import custom_errors, file_structure
+
+STATION_INFO_COLUMNS = [
+    "provider",
+    "net",
+    "sta",
+    "lat",
+    "lon",
+    "elev",
+    "creation_date",
+    "end_date",
+    "chan",
+    "loc",
+    "loc_elev",
+    "start_time",
+    "end_time",
+]
 
 
 def get_provider_inventory(
-    provider: str = None,
-    networks: list[str] = None,
+    provider: str | None = None,
+    networks: list[str] | None = None,
     channel_codes: str | None = None,
     stations: str = "*",
     level: str = "response",
     starttime: str = "2000-01-01",
-    endtime: str = datetime.datetime.strftime(datetime.datetime.now(), "%Y-%m-%d"),
+    endtime: str | None = None,
     real_time: bool = False,
-):
+) -> Inventory | None:
     """
-    Fetch inventory from a specified FDSN provider within configured bounding box.
+    Fetch inventory from a single FDSN provider within the configured bounding box.
 
     Parameters
     ----------
     provider : str, optional
-        FDSN provider base URL, required if `real_time` is False.
+        FDSN provider name or base URL (e.g. "GEONET", "IRIS"), required if `real_time` is False.
     networks : list[str], optional
         List of network codes to fetch. If None, fetches all networks.
-    channel_codes : str or None, optional
-        Channel codes filter. If None, uses config default.
+    channel_codes : str, optional
+        Channel codes filter. If None, uses the config default.
     stations : str, optional
         Station selector passed to FDSN, by default "*".
     level : str, optional
         StationXML detail level to request, by default "response".
     starttime : str, optional
         Start date (YYYY-MM-DD), by default "2000-01-01".
+        Overridden to the last 14 days when `real_time` is True.
     endtime : str, optional
         End date (YYYY-MM-DD), by default today.
     real_time : bool, optional
-        Whether to use real-time data source from config, by default False.
+        Whether to use the real-time FDSN url from the config, by default False.
+
+    Returns
+    -------
+    Inventory or None
+        The inventory for the provider, or None if no data was found.
+
+    Raises
+    ------
+    ValueError
+        If `provider` is None and `real_time` is False.
     """
     config = cfg.Config()
     channel_codes = (
         config.get_value("channel_codes") if channel_codes is None else channel_codes
     )
-    bbox = config.get_value("bbox")  # [min_lon, min_lat, max_lon, max_lat]
-    min_lon, min_lat, max_lon, max_lat = bbox
-    max_lon = 180  # Due to issues with FDSN of passing barrier (no land past this point for sites that are of interest)
+    endtime = datetime.date.today().isoformat() if endtime is None else endtime
+    min_lon, min_lat, _, max_lat = config.get_value("bbox")
+    # FDSN queries can't cross the antimeridian, no sites of interest lie past 180
+    max_lon = 180
+
     if real_time:
-        client = FDSN_Client(base_url=config.get_value("real_time_url"))
-        # Adjust the start time to be more recent for real-time data to improve speed
-        starttime = datetime.datetime.strftime(
-            datetime.datetime.now() - datetime.timedelta(days=14), "%Y-%m-%d"
-        )
-    else:
-        if provider is None:
-            raise ValueError("Provider must be specified if not using real-time data.")
-        client = FDSN_Client(provider)
-    networks = "*" if networks is None else ",".join(networks)
+        provider = config.get_value("real_time_url")
+        # Only look at recent stations for real-time data to improve speed
+        starttime = (datetime.date.today() - datetime.timedelta(days=14)).isoformat()
+    elif provider is None:
+        raise ValueError("Provider must be specified if not using real-time data.")
+
     try:
-        inv = client.get_stations(
-            network=networks,
+        # Client creation is inside the try as service discovery can fail if a provider is down
+        client = FDSN_Client(provider)
+        return client.get_stations(
+            network="*" if networks is None else ",".join(networks),
             station=stations,
             channel=channel_codes,
             level=level,
@@ -76,12 +104,9 @@ def get_provider_inventory(
             starttime=starttime,
             endtime=endtime,
         )
-    except FDSNException:
-        print(
-            f"No inventory data found for provider {provider} with the specified parameters."
-        )
-        inv = None
-    return inv
+    except FDSNException as e:
+        print(f"No inventory data found for provider {provider}: {type(e).__name__}")
+        return None
 
 
 def get_full_inventory(
@@ -90,11 +115,11 @@ def get_full_inventory(
     channel_codes: str | None = None,
     stations: str = "*",
     starttime: str = "2000-01-01",
-    endtime: str = datetime.datetime.strftime(datetime.datetime.now(), "%Y-%m-%d"),
+    endtime: str | None = None,
     return_df: bool = False,
-):
+) -> Inventory | pd.DataFrame | None:
     """
-    Fetch inventories from all configured providers and optionally return station/channel metadata.
+    Fetch inventories from all configured providers and merge them.
 
     Parameters
     ----------
@@ -102,8 +127,8 @@ def get_full_inventory(
         Whether to include temporary array providers, by default False.
     level : str, optional
         StationXML detail level to request, by default "response".
-    channel_codes : str or None, optional
-        Channel codes filter. If None, uses config default.
+    channel_codes : str, optional
+        Channel codes filter. If None, uses the config default.
     stations : str, optional
         Station selector passed to FDSN, by default "*".
     starttime : str, optional
@@ -111,19 +136,22 @@ def get_full_inventory(
     endtime : str, optional
         End date (YYYY-MM-DD), by default today.
     return_df : bool, optional
-        If True, return a DataFrame of station/channel info; otherwise return merged Inventory.
+        If True, return a DataFrame of station / channel info instead of the Inventory, by default False.
 
     Returns
     -------
-    pandas.DataFrame or obspy.core.inventory.inventory.Inventory
-        DataFrame when `return_df=True`, else the merged ObsPy Inventory.
+    Inventory or pd.DataFrame or None
+        The merged Inventory (None if no provider returned data),
+        or a DataFrame with STATION_INFO_COLUMNS when `return_df` is True.
     """
     config = cfg.Config()
-    provider_networks = config.get_value("main_providers_networks")
+    # Copy so the shared config dictionary is not modified
+    provider_networks = dict(config.get_value("main_providers_networks"))
     if add_tmp_arrays:
         provider_networks.update(config.get_value("tmp_array_providers_networks"))
-    return_inv = None
-    info_dfs = []
+
+    full_inventory = None
+    station_info = []
     for provider, networks in provider_networks.items():
         inventory = get_provider_inventory(
             provider=provider,
@@ -136,13 +164,13 @@ def get_full_inventory(
         )
         if inventory is None:
             continue
-        if return_inv is None:
-            return_inv = inventory
+        if full_inventory is None:
+            full_inventory = inventory
         else:
-            return_inv += inventory
+            full_inventory += inventory
 
         if return_df:
-            station_info = [
+            station_info.extend(
                 [
                     provider,
                     network.code,
@@ -161,55 +189,16 @@ def get_full_inventory(
                 for network in inventory
                 for station in network
                 for channel in station.channels
-            ]
-
-            info_dfs.append(
-                pd.DataFrame(
-                    station_info,
-                    columns=[
-                        "provider",
-                        "net",
-                        "sta",
-                        "lat",
-                        "lon",
-                        "elev",
-                        "creation_date",
-                        "end_date",
-                        "chan",
-                        "loc",
-                        "loc_elev",
-                        "start_time",
-                        "end_time",
-                    ],
-                )
             )
 
     if return_df:
-        if not info_dfs:
-            return pd.DataFrame(
-                columns=[
-                    "provider",
-                    "net",
-                    "sta",
-                    "lat",
-                    "lon",
-                    "elev",
-                    "creation_date",
-                    "end_date",
-                    "chan",
-                    "loc",
-                    "loc_elev",
-                    "start_time",
-                    "end_time",
-                ]
-            )
+        return (
+            pd.DataFrame(station_info, columns=STATION_INFO_COLUMNS)
+            .drop_duplicates(["provider", "net", "sta", "chan", "loc", "loc_elev"])
+            .reset_index(drop=True)
+        )
 
-        all_info_df = pd.concat(info_dfs, ignore_index=True)
-        return all_info_df.drop_duplicates(
-            ["provider", "net", "sta", "chan", "loc", "loc_elev"]
-        ).reset_index(drop=True)
-
-    return return_inv
+    return full_inventory
 
 
 def fetch_and_save_inventory(
@@ -217,10 +206,10 @@ def fetch_and_save_inventory(
     stations: list[str],
     add_tmp_arrays: bool = False,
     starttime: str = "2000-01-01",
-    endtime: str = datetime.datetime.strftime(datetime.datetime.now(), "%Y-%m-%d"),
+    endtime: str | None = None,
 ):
     """
-    Fetches inventory data from the obspy FDSN client and saves it as StationXML files.
+    Fetch inventory data for the given stations and save each as a StationXML file.
 
     Parameters
     ----------
@@ -233,26 +222,23 @@ def fetch_and_save_inventory(
     starttime : str, optional
         The start time for the inventory data, by default "2000-01-01".
     endtime : str, optional
-        The end time for the inventory data, by default the current date.
+        The end time for the inventory data, by default today.
     """
     xml_dir = file_structure.get_stationxml_dir(main_dir)
     xml_dir.mkdir(parents=True, exist_ok=True)
 
-    all_stations = ",".join(stations)
+    inv = get_full_inventory(
+        add_tmp_arrays=add_tmp_arrays,
+        stations=",".join(stations),
+        starttime=starttime,
+        endtime=endtime,
+    )
+    if inv is None:
+        raise custom_errors.InventoryNotFoundError("No inventory data found for the specified stations.")
 
-    try:
-        inv = get_full_inventory(
-            add_tmp_arrays=add_tmp_arrays,
-            stations=all_stations,
-            starttime=starttime,
-            endtime=endtime,
-        )
-        for sta in stations:
-            sel = inv.select(station=sta)
-            if not sel.networks:
-                print(f"Warning: No inventory data found for station {sta}. Skipping.")
-                continue
-            fname = xml_dir / f"{sta}.xml"
-            sel.write(fname, format="STATIONXML")
-    except FDSNNoDataException:
-        print("No inventory data found for the specified stations and time range.")
+    for sta in stations:
+        sel = inv.select(station=sta)
+        if not sel.networks:
+            print(f"Warning: No inventory data found for station {sta}. Skipping.")
+            continue
+        sel.write(xml_dir / f"{sta}.xml", format="STATIONXML")
