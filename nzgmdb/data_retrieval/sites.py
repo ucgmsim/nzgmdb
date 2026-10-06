@@ -10,11 +10,10 @@ import numpy as np
 import pandas as pd
 import rasterio
 import shapely
-from obspy.clients.fdsn import Client as FDSN_Client
 from pyproj import Transformer
 from scipy.spatial import cKDTree
 
-from nzgmdb.data_retrieval import tect_domain, inventory_xml
+from nzgmdb.data_retrieval import inventory_xml, tect_domain
 from nzgmdb.management import config as cfg
 from nzgmdb.management.data_registry import NZGMDB_DATA
 from velocity_modelling import registry, threshold
