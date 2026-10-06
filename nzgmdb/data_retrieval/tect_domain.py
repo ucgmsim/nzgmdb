@@ -9,12 +9,14 @@ from pathlib import Path
 import fiona
 import numpy as np
 import pandas as pd
+import shapely
 from pyproj import Transformer
+from shapely.geometry import shape
 
 from cmt_solutions import cmt_data
 from nzgmdb.management import config as cfg
 from nzgmdb.management.data_registry import NZGMDB_DATA
-from qcore import geo, point_in_polygon
+from qcore import geo
 
 
 def merge_NZSMDB_flatfile_on_events(
@@ -415,44 +417,26 @@ def find_domain_from_shapes(
     wgs2nztm = Transformer.from_crs(
         config.get_value("ll_num"), config.get_value("nztm_num"), always_xy=True
     )
-    points = np.array(merged_df[["lon", "lat"]])
-    points = np.asarray(wgs2nztm.transform(points[:, 0], points[:, 1])).T
+    x, y = wgs2nztm.transform(merged_df["lon"].to_numpy(), merged_df["lat"].to_numpy())
+
+    # Object arrays keep the mixed domain_no values (shapefile strings and 0 for Oceanic)
+    domain_nos = np.full(len(merged_df), None, dtype=object)
+    domain_types = np.full(len(merged_df), None, dtype=object)
 
     # Go through each domain and determine if the points are in the domain
+    # (points on the boundary count as inside, later layers take priority)
     for layer in shapes:
-        domain_no = layer["properties"]["Domain_No"]
-        domain_type = layer["properties"]["DomainType"]
-        geometry_type = layer["geometry"]["type"]
-        geometry_coords = layer["geometry"]["coordinates"]
-        in_domain = None
-        if geometry_type == "MultiPolygon":
-            for coords in geometry_coords:
-                # Convert the coords into a numpy array
-                coords = np.asarray(coords)
-                in_domain_check = point_in_polygon.is_inside_postgis_parallel(
-                    points, coords
-                )
-                # If in_domain is None, set it to the first in_domain_check
-                if in_domain is None:
-                    in_domain = in_domain_check
-                else:
-                    # If in_domain is not None, update it with the in_domain_check
-                    in_domain = in_domain | in_domain_check
-        else:
-            # Convert the geometry coords into a numpy array
-            geometry_coords = np.asarray([list(coord) for coord in geometry_coords[0]])
-            in_domain = point_in_polygon.is_inside_postgis_parallel(
-                points, geometry_coords
-            )
-
-        # Update the domain_no, domain_name, and domain_type based on the in_domain
-        merged_df.loc[in_domain, ["domain_no", "domain_type"]] = domain_no, domain_type
+        in_domain = shapely.intersects_xy(shape(layer["geometry"]), x, y)
+        domain_nos[in_domain] = layer["properties"]["Domain_No"]
+        domain_types[in_domain] = layer["properties"]["DomainType"]
 
     # Add Oceanic for points not in any domain
-    merged_df.loc[merged_df.domain_no.isnull(), ["domain_no", "domain_type"]] = (
-        0,
-        "Oceanic",
-    )
+    is_oceanic = pd.isna(domain_nos)
+    domain_nos[is_oceanic] = 0
+    domain_types[is_oceanic] = "Oceanic"
+
+    merged_df["domain_no"] = domain_nos
+    merged_df["domain_type"] = domain_types
     return merged_df
 
 
