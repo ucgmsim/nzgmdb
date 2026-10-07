@@ -203,7 +203,7 @@ def create_site_table_response(
     # Fetch the client station information
     config = cfg.Config()
     all_info_df = inventory_xml.get_full_inventory(
-        add_tmp_arrays=add_tmp_arrays, return_df=True
+        add_tmp_arrays=add_tmp_arrays, return_df=True, level="channel"
     )
 
     # Get the Geonet metadata summary information
@@ -308,12 +308,17 @@ def create_site_table_response(
             NZGMDB_DATA.fetch("nzcvm_v1.tif")
             file_path = Path(NZGMDB_DATA.abspath) / "nzcvm_v1.tif"
 
-            # Sample the Vs30 map and fill gaps using nearest-neighbour averaging
+            # Sample the Vs30 (band 1) and its ln standard deviation (band 2) from the map
+            # and fill gaps using nearest-neighbour averaging
             points = tect_merged_df.loc[mask_vs30, ["lat", "lon"]].to_numpy()
-            vs30_values = sample_points_from_geotiff(file_path, points).ravel()
             coords = np.column_stack([points[:, 1], points[:, 0]])
+            vs30_values = sample_points_from_geotiff(file_path, points, band=1).ravel()
+            vs30_std = sample_points_from_geotiff(file_path, points, band=2).ravel()
             tect_merged_df.loc[mask_vs30, "Vs30"] = np.round(
                 fill_gaps_with_nearest(coords, vs30_values)
+            )
+            tect_merged_df.loc[mask_vs30, "Vs30_std"] = fill_gaps_with_nearest(
+                coords, vs30_std
             )
 
             # Only label the stations that actually received a map value

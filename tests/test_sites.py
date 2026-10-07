@@ -163,7 +163,8 @@ def run_site_table(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> Callable:
     The real tectonic domain code runs (with no domain shapes, so every site is
     Oceanic). NZCVM returns Z1.0 = |lat| / 50 km, Z2.5 = |lat| / 10 km and
     sigma = 0.3, in reversed station order to check results are aligned by station.
-    The Vs30 map returns `vs30_map` values (default 250) in point order.
+    The Vs30 map returns `vs30_map` (band 1, default 250) and `vs30_std_map`
+    (band 2, default 0.5) values in point order.
 
     Parameters
     ----------
@@ -175,7 +176,8 @@ def run_site_table(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> Callable:
     Returns
     -------
     Callable
-        `run(inventory, metadata, vs30_map=None, nzcvm_error=None)` returning
+        `run(inventory, metadata, vs30_map=None, vs30_std_map=None, nzcvm_error=None)`
+        returning
         `(site_df, station_df, calls)`.
     """
 
@@ -183,6 +185,7 @@ def run_site_table(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> Callable:
         inventory: list[dict],
         metadata: list[dict],
         vs30_map: list[float] | None = None,
+        vs30_std_map: list[float] | None = None,
         nzcvm_error: Exception | None = None,
     ) -> tuple[pd.DataFrame, pd.DataFrame, dict]:
         calls = {"nzcvm_stations": [], "vs30_points": 0}
@@ -223,9 +226,14 @@ def run_site_table(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> Callable:
 
         monkeypatch.setattr(sites.threshold, "compute_station_thresholds", _thresholds)
 
-        def _vs30_map(_file_path: Path, points: np.ndarray) -> np.ndarray:
-            calls["vs30_points"] = len(points)
-            values = vs30_map if vs30_map is not None else [250.0] * len(points)
+        def _vs30_map(
+            _file_path: Path, points: np.ndarray, band: int = 1
+        ) -> np.ndarray:
+            if band == 1:
+                calls["vs30_points"] = len(points)
+                values = vs30_map or [250.0] * len(points)
+            else:
+                values = vs30_std_map or [0.5] * len(points)
             return np.asarray(values, dtype=float).reshape(-1, 1)
 
         monkeypatch.setattr(sites, "sample_points_from_geotiff", _vs30_map)
@@ -325,8 +333,9 @@ def test_only_inventory_stations_are_included(run_site_table: Callable):
     assert ccc["Z1.0"] == pytest.approx(40.0 / 50 * 1000)  # m
     assert ccc["Z2.5"] == pytest.approx(40.0 / 10)  # km
     assert (ccc["Z1.0_ref"], ccc["Q_Z1.0"]) == ("NZCVM (2026)", "Q3")
-    assert (ccc["Vs30"], ccc["Vs30_Ref"], ccc["Q_Vs30"]) == (
+    assert (ccc["Vs30"], ccc["Vs30_std"], ccc["Vs30_Ref"], ccc["Q_Vs30"]) == (
         250.0,
+        0.5,
         "Vs30 Map v1.0 (2026)",
         "Q3",
     )
@@ -359,25 +368,37 @@ def test_q3_z_values_are_replaced_by_nzcvm(run_site_table: Callable):
     assert (bbb["Z1.0_std"], bbb["Z2.5_std"]) == (0.3, 0.3)
     assert (bbb["Z1.0_ref"], bbb["Z2.5_ref"]) == ("NZCVM (2026)", "NZCVM (2026)")
     # Measured Vs30 kept even though Z1.0 was Q3
-    assert (bbb["Vs30"], bbb["Q_Vs30"], bbb["Vs30_Ref"]) == (500.0, "Q1", "GeoNet")
+    assert (bbb["Vs30"], bbb["Vs30_std"], bbb["Q_Vs30"], bbb["Vs30_Ref"]) == (
+        500.0,
+        0.1,
+        "Q1",
+        "GeoNet",
+    )
     assert calls["vs30_points"] == 0
 
 
 def test_q3_vs30_is_replaced_without_touching_z(run_site_table: Callable):
-    """Vs30 follows its own quality: Q3 Vs30 is replaced while measured Z values stay."""
+    """
+    Vs30 follows its own quality: Q3 Vs30 and its std are both replaced by the map,
+    while measured Z values stay.
+    """
     site_df, _, calls = run_site_table(
         inventory=[_inventory_row("AAA", -41.0, 174.0)],
         metadata=[_metadata_row("AAA", vs30=600.0, q_vs30="Q3")],
     )
 
     aaa = site_df.loc["AAA"]
-    assert (aaa["Vs30"], aaa["Vs30_Ref"]) == (250.0, "Vs30 Map v1.0 (2026)")
+    assert (aaa["Vs30"], aaa["Vs30_std"], aaa["Vs30_Ref"]) == (
+        250.0,
+        0.5,
+        "Vs30 Map v1.0 (2026)",
+    )
     assert (aaa["Z1.0"], aaa["Z1.0_ref"]) == (200.0, "GeoNet")
     assert calls["nzcvm_stations"] == []
 
 
 def test_vs30_map_gaps_are_filled_from_neighbours(run_site_table: Callable):
-    """A NaN from the Vs30 map is filled from nearby stations and rounded."""
+    """A NaN from the map is filled from nearby stations (Vs30 rounded, std not)."""
     site_df, _, _ = run_site_table(
         inventory=[
             _inventory_row("AAA", -41.00, 174.00),
@@ -386,9 +407,11 @@ def test_vs30_map_gaps_are_filled_from_neighbours(run_site_table: Callable):
         ],
         metadata=[],
         vs30_map=[200.0, np.nan, 310.0],
+        vs30_std_map=[0.4, np.nan, 0.7],
     )
 
     assert site_df.loc["BBB", "Vs30"] == 255.0
+    assert site_df.loc["BBB", "Vs30_std"] == pytest.approx(0.55)
     assert (site_df["Vs30_Ref"] == "Vs30 Map v1.0 (2026)").all()
 
 
@@ -398,9 +421,11 @@ def test_vs30_left_missing_when_map_has_no_values(run_site_table: Callable):
         inventory=[_inventory_row("AAA", -41.0, 174.0)],
         metadata=[],
         vs30_map=[np.nan],
+        vs30_std_map=[np.nan],
     )
 
     assert np.isnan(site_df.loc["AAA", "Vs30"])
+    assert np.isnan(site_df.loc["AAA", "Vs30_std"])
     assert pd.isna(site_df.loc["AAA", "Vs30_Ref"])
     assert pd.isna(site_df.loc["AAA", "Q_Vs30"])
 
