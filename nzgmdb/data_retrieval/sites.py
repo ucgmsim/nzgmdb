@@ -275,72 +275,57 @@ def create_site_table_response(
     # Rename the domain column
     tect_merged_df = tect_merged_df.rename(columns={"domain_no": "site_domain_no"})
 
-    # Only compute thresholds for stations where Z1.0 is missing
-    mask_missing_z1 = tect_merged_df["Z1.0"].isna()
-    mask_q3 = tect_merged_df["Q_Z1.0"] == "Q3"
-    mask_to_compute = mask_missing_z1 | mask_q3
-    if mask_to_compute.any():
-        # Prepare stations DataFrame for only missing rows, indexed by station code
-        stations = tect_merged_df.loc[mask_to_compute, ["sta", "lon", "lat"]].set_index(
-            "sta"
-        )[["lon", "lat"]]
-        try:
-            nzcvm_version = config.get_value("nzcvm_version")
+    # Stations that use NZCVM Z1.0 / Z2.5 (missing or Q3 GeoNet values)
+    mask_z = tect_merged_df["Z1.0"].isna() | (tect_merged_df["Q_Z1.0"] == "Q3")
+    # Stations that use the Vs30 map (missing or Q3 GeoNet Vs30), independent of Z quality
+    mask_vs30 = tect_merged_df["Vs30"].isna() | (tect_merged_df["Q_Vs30"] == "Q3")
+    try:
+        if mask_z.any():
+            stations = tect_merged_df.loc[mask_z, ["sta", "lon", "lat"]].set_index(
+                "sta"
+            )
             thresholds = threshold.compute_station_thresholds(
-                stations, model_version=nzcvm_version
-            )
-            # Merge computed thresholds back (computed columns will be suffixed)
-            tect_merged_df = tect_merged_df.merge(
-                thresholds[["Z1.0(km)", "Z2.5(km)", "sigma"]],
-                left_on="sta",
-                right_index=True,
-                how="left",
-            )
+                stations, model_version=config.get_value("nzcvm_version")
+            ).reindex(stations.index)
 
-            # Add in the computed values where missing
-            tect_merged_df["Z1.0"] = tect_merged_df["Z1.0"].combine_first(
-                tect_merged_df.get("Z1.0(km)") * 1000.0
+            # Overwrite (not fill) so Q3 GeoNet values are replaced by NZCVM, Z in m
+            tect_merged_df.loc[mask_z, "Z1.0"] = (
+                thresholds["Z1.0(km)"].to_numpy() * 1000.0
             )
-            tect_merged_df["Z2.5"] = tect_merged_df["Z2.5"].combine_first(
-                tect_merged_df.get("Z2.5(km)") * 1000.0
+            tect_merged_df.loc[mask_z, "Z2.5"] = (
+                thresholds["Z2.5(km)"].to_numpy() * 1000.0
             )
-            tect_merged_df["Z1.0_std"] = tect_merged_df["Z1.0_std"].combine_first(
-                tect_merged_df.get("sigma")
-            )
-            tect_merged_df["Z2.5_std"] = tect_merged_df["Z2.5_std"].combine_first(
-                tect_merged_df.get("sigma")
-            )
+            tect_merged_df.loc[mask_z, "Z1.0_std"] = thresholds["sigma"].to_numpy()
+            tect_merged_df.loc[mask_z, "Z2.5_std"] = thresholds["sigma"].to_numpy()
+            tect_merged_df.loc[mask_z, ["Z1.0_ref", "Z2.5_ref", "Q_Z1.0", "Q_Z2.5"]] = [
+                "NZCVM (2026)",
+                "NZCVM (2026)",
+                "Q3",
+                "Q3",
+            ]
 
-            # Set extra ref / quality fields
-            tect_merged_df.loc[
-                mask_to_compute, ["Z1.0_ref", "Z2.5_ref", "Q_Z1.0", "Q_Z2.5"]
-            ] = ["NZCVM (2026)", "NZCVM (2026)", "Q3", "Q3"]
-
-            # Get the file path to the combined MVN GeoTIFF
+        if mask_vs30.any():
             NZGMDB_DATA.fetch("nzcvm_v1.tif")
             file_path = Path(NZGMDB_DATA.abspath) / "nzcvm_v1.tif"
 
-            # Compute Vs30 for missing values
-            points = tect_merged_df.loc[mask_to_compute, ["lat", "lon"]].to_numpy()
+            # Sample the Vs30 map and fill gaps using nearest-neighbour averaging
+            points = tect_merged_df.loc[mask_vs30, ["lat", "lon"]].to_numpy()
             vs30_values = sample_points_from_geotiff(file_path, points).ravel()
-
-            # Fill missing gaps in Vs30 using nearest-neighbour averaging
             coords = np.column_stack([points[:, 1], points[:, 0]])
-            vs30_values_filled = fill_gaps_with_nearest(coords, vs30_values)
-            vs30_values_filled_rounded = np.round(vs30_values_filled)
-
-            # Update Vs30 and related fields
-            tect_merged_df.loc[mask_to_compute, "Vs30"] = vs30_values_filled_rounded
-
-            # Ensure reference and quality fields are set for Vs30 where filled
-            vs30_mask = mask_to_compute & ~tect_merged_df["Vs30"].isna()
-            tect_merged_df.loc[vs30_mask, "Vs30_Ref"] = "Vs30 Map v1.0 (2026)"
-            tect_merged_df.loc[vs30_mask, "Q_Vs30"] = "Q3"
-
-        except (FileNotFoundError, ValueError, RuntimeError):
-            raise UserWarning(
-                "Could not compute thresholds for missing Z1.0 values, check correct setup for NZCVM"
+            tect_merged_df.loc[mask_vs30, "Vs30"] = np.round(
+                fill_gaps_with_nearest(coords, vs30_values)
             )
+
+            # Only label the stations that actually received a map value
+            vs30_filled = mask_vs30 & tect_merged_df["Vs30"].notna()
+            tect_merged_df.loc[vs30_filled, ["Vs30_Ref", "Q_Vs30"]] = [
+                "Vs30 Map v1.0 (2026)",
+                "Q3",
+            ]
+    except (FileNotFoundError, ValueError, RuntimeError) as e:
+        raise UserWarning(
+            "Could not compute NZCVM Z1.0 / Z2.5 or Vs30 values, check correct setup for NZCVM"
+        ) from e
 
     # Split into station and site dfs
     station_df = all_info_df.loc[
