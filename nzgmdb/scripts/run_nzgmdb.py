@@ -542,6 +542,12 @@ def generate_site_table_basin(
             file_okay=False,
         ),
     ],
+    add_tmp_arrays: Annotated[
+        bool,
+        typer.Option(
+            is_flag=True,
+        ),
+    ] = False,
 ):
     """
     Generate the site table basin flatfile.
@@ -554,15 +560,20 @@ def generate_site_table_basin(
         The main directory of the NZGMDB results (Highest level directory).
     nzcvm_data_ffp : Path
         The full file path to the nzcvm_data repository that stores the basin information.
+    add_tmp_arrays : bool, optional
+        If True, temporary arrays will be added to the site table (default is False).
     """
     main_dir.mkdir(parents=True, exist_ok=True)
     # Generate the site basin flatfile
     flatfile_dir = file_structure.get_flatfile_dir(main_dir)
     flatfile_dir.mkdir(parents=True, exist_ok=True)
 
-    site_df = sites.create_site_table_response()
+    site_df, station_df = sites.create_site_table_response(add_tmp_arrays)
     site_df = sites.add_site_basins(site_df, nzcvm_data_ffp)
 
+    station_df.to_csv(
+        flatfile_dir / file_structure.PreFlatfileNames.STATION_TABLE, index=False
+    )
     site_df.to_csv(
         flatfile_dir / file_structure.PreFlatfileNames.SITE_TABLE, index=False
     )
@@ -837,6 +848,17 @@ def run_full_nzgmdb(
             dir_okay=False,
         ),
     ] = None,
+    add_tmp_arrays: Annotated[
+        bool,
+        typer.Option(),
+    ] = False,
+    tmp_array_data_dir: Annotated[
+        Path,
+        typer.Option(
+            exists=True,
+            file_okay=False,
+        ),
+    ] = None,
     machine: Annotated[
         cfg.MachineName,
         typer.Option(
@@ -850,6 +872,7 @@ def run_full_nzgmdb(
     This function orchestrates the full pipeline of NZGMDB, executing all necessary steps sequentially.
 
     Steps Included:
+    - Generate site table with basin information
     - Fetch Geonet data
     - Merge tectonic domains
     - Generate phase arrival table
@@ -907,11 +930,21 @@ def run_full_nzgmdb(
         If True, the function will create a quality database (default is False).
     bypass_records_ffp : Path, optional
         The full file path to the bypass records file, if applicable.
+    add_tmp_arrays : bool, optional
+        If True, temporary arrays will be added to the database run (default is False).
+    tmp_array_data_dir : Path, optional
+        The directory containing temporary array data, required if add_tmp_arrays is True.
     machine : cfg.MachineName, optional
         The machine name to use for process configuration (default is None).
     """
     main_dir.mkdir(parents=True, exist_ok=True)
     config = cfg.Config()
+
+    # Check that if add_tmp_arrays is True, tmp_array_data_dir is provided
+    if add_tmp_arrays and tmp_array_data_dir is None:
+        raise ValueError(
+            "tmp_array_data_dir must be provided if add_tmp_arrays is True."
+        )
 
     # Generate the site basin flatfile
     flatfile_dir = file_structure.get_flatfile_dir(main_dir)
@@ -921,7 +954,7 @@ def run_full_nzgmdb(
         and (flatfile_dir / file_structure.PreFlatfileNames.SITE_TABLE).exists()
     ):
         print("Generating site table basin flatfile")
-        generate_site_table_basin(main_dir, nzcvm_data_ffp)
+        generate_site_table_basin(main_dir, nzcvm_data_ffp, add_tmp_arrays)
 
     # Fetch the Geonet data
     if not (
