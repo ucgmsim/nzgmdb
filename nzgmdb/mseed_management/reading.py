@@ -26,16 +26,21 @@ def read_mseed_to_stream(file_path: Path):
     -------
     Stream
         ObsPy Stream object containing the data from the MiniSEED file
+
+    Raises
+    ------
+    InvalidMseedFileError
+        If mseedlib fails to read the file
     """
     stream = Stream()
     nptype = {"i": np.int32, "f": np.float32, "d": np.float64, "t": np.char}
     mstl = mseedlib.MSTraceList()
     try:
         mstl.read_file(str(file_path), unpack_data=False, record_list=True)
-    except mseedlib.exceptions.MseedLibError:
+    except mseedlib.exceptions.MseedLibError as e:
         raise custom_errors.InvalidMseedFileError(
             f"Error reading MiniSEED file {file_path}"
-        )
+        ) from e
 
     for traceid in mstl.traceids():
         for segment in traceid.segments():
