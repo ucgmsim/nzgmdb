@@ -70,7 +70,7 @@ def compute_mw_eq_7(mag_0: float):
     float
         The moment magnitude (Mw)
     """
-    return (2 / 3) * np.log10(mag_0) - 10.73
+    return (2 / 3) * np.log10(mag_0) - 10.7
 
 
 def replace_cmt_data_on_event(
