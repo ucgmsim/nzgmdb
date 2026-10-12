@@ -33,7 +33,7 @@ class EventData(NamedTuple):
     A named tuple to store each events data.
     """
 
-    event_line: list[Any]
+    event_line: list[Any] | None
     """The full event line with all metadata."""
     station_extraction_table: pd.DataFrame
     """The station extraction table with all metadata for wavefrom extraction."""
@@ -133,7 +133,7 @@ def fetch_event_line(event_cat: Event, event_id: str):
             if mb_mag.station_count < 3:
                 loc_mag = max(
                     [ml_loc_mag, mlv_loc_mag],
-                    key=lambda mag: (mag.station_count if mag else 0),
+                    key=lambda mag: mag.station_count if mag else 0,
                 )
                 if 0 < loc_mag.station_count <= mb_mag.station_count:
                     loc_mag = mb_mag
@@ -145,7 +145,7 @@ def fetch_event_line(event_cat: Event, event_id: str):
             if ml_loc_mag or mlv_loc_mag:
                 loc_mag = max(
                     [ml_loc_mag, mlv_loc_mag],
-                    key=lambda mag: (mag.station_count if mag else 0),
+                    key=lambda mag: mag.station_count if mag else 0,
                 )
             else:
                 # No ML or MLv, try M
@@ -255,6 +255,7 @@ def fetch_sta_extraction(
     pref_mag: float,
     pref_mag_type: str,
     site_table: pd.DataFrame,
+    provider: str | None,
 ):
     """
     Fetch the extraction table for a station to be added to the station extraction table
@@ -276,6 +277,8 @@ def fetch_sta_extraction(
         The preferred magnitude type
     site_table : pd.DataFrame
         The site table to extract the vs30 value from
+    provider : str | None
+        The provider of the station's network, however if None, the station will be skipped and a reason will be returned
 
     Returns
     -------
@@ -285,15 +288,6 @@ def fetch_sta_extraction(
         The skipped reasons if the station has an issue getting a phase arrival
     """
     config = cfg.Config()
-
-    # Get the provider and network codes
-    provider_networks = config.get_value("main_providers_networks")
-    provider_networks.update(config.get_value("tmp_array_providers_networks"))
-
-    provider = next(
-        (prov for prov, nets in provider_networks.items() if network.code in nets),
-        None,
-    )
 
     if provider is None:
         print(
@@ -413,8 +407,8 @@ def fetch_event_data(
     inventory: Inventory,
     site_table: pd.DataFrame,
     mw_rrup_data: np.ndarray,
-    only_sites: list[str] = None,
-    only_record_ids: pd.DataFrame = None,
+    only_sites: list[str] | None = None,
+    only_record_ids: pd.DataFrame | None = None,
     n_procs: int = 1,
 ):
     """
@@ -450,7 +444,6 @@ def fetch_event_data(
     skipped_records = pd.DataFrame()
 
     if event_line is not None:
-
         # Get Networks / Stations within a certain radius of the event
         inv_sub_sta = get_stations_within_radius(event_cat, mw_rrup_data, inventory)
 
@@ -468,7 +461,7 @@ def fetch_event_data(
                 only_record_ids["record_id"].str.contains(f"^{event_id}_")
             ]
             if event_only_record_ids.empty:
-                return [], [], [], []
+                return EventData(None, pd.DataFrame(), pd.DataFrame())
             filtered_stations = [
                 (network, station)
                 for network, station in filtered_stations
@@ -476,6 +469,17 @@ def fetch_event_data(
                     event_only_record_ids["record_id"].str.contains(f"_{station.code}_")
                 ].empty
             ]
+
+        # Get the providers for the networks from the config file
+        config = cfg.Config()
+        network_providers = {}
+        for provider_networks in (
+            config.get_value("main_providers_networks"),
+            config.get_value("tmp_array_providers_networks"),
+        ):
+            for provider, networks in provider_networks.items():
+                for network in networks:
+                    network_providers.setdefault(network, provider)
 
         if n_procs > 1:
             with mp.Pool(n_procs) as pool:
@@ -488,7 +492,10 @@ def fetch_event_data(
                         pref_mag_type=event_line[8],
                         site_table=site_table,
                     ),
-                    [(station, network) for network, station in filtered_stations],
+                    [
+                        (station, network, network_providers.get(network.code))
+                        for network, station in filtered_stations
+                    ],
                 )
         else:
             results = [
@@ -500,6 +507,7 @@ def fetch_event_data(
                     event_line[7],
                     event_line[8],
                     site_table,
+                    network_providers.get(network.code),
                 )
                 for network, station in filtered_stations
             ]
