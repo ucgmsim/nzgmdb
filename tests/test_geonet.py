@@ -21,7 +21,7 @@ def test_fetch_event_data_against_benchmark(evid: str) -> None:
     client_NZ = FDSN_Client("GEONET")
     event_cat = client_NZ.get_events(eventid=evid)[0]
 
-    inventory = inventory_xml.get_full_inventory(level="station")
+    inventory = inventory_xml.get_full_inventory(level="channel")
 
     # site_table used by fetch_sta_extraction - empty (so code will fall back to default vs30)
     site_table = pd.DataFrame(columns=["net", "sta", "Vs30", "Z1.0"])
