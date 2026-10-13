@@ -207,7 +207,8 @@ def get_stations_within_radius(
     mw_rrup_data : np.ndarray
         The Mw_rrup data to get the interpolation function to determine the max radius.
     inventory : Inventory
-        The inventory of the stations from all networks to extract the stations from
+        The channel level inventory of the stations from all networks to extract the stations from
+        Stations without a channel active at the event time are removed
 
     Returns
     -------
@@ -807,14 +808,15 @@ def parse_geonet_information(
         only_record_ids = None
 
     config = cfg.Config()
+    # Channel level so stations are only selected if a channel was active at the event time
     if real_time:
         inventory = inventory_xml.get_provider_inventory(
-            real_time=True, level="station"
+            real_time=True, level="channel"
         )
         client_NZ = FDSN_Client(base_url=config.get_value("real_time_url"))
     else:
         inventory = inventory_xml.get_full_inventory(
-            add_tmp_arrays=add_tmp_arrays, level="station"
+            add_tmp_arrays=add_tmp_arrays, level="channel"
         )
         client_NZ = FDSN_Client("GEONET")
 
