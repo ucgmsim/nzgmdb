@@ -15,7 +15,7 @@ from typing import NamedTuple
 import numpy as np
 import pandas as pd
 import scipy as sp
-from obspy import Stream, Trace, UTCDateTime, read, read_inventory
+from obspy import Stream, Trace, UTCDateTime, read
 from obspy.clients.fdsn import Client as FDSN_Client
 from obspy.clients.fdsn.header import (
     FDSNNoDataException,
@@ -893,11 +893,10 @@ def extract_station_info(
             multi_event_records=multi_event_records,
         )
 
-    # Get the inventory xml file
-    xml_dir = file_structure.get_stationxml_dir(main_dir)
     # Load the inventory information
-    inventory_file = xml_dir / f"{station}.xml"
-    inventory = read_inventory(inventory_file) if inventory_file.is_file() else None
+    inventory = inventory_xml.load_station_inventory(
+        file_structure.get_stationxml_dir(main_dir), network, station
+    )
 
     # Get the unique channels (Using first 2 keys) and locations
     unique_channels = set([(tr.stats.channel[:2], tr.stats.location) for tr in st])
@@ -1160,11 +1159,15 @@ def extract_waveforms(
 
     # Fetch the station xmls before extraction, as they are needed for the response removal
     xml_dir = file_structure.get_stationxml_dir(main_dir)
-    missing_sites = [
-        sta
-        for sta in station_extraction_table["sta"].unique()
-        if not (xml_dir / f"{sta}.xml").is_file()
-    ]
+    missing_sites = sorted(
+        {
+            (net, sta)
+            for net, sta in zip(
+                station_extraction_table["net"], station_extraction_table["sta"]
+            )
+            if not file_structure.get_stationxml_ffp(xml_dir, net, sta).is_file()
+        }
+    )
     if missing_sites:
         print(f"Fetching station XML metadata for {len(missing_sites)} unique sites")
         inventory_xml.fetch_and_save_inventory(
