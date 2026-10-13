@@ -39,6 +39,12 @@ def fetch_geonet_data(
     ] = None,
     real_time: Annotated[bool, typer.Option()] = False,
     mp_sites: Annotated[bool, typer.Option()] = False,
+    add_tmp_arrays: Annotated[
+        bool,
+        typer.Option(
+            is_flag=True,
+        ),
+    ] = False,
 ):
     """
     Fetch earthquake data from Geonet and generate the earthquake source and station magnitude tables.
@@ -65,6 +71,8 @@ def fetch_geonet_data(
         If True, the function will run in real-time mode by using a different client (default is False).
     mp_sites : bool, optional
         If True, the function will use multiprocessing over sites instead of events (default is False).
+    add_tmp_arrays : bool, optional
+        If True, temporary arrays will be added to the database run (default is False).
     """
     geonet.parse_geonet_information(
         main_dir,
@@ -77,6 +85,7 @@ def fetch_geonet_data(
         only_record_ids_ffp,
         real_time,
         mp_sites,
+        add_tmp_arrays,
     )
 
 
@@ -980,6 +989,7 @@ def run_full_nzgmdb(
             only_sites,
             only_record_ids_ffp,
             real_time,
+            add_tmp_arrays=add_tmp_arrays,
         )
 
     # Extract Waveforms
