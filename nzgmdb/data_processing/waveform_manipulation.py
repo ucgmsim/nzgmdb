@@ -4,8 +4,6 @@ This module contains functions for the initial pre-processing of waveform data a
 
 import numpy as np
 from obspy import Inventory, UTCDateTime
-from obspy.clients.fdsn import Client as FDSN_Client
-from obspy.clients.fdsn.header import FDSNNoDataException
 from obspy.core.inventory.response import Response
 from obspy.core.stream import Stream
 from scipy import integrate, signal
@@ -24,7 +22,7 @@ def check_sensitivity(
 
     Parameters
     ----------
-    resp: Response
+    resp : Response
         The response object to check the sensitivity of
     threshold : float, optional
         The percentage difference threshold to determine if the sensitivity mismatch is acceptable, by default 10.0
@@ -36,7 +34,7 @@ def check_sensitivity(
     float
         The percentage difference between the total sensitivity and the stage sensitivity
 
-    Reference
+    References
     ----------
         USGS gmprocess instrument-response helper:
         https://ghsc.code-pages.usgs.gov/esi/groundmotion-processing/_modules/gmprocess/waveform_processing/instrument_response.html

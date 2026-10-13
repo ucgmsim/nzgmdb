@@ -15,7 +15,7 @@ from typing import NamedTuple
 import numpy as np
 import pandas as pd
 import scipy as sp
-from obspy import Stream, Trace, UTCDateTime, read_inventory, read
+from obspy import Stream, Trace, UTCDateTime, read, read_inventory
 from obspy.clients.fdsn import Client as FDSN_Client
 from obspy.clients.fdsn.header import (
     FDSNNoDataException,
@@ -667,7 +667,7 @@ def check_trace_issues(st: Stream, record_id: str, station_extraction_row: pd.Se
                 pd.DataFrame(
                     {
                         "record_id": [record_id],
-                        "reason": [f"Selected trace: {index_selected+1}"],
+                        "reason": [f"Selected trace: {index_selected + 1}"],
                     }
                 )
             )
@@ -764,7 +764,6 @@ def get_tmp_array_stream(
     pattern = f"{net}_{sta}_*"
     selected_files = []
     for sta_dir in sorted(p for p in net_dir.glob(pattern) if p.is_dir()):
-
         for f in sta_dir.glob("*.mseed"):
             # Example filename
             # Y3.CASS..HHN__20090312T000000Z__20090411T000000Z.mseed
@@ -785,7 +784,7 @@ def get_tmp_array_stream(
         st += read(str(f))
 
     # Merge overlapping / adjacent segments
-    # st.merge(method=1, fill_value=None)
+    st.merge(method=1, fill_value=None)
 
     # Trim to exact window
     st.trim(start_time, end_time)
@@ -939,7 +938,6 @@ def extract_station_info(
         try:
             # Check the data is not all 0's
             if all([np.allclose(tr.data, 0) for tr in mseed]):
-
                 skipped_records.append(
                     pd.DataFrame(
                         {
@@ -978,7 +976,6 @@ def extract_station_info(
 
         # Check if the record should be dropped
         if clip > threshold:
-
             clipped_records.append(
                 [
                     record_id,
@@ -1020,7 +1017,7 @@ def extract_station_info(
         try:
             # Write the mseed file
             creation.write_mseed(mseed, event_id, station, mseed_dir)
-        except Exception as e:
+        except Exception as e:  # noqa: BLE001
             skipped_records.append(
                 pd.DataFrame(
                     {
@@ -1233,19 +1230,6 @@ def extract_waveforms(
             finally:
                 pool.close()
                 pool.join()
-
-            # with mp.Pool(n_procs) as pool:
-            #     results = pool.map(
-            #         functools.partial(
-            #             extract_station_info,
-            #             main_dir=main_dir,
-            #             event_catalogues=catalog_dict,
-            #             extraction_table=station_extraction_table,
-            #             only_record_ids=only_record_ids,
-            #             tmp_array_dir=tmp_array_dir,
-            #         ),
-            #         (row for _, row in batch_rows.iterrows()),
-            #     )
 
             # Extract the results
             (
