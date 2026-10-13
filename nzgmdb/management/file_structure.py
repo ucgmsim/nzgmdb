@@ -302,3 +302,24 @@ def get_stationxml_dir(main_dir: Path) -> Path:
         The directory where StationXML files are stored.
     """
     return main_dir / "stationxml"
+
+
+def get_stationxml_ffp(xml_dir: Path, network: str, station: str) -> Path:
+    """
+    Get the StationXML file path for a station, named NET.STA.xml.
+
+    Parameters
+    ----------
+    xml_dir : Path
+        The directory where StationXML files are stored.
+    network : str
+        The network code of the station.
+    station : str
+        The station code.
+
+    Returns
+    -------
+    Path
+        The StationXML file path.
+    """
+    return xml_dir / f"{network}.{station}.xml"
