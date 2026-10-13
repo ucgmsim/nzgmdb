@@ -107,11 +107,8 @@ def fetch_event_line(event_cat: Event, event_id: str):
         else str(preferred_origin.earth_model_id).split("/")[1]
     )
     quality = preferred_origin.quality
-    if quality is None:
-        ev_ndef = None
-        ev_nsta = None
-        std = None
-    else:
+    ev_ndef, ev_nsta, std = None, None, None
+    if quality is not None:
         ev_ndef = None if quality.used_phase_count is None else quality.used_phase_count
         ev_nsta = (
             None if quality.used_station_count is None else quality.used_station_count

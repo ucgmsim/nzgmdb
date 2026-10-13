@@ -17,6 +17,9 @@ from cmt_solutions import cmt_data
 from nzgmdb.management import config as cfg
 from nzgmdb.management.data_registry import NZGMDB_DATA
 from qcore import geo
+from source_modelling import moment
+
+DYNE_CM_TO_NM = 1e-7
 
 
 def merge_NZSMDB_flatfile_on_events(
@@ -56,23 +59,6 @@ def merge_NZSMDB_flatfile_on_events(
     return event_df
 
 
-def compute_mw_eq_7(mag_0: float):
-    """
-    Compute the moment magnitude (Mw) from the seismic moment (Mo)
-
-    Parameters
-    ----------
-    mag_0 : float
-        The seismic moment (Mo)
-
-    Returns
-    -------
-    float
-        The moment magnitude (Mw)
-    """
-    return (2 / 3) * np.log10(mag_0) - 10.7
-
-
 def replace_cmt_data_on_event(
     event_df: pd.DataFrame,
     cmt_df: pd.DataFrame,
@@ -94,8 +80,10 @@ def replace_cmt_data_on_event(
     pd.DataFrame
         The event dataframe with the CMT data merged
     """
-    # Ensure the Mw is computed using equation 7
-    cmt_df["Mw"] = cmt_df["Mo"].apply(compute_mw_eq_7)
+    # Ensure the Mw is computed using equation 7 (Mo is in dyne-cm, convert to Nm)
+    cmt_df["Mw"] = cmt_df["Mo"].apply(
+        lambda mo: float(moment.moment_to_magnitude(mo * DYNE_CM_TO_NM))
+    )
 
     # Manage index and column renaming
     cmt_df = cmt_df.rename(
