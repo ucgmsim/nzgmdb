@@ -323,3 +323,28 @@ def get_stationxml_ffp(xml_dir: Path, network: str, station: str) -> Path:
         The StationXML file path.
     """
     return xml_dir / f"{network}.{station}.xml"
+
+
+def get_record_id(event_id: str, station: str, channel: str, location: str) -> str:
+    """
+    Get the record_id for a record, formatted as EVID_STA_CHAN_LOC.
+
+    Parameters
+    ----------
+    event_id : str
+        The event id.
+    station : str
+        The station code.
+    channel : str
+        The channel code, only the first 2 characters are used.
+    location : str
+        The location code, empty location codes are written as "00".
+
+    Returns
+    -------
+    str
+        The record_id.
+    """
+    # Empty location codes are written as "00" based on the FDSN Source Identifiers documentation
+    # (https://docs.fdsn.org/projects/source-identifiers/en/latest/location-codes.html)
+    return f"{event_id}_{station}_{channel[:2]}_{location or '00'}"

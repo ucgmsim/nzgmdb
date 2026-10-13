@@ -113,6 +113,13 @@ def compute_snr_for_single_mseed(
         }
         skipped_record = pd.DataFrame([skipped_record_dict])
         return None, skipped_record
+    except custom_errors.DetrendError:
+        skipped_record_dict = {
+            "record_id": mseed_file.stem,
+            "reason": "Failed to demean and detrend the data",
+        }
+        skipped_record = pd.DataFrame([skipped_record_dict])
+        return None, skipped_record
 
     # Get the TP from the phase arrival table
     try:
