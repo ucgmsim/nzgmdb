@@ -4,6 +4,8 @@ This module contains functions for the initial pre-processing of waveform data a
 
 import numpy as np
 from obspy import Inventory, UTCDateTime
+from obspy.clients.fdsn import Client as FDSN_Client
+from obspy.clients.fdsn.header import FDSNNoDataException
 from obspy.core.inventory.response import Response
 from obspy.core.stream import Stream
 from scipy import integrate, signal
@@ -59,7 +61,7 @@ def initial_preprocessing(
     mseed: Stream,
     apply_taper: bool = True,
     apply_zero_padding: bool = True,
-    inventory: Inventory = None,
+    inventory: Inventory | None = None,
     provider: str = "GEONET",
     network: str = "NZ",
 ) -> Stream:
@@ -135,19 +137,19 @@ def initial_preprocessing(
 
     inv = inventory
     if inv is None:
-        # try:
-        #     client_NZ = FDSN_Client(provider)
-        #     inv = client_NZ.get_stations(
-        #         level="response",
-        #         network=network,
-        #         station=station,
-        #         location=location,
-        #         channel=f"{channel}?",
-        #     )
-        # except FDSNNoDataException:
-        raise custom_errors.InventoryNotFoundError(
-            f"No inventory information found for station {station} with location {location}"
-        )
+        try:
+            client_NZ = FDSN_Client(provider)
+            inv = client_NZ.get_stations(
+                level="response",
+                network=network,
+                station=station,
+                location=location,
+                channel=f"{channel}?",
+            )
+        except FDSNNoDataException:
+            raise custom_errors.InventoryNotFoundError(
+                f"No inventory information found for station {station} with location {location}"
+            )
 
     try:
         # Apply the correct sensitivity removal based on the check_sensitivity function

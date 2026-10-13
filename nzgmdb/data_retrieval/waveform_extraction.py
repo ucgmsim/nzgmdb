@@ -783,9 +783,6 @@ def get_tmp_array_stream(
     for f in sorted(selected_files):
         st += read(str(f))
 
-    # Merge overlapping / adjacent segments
-    st.merge(method=1, fill_value=None)
-
     # Trim to exact window
     st.trim(start_time, end_time)
 
@@ -1161,6 +1158,20 @@ def extract_waveforms(
     )
     client = FDSN_Client("GEONET")
 
+    # Fetch the station xmls before extraction, as they are needed for the response removal
+    xml_dir = file_structure.get_stationxml_dir(main_dir)
+    missing_sites = [
+        sta
+        for sta in station_extraction_table["sta"].unique()
+        if not (xml_dir / f"{sta}.xml").is_file()
+    ]
+    if missing_sites:
+        print(f"Fetching station XML metadata for {len(missing_sites)} unique sites")
+        inventory_xml.fetch_and_save_inventory(
+            main_dir, missing_sites, add_tmp_arrays=tmp_array_dir is not None
+        )
+        print("Station XML metadata fetching complete.")
+
     for batch_index, batch_indices in enumerate(index_batches):
         if batch_index not in processed_suffixes:
             print(f"Processing batch {batch_index + 1}/{len(index_batches)}")
@@ -1197,39 +1208,51 @@ def extract_waveforms(
             )
 
             results = []
-            pool = mp.Pool(processes=n_procs)
             timeout_s = 60 * 5  # 5 min
-            try:
-                for _, row in batch_rows.iterrows():
-                    job = pool.apply_async(extract_fn, (row,))
-                    record_id = f"{row['evid']}_{row['sta']}"
-                    try:
-                        results.append(job.get(timeout=timeout_s))
-                    except mp.TimeoutError:
-                        results.append(
-                            StationExtractionResult(
-                                sta_mag_line=[],
-                                skipped_records=[
-                                    pd.DataFrame(
-                                        {
-                                            "record_id": [record_id],
-                                            "reason": [
-                                                f"Hung (> {timeout_s // 60} min)"
-                                            ],
-                                        }
-                                    )
-                                ],
-                                clipped_records=[],
-                                multi_trace_issues=[],
-                                multi_event_records=[],
+            pending_rows = [row for _, row in batch_rows.iterrows()]
+            while pending_rows:
+                # Submit all rows so they run in parallel
+                pool = mp.Pool(processes=n_procs)
+                jobs = [
+                    (row, pool.apply_async(extract_fn, (row,))) for row in pending_rows
+                ]
+                pending_rows = []
+                try:
+                    for job_index, (row, job) in enumerate(jobs):
+                        try:
+                            results.append(job.get(timeout=timeout_s))
+                        except mp.TimeoutError:
+                            results.append(
+                                StationExtractionResult(
+                                    sta_mag_line=[],
+                                    skipped_records=[
+                                        pd.DataFrame(
+                                            {
+                                                "record_id": [
+                                                    f"{row['evid']}_{row['sta']}"
+                                                ],
+                                                "reason": [
+                                                    f"Hung (> {timeout_s // 60} min)"
+                                                ],
+                                            }
+                                        )
+                                    ],
+                                    clipped_records=[],
+                                    multi_trace_issues=[],
+                                    multi_event_records=[],
+                                )
                             )
-                        )
-                        pool.terminate()
-                        pool.join()
-                        pool = mp.Pool(processes=n_procs)
-            finally:
-                pool.close()
-                pool.join()
+                            # Keep finished jobs, rerun the rest on a fresh pool
+                            for other_row, other_job in jobs[job_index + 1 :]:
+                                if other_job.ready():
+                                    results.append(other_job.get())
+                                else:
+                                    pending_rows.append(other_row)
+                            break
+                finally:
+                    # Terminate so a hung worker can't block the pool from closing
+                    pool.terminate()
+                    pool.join()
 
             # Extract the results
             (
@@ -1325,14 +1348,6 @@ def extract_waveforms(
                 multi_event_records_df.to_csv(
                     batch_dir / f"multi_event_records_{batch_index}.csv", index=False
                 )
-
-    # Grab all the station xmls and write them as outputs
-    unique_sites = station_extraction_table["sta"].unique()
-    print(f"Fetching station XML metadata for {len(unique_sites)} unique sites")
-    inventory_xml.fetch_and_save_inventory(
-        main_dir, unique_sites, add_tmp_arrays=tmp_array_dir is not None
-    )
-    print("Station XML metadata fetching complete.")
 
     # Combine all the event and sta_mag dataframes
     sta_mag_dfs = []
