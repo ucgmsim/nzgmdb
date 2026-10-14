@@ -517,7 +517,7 @@ def add_tect_domain(
         region_b_on=region_b_on,
         region_c_downdip=region_c_downdip,
     )
-    with multiprocessing.Pool(n_procs) as pool:
+    with multiprocessing.get_context("forkserver").Pool(n_procs) as pool:
         results = pool.map(f, event_df.to_records(index=False))
 
     # Assign the results to the respective DataFrame columns

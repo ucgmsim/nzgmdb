@@ -1247,7 +1247,8 @@ def extract_waveforms(
             pending_rows = [row for _, row in batch_rows.iterrows()]
             while pending_rows:
                 # Submit all rows so they run in parallel
-                pool = mp.Pool(processes=n_procs)
+                # forkserver, as forking this multi-threaded process (FDSN / BLAS threads) can corrupt the worker heap
+                pool = mp.get_context("forkserver").Pool(processes=n_procs)
                 jobs = [
                     (row, pool.apply_async(extract_fn, (row,))) for row in pending_rows
                 ]
