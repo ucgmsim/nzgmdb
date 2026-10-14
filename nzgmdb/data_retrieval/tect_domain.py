@@ -17,6 +17,9 @@ from cmt_solutions import cmt_data
 from nzgmdb.management import config as cfg
 from nzgmdb.management.data_registry import NZGMDB_DATA
 from qcore import geo
+from source_modelling import moment
+
+DYNE_CM_TO_NM = 1e-7
 
 
 def merge_NZSMDB_flatfile_on_events(
@@ -77,6 +80,11 @@ def replace_cmt_data_on_event(
     pd.DataFrame
         The event dataframe with the CMT data merged
     """
+    # Ensure the Mw is computed using equation 7 (Mo is in dyne-cm, convert to Nm)
+    cmt_df["Mw"] = cmt_df["Mo"].apply(
+        lambda mo: float(moment.moment_to_magnitude(mo * DYNE_CM_TO_NM))
+    )
+
     # Manage index and column renaming
     cmt_df = cmt_df.rename(
         columns={
@@ -115,6 +123,9 @@ def replace_cmt_data_on_event(
 
     # Drop the CMT columns
     event_df = event_df.drop(columns=["mag_cmt", "lat_cmt", "lon_cmt", "depth_cmt"])
+
+    # Ensure that mag is rounded to 2dp
+    event_df["mag"] = event_df["mag"].round(2)
 
     return event_df
 

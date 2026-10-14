@@ -21,6 +21,7 @@ from obspy.taup import TauPyModel
 from pandas.errors import EmptyDataError
 from scipy.interpolate import interp1d
 
+from nzgmdb.data_retrieval import inventory_xml
 from nzgmdb.management import config as cfg
 from nzgmdb.management import custom_errors, file_structure
 from nzgmdb.management.data_registry import NZGMDB_DATA
@@ -32,7 +33,7 @@ class EventData(NamedTuple):
     A named tuple to store each events data.
     """
 
-    event_line: list[Any]
+    event_line: list[Any] | None
     """The full event line with all metadata."""
     station_extraction_table: pd.DataFrame
     """The station extraction table with all metadata for wavefrom extraction."""
@@ -86,8 +87,8 @@ def fetch_event_line(event_cat: Event, event_id: str):
     preferred_origin = event_cat.preferred_origin()
     preferred_magnitude = event_cat.preferred_magnitude()
 
-    # If the preferred origin is None, return None
-    if preferred_origin is None:
+    # If the preferred origin or magnitude is None, return None
+    if preferred_origin is None or preferred_magnitude is None:
         return None
 
     # Extract basic info from the catalogue
@@ -105,21 +106,14 @@ def fetch_event_line(event_cat: Event, event_id: str):
         if preferred_origin.earth_model_id is None
         else str(preferred_origin.earth_model_id).split("/")[1]
     )
-    ev_ndef = (
-        None
-        if preferred_origin.quality.used_phase_count is None
-        else preferred_origin.quality.used_phase_count
-    )
-    ev_nsta = (
-        None
-        if preferred_origin.quality.used_station_count is None
-        else preferred_origin.quality.used_station_count
-    )
-    std = (
-        None
-        if preferred_origin.quality.standard_error is None
-        else preferred_origin.quality.standard_error
-    )
+    quality = preferred_origin.quality
+    ev_ndef, ev_nsta, std = None, None, None
+    if quality is not None:
+        ev_ndef = None if quality.used_phase_count is None else quality.used_phase_count
+        ev_nsta = (
+            None if quality.used_station_count is None else quality.used_station_count
+        )
+        std = None if quality.standard_error is None else quality.standard_error
 
     pref_mag_type = preferred_magnitude.magnitude_type
 
@@ -136,7 +130,7 @@ def fetch_event_line(event_cat: Event, event_id: str):
             if mb_mag.station_count < 3:
                 loc_mag = max(
                     [ml_loc_mag, mlv_loc_mag],
-                    key=lambda mag: (mag.station_count if mag else 0),
+                    key=lambda mag: mag.station_count if mag else 0,
                 )
                 if 0 < loc_mag.station_count <= mb_mag.station_count:
                     loc_mag = mb_mag
@@ -148,7 +142,7 @@ def fetch_event_line(event_cat: Event, event_id: str):
             if ml_loc_mag or mlv_loc_mag:
                 loc_mag = max(
                     [ml_loc_mag, mlv_loc_mag],
-                    key=lambda mag: (mag.station_count if mag else 0),
+                    key=lambda mag: mag.station_count if mag else 0,
                 )
             else:
                 # No ML or MLv, try M
@@ -213,7 +207,8 @@ def get_stations_within_radius(
     mw_rrup_data : np.ndarray
         The Mw_rrup data to get the interpolation function to determine the max radius.
     inventory : Inventory
-        The inventory of the stations from all networks to extract the stations from
+        The channel level inventory of the stations from all networks to extract the stations from
+        Stations without a channel active at the event time are removed
 
     Returns
     -------
@@ -258,6 +253,7 @@ def fetch_sta_extraction(
     pref_mag: float,
     pref_mag_type: str,
     site_table: pd.DataFrame,
+    provider: str | None,
 ):
     """
     Fetch the extraction table for a station to be added to the station extraction table
@@ -279,6 +275,8 @@ def fetch_sta_extraction(
         The preferred magnitude type
     site_table : pd.DataFrame
         The site table to extract the vs30 value from
+    provider : str | None
+        The provider of the station's network, however if None, the station will be skipped and a reason will be returned
 
     Returns
     -------
@@ -288,6 +286,18 @@ def fetch_sta_extraction(
         The skipped reasons if the station has an issue getting a phase arrival
     """
     config = cfg.Config()
+
+    if provider is None:
+        print(
+            f"Warning: No provider found for network {network.code}. Skipping station {station.code}."
+        )
+        skipped_reason = pd.DataFrame(
+            {
+                "record_id": [f"{event_id}_{station.code}"],
+                "skipped_reason": ["No provider found for network"],
+            }
+        )
+        return pd.DataFrame(), skipped_reason
 
     # Get the preferred_origin
     preferred_origin = event_cat.preferred_origin()
@@ -359,6 +369,7 @@ def fetch_sta_extraction(
         # Create the station_extraction_table
         station_extraction_table = pd.DataFrame(
             {
+                "provider": [provider],
                 "net": [network.code],
                 "sta": [station.code],
                 "evid": [event_id],
@@ -394,8 +405,8 @@ def fetch_event_data(
     inventory: Inventory,
     site_table: pd.DataFrame,
     mw_rrup_data: np.ndarray,
-    only_sites: list[str] = None,
-    only_record_ids: pd.DataFrame = None,
+    only_sites: list[str] | None = None,
+    only_record_ids: pd.DataFrame | None = None,
     n_procs: int = 1,
 ):
     """
@@ -431,7 +442,6 @@ def fetch_event_data(
     skipped_records = pd.DataFrame()
 
     if event_line is not None:
-
         # Get Networks / Stations within a certain radius of the event
         inv_sub_sta = get_stations_within_radius(event_cat, mw_rrup_data, inventory)
 
@@ -449,7 +459,7 @@ def fetch_event_data(
                 only_record_ids["record_id"].str.contains(f"^{event_id}_")
             ]
             if event_only_record_ids.empty:
-                return [], [], [], []
+                return EventData(None, pd.DataFrame(), pd.DataFrame())
             filtered_stations = [
                 (network, station)
                 for network, station in filtered_stations
@@ -457,6 +467,17 @@ def fetch_event_data(
                     event_only_record_ids["record_id"].str.contains(f"_{station.code}_")
                 ].empty
             ]
+
+        # Get the providers for the networks from the config file
+        config = cfg.Config()
+        network_providers = {}
+        for provider_networks in (
+            config.get_value("main_providers_networks"),
+            config.get_value("tmp_array_providers_networks"),
+        ):
+            for provider, networks in provider_networks.items():
+                for network in networks:
+                    network_providers.setdefault(network, provider)
 
         if n_procs > 1:
             with mp.Pool(n_procs) as pool:
@@ -469,7 +490,10 @@ def fetch_event_data(
                         pref_mag_type=event_line[8],
                         site_table=site_table,
                     ),
-                    [(station, network) for network, station in filtered_stations],
+                    [
+                        (station, network, network_providers.get(network.code))
+                        for network, station in filtered_stations
+                    ],
                 )
         else:
             results = [
@@ -481,6 +505,7 @@ def fetch_event_data(
                     event_line[7],
                     event_line[8],
                     site_table,
+                    network_providers.get(network.code),
                 )
                 for network, station in filtered_stations
             ]
@@ -730,6 +755,7 @@ def parse_geonet_information(
     only_record_ids_ffp: Path = None,
     real_time: bool = False,
     mp_sites: bool = False,
+    add_tmp_arrays: bool = False,
 ):
     """
     Read the geonet information and manage the fetching of more data to create the mseed files
@@ -756,6 +782,8 @@ def parse_geonet_information(
         If the function is being used in real time use a different client, default is False
     mp_sites : bool (optional)
         Whether to multiprocess over sites (when not using mp over events)
+    add_tmp_arrays : bool (optional)
+        Whether to add temporary array stations to the inventory, default is False
     """
     if only_record_ids_ffp:
         # Read the only record ids file
@@ -780,13 +808,17 @@ def parse_geonet_information(
         only_record_ids = None
 
     config = cfg.Config()
-    channel_codes = config.get_value("channel_codes")
+    # Channel level so stations are only selected if a channel was active at the event time
     if real_time:
+        inventory = inventory_xml.get_provider_inventory(
+            real_time=True, level="channel"
+        )
         client_NZ = FDSN_Client(base_url=config.get_value("real_time_url"))
     else:
-        # Get Station Information from geonet clients
+        inventory = inventory_xml.get_full_inventory(
+            add_tmp_arrays=add_tmp_arrays, level="channel"
+        )
         client_NZ = FDSN_Client("GEONET")
-    inventory = client_NZ.get_stations(channel=channel_codes, level="station")
 
     # Get the rrup data
     mw_rrup_data = np.loadtxt(NZGMDB_DATA.fetch("Mw_rrup.txt"))
