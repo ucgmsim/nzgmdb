@@ -154,6 +154,7 @@ def stalta_for_stream(stream: Stream, inventory: Inventory | None = None) -> flo
         custom_errors.SensitivityRemovalError,
         custom_errors.RotationError,
         custom_errors.DetrendError,
+        custom_errors.DiffrentiateError,
     ):
         return np.nan
 
