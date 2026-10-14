@@ -480,7 +480,7 @@ def fetch_event_data(
                     network_providers.setdefault(network, provider)
 
         if n_procs > 1:
-            with mp.Pool(n_procs) as pool:
+            with mp.get_context("forkserver").Pool(n_procs) as pool:
                 results = pool.starmap(
                     functools.partial(
                         fetch_sta_extraction,
@@ -583,7 +583,7 @@ def process_batch(
             for event_id in batch_events
         ]
     else:
-        with mp.Pool(n_procs) as p:
+        with mp.get_context("forkserver").Pool(n_procs) as p:
             results = p.starmap(
                 functools.partial(
                     fetch_event_data,
