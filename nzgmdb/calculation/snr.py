@@ -9,7 +9,6 @@ from pathlib import Path
 
 import numpy as np
 import pandas as pd
-from obspy import read_inventory
 from pandas.errors import EmptyDataError
 
 from IM import im_calculation, snr_calculation
@@ -63,21 +62,6 @@ def compute_snr_for_single_mseed(
     # Get the event_id
     event_id = file_structure.get_event_id_from_mseed(mseed_file)
 
-    inventory = None
-    if xml_dir:
-        # Load the inventory information
-        inventory_file = xml_dir / f"{station}.xml"
-        if inventory_file.is_file():
-            inventory = read_inventory(inventory_file)
-        else:
-            # No Inventory found for the station, skip the file and add to the skipped records
-            skipped_record_dict = {
-                "record_id": mseed_file.stem,
-                "reason": "Failed to find inventory information",
-            }
-            skipped_record = pd.DataFrame([skipped_record_dict])
-            return None, skipped_record
-
     # Read mseed information
     try:
         waveform = reading.create_waveform_from_mseed(
@@ -85,7 +69,7 @@ def compute_snr_for_single_mseed(
             pre_process=True,
             apply_taper=False,
             apply_zero_padding=False,
-            inventory=inventory,
+            xml_dir=xml_dir,
         )
     except custom_errors.InventoryNotFoundError:
         skipped_record_dict = {
@@ -132,7 +116,7 @@ def compute_snr_for_single_mseed(
     except custom_errors.DetrendError:
         skipped_record_dict = {
             "record_id": mseed_file.stem,
-            "reason": "Unable to detrend record",
+            "reason": "Failed to demean and detrend the data",
         }
         skipped_record = pd.DataFrame([skipped_record_dict])
         return None, skipped_record
