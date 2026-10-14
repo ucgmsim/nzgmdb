@@ -118,6 +118,33 @@ def get_mseed_dir_from_snrfas(snrfas_file: Path) -> Path:
     return get_mseed_dir(main_dir, year, event_id)
 
 
+def get_snr_fas_ffp(snr_fas_dir: Path, mseed_file: Path) -> Path:
+    """
+    Get the SNR/FAS file path for an mseed file.
+
+    Uses the same year and event ID folders as the mseed file (waveforms/<year>/<evid>/mseed).
+
+    Parameters
+    ----------
+    snr_fas_dir : Path
+        The directory where the SNR/FAS files are stored.
+    mseed_file : Path
+        The mseed file.
+
+    Returns
+    -------
+    Path
+        The SNR/FAS file path, named <record_id>_snr_fas.csv.
+    """
+    event_dir = mseed_file.parent.parent
+    return (
+        snr_fas_dir
+        / event_dir.parent.name
+        / event_dir.name
+        / f"{mseed_file.stem}_snr_fas.csv"
+    )
+
+
 def get_processed_dir(main_dir: Path, year: int, event_id: str) -> Path:
     """
     Get the directory for processed waveform files.

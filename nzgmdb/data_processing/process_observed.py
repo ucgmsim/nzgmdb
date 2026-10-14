@@ -257,7 +257,7 @@ def process_mseeds_to_txt(
     bypass_df = None if bypass_records_ffp is None else pd.read_csv(bypass_records_ffp)
 
     # Use multiprocessing to process the mseed files
-    with multiprocessing.Pool(processes=n_procs) as pool:
+    with multiprocessing.get_context("forkserver").Pool(processes=n_procs) as pool:
         skipped_records = pool.map(
             functools.partial(
                 process_single_mseed,

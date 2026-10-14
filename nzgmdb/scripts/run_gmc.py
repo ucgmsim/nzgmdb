@@ -17,14 +17,14 @@ from qcore import cli
 app = typer.Typer(pretty_exceptions_enable=False)
 
 
-def get_gmc_errors(gmc_dir: Path) -> pd.DataFrame:
+def get_gmc_errors(batch_dirs: list[Path]) -> pd.DataFrame:
     """
     Get all the GMC error files that had an issue during the execution
 
     Parameters
     ----------
-    gmc_dir : Path
-        The directory containing the GMC results.
+    batch_dirs : list[Path]
+        The GMC batch directories of the current run.
 
     Returns
     -------
@@ -32,7 +32,7 @@ def get_gmc_errors(gmc_dir: Path) -> pd.DataFrame:
         A dataframe containing the record_id and reason for each error.
     """
     error_records = []
-    for batch_dir in gmc_dir.iterdir():
+    for batch_dir in batch_dirs:
         if not batch_dir.is_dir():
             continue
 
@@ -277,8 +277,8 @@ def run_gmc_processing(
     )
     prob_series_ffp = flatfile_dir / file_structure.PreFlatfileNames.PROB_SERIES
 
-    # Get all the mseed files
-    mseed_files = list(waveform_dir.rglob("*.mseed"))
+    # Get all the mseed files (sorted so the batches are the same on a re-run)
+    mseed_files = sorted(waveform_dir.rglob("*.mseed"))
 
     # Ensure that n_procs and n_batches is equal too or less than the number of mseed files
     n_procs = min(n_procs, len(mseed_files))
@@ -302,9 +302,10 @@ def run_gmc_processing(
         xml_dir=file_structure.get_stationxml_dir(main_dir),
     )
 
+    batch_dirs = [gmc_dir / f"batch_{idx}" for idx in range(len(mseed_batches))]
+
     pending_jobs = []
-    for idx, batch in enumerate(mseed_batches):
-        batch_dir = gmc_dir / f"batch_{idx}"
+    for idx, (batch, batch_dir) in enumerate(zip(mseed_batches, batch_dirs)):
         predictions_output = batch_dir / file_structure.FlatfileNames.GMC_PREDICTIONS
 
         if predictions_output.exists():
@@ -317,12 +318,12 @@ def run_gmc_processing(
         print("All batches already have gmc_predictions.csv; nothing to run.")
     else:
         # Use multiprocessing with starmap and the partial function (pending only)
-        with multiprocessing.Pool(n_procs) as p:
+        with multiprocessing.get_context("forkserver").Pool(n_procs) as p:
             p.starmap(process_partial, pending_jobs)
 
-    # For each subfolder combine the gmc_predictions.csv into a single file
+    # Combine only this run's batches, so batches from a run with a different gmc_n_batches are not mixed in
     dfs = []
-    for gmc_subfolder in gmc_dir.iterdir():
+    for gmc_subfolder in batch_dirs:
         predictions_output = (
             gmc_subfolder / file_structure.FlatfileNames.GMC_PREDICTIONS
         )
@@ -336,7 +337,7 @@ def run_gmc_processing(
     combined_df = pd.concat(dfs)
 
     # Get the gmc errors
-    gmc_errors_df = get_gmc_errors(gmc_dir)
+    gmc_errors_df = get_gmc_errors(batch_dirs)
 
     # Check if the bypass records file exists
     if bypass_records_ffp is not None:
