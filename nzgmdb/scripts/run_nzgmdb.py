@@ -435,7 +435,7 @@ def calc_fmax(
     if snr_fas_output_dir is None:
         snr_fas_output_dir = file_structure.get_snr_fas_dir(main_dir)
     if batches_dir is None:
-        batches_dir = main_dir / "fmax"
+        batches_dir = file_structure.get_fmax_dir(main_dir)
 
     fmax.run_full_fmax_calc(
         meta_output_dir,

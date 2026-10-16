@@ -246,6 +246,23 @@ def get_snr_fas_dir(main_dir: Path) -> Path:
     return main_dir / "snr_fas"
 
 
+def get_fmax_dir(main_dir: Path) -> Path:
+    """
+    Get the directory for storing the Fmax batch results.
+
+    Parameters
+    ----------
+    main_dir : Path
+        The main directory of the NZGMDB results.
+
+    Returns
+    -------
+    Path
+        The directory where the Fmax batch results are stored.
+    """
+    return main_dir / "fmax"
+
+
 def get_waveform_dir(main_dir: Path) -> Path:
     """
     Get the directory where waveforms (mseed and processed) are stored.
