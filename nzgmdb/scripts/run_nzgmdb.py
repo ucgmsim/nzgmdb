@@ -544,9 +544,17 @@ def run_im_calculation(
         ),
     ] = False,
     intensity_measures: Annotated[
-        list[IM],
+        str | None,
         typer.Option(
-            callback=lambda x: [IM(i) for i in x[0].split(",")],
+            callback=lambda x: (
+                None
+                if x is None or (isinstance(x, (list, tuple)) and not x)
+                else [
+                    IM(i.strip())
+                    for i in (x[0] if isinstance(x, (list, tuple)) else x).split(",")
+                    if i.strip()
+                ]
+            ),
         ),
     ] = None,
 ):
@@ -694,26 +702,15 @@ def merge_im_results(
         Path,
         typer.Argument(file_okay=False),
     ],
-    gmc_ffp: Annotated[
+    records_ffp: Annotated[
         Path,
-        typer.Option(
-            readable=True,
-            exists=True,
-        ),
-    ] = None,
-    fmax_ffp: Annotated[
-        Path,
-        typer.Option(
-            readable=True,
-            exists=True,
-        ),
-    ] = None,
+        typer.Argument(dir_okay=False),
+    ],
+    n_procs: Annotated[int, typer.Option()] = 1,
+    batch_size: Annotated[int, typer.Option()] = 5000,
 ):
     """
-    Merge IM results together into one flatfile and perform a filter for Ds595.
-
-    This function consolidates individual IM result files into a single comprehensive
-    dataset, ensuring consistency and filtering for the Ds595 parameter.
+    Merge IM results together into individual component files.
 
     Parameters
     ----------
@@ -721,12 +718,12 @@ def merge_im_results(
         The directory containing the IM results to merge.
     output_dir : Path
         The directory to save the merged IM file.
-    gmc_ffp : Path
-        The full file path to the GMC predictions file.
-    fmax_ffp : Path
-        The full file path to the Fmax file.
+    records_ffp : Path
+        The full file path to the records file, which contains all the record ids.
     """
-    merge_flatfiles.merge_im_data(im_dir, output_dir, gmc_ffp, fmax_ffp)
+    merge_flatfiles.merge_im_data(
+        im_dir, output_dir, records_ffp, n_procs=n_procs, batch_size=batch_size
+    )
 
 
 @cli.from_docstring(app)
@@ -1208,21 +1205,35 @@ def run_full_nzgmdb(
     # Run IM calculation
     im_dir = file_structure.get_im_dir(main_dir)
     im_dir.mkdir(parents=True, exist_ok=True)
-    print("Calculating IMs")
-    im_n_procs = (
-        n_procs if machine is None else config.get_n_procs(machine, cfg.WorkflowStep.IM)
-    )
-    run_im_calculation(main_dir, ko_matrix_path, im_dir, im_n_procs, checkpoint)
-
-    # Merge IM results
+    print("Checking Im Calculations")
     if not (
         checkpoint
         and (
-            flatfile_dir / file_structure.PreFlatfileNames.GROUND_MOTION_IM_CATALOGUE
+            flatfile_dir / file_structure.SkippedRecordFilenames.IM_CALC_SKIPPED_RECORDS
         ).exists()
     ):
-        print("Merging IM results")
-        merge_im_results(im_dir, flatfile_dir, gmc_ffp, fmax_ffp)
+        im_n_procs = (
+            n_procs
+            if machine is None
+            else config.get_n_procs(machine, cfg.WorkflowStep.IM)
+        )
+        print("Calculating IMs")
+        run_im_calculation(main_dir, ko_matrix_path, im_dir, im_n_procs, checkpoint)
+
+    # Merge IM results
+    # print("Checking Im Merge")
+    # if not (
+    #     checkpoint
+    #     and (flatfile_dir / file_structure.PreFlatfileNames.IM_MERGE_EAS_FAS).exists()
+    # ):
+    # records_ffp = flatfile_dir / "records.csv"
+    # im_merge_n_procs = (
+    #     n_procs
+    #     if machine is None
+    #     else config.get_n_procs(machine, cfg.WorkflowStep.IM_MERGE)
+    # )
+    # print("Merging IM results")
+    # merge_im_results(im_dir, flatfile_dir, records_ffp, im_merge_n_procs)
 
     # Calculate distances
     if not (
