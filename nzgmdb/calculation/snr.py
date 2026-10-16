@@ -120,6 +120,13 @@ def compute_snr_for_single_mseed(
         }
         skipped_record = pd.DataFrame([skipped_record_dict])
         return None, skipped_record
+    except custom_errors.InvalidMseedFileError:
+        skipped_record_dict = {
+            "record_id": mseed_file.stem,
+            "reason": "Invalid mseed file",
+        }
+        skipped_record = pd.DataFrame([skipped_record_dict])
+        return None, skipped_record
 
     # Get the TP from the phase arrival table
     try:
@@ -185,15 +192,10 @@ def compute_snr_for_single_mseed(
     # Concatenate the DataFrames along the columns
     snr_fas_df = pd.concat([snr, fas_signal, fas_noise], axis=1)
 
-    # Save the SNR data
-    year_dir = output_dir / str(stats.starttime.year)
-    event_dir = year_dir / event_id
-    event_dir.mkdir(parents=True, exist_ok=True)
-    snr_fas_df.to_csv(
-        event_dir
-        / f"{event_id}_{station}_{stats.channel[:2]}_{stats.location}_snr_fas.csv",
-        index_label="frequency",
-    )
+    # Save the SNR data in the same year / event folders as the mseed file
+    snr_fas_ffp = file_structure.get_snr_fas_ffp(output_dir, mseed_file)
+    snr_fas_ffp.parent.mkdir(parents=True, exist_ok=True)
+    snr_fas_df.to_csv(snr_fas_ffp, index_label="frequency")
 
     # Add to the metadata dataframe
     meta_dict = {
@@ -305,7 +307,7 @@ def compute_snr_for_mseed_data(
         if index not in processed_suffixes:
             print(f"Processing batch {index + 1}/{len(mseed_batches)}")
             # Process the batch
-            with mp.Pool(n_procs) as p:
+            with mp.get_context("forkserver").Pool(n_procs) as p:
                 results = p.map(
                     functools.partial(
                         compute_snr_for_single_mseed,
