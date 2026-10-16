@@ -11,6 +11,7 @@ import h5py
 import numpy as np
 import pandas as pd
 
+from nzgmdb.management import config as cfg
 from nzgmdb.management import file_structure, shell_commands
 
 
@@ -21,6 +22,7 @@ def process_batch(
     env_activate_command: str,
     bypass_records_ffp: Path | None = None,
     xml_dir: Path | None = None,
+    geonet_networks: list[str] | None = None,
 ):
     """
     Process a single subfolder: run PhaseNet over mseeds.
@@ -35,10 +37,12 @@ def process_batch(
         The path to the conda.sh script. (Used to activate the conda PhaseNet environment)
     env_activate_command : str
         The command to activate the environment for running PhaseNet.
-    bypass_records_ffp : Path
+    bypass_records_ffp : Path, optional
         The full file path to the bypass records file, which includes a custom p_wave_datetime and/or s_wave_datetime
-    xml_dir: Path
+    xml_dir : Path, optional
         The path to the station xml files. Used for reducing FDSN calls that require station information.
+    geonet_networks : list[str], optional
+        Networks that can fall back to the GeoNet FDSN when no station xml is saved.
 
     Raises
     ------
@@ -57,25 +61,23 @@ def process_batch(
 
     log_file_path_phasenet = output_dir / "run_phasenet.log"
 
-    # Check if the output phase_arrival_table already exists
-    if (output_dir / file_structure.FlatfileNames.PHASE_ARRIVAL_TABLE).exists():
-        print(f"Skipping run_phasenet for Batch {batch_num} as results already exist")
-    else:
-        # Activate phaseNet environment and run over mseeds for the subfolder
-        phasenet_command = f"python {run_phasenet_script_ffp} {batch_txt} {output_dir}"
-        if bypass_records_ffp is not None:
-            phasenet_command += f" --bypass_ffp {bypass_records_ffp}"
-        if xml_dir is not None:
-            phasenet_command += f" --xml_dir {xml_dir}"
-        shell_commands.run_command(
-            phasenet_command, conda_sh, env_activate_command, log_file_path_phasenet
-        )
+    # Activate phaseNet environment and run over mseeds for the subfolder
+    phasenet_command = f"python {run_phasenet_script_ffp} {batch_txt} {output_dir}"
+    if bypass_records_ffp is not None:
+        phasenet_command += f" --bypass_ffp {bypass_records_ffp}"
+    if xml_dir is not None:
+        phasenet_command += f" --xml_dir {xml_dir}"
+    if geonet_networks:
+        phasenet_command += f" --geonet_networks {','.join(geonet_networks)}"
+    shell_commands.run_command(
+        phasenet_command, conda_sh, env_activate_command, log_file_path_phasenet
+    )
 
-        # Check again that the output phase_arrival_table exists
-        if not (output_dir / file_structure.FlatfileNames.PHASE_ARRIVAL_TABLE).exists():
-            raise FileNotFoundError(
-                f"Failed to run_phasenet for Batch {batch_num}. Please check logs in this folder or try a re-run"
-            )
+    # Check that the output phase_arrival_table exists
+    if not (output_dir / file_structure.FlatfileNames.PHASE_ARRIVAL_TABLE).exists():
+        raise FileNotFoundError(
+            f"Failed to run_phasenet for Batch {batch_num}. Please check logs in this folder or try a re-run"
+        )
 
 
 def generate_phase_arrival_table(
@@ -84,9 +86,9 @@ def generate_phase_arrival_table(
     conda_sh: Path,
     env_activate_command: str,
     n_procs: int,
-    n_batches: int = None,
-    bypass_records_ffp: Path = None,
-    xml_dir: Path = None,
+    n_batches: int | None = None,
+    bypass_records_ffp: Path | None = None,
+    xml_dir: Path | None = None,
 ):
     """
     Generate the phase arrival table utilizing phaseNet
@@ -106,9 +108,9 @@ def generate_phase_arrival_table(
         The number of processes to use
     n_batches : int, optional
         The number of batches to split the mseed files into. If None, it will be set to the number of processes. (Default is None)
-    bypass_records_ffp : Path
+    bypass_records_ffp : Path, optional
         The full file path to the bypass records file, which includes a custom p_wave_ix
-    xml_dir: Path
+    xml_dir : Path, optional
         The path to the station xml files. Used for reducing FDSN calls that require station information.
     """
     # Get the Phase_arrival directory
@@ -118,8 +120,8 @@ def generate_phase_arrival_table(
     # Get the flatfile directory
     flatfile_dir = file_structure.get_flatfile_dir(main_dir)
 
-    # Find all mseed files recursively
-    mseed_files = list(main_dir.rglob("*.mseed"))
+    # Find all mseed files recursively (sorted so batches are the same on a re-run)
+    mseed_files = sorted(main_dir.rglob("*.mseed"))
 
     # Split them into even batches based on number of mseeds and n_procs
     # Ensure n_procs and n_batches gets reduced if it is greater than the number of mseed files
@@ -142,11 +144,14 @@ def generate_phase_arrival_table(
             continue
         pending_batches.append((batch, out_dir))
 
+    # GeoNet networks can fall back to FDSN for inventory when no station xml is saved
+    geonet_networks = cfg.Config().get_value("main_providers_networks")["GEONET"]
+
     if not pending_batches:
         print("All batches already have a phase arrival table; nothing to run.")
     else:
         # Fetch results (only for pending batches)
-        with mp.Pool(n_procs) as p:
+        with mp.get_context("forkserver").Pool(n_procs) as p:
             p.map(
                 functools.partial(
                     process_batch,
@@ -155,6 +160,7 @@ def generate_phase_arrival_table(
                     env_activate_command=env_activate_command,
                     bypass_records_ffp=bypass_records_ffp,
                     xml_dir=xml_dir,
+                    geonet_networks=geonet_networks,
                 ),
                 pending_batches,
             )

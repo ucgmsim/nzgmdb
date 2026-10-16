@@ -9,7 +9,6 @@ from pathlib import Path
 
 import numpy as np
 import pandas as pd
-from obspy import read_inventory
 from pandas.errors import EmptyDataError
 
 from IM import im_calculation, snr_calculation
@@ -63,21 +62,6 @@ def compute_snr_for_single_mseed(
     # Get the event_id
     event_id = file_structure.get_event_id_from_mseed(mseed_file)
 
-    inventory = None
-    if xml_dir:
-        # Load the inventory information
-        inventory_file = xml_dir / f"{station}.xml"
-        if inventory_file.is_file():
-            inventory = read_inventory(inventory_file)
-        else:
-            # No Inventory found for the station, skip the file and add to the skipped records
-            skipped_record_dict = {
-                "record_id": mseed_file.stem,
-                "reason": "Failed to find inventory information",
-            }
-            skipped_record = pd.DataFrame([skipped_record_dict])
-            return None, skipped_record
-
     # Read mseed information
     try:
         waveform = reading.create_waveform_from_mseed(
@@ -85,7 +69,7 @@ def compute_snr_for_single_mseed(
             pre_process=True,
             apply_taper=False,
             apply_zero_padding=False,
-            inventory=inventory,
+            xml_dir=xml_dir,
         )
     except custom_errors.InventoryNotFoundError:
         skipped_record_dict = {
@@ -132,7 +116,7 @@ def compute_snr_for_single_mseed(
     except custom_errors.DetrendError:
         skipped_record_dict = {
             "record_id": mseed_file.stem,
-            "reason": "Unable to detrend record",
+            "reason": "Failed to demean and detrend the data",
         }
         skipped_record = pd.DataFrame([skipped_record_dict])
         return None, skipped_record
@@ -208,15 +192,10 @@ def compute_snr_for_single_mseed(
     # Concatenate the DataFrames along the columns
     snr_fas_df = pd.concat([snr, fas_signal, fas_noise], axis=1)
 
-    # Save the SNR data
-    year_dir = output_dir / str(stats.starttime.year)
-    event_dir = year_dir / event_id
-    event_dir.mkdir(parents=True, exist_ok=True)
-    snr_fas_df.to_csv(
-        event_dir
-        / f"{event_id}_{station}_{stats.channel[:2]}_{stats.location}_snr_fas.csv",
-        index_label="frequency",
-    )
+    # Save the SNR data in the same year / event folders as the mseed file
+    snr_fas_ffp = file_structure.get_snr_fas_ffp(output_dir, mseed_file)
+    snr_fas_ffp.parent.mkdir(parents=True, exist_ok=True)
+    snr_fas_df.to_csv(snr_fas_ffp, index_label="frequency")
 
     # Add to the metadata dataframe
     meta_dict = {
@@ -328,7 +307,7 @@ def compute_snr_for_mseed_data(
         if index not in processed_suffixes:
             print(f"Processing batch {index + 1}/{len(mseed_batches)}")
             # Process the batch
-            with mp.Pool(n_procs) as p:
+            with mp.get_context("forkserver").Pool(n_procs) as p:
                 results = p.map(
                     functools.partial(
                         compute_snr_for_single_mseed,
