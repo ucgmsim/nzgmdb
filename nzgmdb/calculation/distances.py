@@ -789,12 +789,7 @@ def compute_distances_for_event(
     rrups, rjbs, rrup_points = src_site_dist.calc_rrup_rjb(
         srf_points, stations, return_rrup_points=True
     )
-    try:
-        rxs, rys = src_site_dist.calc_rx_ry(srf_points, srf_header, stations)
-    except Exception:
-        print(f"Event ID {event_id}")
-        print(srf_header)
-        raise Exception(f"Event ID {event_id}")
+    rxs, rys = src_site_dist.calc_rx_ry(srf_points, srf_header, stations)
     rrups_lon, rrups_lat = rrup_points[:, 0], rrup_points[:, 1]
 
     # Get the segment corners for the srf or corners
@@ -1263,8 +1258,6 @@ def calc_distances(main_dir: Path, n_procs: int = 1):
         flatfile_dir / "im_merge_batch_dir" / "im_merge_rotd50",
         columns=["evid", "sta"],
     )
-
-    print(f"Length of im_df: {len(im_df)}")
 
     # Get the site information
     site_df = pd.read_csv(
