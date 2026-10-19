@@ -217,8 +217,9 @@ As part of the waveform extraction process, several output files are generated i
 ### 🔹 Station XML Inventory Files
 - **Location:** `stationxml/` subdirectory
 - **Format:** StationXML (`.xml`)
-- **Naming convention:** `{network}_{station}.xml`
+- **Naming convention:** `{network}.{station}.xml`
 - **Content:** Station metadata including sensor response information
+- **When:** Fetched before extraction for any site without an existing file, so the response is available for multi-event scoring and the later processing steps
 
 ### 🔹 Station Magnitude Table (`station_magnitude_table.csv`)
 
