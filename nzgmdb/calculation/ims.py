@@ -291,8 +291,8 @@ def compute_ims_for_all_processed_records(
         if n_procs == 1:
             results = [record_fn(ffp_000) for ffp_000 in batch]
         else:
-            # Spawn is a fix for multiprocessing issues in IM calculation
-            with mp.get_context("spawn").Pool(n_procs) as p:
+            # forkserver, as forking this multi-threaded process can corrupt the worker heap
+            with mp.get_context("forkserver").Pool(n_procs) as p:
                 results = p.map(record_fn, batch)
 
         im_dfs = [im_df for im_df, _ in results if im_df is not None]
