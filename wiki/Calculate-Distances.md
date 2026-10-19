@@ -27,7 +27,7 @@ Optional parameters include:
 ## 📋 Prerequisites
 
 The Calculate Distances step requires the following inputs from previous pipeline steps:
-- **[Merge IM Results](Merge-IM-Results.md)** - Provides the merged intensity measure data with event-station pairs (This is to optimise the distance calculation with only the even-station pairs that actually have processed results)
+- **[IM Calculation](IM-Calculation.md)** - Provides the batched rotd50 IM parquet files with the event-station pairs (This is to optimise the distance calculation with only the event-station pairs that actually have processed results)
 
 ---
 
@@ -360,6 +360,6 @@ Additional geometry information is stored in a separate table for each of the pl
 
 ## 🔗 Related Steps
 
-- **Previous**: [Merge IM Results](Merge-IM-Results.md) - Provides the event-station pairs requiring distance calculations
+- **Previous**: [IM Calculation](IM-Calculation.md) - Provides the event-station pairs requiring distance calculations
 - **Next**: [Merge Aftershocks](Merge-Aftershocks.md) - Merges aftershock classifications and cluster labels into the earthquake source table
 - **Related**: [Add Tectonic Domain](Add-Tectonic-Domain.md) - Provides tectonic classifications used in CCLD method selection

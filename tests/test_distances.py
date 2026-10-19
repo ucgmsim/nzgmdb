@@ -9,10 +9,16 @@ from pyproj import Geod, Transformer
 from shapely.geometry import Polygon
 
 from cmt_solutions import cmt_data
-from nzgmdb.calculation.distances import compute_distances_for_event
+from nzgmdb.calculation.distances import (
+    compute_distances_for_event,
+    compute_ravg_distance_vectorized,
+    get_seg_corners,
+)
 from nzgmdb.data_retrieval import tect_domain
 from nzgmdb.management import config as cfg
 from nzgmdb.management.data_registry import NZGMDB_DATA, REGISTRY
+from qcore import coordinates, grid
+from source_modelling.sources import Plane
 
 TEST_EVIDS = [
     "2016p858000",  # ff
@@ -26,7 +32,13 @@ geod = Geod(ellps="WGS84")
 # ---------------------------
 # Helpers
 # ---------------------------
-def generate_sites_around_event(lat, lon, evid, radii_km=(10, 100, 400), n_per_ring=4):
+def generate_sites_around_event(
+    lat: float,
+    lon: float,
+    evid: str,
+    radii_km: tuple[float, ...] = (10, 100, 400),
+    n_per_ring: int = 4,
+) -> pd.DataFrame:
     stations = []
     sta_idx = 0
 
@@ -51,7 +63,7 @@ def generate_sites_around_event(lat, lon, evid, radii_km=(10, 100, 400), n_per_r
     return pd.DataFrame(stations)
 
 
-def build_site_and_im_df(event_df):
+def build_site_and_im_df(event_df: pd.DataFrame) -> tuple[pd.DataFrame, pd.DataFrame]:
     site_rows = []
     im_rows = []
 
@@ -76,7 +88,7 @@ def build_site_and_im_df(event_df):
 # ---------------------------
 @pytest.mark.parametrize("evid", TEST_EVIDS)
 def test_compute_distances_for_event(
-    evid,
+    evid: str,
 ):
     """
     Test distances and geometry for multiple nodal plane determination paths.
@@ -204,4 +216,44 @@ def test_compute_distances_for_event(
         check_dtype=False,
         check_index_type=False,
         check_names=False,
+    )
+
+
+# ---------------------------
+# Ravg corner ordering test
+# ---------------------------
+@pytest.mark.parametrize("strike, dip", [(40.0, 45.0), (220.0, 30.0), (310.0, 80.0)])
+def test_srf_ravg_corner_ordering(strike: float, dip: float):
+    """
+    Check SRF plane corners give the same Ravg as the grid_corners path.
+    """
+    length, width, ztor = 20.0, 10.0, 2.0
+    dip_dir = (strike + 90) % 360
+    corner_0, corner_1, corner_2, corner_3 = grid.grid_corners(
+        np.array([-43.5, 172.6]),
+        strike,
+        dip_dir,
+        ztor,
+        ztor + width * np.sin(np.radians(dip)),
+        length,
+        width * np.cos(np.radians(dip)),
+    )
+    plane = Plane.from_corners(np.array([corner_0, corner_1, corner_2, corner_3]))
+
+    # Non-SRF path: grid_corners (TL, TR, BL, BR) mapped to clockwise order
+    grid_seg = get_seg_corners([np.array([corner_0, corner_1, corner_3, corner_2])])
+    # SRF path: Plane corners are already clockwise
+    srf_seg = get_seg_corners([plane.corners])
+    np.testing.assert_allclose(srf_seg, grid_seg, atol=1e-6)
+
+    # Bottom edge (BR - BL) must run along strike, parallel to the top edge
+    tl, tr, br, bl = srf_seg[:, :, 0].T
+    assert np.dot(tr - tl, br - bl) > 0
+
+    sites = np.array([[-43.3, 172.9, 0.0], [-43.8, 172.2, 0.0], [-43.5, 172.6, 0.0]])
+    nztm_sites = coordinates.wgs_depth_to_nztm(sites)[:, [1, 0, 2]] / 1000
+    np.testing.assert_allclose(
+        compute_ravg_distance_vectorized(srf_seg, nztm_sites.copy()),
+        compute_ravg_distance_vectorized(grid_seg, nztm_sites.copy()),
+        rtol=1e-6,
     )
