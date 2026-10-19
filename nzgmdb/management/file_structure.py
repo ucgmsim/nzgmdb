@@ -280,9 +280,9 @@ def get_waveform_dir(main_dir: Path) -> Path:
     return main_dir / "waveforms"
 
 
-def get_im_dir(main_dir: Path) -> Path:
+def get_im_merge_dir(main_dir: Path) -> Path:
     """
-    Get the directory for storing IM results.
+    Get the directory for storing the batched IM results for each component.
 
     Parameters
     ----------
@@ -292,9 +292,28 @@ def get_im_dir(main_dir: Path) -> Path:
     Returns
     -------
     Path
-        The directory where IM results are stored.
+        The directory containing an im_merge_<component> directory per component.
     """
-    return main_dir / "IM"
+    return get_flatfile_dir(main_dir) / "im_merge_batch_dir"
+
+
+def get_im_component_dir(main_dir: Path, component: str) -> Path:
+    """
+    Get the directory of batched IM parquet files for a component.
+
+    Parameters
+    ----------
+    main_dir : Path
+        The main directory of the NZGMDB results.
+    component : str
+        The IM component, e.g. "rotd50", or "000_fas" for the FAS of the 000 component.
+
+    Returns
+    -------
+    Path
+        The directory of batch_<n>.parquet files, which can be read as a single parquet dataset.
+    """
+    return get_im_merge_dir(main_dir) / f"im_merge_{component}"
 
 
 def get_processed_dir_from_mseed(mseed_file: Path) -> Path:

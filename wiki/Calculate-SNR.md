@@ -74,7 +74,7 @@ The core SNR calculation follows these steps:
 #### Signal Processing
 1. Apply **Tukey taper** (5% alpha) to both signal and noise windows separately
 2. Calculate **Fourier Amplitude Spectra (FAS)** for signal and noise
-3. Apply **Konno-Ohmachi smoothing** with bandwidth parameter b = 40
+3. Apply **Konno-Ohmachi smoothing** with bandwidth parameter b = 188.5 (`ko_bandwidth`, matching NGA-West3)
 4. **Interpolate** FAS values to the common frequency vector
 5. Set values to **NaN** for frequencies above Nyquist frequency (sample_rate / 2)
 
@@ -92,7 +92,7 @@ Key configuration values from `config.yaml`:
 | `common_frequency_start` | 0.01318257 | Start frequency for common vector (Hz) |
 | `common_frequency_end` | 100 | End frequency for common vector (Hz) |
 | `common_frequency_num` | 389 | Number of frequency points |
-| `ko_bandwidth` | 40 | Konno-Ohmachi smoothing bandwidth |
+| `ko_bandwidth` | 188.5 | Konno-Ohmachi smoothing bandwidth (NGA-West3) |
 | `g` | 9.81 | Gravitational acceleration (m/s²) |
 | `taper_fraction` | 0.05 | Fraction for Tukey taper |
 | `zero_padding_time` | 5 | Zero padding duration (seconds) |
