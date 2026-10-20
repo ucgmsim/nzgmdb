@@ -6,7 +6,7 @@ import datetime
 from pathlib import Path
 
 import pandas as pd
-from obspy import Inventory
+from obspy import Inventory, read_inventory
 from obspy.clients.fdsn import Client as FDSN_Client
 from obspy.clients.fdsn.header import FDSNException
 
@@ -203,20 +203,20 @@ def get_full_inventory(
 
 def fetch_and_save_inventory(
     main_dir: Path,
-    stations: list[str],
+    sites: list[tuple[str, str]],
     add_tmp_arrays: bool = False,
     starttime: str = "2000-01-01",
     endtime: str | None = None,
 ):
     """
-    Fetch inventory data for the given stations and save each as a StationXML file.
+    Fetch inventory data for the given sites and save each as a NET.STA StationXML file.
 
     Parameters
     ----------
     main_dir : Path
         The main directory where the StationXML files will be saved.
-    stations : list[str]
-        A list of station codes to fetch the inventory data for.
+    sites : list[tuple[str, str]]
+        A list of (network, station) code pairs to fetch the inventory data for.
     add_tmp_arrays : bool, optional
         Whether to include temporary array providers in the inventory fetch, by default False.
     starttime : str, optional
@@ -229,16 +229,44 @@ def fetch_and_save_inventory(
 
     inv = get_full_inventory(
         add_tmp_arrays=add_tmp_arrays,
-        stations=",".join(stations),
+        stations=",".join(sorted({sta for _, sta in sites})),
         starttime=starttime,
         endtime=endtime,
     )
     if inv is None:
-        raise custom_errors.InventoryNotFoundError("No inventory data found for the specified stations.")
+        raise custom_errors.InventoryNotFoundError(
+            "No inventory data found for the specified stations."
+        )
 
-    for sta in stations:
-        sel = inv.select(station=sta)
+    for net, sta in sites:
+        sel = inv.select(network=net, station=sta)
         if not sel.networks:
-            print(f"Warning: No inventory data found for station {sta}. Skipping.")
+            print(f"Warning: No inventory data found for {net}.{sta}. Skipping.")
             continue
-        sel.write(xml_dir / f"{sta}.xml", format="STATIONXML")
+        sel.write(
+            file_structure.get_stationxml_ffp(xml_dir, net, sta), format="STATIONXML"
+        )
+
+
+def load_station_inventory(
+    xml_dir: Path, network: str, station: str
+) -> Inventory | None:
+    """
+    Load the saved StationXML inventory for a station.
+
+    Parameters
+    ----------
+    xml_dir : Path
+        The directory where StationXML files are stored.
+    network : str
+        The network code of the station.
+    station : str
+        The station code.
+
+    Returns
+    -------
+    Inventory or None
+        The station inventory, or None if no StationXML file exists.
+    """
+    inventory_ffp = file_structure.get_stationxml_ffp(xml_dir, network, station)
+    return read_inventory(inventory_ffp) if inventory_ffp.is_file() else None

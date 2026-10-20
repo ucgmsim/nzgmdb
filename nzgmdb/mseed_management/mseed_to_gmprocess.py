@@ -243,7 +243,7 @@ def convert_mseed_to_gmprocess(main_dir: Path, output_dir: Path, n_procs: int = 
     event_dirs = get_event_dirs(main_dir)
 
     # Do multiprocessing over each event
-    with multiprocessing.Pool(processes=n_procs) as pool:
+    with multiprocessing.get_context("forkserver").Pool(processes=n_procs) as pool:
         pool.map(
             functools.partial(
                 run_for_single_event,

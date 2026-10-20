@@ -15,7 +15,7 @@ from typing import NamedTuple
 import numpy as np
 import pandas as pd
 import scipy as sp
-from obspy import Stream, Trace, UTCDateTime
+from obspy import Stream, Trace, UTCDateTime, read
 from obspy.clients.fdsn import Client as FDSN_Client
 from obspy.clients.fdsn.header import (
     FDSNNoDataException,
@@ -667,7 +667,7 @@ def check_trace_issues(st: Stream, record_id: str, station_extraction_row: pd.Se
                 pd.DataFrame(
                     {
                         "record_id": [record_id],
-                        "reason": [f"Selected trace: {index_selected+1}"],
+                        "reason": [f"Selected trace: {index_selected + 1}"],
                     }
                 )
             )
@@ -691,33 +691,21 @@ def check_trace_issues(st: Stream, record_id: str, station_extraction_row: pd.Se
 
 def get_station_window(
     station_extraction_row: pd.Series,
-    client: FDSN_Client,
-    channel_codes: str,
-    loc: str,
 ):
     """
-    Get the initial stream of waveforms for a station based on the extraction parameters.
+    Get the start and end time for the waveform extraction window for a station based on the parameters in the station extraction table.
 
     Parameters
     ----------
     station_extraction_row : pd.Series
         A row from the station extraction table containing the parameters for waveform extraction.
-    client : FDSN_Client
-        The FDSN client to use for retrieving waveforms.
-    channel_codes : str
-        The channel codes to retrieve, formatted as a comma-separated string.
-        e.g. "HN?,BN?,HH?".
-    loc : str
-        The location code to retrieve waveforms for, typically "*".
 
     Returns
     -------
-    Stream
-        An ObsPy Stream object containing the waveform data for the specified station.
+    tuple of UTCDateTime
+        A tuple containing the start time and end time for the waveform extraction window.
     """
     # Extract the parameters from the row
-    net = station_extraction_row["net"]
-    sta = station_extraction_row["sta"]
     r_hyp = station_extraction_row["r_hyp"]
     ptime_est = UTCDateTime(station_extraction_row["ptime_est"])
     ds_mean = station_extraction_row["ds_mean"]
@@ -736,7 +724,84 @@ def get_station_window(
     # Note: both ds_mean and ds_std are in logspace
     end_time = ptime_est + np.exp(ds_mean) * np.exp(ds_std_multiplier * ds_std)
 
-    return get_inital_stream(start_time, end_time, channel_codes, loc, client, net, sta)
+    return start_time, end_time
+
+
+def get_tmp_array_stream(
+    tmp_array_dir: Path,
+    net: str,
+    sta: str,
+    start_time: UTCDateTime,
+    end_time: UTCDateTime,
+    channel_codes: str,
+    location: str,
+) -> Stream | None:
+    """
+    Get the initial stream of waveforms for a station from the temporary array storage location.
+
+    Parameters
+    ----------
+    tmp_array_dir : Path
+        The directory where the temporary array waveform files are stored.
+    net : str
+        The network code to retrieve waveforms for.
+    sta : str
+        The station code to retrieve waveforms for.
+    start_time : UTCDateTime
+        The start time of the waveform data to retrieve.
+    end_time : UTCDateTime
+        The end time of the waveform data to retrieve.
+    channel_codes : str
+        The channel codes to keep, formatted as a comma-separated string.
+        e.g. "HN?,BN?,HH?".
+    location : str
+        The location codes to keep, formatted as a comma-separated string.
+        e.g. "*" or "00,--" ("--" is an empty location code).
+
+    Returns
+    -------
+    Stream or None
+        An ObsPy Stream object containing the waveform data for the specified station.
+        None if no data was found.
+    """
+    net_dir = tmp_array_dir / net
+    if not net_dir.is_dir():
+        return None
+
+    st = Stream()
+
+    pattern = f"{net}_{sta}_*"
+    selected_files = []
+    for sta_dir in sorted(p for p in net_dir.glob(pattern) if p.is_dir()):
+        for f in sta_dir.glob("*.mseed"):
+            # Example filename
+            # Y3.CASS..HHN__20090312T000000Z__20090411T000000Z.mseed
+            parts = f.name.split("__")
+
+            file_start = UTCDateTime(parts[1])
+            file_end = UTCDateTime(parts[2].replace(".mseed", ""))
+
+            # Check overlap
+            if file_end >= start_time and file_start <= end_time:
+                selected_files.append(f)
+
+    if not selected_files:
+        return None
+
+    # Read files
+    for f in sorted(selected_files):
+        st += read(str(f))
+
+    # Trim to exact window
+    st.trim(start_time, end_time)
+
+    # Keep only the requested channels and locations
+    selected_st = Stream()
+    for chan in channel_codes.split(","):
+        for loc in location.split(","):
+            selected_st += st.select(channel=chan, location="" if loc == "--" else loc)
+
+    return selected_st if len(selected_st) > 0 else None
 
 
 def extract_station_info(
@@ -745,6 +810,7 @@ def extract_station_info(
     event_catalogues: dict,
     extraction_table: pd.DataFrame,
     only_record_ids: pd.DataFrame = None,
+    tmp_array_dir: Path | None = None,
 ) -> StationExtractionResult:
     """
     Extract the waveform data for a single station based on the extraction parameters.
@@ -761,6 +827,8 @@ def extract_station_info(
         The full extraction table containing all extraction parameters.
     only_record_ids : pd.DataFrame, optional
         A DataFrame containing a subset of record IDs to use for extraction, if provided.
+    tmp_array_dir : Path, optional
+        The directory where the temporary array waveform files are stored, if using temporary array storage for waveforms.
 
     Returns
     -------
@@ -776,6 +844,7 @@ def extract_station_info(
         multi_event_records,
     ) = ([], [], [], [], [])
     # Extract the parameters from the row
+    provider = station_extraction_row["provider"]
     event_id = station_extraction_row["evid"]
     station = station_extraction_row["sta"]
     network = station_extraction_row["net"]
@@ -809,16 +878,38 @@ def extract_station_info(
             site_only_record_ids["record_id"].str.split("_").str[-2].values[0] + "?"
         )
         location = site_only_record_ids["record_id"].str.split("_").str[-1].values[0]
+        # "00" in a record_id can be a real "00" or an empty location code ("--" for FDSN)
+        if location == "00":
+            location = "00,--"
 
-    # Get the Stream
-    client = FDSN_Client("GEONET")
-    st = get_station_window(station_extraction_row, client, channel_codes, location)
+    start_time, end_time = get_station_window(station_extraction_row)
+
+    st, skip_reason = None, "No Waveform Data"
+    if provider == "GEONET":
+        # Get the Stream
+        client = FDSN_Client("GEONET")
+        st = get_inital_stream(
+            start_time, end_time, channel_codes, location, client, network, station
+        )
+    elif tmp_array_dir is None:
+        skip_reason = f"No tmp_array_dir given for provider {provider}"
+    else:
+        # Get the stream from the tmp array storage location
+        st = get_tmp_array_stream(
+            tmp_array_dir,
+            network,
+            station,
+            start_time,
+            end_time,
+            channel_codes,
+            location,
+        )
 
     # Check that data was found
     if st is None:
         skipped_records.append(
             pd.DataFrame(
-                {"record_id": [f"{event_id}_{station}"], "reason": ["No Waveform Data"]}
+                {"record_id": [f"{event_id}_{station}"], "reason": [skip_reason]}
             )
         )
         return StationExtractionResult(
@@ -829,6 +920,11 @@ def extract_station_info(
             multi_event_records=multi_event_records,
         )
 
+    # Load the inventory information
+    inventory = inventory_xml.load_station_inventory(
+        file_structure.get_stationxml_dir(main_dir), network, station
+    )
+
     # Get the unique channels (Using first 2 keys) and locations
     unique_channels = set([(tr.stats.channel[:2], tr.stats.location) for tr in st])
 
@@ -837,7 +933,9 @@ def extract_station_info(
     for chan, loc in unique_channels:
         # Each unique channel and location pair is a new mseed file
         st_new = st.select(location=loc, channel=f"{chan}?")
-        record_id = f"{event_id}_{st_new[0].stats.station}_{st_new[0].stats.channel[:2]}_{st_new[0].stats.location}"
+        record_id = file_structure.get_record_id(
+            event_id, st_new[0].stats.station, chan, loc
+        )
 
         # Check trace issues
         st_revised, skipped, issues = check_trace_issues(
@@ -860,44 +958,52 @@ def extract_station_info(
     ]
 
     for mseed in mseeds:
+        stats = mseed[0].stats
+        record_id = file_structure.get_record_id(
+            event_id, stats.station, stats.channel, stats.location
+        )
         try:
             # Check the data is not all 0's
             if all([np.allclose(tr.data, 0) for tr in mseed]):
-                stats = mseed[0].stats
                 skipped_records.append(
                     pd.DataFrame(
                         {
-                            "record_id": [
-                                f"{event_id}_{stats.station}_{stats.channel}_{stats.location}"
-                            ],
+                            "record_id": [record_id],
                             "reason": ["All 0's"],
                         }
                     )
                 )
                 continue
         except TypeError:
-            stats = mseed[0].stats
             skipped_records.append(
                 pd.DataFrame(
                     {
-                        "record_id": [
-                            f"{event_id}_{stats.station}_{stats.channel}_{stats.location}"
-                        ],
+                        "record_id": [record_id],
                         "reason": ["TypeError when checking for all 0's"],
                     }
                 )
             )
+            continue
+
+        # Check for 3 component data, if not skip
+        if len(mseed) < 3:
+            skipped_records.append(
+                pd.DataFrame(
+                    {
+                        "record_id": [record_id],
+                        "reason": ["Less than 3 component traces"],
+                    }
+                )
+            )
+            continue
 
         # Calculate clip to determine if the record should be dropped
         clip = filtering.get_clip_probability(event_mag, r_hyp, mseed)
 
         threshold = config.get_value("clip_threshold")
-        stats = mseed[0].stats
-        record_id = f"{event_id}_{stats.station}_{stats.channel[:2]}_{stats.location}"
 
         # Check if the record should be dropped
         if clip > threshold:
-
             clipped_records.append(
                 [
                     record_id,
@@ -918,7 +1024,7 @@ def extract_station_info(
         # Check for multi-event flagging
         start_time, end_time, stalta_score, sync_event = (
             multi_event.compute_multi_event_scores(
-                mseed.copy(), sync_check_extraction_table
+                mseed.copy(), sync_check_extraction_table, inventory=inventory
             )
         )
         # Add to the multi_event_records list
@@ -936,8 +1042,19 @@ def extract_station_info(
         year = event_cat.origins[0].time.year
         mseed_dir = file_structure.get_mseed_dir(main_dir, year, event_id)
 
-        # Write the mseed file
-        creation.write_mseed(mseed, event_id, station, mseed_dir)
+        try:
+            # Write the mseed file
+            creation.write_mseed(mseed, event_id, station, mseed_dir)
+        except Exception as e:  # noqa: BLE001
+            skipped_records.append(
+                pd.DataFrame(
+                    {
+                        "record_id": [record_id],
+                        "reason": [f"Error writing mseed file: {str(e)}"],
+                    }
+                )
+            )
+            continue
 
         for trace in mseed:
             chan = trace.stats.channel
@@ -1003,8 +1120,9 @@ def extract_waveforms(
     main_dir: Path,
     station_extraction_table_ffp: Path,
     n_procs: int = 1,
-    only_record_ids_ffp: Path = None,
+    only_record_ids_ffp: Path | None = None,
     batch_size: int = 1000,
+    tmp_array_dir: Path | None = None,
 ):
     """
     Extract waveforms for each station in the station extraction table.
@@ -1024,6 +1142,8 @@ def extract_waveforms(
         Full file path to the file containing a subset of record IDs to use for extraction, if provided.
     batch_size : int, optional
         The number of rows to process in each batch, by default 1000.
+    tmp_array_dir : Path, optional
+        The directory where the temporary array waveform files are stored, if using temporary array storage for waveforms.
     """
     station_extraction_table = pd.read_csv(
         station_extraction_table_ffp, dtype={"evid": str}
@@ -1069,6 +1189,24 @@ def extract_waveforms(
     )
     client = FDSN_Client("GEONET")
 
+    # Fetch the station xmls before extraction, as they are needed for the response removal
+    xml_dir = file_structure.get_stationxml_dir(main_dir)
+    missing_sites = sorted(
+        {
+            (net, sta)
+            for net, sta in zip(
+                station_extraction_table["net"], station_extraction_table["sta"]
+            )
+            if not file_structure.get_stationxml_ffp(xml_dir, net, sta).is_file()
+        }
+    )
+    if missing_sites:
+        print(f"Fetching station XML metadata for {len(missing_sites)} unique sites")
+        inventory_xml.fetch_and_save_inventory(
+            main_dir, missing_sites, add_tmp_arrays=tmp_array_dir is not None
+        )
+        print("Station XML metadata fetching complete.")
+
     for batch_index, batch_indices in enumerate(index_batches):
         if batch_index not in processed_suffixes:
             print(f"Processing batch {batch_index + 1}/{len(index_batches)}")
@@ -1095,17 +1233,62 @@ def extract_waveforms(
                     print("Retrying in 120 seconds...")
                     time.sleep(120)  # Wait for 2 minutes before retrying
 
-            with mp.Pool(n_procs) as pool:
-                results = pool.map(
-                    functools.partial(
-                        extract_station_info,
-                        main_dir=main_dir,
-                        event_catalogues=catalog_dict,
-                        extraction_table=station_extraction_table,
-                        only_record_ids=only_record_ids,
-                    ),
-                    (row for _, row in batch_rows.iterrows()),
-                )
+            extract_fn = functools.partial(
+                extract_station_info,
+                main_dir=main_dir,
+                event_catalogues=catalog_dict,
+                extraction_table=station_extraction_table,
+                only_record_ids=only_record_ids,
+                tmp_array_dir=tmp_array_dir,
+            )
+
+            results = []
+            timeout_s = 60 * 5  # 5 min
+            pending_rows = [row for _, row in batch_rows.iterrows()]
+            while pending_rows:
+                # Submit all rows so they run in parallel
+                # forkserver, as forking this multi-threaded process (FDSN / BLAS threads) can corrupt the worker heap
+                pool = mp.get_context("forkserver").Pool(processes=n_procs)
+                jobs = [
+                    (row, pool.apply_async(extract_fn, (row,))) for row in pending_rows
+                ]
+                pending_rows = []
+                try:
+                    for job_index, (row, job) in enumerate(jobs):
+                        try:
+                            results.append(job.get(timeout=timeout_s))
+                        except mp.TimeoutError:
+                            results.append(
+                                StationExtractionResult(
+                                    sta_mag_line=[],
+                                    skipped_records=[
+                                        pd.DataFrame(
+                                            {
+                                                "record_id": [
+                                                    f"{row['evid']}_{row['sta']}"
+                                                ],
+                                                "reason": [
+                                                    f"Hung (> {timeout_s // 60} min)"
+                                                ],
+                                            }
+                                        )
+                                    ],
+                                    clipped_records=[],
+                                    multi_trace_issues=[],
+                                    multi_event_records=[],
+                                )
+                            )
+                            # Keep finished jobs, rerun the rest on a fresh pool
+                            for other_row, other_job in jobs[job_index + 1 :]:
+                                if other_job.ready():
+                                    results.append(other_job.get())
+                                else:
+                                    pending_rows.append(other_row)
+                            break
+                finally:
+                    # Terminate so a hung worker can't block the pool from closing
+                    pool.terminate()
+                    pool.join()
 
             # Extract the results
             (
@@ -1201,12 +1384,6 @@ def extract_waveforms(
                 multi_event_records_df.to_csv(
                     batch_dir / f"multi_event_records_{batch_index}.csv", index=False
                 )
-
-    # Grab all the station xmls and write them as outputs
-    unique_sites = station_extraction_table["sta"].unique()
-    print(f"Fetching station XML metadata for {len(unique_sites)} unique sites")
-    inventory_xml.fetch_and_save_inventory(main_dir, unique_sites)
-    print("Station XML metadata fetching complete.")
 
     # Combine all the event and sta_mag dataframes
     sta_mag_dfs = []
