@@ -18,12 +18,17 @@ from nzgmdb.management import config as cfg
 from nzgmdb.management import custom_errors, file_structure
 from nzgmdb.management.background import launch_cmt_background
 from nzgmdb.management.slack import reply_to_message_on_slack, send_message_to_slack
+from nzgmdb.management.timing import StepTimer, profile_to, safe_write_timings
 from nzgmdb.scripts import run_gmc, run_nzgmdb
 from qcore import cli
 
 app = typer.Typer(pretty_exceptions_enable=False)
 
 SEISMIC_NOW_URL = "https://quakecoresoft.canterbury.ac.nz/seismicnow/api/"
+
+# Written into the event directory by run_event
+NZGMDB_TIMINGS_FILENAME = "nzgmdb_timings.csv"
+NZGMDB_PROFILE_FILENAME = "nzgmdb_profile.prof"
 
 
 def download_earthquake_data(
@@ -174,6 +179,7 @@ def run_event(
             case_sensitive=False,
         ),
     ] = cfg.MachineName.LOCAL,
+    profile: Annotated[bool, typer.Option()] = True,
 ):
     """
     Run the NZGMDB pipeline for a specific event in near-real-time mode.
@@ -200,6 +206,80 @@ def run_event(
         Whether to add the event to SeismicNow (default is False).
     machine : cfg.MachineName, optional
         The machine name to use for the number of processes (default is cfg.MachineName.LOCAL).
+    profile : bool, optional
+        Write a cProfile dump of the main process to nzgmdb_profile.prof in
+        the event directory (default is True). Step timings are always
+        written to nzgmdb_timings.csv.
+
+    Returns
+    -------
+    bool
+        True if the event was processed, False if the event was skipped.
+    """
+    timer = StepTimer()
+    profile_ffp = event_dir / NZGMDB_PROFILE_FILENAME if profile else None
+    try:
+        with profile_to(profile_ffp):
+            return _run_event(
+                event_id,
+                event_dir,
+                gm_classifier_dir,
+                conda_sh,
+                gmc_activate,
+                gmc_predict_activate,
+                ko_matrix_path,
+                nzcvm_data_ffp,
+                add_seismic_now,
+                machine,
+                timer,
+            )
+    finally:
+        # Time since the last finished step (early return, error or final checks)
+        timer.lap("other")
+        # Skipped events may have had their event directory removed
+        safe_write_timings(timer.to_dataframe(), event_dir / NZGMDB_TIMINGS_FILENAME)
+
+
+def _run_event(
+    event_id: str,
+    event_dir: Path,
+    gm_classifier_dir: Path,
+    conda_sh: Path,
+    gmc_activate: str,
+    gmc_predict_activate: str,
+    ko_matrix_path: Path,
+    nzcvm_data_ffp: Path,
+    add_seismic_now: bool,
+    machine: cfg.MachineName,
+    timer: StepTimer,
+) -> bool:
+    """
+    Run the NZGMDB pipeline steps for run_event, recording each step's time.
+
+    Parameters
+    ----------
+    event_id : str
+        The event ID.
+    event_dir : Path
+        The directory for the event to output to.
+    gm_classifier_dir : Path
+        Directory for gm_classifier.
+    conda_sh : Path
+        Path to the conda.sh script for environment activation.
+    gmc_activate : str
+        Command to activate gmc environment.
+    gmc_predict_activate : str
+        Command to activate gmc_predict environment.
+    ko_matrix_path : Path
+        Path to the KO matrix directory.
+    nzcvm_data_ffp : Path
+        File path to the nzcvm data directory.
+    add_seismic_now : bool
+        Whether to add the event to SeismicNow.
+    machine : cfg.MachineName
+        The machine name to use for the number of processes.
+    timer : StepTimer
+        Timer each finished step is recorded in.
 
     Returns
     -------
@@ -210,6 +290,7 @@ def run_event(
         config = cfg.Config()
         # Execute custom pipeline
         run_nzgmdb.generate_site_table_basin(event_dir, nzcvm_data_ffp)
+        timer.lap("site_table")
         # Get geonet data
         run_nzgmdb.fetch_geonet_data(
             event_dir,
@@ -220,6 +301,7 @@ def run_event(
             real_time=True,
             mp_sites=True,
         )
+        timer.lap("geonet_data")
         flatfile_dir = file_structure.get_flatfile_dir(event_dir)
 
         # Extract waveforms
@@ -230,6 +312,7 @@ def run_event(
             config.get_n_procs(machine, cfg.WorkflowStep.EXTRACTION),
             real_time=True,
         )
+        timer.lap("extract_waveforms")
 
         if add_seismic_now:
             # Update with latest info
@@ -247,6 +330,7 @@ def run_event(
                 f"Event ID: {event_id} started processing for SeismicNow: Mag: {mag:.2f}; Depth: {depth:.2f} km; Lat: {lat:.4f}; Lon: {lon:.4f}",
             )
             message_ts = response["ts"]
+            timer.lap("seismic_now_start")
 
         # Tectonic types
         eq_source_ffp = (
@@ -262,6 +346,7 @@ def run_event(
             eq_tect_domain_ffp,
             config.get_n_procs(machine, cfg.WorkflowStep.TEC_DOMAIN),
         )
+        timer.lap("tect_domain")
         # Process the records
         process_observed.process_mseeds_to_txt(
             event_dir,
@@ -270,6 +355,7 @@ def run_event(
             None,
             config.get_n_procs(machine, cfg.WorkflowStep.PROCESS),
         )
+        timer.lap("process_mseeds_basic")
         # Run IM_calculation
         im_dir = file_structure.get_im_dir(event_dir)
         im_dir.mkdir(parents=True, exist_ok=True)
@@ -278,19 +364,24 @@ def run_event(
             ko_matrix_path,
             n_procs=config.get_n_procs(machine, cfg.WorkflowStep.IM),
         )
+        timer.lap("im_calculation_basic")
         # Merge results
         run_nzgmdb.merge_im_results(im_dir, flatfile_dir, None, None)
+        timer.lap("merge_im_basic")
         # Calculate distances
         run_nzgmdb.distances.calc_distances(
             event_dir, config.get_n_procs(machine, cfg.WorkflowStep.DISTANCES)
         )
+        timer.lap("distances_basic")
         # Calculate Aftershocks (Not valid, however is fast and needed for pipeline in marge flatfiles)
         run_nzgmdb.calculate_aftershocks(
             event_dir,
         )
+        timer.lap("aftershocks_basic")
 
         # Merge the flatfiles
         run_nzgmdb.merge_flat_files(event_dir)
+        timer.lap("merge_flatfiles_basic")
 
     except custom_errors.NoStationsError:
         print(f"Event {event_id} has no stations, skipping")
@@ -332,6 +423,7 @@ def run_event(
                 f"Failed to add event {event_id} to SeismicNow, SW team investigate",
             )
             return False
+        timer.lap("seismic_now_add")
 
     # Continue the rest of the pipeline
     run_phasenet_script_ffp = (
@@ -345,6 +437,7 @@ def run_event(
         gmc_activate,
         phase_n_procs,
     )
+    timer.lap("phase_arrival")
 
     phase_table_path = (
         flatfile_dir / file_structure.PreFlatfileNames.PHASE_ARRIVAL_TABLE
@@ -358,6 +451,7 @@ def run_event(
         snr_fas_output_dir,
         config.get_n_procs(machine, cfg.WorkflowStep.SNR),
     )
+    timer.lap("snr")
 
     waveform_dir = file_structure.get_waveform_dir(event_dir)
     run_nzgmdb.calc_fmax(
@@ -367,6 +461,7 @@ def run_event(
         snr_fas_output_dir,
         n_procs=config.get_n_procs(machine, cfg.WorkflowStep.FMAX),
     )
+    timer.lap("fmax")
 
     run_gmc.run_gmc_processing(
         event_dir,
@@ -378,33 +473,40 @@ def run_event(
         config.get_n_procs(machine, cfg.WorkflowStep.GMC),
         allow_empty=True,
     )
+    timer.lap("gmc")
 
     run_nzgmdb.process_records(
         event_dir, n_procs=config.get_n_procs(machine, cfg.WorkflowStep.PROCESS)
     )
+    timer.lap("process_records")
 
     run_nzgmdb.run_im_calculation(
         event_dir,
         ko_matrix_path,
         n_procs=config.get_n_procs(machine, cfg.WorkflowStep.IM),
     )
+    timer.lap("im_calculation")
     run_nzgmdb.merge_im_results(
         im_dir,
         flatfile_dir,
         flatfile_dir / file_structure.FlatfileNames.GMC_PREDICTIONS,
         flatfile_dir / file_structure.FlatfileNames.FMAX,
     )
+    timer.lap("merge_im")
 
     # Calculate distances
     run_nzgmdb.distances.calc_distances(
         event_dir, config.get_n_procs(machine, cfg.WorkflowStep.DISTANCES)
     )
+    timer.lap("distances")
     # Calculate Aftershocks (Not valid, however is fast and needed for pipeline in marge flatfiles)
     run_nzgmdb.calculate_aftershocks(
         event_dir,
     )
+    timer.lap("aftershocks")
 
     run_nzgmdb.merge_flat_files(event_dir)
+    timer.lap("merge_flatfiles")
 
     if add_seismic_now:
         # Get updated values
@@ -455,26 +557,17 @@ def run_event(
                 message_ts,
                 f"Event ID: {event_id} completed final processing: Mag: {mag:.2f}; Depth: {depth:.2f} km; Lat: {lat:.4f}; Lon: {lon:.4f}",
             )
+            timer.lap("seismic_now_update")
 
             # Event is finalised and confirmed in SeismicNow - launch the
-            # 1-D CMT inversion now, as a detached background process.
-            cmt_output_dir = event_dir / "cmt_1d"
+            # multi-run 1-D CMT pipeline now, as a detached background process.
             launch_cmt_background(
                 event_id,
                 eq_source_ffp,
-                cmt_output_dir,
+                event_dir / "cmt_1d",
                 slack_thread_ts=message_ts,
             )
-            # Also launch the deviatoric CMT inversion in a separate background process.
-            # (Just for testing purposes for now, but could be useful in the future.)
-            cmt_output_dir = event_dir / "cmt_1d_deviatoric"
-            launch_cmt_background(
-                event_id,
-                eq_source_ffp,
-                cmt_output_dir,
-                deviatoric=True,
-            )
-
+            timer.lap("launch_cmt")
 
         else:
             print(f"Failed to add event. Status code: {response.status_code}")
@@ -511,6 +604,7 @@ def poll_earthquake_data(
             case_sensitive=False,
         ),
     ] = cfg.MachineName.LOCAL,
+    profile: Annotated[bool, typer.Option()] = True,
 ):
     """
     Poll earthquake data, process events, and run the NZGMDB pipeline for real-time data.
@@ -535,6 +629,8 @@ def poll_earthquake_data(
         Whether to add the event to SeismicNow (default is False).
     machine : cfg.MachineName, optional
         The machine name to use for the number of processes (default is cfg.MachineName.LOCAL).
+    profile : bool, optional
+        Write a cProfile dump for each event's NZGMDB run (default is True).
 
     Returns
     -------
@@ -586,6 +682,7 @@ def poll_earthquake_data(
                     nzcvm_data_ffp,
                     add_seismic_now,
                     machine,
+                    profile,
                 )
 
                 if not result:

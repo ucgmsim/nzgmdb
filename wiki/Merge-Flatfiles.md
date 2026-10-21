@@ -26,9 +26,9 @@ python -m nzgmdb.scripts.run_nzgmdb merge-flat-files nzgmdb_output/
 ## 📋 Prerequisites
 
 The Merge Flatfiles step requires the following inputs from previous pipeline steps:
-- **[Calculate Aftershocks](Calculate-Aftershocks.md)** - Generates the earthquake source table with aftershock classifications
+- **[Merge Aftershocks](Merge-Aftershocks.md)** - Generates the earthquake source table with aftershock classifications
 - **[Calculate Distances](Calculate-Distances.md)** - Provides the distance calculations and the geometry table containing rupture polygons
-- **[Merge IM Results](Merge-IM-Results.md)** - Generates the ground_motion_im_catalogue.csv file
+- **[IM Calculation](IM-Calculation.md)** - Generates the batched IM parquet files per component in `flatfiles/im_merge_batch_dir/`
 
 ---
 
@@ -200,6 +200,6 @@ Only includes the columns where appropriate IMs were calculated for the componen
 
 ## 🔗 Related Steps
 
-- **Previous**: [Calculate Aftershocks](Calculate-Aftershocks.md) - Generates earthquake source table with aftershock classifications
+- **Previous**: [Merge Aftershocks](Merge-Aftershocks.md) - Generates earthquake source table with aftershock classifications
 - **Next**: [Quality DB](Quality-DB.md) - Applies final filtering and creates delivery-ready quality database
 - **Related**: [IM-Calculation](IM-Calculation.md) - Details the intensity measure calculations and which IM's are computed per component

@@ -91,18 +91,20 @@ The pipeline is therefore composed of subtasks that can be run independently. Th
 1. **[Fetching Site Table](https://github.com/ucgmsim/nzgmdb/wiki/Fetching-site-table)** (Gets all the sites in the NZ network domain and gathers their metadata, such as Vs30 and basin info)
 2. **[Parse Geonet](https://github.com/ucgmsim/nzgmdb/wiki/Parse-Geonet)** (Fetches event metadata and station extraction information)
 3. **[Waveform Extraction](https://github.com/ucgmsim/nzgmdb/wiki/Waveform-Extraction)** (Downloads raw waveforms from the FDSN Client and saves them as MSEED files)
-3. **[Add Tectonic domain](https://github.com/ucgmsim/nzgmdb/wiki/Add-Tectonic-domain)** (Adds the tectonic classification to the earthquake source table and handles relocations)
-4. **[Phase Arrival](https://github.com/ucgmsim/nzgmdb/wiki/Phase-Arrival)** (Estimates the P- and S-wave arrival times for records using PhaseNet)
-5. **[Calculate SNR](https://github.com/ucgmsim/nzgmdb/wiki/Calculate-SNR)** (Computes SNR and FAS files)
-6. **[Calculate Fmax](https://github.com/ucgmsim/nzgmdb/wiki/Calculate-Fmax)** (Computes Fmax from SNR data)
-7. **[GMC](https://github.com/ucgmsim/nzgmdb/wiki/GMC)** (Machine Learning Model to classify records and produce Fmin and quality metadata)
-8. **[Process records](https://github.com/ucgmsim/nzgmdb/wiki/Process-Records)** (Filters records based on GMC results and performs wave processing to turn mseeds into text files)
-9. **[IM Calculation](https://github.com/ucgmsim/nzgmdb/wiki/IM-Calculation)** (Performs Intensity Measure Calculations)
-10. **[Merge IM results](https://github.com/ucgmsim/nzgmdb/wiki/Merge-IM-Results)** (Merges all IM result files together)
+4. **[Add Tectonic domain](https://github.com/ucgmsim/nzgmdb/wiki/Add-Tectonic-domain)** (Adds the tectonic classification to the earthquake source table and handles relocations)
+5. **[Phase Arrival](https://github.com/ucgmsim/nzgmdb/wiki/Phase-Arrival)** (Estimates the P- and S-wave arrival times for records using PhaseNet)
+6. **[Calculate SNR](https://github.com/ucgmsim/nzgmdb/wiki/Calculate-SNR)** (Computes SNR and FAS files)
+7. **[Calculate Fmax](https://github.com/ucgmsim/nzgmdb/wiki/Calculate-Fmax)** (Computes Fmax from SNR data)
+8. **[GMC](https://github.com/ucgmsim/nzgmdb/wiki/GMC)** (Machine Learning Model to classify records and produce Fmin and quality metadata)
+9. **[Process records](https://github.com/ucgmsim/nzgmdb/wiki/Process-Records)** (Filters records based on GMC results and performs wave processing to turn mseeds into text files)
+10. **[IM Calculation](https://github.com/ucgmsim/nzgmdb/wiki/IM-Calculation)** (Performs Intensity Measure Calculations and saves batched parquet results per component)
 11. **[Calculate Distances](https://github.com/ucgmsim/nzgmdb/wiki/Calculate-Distances)** (Determines fault planes to calculate distance values for the propagation table)
 12. **[Merge Aftershocks](Merge-Aftershocks.md)** (Merges aftershock classification into the earthquake source table)
 13. **[Merge flatfiles](https://github.com/ucgmsim/nzgmdb/wiki/Merge-Flatfiles)** (Merges all flatfiles to ensure to remove filtered entries and split IM results per component into different flatfiles)
 14. **[Quality DB](Quality-DB.md)** (Applies filters and generates the final quality database flatfiles with all filtered records)
+
+Real-time / standalone:
+- **[Auto CMT](Auto-CMT.md)** (Runs the automated multi-run 1-D CMT inversion for an event and selects the best solution, launched by the real-time pipeline or run manually for past events)
 
 ---
 
@@ -133,8 +135,8 @@ After a successful run of the NZGMDB pipeline, the output directory is organised
   - **`gmc_predictions.csv`**  
     Contains machine learning classification results, including score and Fmin per record/component.
 
-  - **`ground_motion_im_catalogue.csv`**  
-    Full catalogue of all IMs per record for components: 000, 090, ver, rotd0, rotd50, rotd100, EAS.
+  - **`im_merge_batch_dir/`**  
+    Batched IM results from the IM Calculation stage, with an `im_merge_<component>` directory of `batch_<n>.parquet` files per component (e.g. `im_merge_000`, `im_merge_rotd50`, `im_merge_rotd0_orientation`, `im_merge_000_fas`). Each directory is read as a single parquet dataset. Also holds `batch_records.csv` (the record / batch assignment) and the per-batch `im_calc_skipped_records/`. See [IM Calculation](https://github.com/ucgmsim/nzgmdb/wiki/IM-Calculation) for the columns in each table.
 
   - **`ground_motion_im_table_000.csv`**  
     IMs for component 000 only, per record.
@@ -178,7 +180,7 @@ After a successful run of the NZGMDB pipeline, the output directory is organised
   - **`ground_motion_im_table_EAS_flat.csv`**
   EAS IMs with combined metadata: site, fmin, fmax, scores, source info.
 
-  - **`IM_calc_skipped_records.csv`**  
+  - **`im_calc_skipped_records.csv`**  
     Records skipped during the Intensity Measure calculation stage.
 
   - **`missing_sites.csv`**  
@@ -263,17 +265,6 @@ waveforms/
                 # 2022p002924_DCZ_HN_20.000
                 # 2022p002924_DCZ_HN_20.090
                 # 2022p002924_DCZ_HN_20.ver
-```
-
-- **`IM/`**  
-Stores per-record intensity measure (IM) CSV files computed during the IM Calculation stage. Files are organised by event ID, with each folder containing intensity measure results for every record that has corresponding processed waveform data. The structure of the IM/ directory and the naming convention is shown below:
-
-```
-IM/
-└── <event_id>/                              # e.g. 2022p002924
-    ├── <event_id>_<station>_<channel>_<location>_IM.csv
-    │   # e.g. 2022p002924_DCZ_HN_20_IM.csv
-    ├── ...
 ```
 
 - **`snr_fas/`**  
