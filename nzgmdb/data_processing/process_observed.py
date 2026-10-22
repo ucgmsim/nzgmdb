@@ -54,7 +54,15 @@ def process_single_mseed(
     gmc_rows = None if gmc_df is None else gmc_df[gmc_df["record"] == mseed_stem]
 
     # Read mseed information
-    mseed = reading.read_mseed_to_stream(mseed_file)
+    try:
+        mseed = reading.read_mseed_to_stream(mseed_file)
+    except custom_errors.InvalidMseedFileError:
+        skipped_record_dict = {
+            "record_id": mseed_stem,
+            "reason": "Invalid mseed file",
+        }
+        skipped_record = pd.DataFrame([skipped_record_dict])
+        return skipped_record
 
     # Extract mseed values
     dt = mseed.traces[0].stats.delta
@@ -249,7 +257,7 @@ def process_mseeds_to_txt(
     bypass_df = None if bypass_records_ffp is None else pd.read_csv(bypass_records_ffp)
 
     # Use multiprocessing to process the mseed files
-    with multiprocessing.Pool(processes=n_procs) as pool:
+    with multiprocessing.get_context("forkserver").Pool(processes=n_procs) as pool:
         skipped_records = pool.map(
             functools.partial(
                 process_single_mseed,
