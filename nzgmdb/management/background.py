@@ -3,6 +3,7 @@ Launch the multi-run 1-D CMT pipeline as a detached background subprocess, and
 notify Slack when it finishes.
 """
 
+import os
 import subprocess
 import sys
 import threading
@@ -293,6 +294,8 @@ def launch_cmt_background(
             stderr=subprocess.STDOUT,
             stdin=subprocess.DEVNULL,
             start_new_session=True,
+            # Headless plotting, interactive backends crash forked BayesISOLA workers
+            env={**os.environ, "MPLBACKEND": "Agg"},
         )
 
     print(

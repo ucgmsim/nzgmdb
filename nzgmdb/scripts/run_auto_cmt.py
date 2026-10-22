@@ -14,6 +14,7 @@ from contextlib import contextmanager
 from pathlib import Path
 from typing import Annotated, Any
 
+import matplotlib
 import numpy as np
 import pandas as pd
 import requests
@@ -511,6 +512,11 @@ def run_cmt_pipeline(
         timings are written to timings.csv.
     """
     global _NZ_GRID
+
+    # BayesISOLA plots with pyplot and forks inversion workers. An interactive
+    # backend (TkAgg when a display is available) is not fork-safe and aborts
+    # the run with "Tcl_AsyncDelete: async handler deleted by the wrong thread"
+    matplotlib.use("Agg")
 
     timer = StepTimer()
     # Finished run records, so timings can be written whatever step fails
