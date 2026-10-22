@@ -270,14 +270,6 @@ def calculate_snr(
             file_okay=False,
         ),
     ],
-    ko_directory: Annotated[
-        Path,
-        typer.Argument(
-            help="The directory containing the Konno-Ohmachi smoothing files",
-            exists=True,
-            file_okay=False,
-        ),
-    ],
     phase_table_path: Annotated[
         Path,
         typer.Option(
@@ -322,8 +314,6 @@ def calculate_snr(
     ----------
     main_dir : Path
         The main directory of the NZGMDB results (Highest level directory).
-    ko_directory : Path
-        The directory containing the Konno-Ohmachi smoothing files.
     phase_table_path : Path, optional
         Path to the phase arrival table. If not provided, defaults to the expected location.
     meta_output_dir : Path, optional
@@ -352,7 +342,6 @@ def calculate_snr(
         phase_table_path,
         meta_output_dir,
         snr_fas_output_dir,
-        ko_directory,
         n_procs,
         batch_size=batch_size,
         bypass_records_ffp=bypass_records_ffp,
@@ -525,55 +514,43 @@ def run_im_calculation(
             file_okay=False,
         ),
     ],
-    ko_directory: Annotated[
-        Path,
-        typer.Argument(
-            exists=True,
-            file_okay=False,
-        ),
-    ],
-    output_dir: Annotated[
-        Path,
-        typer.Option(file_okay=False),
-    ] = None,
     n_procs: Annotated[int, typer.Option()] = 1,
-    checkpoint: Annotated[
-        bool,
-        typer.Option(
-            is_flag=True,
-        ),
-    ] = False,
     intensity_measures: Annotated[
-        list[IM],
+        str | None,
         typer.Option(
-            callback=lambda x: [IM(i) for i in x[0].split(",")],
+            callback=lambda x: (
+                None
+                if x is None or (isinstance(x, (list, tuple)) and not x)
+                else [
+                    IM(i.strip())
+                    for i in (x[0] if isinstance(x, (list, tuple)) else x).split(",")
+                    if i.strip()
+                ]
+            ),
         ),
     ] = None,
+    batch_size: Annotated[int, typer.Option()] = 5000,
 ):
     """
     Run IM Calculation on processed waveform files.
 
-    This function computes intensity measures (IMs) for processed waveform files.
+    This function computes intensity measures (IMs) for processed waveform files in batches,
+    saving a parquet file per batch for each component in the IM merge directory.
+    Batches that are already complete are skipped.
 
     Parameters
     ----------
     main_dir : Path
         The main directory of the NZGMDB results (Highest level directory).
-    ko_directory : Path
-        The directory containing the Konno-Ohmachi smoothing files. Defaults to the expected location.
-    output_dir : Path, optional
-        The directory to save the IM files. Defaults to the expected location.
     n_procs : int, optional
         The number of processes to use (default is 1).
-    checkpoint : bool, optional
-        If True, the function will check for already completed files and skip them.
     intensity_measures : list[IM], optional
         The list of intensity measures to calculate, by default None and will use the config file.
+    batch_size : int, optional
+        The number of records in each batch (default is 5000).
     """
-    if output_dir is None:
-        output_dir = file_structure.get_im_dir(main_dir)
     ims.compute_ims_for_all_processed_records(
-        main_dir, output_dir, ko_directory, n_procs, checkpoint, intensity_measures
+        main_dir, n_procs, intensity_measures, batch_size
     )
 
 
@@ -679,54 +656,6 @@ def calculate_aftershocks(
         The main directory of the NZGMDB results (Highest level directory).
     """
     aftershocks.merge_aftershocks(main_dir)
-
-
-@cli.from_docstring(app)
-def merge_im_results(
-    im_dir: Annotated[
-        Path,
-        typer.Argument(
-            exists=True,
-            file_okay=False,
-        ),
-    ],
-    output_dir: Annotated[
-        Path,
-        typer.Argument(file_okay=False),
-    ],
-    gmc_ffp: Annotated[
-        Path,
-        typer.Option(
-            readable=True,
-            exists=True,
-        ),
-    ] = None,
-    fmax_ffp: Annotated[
-        Path,
-        typer.Option(
-            readable=True,
-            exists=True,
-        ),
-    ] = None,
-):
-    """
-    Merge IM results together into one flatfile and perform a filter for Ds595.
-
-    This function consolidates individual IM result files into a single comprehensive
-    dataset, ensuring consistency and filtering for the Ds595 parameter.
-
-    Parameters
-    ----------
-    im_dir : Path
-        The directory containing the IM results to merge.
-    output_dir : Path
-        The directory to save the merged IM file.
-    gmc_ffp : Path
-        The full file path to the GMC predictions file.
-    fmax_ffp : Path
-        The full file path to the Fmax file.
-    """
-    merge_flatfiles.merge_im_data(im_dir, output_dir, gmc_ffp, fmax_ffp)
 
 
 @cli.from_docstring(app)
@@ -1135,7 +1064,6 @@ def run_full_nzgmdb(
         )
         calculate_snr(
             main_dir,
-            ko_matrix_path,
             phase_table_path,
             flatfile_dir,
             snr_fas_output_dir,
@@ -1206,23 +1134,20 @@ def run_full_nzgmdb(
         )
 
     # Run IM calculation
-    im_dir = file_structure.get_im_dir(main_dir)
-    im_dir.mkdir(parents=True, exist_ok=True)
-    print("Calculating IMs")
-    im_n_procs = (
-        n_procs if machine is None else config.get_n_procs(machine, cfg.WorkflowStep.IM)
-    )
-    run_im_calculation(main_dir, ko_matrix_path, im_dir, im_n_procs, checkpoint)
-
-    # Merge IM results
+    print("Checking Im Calculations")
     if not (
         checkpoint
         and (
-            flatfile_dir / file_structure.PreFlatfileNames.GROUND_MOTION_IM_CATALOGUE
+            flatfile_dir / file_structure.SkippedRecordFilenames.IM_CALC_SKIPPED_RECORDS
         ).exists()
     ):
-        print("Merging IM results")
-        merge_im_results(im_dir, flatfile_dir, gmc_ffp, fmax_ffp)
+        im_n_procs = (
+            n_procs
+            if machine is None
+            else config.get_n_procs(machine, cfg.WorkflowStep.IM)
+        )
+        print("Calculating IMs")
+        run_im_calculation(main_dir, im_n_procs)
 
     # Calculate distances
     if not (

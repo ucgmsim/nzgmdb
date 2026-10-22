@@ -9,22 +9,22 @@ This step computes Intensity Measures (IMs) for seismic waveform records process
 To calculate intensity measures for all processed waveform data, run the following Python script:
 
 ```bash
-python -m nzgmdb.scripts.run_nzgmdb run-im-calculation <main_dir> <ko_directory>
+python -m nzgmdb.scripts.run_nzgmdb run-im-calculation <main_dir>
 ```
 
 - **<main_dir>** is the top-level output directory where NZGMDB stores its results
-- **<ko_directory>** is the path to the directory containing Konno-Ohmachi smoothing matrices
 
 Example:
 ```bash
-python -m nzgmdb.scripts.run_nzgmdb run-im-calculation nzgmdb_output/ /path/to/ko_matrices/
+python -m nzgmdb.scripts.run_nzgmdb run-im-calculation nzgmdb_output/ --n-procs 8
 ```
 
 Optional parameters include:
-- `--output-dir`: Custom directory for IM output files (default: main_dir/IM/)
 - `--n-procs`: Number of processes for parallel processing (default: 1)
-- `--checkpoint`: Skip already completed files for incremental processing
+- `--batch-size`: Number of records in each batch (default: 5000)
 - `--intensity-measures`: Comma-separated list of specific IMs to calculate, defaults to all configured IMs in `config.yaml`
+
+Konno-Ohmachi smoothing for the FAS is done inside [IM_calculation](https://github.com/ucgmsim/IM_calculation), so no smoothing matrices are needed.
 
 ---
 
@@ -112,68 +112,53 @@ IMs are calculated for multiple component orientations:
 
 **Note:** For FAS calculations, an additional **EAS** component is computed specifically.
 
-### 🔹 Parallel Processing
+**Note:** IM_calculation also returns `rotd0_orientation` and `rotd100_orientation` rows, the rotation angle (degrees) of each RotD0 / RotD100 IM. These are saved as their own components.
 
-The step utilises multiprocessing for computational efficiency:
-- Distributes IM calculations across available CPU cores
-- Processes multiple records simultaneously
-- Optimised memory usage for large waveform datasets
+### 🔹 Batching and Checkpointing
+
+- Records are sorted and split into batches of `--batch-size` records
+- The records in a batch are calculated in parallel over `--n-procs` processes
+- Each batch saves a parquet file per component, then its skipped records file, which marks the batch as complete
+- On a re-run, complete batches are skipped, and batch files from an earlier run with more batches are removed
 
 ---
 
 ## 📦 Output
 
-### 🔹 Individual IM Files
+### 🔹 Component IM Parquet Files
 
-Primary output consists of CSV files stored in the directory structure:
+The IMs are saved as one parquet file per batch for each component in `flatfiles/im_merge_batch_dir/`.
+Each `im_merge_<component>` directory is read as a single parquet dataset by the later steps (e.g. `pd.read_parquet(dir)`).
+
 ```
-IM/
-└── event_id/
-    └── evid_station_channel_location_IM.csv
+flatfiles/im_merge_batch_dir/
+├── im_merge_000/batch_0.parquet ...       (000, 090, ver, geom)
+├── im_merge_rotd50/batch_0.parquet ...    (rotd0, rotd50, rotd100)
+├── im_merge_rotd0_orientation/batch_0.parquet ...   (rotd0_orientation, rotd100_orientation)
+├── im_merge_000_fas/batch_0.parquet ...   (000, 090, ver, geom, eas FAS)
+└── im_calc_skipped_records/batch_0.csv ...
 ```
 
-Each CSV file contains all calculated IMs with the following structure:
+Every table starts with `record_id`, `component`, `evid`, `sta`, `chan`, `loc`, followed by:
 
-**File Format**: One row per component (8 rows total), with 509 columns containing all IM data.
+| Directory | Components | IM columns |
+|-----------|------------|------------|
+| `im_merge_<comp>` | 000, 090, ver, geom | `PGA`, `PGV`, `PGD`, `CAV`, `CAV5`, `Ds575`, `Ds595`, `AI`, `pSA_<period>` |
+| `im_merge_<comp>` | rotd0, rotd50, rotd100 | `PGA`, `PGV`, `PGD`, `pSA_<period>` |
+| `im_merge_<comp>` | rotd0_orientation, rotd100_orientation | `PGA`, `PGV`, `PGD`, `pSA_<period>`, holding the rotation angle (degrees) of the RotD0 / RotD100 value |
+| `im_merge_<comp>_fas` | 000, 090, ver, geom, eas | `FAS_<frequency>` (only when FAS is calculated) |
 
-| Column Type | Example Columns                                            | Description |
-|-------------|------------------------------------------------------------|-------------|
-| **Identifiers** | `record_id`, `component`                                   | Record identifier and component type |
-| **Time-Domain IMs** | `PGA`, `PGV`, `PGD`, `CAV`, `CAV5`, `AI`, `Ds575`, `Ds595` | Peak and duration-based measures |
-| **Spectral Acceleration** | `pSA_0.01`, `pSA_0.1`, `pSA_1.0`, `pSA_20.0`               | Response spectra at 111 periods |
-| **Fourier Spectra** | `FAS_0.013182570000000001`, `FAS_1.0`, `FAS_100.0`         | Amplitude spectra at 389 frequencies |
-
-**Component Rows Structure**:
-- Row 1-8: Each represents a different component (000, 090, ver, geom, rotd0, rotd50, rotd100, EAS)
-- All IM values for that component are stored in the same row
-- Period-specific values follow naming: `pSA_{period}` (e.g., `pSA_0.1` for 0.1-second period)
-- Frequency-specific values follow naming: `FAS_{frequency}` (e.g., `FAS_1.0` for 1.0 Hz)
-
-### 🔹 Component Coverage Table
-
-| Intensity Measure | 000 | 090 | ver | geom | rotd0 | rotd50 | rotd100 | EAS |
-|-------------------|-----|-----|-----|------|---|----|---------|-----|
-| **PGA**           | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | |
-| **PGV**           | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | |
-| **PGD**           | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | |
-| **CAV**           | ✓ | ✓ | ✓ | ✓ | | | | |
-| **CAV5**          | ✓ | ✓ | ✓ | ✓ | | | | |
-| **AI**            | ✓ | ✓ | ✓ | ✓ | | | | |
-| **Ds575**         | ✓ | ✓ | ✓ | ✓ | | | | |
-| **Ds595**         | ✓ | ✓ | ✓ | ✓ | | | | |
-| **pSA**           | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | |
-| **FAS**           | ✓ | ✓ | ✓ | | | | | ✓ |
+- pSA columns are named `pSA_{period}` (e.g. `pSA_0.1`)
+- FAS columns are named `FAS_{frequency}` to 6 significant figures (e.g. `FAS_0.0131826`). Every batch has all the configured frequencies, with NaN above a record's Nyquist frequency
 
 ### 🔹 Metadata Files
 
-Additional output files are generated in the `flatfiles/` directory:
-
-- **`IM_calc_skipped_records.csv`**: Contains records that could not be processed due to missing component files
+- **`flatfiles/im_calc_skipped_records.csv`**: The skipped records of all batches combined
 
 | Column | Description |
 |--------|-------------|
 | `record_id` | Unique identifier (evid_station_channel_location) |
-| `reason` | Detailed explanation of processing failure |
+| `reason` | Missing waveform ascii files, or components containing NaN values |
 
 ---
 
@@ -188,7 +173,7 @@ Key configuration values from `config.yaml`:
 | `common_frequency_start` | 0.01318257 | FAS start frequency (Hz) |
 | `common_frequency_end` | 100 | FAS end frequency (Hz) |
 | `common_frequency_num` | 389 | Number of FAS frequency points |
-| `ko_bandwidth` | 40 | Konno-Ohmachi smoothing bandwidth |
+| `ko_bandwidth` | 188.5 | Konno-Ohmachi smoothing bandwidth (NGA-West3) |
 
 ---
 
@@ -206,84 +191,12 @@ For earthquake records from the NZGMDB:
 
 - **File Validation**: Ensures all three component files exist before processing
 - **Error Handling**: Logging of processing failures
-- **Checkpoint Support**: Allows resumption of interrupted calculations
-
----
-
-## 🔄 Merge IM Results
-
-After individual IM calculations are complete, the results must be consolidated into a single comprehensive dataset. This subsequent step merges all individual IM CSV files and applies quality filtering.
-
-### 🚀 Merge Entry Point
-
-To merge all calculated IM results, run:
-
-```bash
-python -m nzgmdb.scripts.run_nzgmdb merge-im-results <im_dir> <output_dir>
-```
-
-- **<im_dir>** is the directory containing individual IM CSV files (typically main_dir/IM/)
-- **<output_dir>** is the output directory for merged results (typically main_dir/flatfiles/)
-
-Example:
-```bash
-python -m nzgmdb.scripts.run_nzgmdb merge-im-results nzgmdb_output/IM/ nzgmdb_output/flatfiles/
-```
-
-Optional parameters:
-- `--gmc-ffp`: Path to GMC predictions file for quality score integration
-- `--fmax-ffp`: Path to Fmax results file for frequency limit integration
-
-### 🔹 Merge Process
-
-The merge operation performs the following consolidation steps:
-
-**1. IM File Aggregation**
-- Recursively finds all `*_IM.csv` files in the IM directory
-- Concatenates all individual record IM files into a single DataFrame
-- Preserves all calculated intensity measures and component orientations
-
-**2. Metadata Integration**
-- **GMC Data**: Merges quality scores, minimum frequencies (fmin), and multi-component scores
-- **Fmax Data**: Integrates maximum usable frequencies for each component
-- **Record Parsing**: Extracts event ID, station, channel, and location from record identifiers
-
-**3. Column Organisation**
-Structures the final dataset with logical column ordering:
-```
-record_id | evid | sta | loc | chan | component | 
-PGA | PGV | PGD | CAV | CAV5 | AI | Ds575 | Ds595 |
-score_mean_X | fmin_mean_X | fmax_mean_X | multi_mean_X |
-score_mean_Y | fmin_mean_Y | fmax_mean_Y | multi_mean_Y |
-score_mean_Z | fmin_mean_Z | fmax_mean_Z | multi_mean_Z |
-[pSA_periods...] | [FAS_frequencies...]
-```
-
-### 🔹 Merge Output
-
-**`ground_motion_im_catalogue.csv`**
-
-The consolidated catalogue contains:
-
-| Field Group | Description | Example Columns                                    |
-|-------------|-------------|----------------------------------------------------|
-| **Identifiers** | Record and location info | `record_id`, `evid`, `sta`, `chan`, `loc`          |
-| **Components** | Motion component type | `component` (000, 090, ver, rotd50, etc.)          |
-| **Time-Domain IMs** | Peak and duration metrics | `PGA`, `PGV`, `PGD`, `CAV`, `AI`, `Ds575`, `Ds595` |
-| **Quality Metrics** | GMC and frequency data | `score_mean_X`, `fmin_mean_X`, `fmax_mean_X`       |
-| **Spectral IMs** | Period-dependant response | `pSA_0.010`, `pSA_0.050`, `pSA_1.000`              |
-| **Frequency IMs** | Fourier amplitude data | `FAS_0.100`, `FAS_1.000`, `FAS_10.000`             |
-
-### 🔹 Integration Benefits
-
-- **Single Source**: Consolidates thousands of individual files into one analysable dataset
-- **Metadata Enrichment**: Combines IM data with quality metrics and processing parameters
-
+- **Checkpoint Support**: Complete batches are skipped when a run is resumed
 
 ---
 
 ## 🔗 Related Steps
 
 - **Previous**: [Process Records](Process-Records.md) - Generates the processed waveform files required for IM calculation
-- **Next**: [Calculate Distances](Calculate-Distances.md) - Computes rupture distance metrics for the merged IM catalogue
-- **Related**: [Merge Flatfiles](Merge-Flatfiles.md) - Further processes the IM catalogue into component-specific flatfiles
+- **Next**: [Calculate Distances](Calculate-Distances.md) - Computes rupture distance metrics for the records in the IM results
+- **Related**: [Merge Flatfiles](Merge-Flatfiles.md) - Loads each component directory to create the component-specific flatfiles
