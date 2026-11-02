@@ -15,9 +15,8 @@ import typer
 
 from nzgmdb.data_processing import process_observed
 from nzgmdb.management import config as cfg
-from nzgmdb.management import custom_errors, file_structure
+from nzgmdb.management import custom_errors, file_structure, slack
 from nzgmdb.management.background import launch_cmt_background
-from nzgmdb.management.slack import reply_to_message_on_slack, send_message_to_slack
 from nzgmdb.management.timing import StepTimer, profile_to, safe_write_timings
 from nzgmdb.scripts import run_gmc, run_nzgmdb
 from qcore import cli
@@ -29,6 +28,9 @@ SEISMIC_NOW_URL = "https://quakecoresoft.canterbury.ac.nz/seismicnow/api/"
 # Written into the event directory by run_event
 NZGMDB_TIMINGS_FILENAME = "nzgmdb_timings.csv"
 NZGMDB_PROFILE_FILENAME = "nzgmdb_profile.prof"
+
+# Events at 'best' quality below this magnitude are not kept on SeismicNow
+SEISMIC_NOW_MIN_MAG = 3.5
 
 
 def download_earthquake_data(
@@ -77,7 +79,7 @@ def download_earthquake_data(
     return df
 
 
-def fetch_geonet_update(event_id: str):
+def fetch_geonet_update(event_id: str) -> dict:
     """
     Fetch the earthquake data from the GeoNet API for the latest update
     on location and magnitude with quality.
@@ -89,35 +91,31 @@ def fetch_geonet_update(event_id: str):
 
     Returns
     -------
-    lon : float
-        Longitude of the event.
-    lat : float
-        Latitude of the event.
-    mag : float
-        Magnitude of the event.
-    depth : float
-        Depth of the event.
-    quality : str
-        Quality of the event.
+    dict
+        mag, lat, lon, depth, quality, locality and origin_time (UTC datetime)
+        of the event, matching the format_event_summary arguments.
     """
     url = f"https://api.geonet.org.nz/quake/{event_id}"
     headers = {"Accept": "application/vnd.geo+json;version=2"}
 
     r = requests.get(url, headers=headers)
     feature = r.json()["features"][0]
+    properties = feature["properties"]
 
-    lon = feature["geometry"]["coordinates"][0]
-    lat = feature["geometry"]["coordinates"][1]
-    quality = feature["properties"]["quality"]
-    mag = feature["properties"]["magnitude"]
-    depth = feature["properties"]["depth"]
-
-    return lon, lat, mag, depth, quality
+    return {
+        "mag": properties["magnitude"],
+        "lat": feature["geometry"]["coordinates"][1],
+        "lon": feature["geometry"]["coordinates"][0],
+        "depth": properties["depth"],
+        "quality": properties["quality"],
+        "locality": properties.get("locality"),
+        "origin_time": pd.to_datetime(properties["time"], utc=True).to_pydatetime(),
+    }
 
 
 def update_eq_source_table(
     event_dir: Path,
-):
+) -> dict:
     """
     Update the earthquake source table with the latest data, such as
     magnitude, latitude, longitude, and depth.
@@ -129,8 +127,8 @@ def update_eq_source_table(
 
     Returns
     -------
-    tuple
-        A tuple containing the updated values: (magnitude, latitude, longitude, depth)
+    dict
+        The latest GeoNet values from fetch_geonet_update
     """
     flatfile_dir = file_structure.get_flatfile_dir(event_dir)
     eq_source_ffp = (
@@ -141,19 +139,50 @@ def update_eq_source_table(
     evid = eq_source_df["evid"].values[0]
 
     # Get the latest data
-    lon, lat, mag, depth, quality = fetch_geonet_update(evid)
+    event_info = fetch_geonet_update(evid)
 
     # Update the data
-    eq_source_df["mag"] = mag
-    eq_source_df["lat"] = lat
-    eq_source_df["lon"] = lon
-    eq_source_df["depth"] = depth
+    for column in ["mag", "lat", "lon", "depth"]:
+        eq_source_df[column] = event_info[column]
 
     # Save the updated data
     eq_source_df.to_csv(eq_source_ffp, index=False)
 
-    # return the new data values with quality
-    return (mag, lat, lon, depth, quality)
+    return event_info
+
+
+def is_below_threshold(event_info: dict) -> bool:
+    """
+    Check if an event is below the SeismicNow magnitude threshold at 'best' quality.
+
+    Parameters
+    ----------
+    event_info : dict
+        The latest GeoNet values from fetch_geonet_update
+
+    Returns
+    -------
+    bool
+        True if the event should not be on SeismicNow
+    """
+    return event_info["quality"] == "best" and event_info["mag"] < SEISMIC_NOW_MIN_MAG
+
+
+def _format_response_error(response: requests.Response) -> str:
+    """
+    Format a failed SeismicNow response for a Slack message.
+
+    Parameters
+    ----------
+    response : requests.Response
+        The failed response.
+
+    Returns
+    -------
+    str
+        Status code and the start of the response text.
+    """
+    return f"status {response.status_code}: `{response.text[: slack.MAX_ERROR_CHARS]}`"
 
 
 @cli.from_docstring(app)
@@ -217,6 +246,7 @@ def run_event(
         True if the event was processed, False if the event was skipped.
     """
     timer = StepTimer()
+    thread = slack.EventThread()
     profile_ffp = event_dir / NZGMDB_PROFILE_FILENAME if profile else None
     try:
         with profile_to(profile_ffp):
@@ -232,7 +262,17 @@ def run_event(
                 add_seismic_now,
                 machine,
                 timer,
+                thread,
             )
+    except Exception as exc:
+        # Report the crash in the event's thread (if started), then let it propagate
+        last_step = timer.rows[-1]["step"] if timer.rows else "start"
+        thread.reply(
+            f"❌ Processing crashed after step `{last_step}`: "
+            f"`{slack.format_error(exc)}`. SW team investigate"
+        )
+        thread.set_status(slack.STATUS_FAILED)
+        raise
     finally:
         # Time since the last finished step (early return, error or final checks)
         timer.lap("other")
@@ -252,6 +292,7 @@ def _run_event(
     add_seismic_now: bool,
     machine: cfg.MachineName,
     timer: StepTimer,
+    thread: slack.EventThread,
 ) -> bool:
     """
     Run the NZGMDB pipeline steps for run_event, recording each step's time.
@@ -280,6 +321,8 @@ def _run_event(
         The machine name to use for the number of processes.
     timer : StepTimer
         Timer each finished step is recorded in.
+    thread : slack.EventThread
+        Slack thread for the event, started here when add_seismic_now is set.
 
     Returns
     -------
@@ -316,20 +359,20 @@ def _run_event(
 
         if add_seismic_now:
             # Update with latest info
-            mag, lat, lon, depth, quality = update_eq_source_table(event_dir)
+            event_info = update_eq_source_table(event_dir)
 
             # Check if quality is best and magnitude is above threshold
-            if quality == "best" and mag < 3.5:
+            if is_below_threshold(event_info):
                 print(
-                    f"Event {event_id} has quality 'best' but magnitude {mag:.1f} is below threshold, skipping"
+                    f"Event {event_id} has quality 'best' but magnitude {event_info['mag']:.1f} is below threshold, skipping"
                 )
                 return False
 
-            # Send a message to slack to indicate the event is being processed
-            response = send_message_to_slack(
-                f"Event ID: {event_id} started processing for SeismicNow: Mag: {mag:.2f}; Depth: {depth:.2f} km; Lat: {lat:.4f}; Lon: {lon:.4f}",
+            # Start the event's slack thread to indicate the event is being processed
+            thread.start(
+                slack.STATUS_PROCESSING,
+                slack.format_event_summary(event_id, **event_info),
             )
-            message_ts = response["ts"]
             timer.lap("seismic_now_start")
 
         # Tectonic types
@@ -391,37 +434,43 @@ def _run_event(
 
     if add_seismic_now:
         # Get updated values
-        mag, lat, lon, depth, quality = update_eq_source_table(event_dir)
+        event_info = update_eq_source_table(event_dir)
+        summary = slack.format_event_summary(event_id, **event_info)
         # Check if quality is best and magnitude is above threshold
-        if quality == "best" and mag < 3.5:
+        if is_below_threshold(event_info):
             print(
-                f"Event {event_id} has quality 'best' but magnitude {mag:.2f} is below threshold, skipping"
+                f"Event {event_id} has quality 'best' but magnitude {event_info['mag']:.2f} is below threshold, skipping"
             )
+            thread.reply(
+                f"🗑️ Not added to SeismicNow: below the magnitude threshold "
+                f"(M{event_info['mag']:.2f} < {SEISMIC_NOW_MIN_MAG} at 'best' quality)"
+            )
+            thread.set_status(slack.STATUS_REMOVED, summary)
             return False
 
-        # Define the URL for the endpoint
-        url = f"{SEISMIC_NOW_URL}earthquakes/add?earthquake_id={event_id}"
+        # Add the event to SeismicNow, with its slack thread for later replies
+        url = f"{SEISMIC_NOW_URL}earthquakes/add"
+        params = {"earthquake_id": event_id}
+        if thread.ts is not None:
+            params["slack_thread_ts"] = thread.ts
 
         # Send a POST request to the endpoint
-        response = requests.post(url)
+        response = requests.post(url, params=params)
 
         if response.status_code == 200:
             print("Event added successfully")
-            # Add a new message to slack
-            response = reply_to_message_on_slack(
-                message_ts,
-                f"Event ID: {event_id} added to SeismicNow (Basic Processing): Mag: {mag:.2f}; Depth: {depth:.2f} km; Lat: {lat:.4f}; Lon: {lon:.4f}",
+            thread.reply(
+                f"Added to SeismicNow (basic processing): {slack.format_event_line(event_info['mag'], event_info['lat'], event_info['lon'], event_info['depth'], event_info['quality'])}"
             )
-            message_ts = response["ts"]
+            thread.set_status(slack.STATUS_BASIC, summary)
 
         else:
             print(f"Failed to add event. Status code: {response.status_code}")
             print(f"Response: {response.text}")
-            # Add a new message to slack
-            reply_to_message_on_slack(
-                message_ts,
-                f"Failed to add event {event_id} to SeismicNow, SW team investigate",
+            thread.reply(
+                f"❌ Failed to add to SeismicNow ({_format_response_error(response)}), SW team investigate"
             )
+            thread.set_status(slack.STATUS_FAILED, summary)
             return False
         timer.lap("seismic_now_add")
 
@@ -510,14 +559,22 @@ def _run_event(
 
     if add_seismic_now:
         # Get updated values
-        mag, lat, lon, depth, quality = update_eq_source_table(event_dir)
+        event_info = update_eq_source_table(event_dir)
+        summary = slack.format_event_summary(event_id, **event_info)
+        event_line = slack.format_event_line(
+            event_info["mag"],
+            event_info["lat"],
+            event_info["lon"],
+            event_info["depth"],
+            event_info["quality"],
+        )
         # Check if quality is best and magnitude is above threshold
-        if quality == "best" and mag < 3.5:
+        if is_below_threshold(event_info):
             print(
-                f"Event {event_id} has quality 'best' but magnitude {mag:.2f} is below threshold, skipping"
+                f"Event {event_id} has quality 'best' but magnitude {event_info['mag']:.2f} is below threshold, skipping"
             )
             # Send the delete request to SeismicNow
-            url = f"{SEISMIC_NOW_URL}/earthquakes/delete"
+            url = f"{SEISMIC_NOW_URL}earthquakes/delete"
 
             payload = {"earthquake_id": event_id}
 
@@ -525,20 +582,20 @@ def _run_event(
 
             if response.status_code == 200:
                 print("Event removed successfully")
-                # Reply to the slack message for final results
-                reply_to_message_on_slack(
-                    message_ts,
-                    f"Event ID: {event_id} falls below the magnitude threshold at 'best' quality and so has been removed.",
+                thread.reply(
+                    f"🗑️ Removed from SeismicNow after final processing: below the magnitude threshold "
+                    f"(M{event_info['mag']:.2f} < {SEISMIC_NOW_MIN_MAG} at 'best' quality)"
                 )
+                thread.set_status(slack.STATUS_REMOVED, summary)
 
             else:
                 print(f"Failed to remove event. Status code: {response.status_code}")
                 print(f"Response: {response.text}")
-                # Add a new message to slack
-                reply_to_message_on_slack(
-                    message_ts,
-                    f"Failed to remove event {event_id} from SeismicNow for falling below the magnitude threshold, SW team investigate",
+                thread.reply(
+                    f"❌ Failed to remove from SeismicNow for falling below the magnitude threshold "
+                    f"({_format_response_error(response)}), SW team investigate"
                 )
+                thread.set_status(slack.STATUS_FAILED, summary)
 
             return False
 
@@ -552,11 +609,8 @@ def _run_event(
 
         if response.status_code == 200:
             print("Event added successfully")
-            # Reply to the slack message for final results
-            reply_to_message_on_slack(
-                message_ts,
-                f"Event ID: {event_id} completed final processing: Mag: {mag:.2f}; Depth: {depth:.2f} km; Lat: {lat:.4f}; Lon: {lon:.4f}",
-            )
+            thread.reply(f"Completed final processing: {event_line}")
+            thread.set_status(slack.STATUS_FINAL, summary)
             timer.lap("seismic_now_update")
 
             # Event is finalised and confirmed in SeismicNow - launch the
@@ -565,18 +619,17 @@ def _run_event(
                 event_id,
                 eq_source_ffp,
                 event_dir / "cmt_1d",
-                slack_thread_ts=message_ts,
+                slack_thread=thread,
             )
             timer.lap("launch_cmt")
 
         else:
             print(f"Failed to add event. Status code: {response.status_code}")
             print(f"Response: {response.text}")
-            # Add a new message to slack
-            reply_to_message_on_slack(
-                message_ts,
-                f"Failed to update event {event_id} for SeismicNow, SW team investigate",
+            thread.reply(
+                f"❌ Failed to update on SeismicNow ({_format_response_error(response)}), SW team investigate"
             )
+            thread.set_status(slack.STATUS_FAILED, summary)
             return False
 
     return True

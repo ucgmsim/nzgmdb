@@ -11,12 +11,14 @@ from pathlib import Path
 
 import pandas as pd
 
-from nzgmdb.management.slack import reply_to_message_on_slack
+from nzgmdb.management import slack
 from nzgmdb.management.timing import TIMINGS_FILENAME, format_duration
 
 CMT_MODULE = "nzgmdb.scripts.run_auto_cmt"
 CMT_COMMAND = "run-cmt-pipeline"
 LOG_TAIL_LINES = 20
+# Most traceback frame lines kept in the Slack failure message
+TRACEBACK_FRAME_LINES = 6
 
 # Written by nzgmdb.scripts.run_auto_cmt into its output_dir. Kept as plain
 # strings so importing this module doesn't import BayesISOLA.
@@ -25,6 +27,10 @@ CMT_SELECTION_FILENAME = "cmt_selection.csv"
 
 # Number of slowest BayesISOLA stages to report in Slack
 TIMING_TOP_STAGES = 3
+
+# Printed by nzgmdb.scripts.run_auto_cmt when the pipeline fails, followed by
+# the last finished step
+CMT_FAILED_STEP_MARKER = "[run_auto_cmt] FAILED after step: "
 
 
 def _tail(path: Path, n_lines: int = LOG_TAIL_LINES) -> str:
@@ -49,6 +55,120 @@ def _tail(path: Path, n_lines: int = LOG_TAIL_LINES) -> str:
     except OSError:
         return "(log file unavailable)"
     return "\n".join(lines[-n_lines:])
+
+
+def _extract_error(log_path: Path) -> tuple[str | None, str | None]:
+    """
+    Find the failed pipeline step and the last traceback in a CMT log.
+
+    Parameters
+    ----------
+    log_path : Path
+        The CMT subprocess's combined stdout/stderr log.
+
+    Returns
+    -------
+    failed_after : str or None
+        Last step finished before the failure, None if not found.
+    traceback_text : str or None
+        Last traceback, trimmed to its final frames and the exception line,
+        None if not found.
+    """
+    try:
+        lines = log_path.read_text().splitlines()
+    except OSError:
+        return None, None
+
+    failed_after = next(
+        (
+            line.removeprefix(CMT_FAILED_STEP_MARKER).strip()
+            for line in reversed(lines)
+            if line.startswith(CMT_FAILED_STEP_MARKER)
+        ),
+        None,
+    )
+
+    starts = [ix for ix, line in enumerate(lines) if line.startswith("Traceback")]
+    if not starts:
+        return failed_after, None
+    # Frames are indented, the first unindented line is the exception
+    frames = []
+    exception_line = ""
+    for line in lines[starts[-1] + 1 :]:
+        if line.startswith(" "):
+            frames.append(line)
+        else:
+            exception_line = line
+            break
+    traceback_text = "\n".join(
+        [lines[starts[-1]], *frames[-TRACEBACK_FRAME_LINES:], exception_line]
+    )
+    return failed_after, traceback_text
+
+
+def _read_run_statuses(output_dir: Path) -> str:
+    """
+    List each CMT run's status from cmt_selection.csv.
+
+    Parameters
+    ----------
+    output_dir : Path
+        Directory the CMT pipeline wrote its results to.
+
+    Returns
+    -------
+    str
+        One line per run, or an empty string if cmt_selection.csv is missing.
+    """
+    try:
+        selection_df = pd.read_csv(output_dir / CMT_SELECTION_FILENAME)
+    except (OSError, ValueError):
+        return ""
+    return "\n".join(
+        f"• {row.run}: ✅ VR {row.variance_reduction:.2f}"
+        if row.status == "ok"
+        else f"• {row.run}: ❌ `{row.message}` (log: {row.folder}/cmt_run.log)"
+        for row in selection_df.itertuples()
+    )
+
+
+def _format_failure_message(
+    event_id: str, returncode: int, output_dir: Path, log_path: Path
+) -> str:
+    """
+    Build the Slack message for a failed CMT pipeline.
+
+    Parameters
+    ----------
+    event_id : str
+        GeoNet event/public ID.
+    returncode : int
+        Exit code of the CMT subprocess.
+    output_dir : Path
+        Directory the CMT pipeline wrote its results to.
+    log_path : Path
+        Path to the subprocess's combined stdout/stderr log.
+
+    Returns
+    -------
+    str
+        Failed step, each run's status and the error, falling back to the
+        log tail if no traceback is found.
+    """
+    failed_after, traceback_text = _extract_error(log_path)
+    message = (
+        f"❌ CMT inversion FAILED for Event ID: {event_id}, exit code {returncode}"
+    )
+    if failed_after:
+        message += f", after step `{failed_after}`"
+    run_statuses = _read_run_statuses(output_dir)
+    if run_statuses:
+        message += f"\nRuns:\n{run_statuses}"
+    if traceback_text:
+        message += f"\nError:\n```{traceback_text}```"
+    else:
+        message += f"\nLast {LOG_TAIL_LINES} log lines:\n```{_tail(log_path)}```"
+    return f"{message}\nLog: {log_path}"
 
 
 def _read_cmt_result_summary(output_dir: Path) -> str:
@@ -83,7 +203,7 @@ def _read_cmt_result_summary(output_dir: Path) -> str:
     others = ", ".join(
         f"{row.run} {row.variance_reduction:.2f}"
         if row.status == "ok"
-        else f"{row.run} failed"
+        else f"{row.run} failed: `{row.message}`"
         for row in selection_df[~selection_df["selected"]].itertuples()
     )
     dropped = selection_df["dropped_stations"].dropna().astype(str)
@@ -152,7 +272,7 @@ def _watch_and_notify(
     event_id: str,
     output_dir: Path,
     log_path: Path,
-    slack_thread_ts: str | None,
+    slack_thread: slack.EventThread | None,
 ) -> None:
     """
     Wait for the CMT subprocess to exit and post a Slack reply reporting
@@ -171,32 +291,27 @@ def _watch_and_notify(
         Directory the CMT pipeline writes results to.
     log_path : Path
         Path to the subprocess's combined stdout/stderr log.
-    slack_thread_ts : str, optional
-        Slack thread timestamp to reply into. If None, no Slack message is
+    slack_thread : slack.EventThread, optional
+        Slack thread of the event to reply into. If None, no Slack message is
         sent.
     """
     returncode = process.wait()
 
-    if slack_thread_ts is None:
+    if slack_thread is None:
         return
 
     if returncode == 0:
-        message = (
-            f"CMT inversion completed for Event ID: {event_id} "
+        slack_thread.reply(
+            f"✅ CMT inversion completed for Event ID: {event_id} "
             f"({_read_cmt_result_summary(output_dir)}). Results: {output_dir}\n"
             f"{_read_cmt_timing_summary(output_dir)}"
         )
+        slack_thread.set_status(slack.STATUS_CMT_DONE)
     else:
-        message = (
-            f"CMT inversion FAILED for Event ID: {event_id}, "
-            f"exit code {returncode}. Log: {log_path}\n"
-            f"Last {LOG_TAIL_LINES} log lines:\n```{_tail(log_path)}```"
+        slack_thread.reply(
+            _format_failure_message(event_id, returncode, output_dir, log_path)
         )
-
-    try:
-        reply_to_message_on_slack(slack_thread_ts, message)
-    except ValueError as exc:
-        print(f"[management.background] failed to post CMT completion to Slack: {exc}")
+        slack_thread.set_status(slack.STATUS_CMT_FAILED)
 
 
 def launch_cmt_background(
@@ -207,7 +322,7 @@ def launch_cmt_background(
     real_time: bool = True,
     python_executable: str = sys.executable,
     threads: int | None = None,
-    slack_thread_ts: str | None = None,
+    slack_thread: slack.EventThread | None = None,
     profile: bool = True,
 ) -> subprocess.Popen:
     """
@@ -246,12 +361,13 @@ def launch_cmt_background(
         running the caller.
     threads : int, optional
         Override the default Axitra thread count for each run.
-    slack_thread_ts : str, optional
-        Slack thread timestamp to reply into once the pipeline finishes. If
-        omitted, no Slack notification is sent. On success, the message
-        reports the selected run, each run's variance reduction, the dropped
-        stations and the selected solution's magnitude and location, plus a
-        timing summary.
+    slack_thread : slack.EventThread, optional
+        Slack thread of the event. If omitted, no Slack notification is sent.
+        Otherwise a reply is posted on launch, the pipeline replies when each
+        run starts and finishes, and a final reply reports the selected run,
+        each run's variance reduction, the dropped stations and the selected
+        solution's magnitude and location, plus a timing summary (or the
+        failed step, run errors and traceback on failure).
     profile : bool, optional
         Write a cProfile dump for each run to <run>/results/profile.prof,
         by default True.
@@ -284,6 +400,13 @@ def launch_cmt_background(
         cmd += ["--threads", str(threads)]
     if profile:
         cmd.append("--profile")
+    if slack_thread is not None and slack_thread.ts is not None:
+        cmd += [
+            "--slack-thread-ts",
+            slack_thread.ts,
+            "--slack-summary",
+            slack_thread.summary,
+        ]
 
     log_path = output_dir / "cmt_1d_run.log"
     # The subprocess keeps its own handle to the log once started
@@ -303,9 +426,15 @@ def launch_cmt_background(
         f"(pid={process.pid}), logging to {log_path}"
     )
 
+    if slack_thread is not None:
+        slack_thread.reply(
+            f"{slack.CMT_EMOJI} CMT pipeline launched (pid {process.pid}), log: {log_path}"
+        )
+        slack_thread.set_status(slack.STATUS_CMT_RUNNING)
+
     watcher = threading.Thread(
         target=_watch_and_notify,
-        args=(process, event_id, output_dir, log_path, slack_thread_ts),
+        args=(process, event_id, output_dir, log_path, slack_thread),
         daemon=True,
     )
     watcher.start()

@@ -9,7 +9,7 @@ import sys
 import time
 import traceback
 from collections.abc import Iterator
-from concurrent.futures import ProcessPoolExecutor
+from concurrent.futures import ProcessPoolExecutor, as_completed
 from contextlib import contextmanager
 from pathlib import Path
 from typing import Annotated, Any
@@ -29,8 +29,15 @@ from auto_cmt.run_cmt import (
 )
 from auto_cmt.timing import TIMINGS_FILENAME as STAGE_TIMINGS_FILENAME
 
+from nzgmdb.management.background import CMT_FAILED_STEP_MARKER
 from nzgmdb.management.cmt_cleanup import cleanup_cmt_run, find_cmt_run_dirs
-from nzgmdb.management.timing import TIMINGS_FILENAME, StepTimer, safe_write_timings
+from nzgmdb.management.slack import CMT_EMOJI, EventThread
+from nzgmdb.management.timing import (
+    TIMINGS_FILENAME,
+    StepTimer,
+    format_duration,
+    safe_write_timings,
+)
 from qcore import cli
 
 app = typer.Typer(pretty_exceptions_enable=False)
@@ -379,6 +386,33 @@ def run_single_cmt(
     return record
 
 
+def format_run_record(record: dict[str, Any]) -> str:
+    """
+    Format a finished run record for a Slack reply.
+
+    Parameters
+    ----------
+    record : dict
+        Run record from run_single_cmt.
+
+    Returns
+    -------
+    str
+        Run name, time taken and its key results, or its error if it failed.
+    """
+    duration = format_duration(record["inversion_s"])
+    if record["status"] != "ok":
+        return f"❌ CMT run `{record['run']}` failed after {duration}: `{record['message']}`"
+    message = (
+        f"✅ CMT run `{record['run']}` finished in {duration}: "
+        f"VR {record['variance_reduction']:.2f}, Mw {record['Mw']:.2f}, "
+        f"depth {record['centroid_depth_km']:.1f} km, {record['n_stations']} stations"
+    )
+    if record["on_grid_edge"]:
+        message += " ⚠️ centroid on grid edge"
+    return message
+
+
 def select_best_run(records: list[dict[str, Any]]) -> pd.DataFrame:
     """
     Select the successful run with the highest variance reduction.
@@ -473,6 +507,8 @@ def run_cmt_pipeline(
     ] = DEFAULT_NZ_3DVM_PATH,
     skip_cleanup: Annotated[bool, typer.Option(is_flag=True)] = False,
     profile: Annotated[bool, typer.Option(is_flag=True)] = False,
+    slack_thread_ts: Annotated[str | None, typer.Option()] = None,
+    slack_summary: Annotated[str, typer.Option()] = "",
 ) -> pd.DataFrame:
     """
     Run the three-run CMT pipeline for one event and select the best solution.
@@ -504,6 +540,11 @@ def run_cmt_pipeline(
         Keep all run files (no cleanup), for debugging.
     profile : bool, optional
         Write a cProfile dump for each run to <run>/results/profile.prof.
+    slack_thread_ts : str, optional
+        Slack thread of the event to reply into when each run starts and
+        finishes. If None, no Slack messages are sent.
+    slack_summary : str, optional
+        Event summary shown in the Slack thread's parent message.
 
     Returns
     -------
@@ -519,6 +560,7 @@ def run_cmt_pipeline(
     matplotlib.use("Agg")
 
     timer = StepTimer()
+    thread = EventThread(slack_thread_ts, slack_summary)
     # Finished run records, so timings can be written whatever step fails
     records = []
     output_dir.mkdir(parents=True, exist_ok=True)
@@ -545,6 +587,9 @@ def run_cmt_pipeline(
 
         # Runs 1 and 2 in parallel, forked workers inherit _NZ_GRID
         print("[run_auto_cmt] running all_stations and azimuth runs")
+        thread.reply(
+            f"{CMT_EMOJI} CMT runs `{RUN_ALL_STATIONS}` and `{RUN_AZIMUTH}` started (in parallel)"
+        )
         with ProcessPoolExecutor(
             max_workers=2, mp_context=mp.get_context("fork")
         ) as pool:
@@ -561,6 +606,9 @@ def run_cmt_pipeline(
                 azimuth_control=True,
                 **run_kwargs,
             )
+            # Report each run as it finishes
+            for future in as_completed([all_future, azimuth_future]):
+                thread.reply(format_run_record(future.result()))
             all_record, azimuth_record = all_future.result(), azimuth_future.result()
         records += [all_record, azimuth_record]
         timer.lap("runs_all_stations_azimuth")
@@ -579,6 +627,11 @@ def run_cmt_pipeline(
             message = "Not dropping stations: all_stations or azimuth run failed"
         print(f"[run_auto_cmt] dropping stations: {dropped} {message}")
         timer.lap("outlier_detection")
+        thread.reply(
+            f"{CMT_EMOJI} CMT run `{RUN_DROP_OUTLIERS_DEV}` started (deviatoric), "
+            f"dropping stations: {', '.join(dropped) or 'none'}"
+            + (f" ({message})" if message else "")
+        )
 
         # Run 3 in a fresh worker so its output redirect stays isolated
         with ProcessPoolExecutor(
@@ -594,6 +647,7 @@ def run_cmt_pipeline(
             ).result()
         records.append(drop_record)
         timer.lap("run_drop_outliers_dev")
+        thread.reply(format_run_record(drop_record))
         if message:
             drop_record["message"] = "; ".join(
                 m for m in [message, drop_record["message"]] if m
@@ -618,6 +672,11 @@ def run_cmt_pipeline(
             raise RuntimeError(f"All CMT runs failed for {event_id}, see {output_dir}")
 
         return selection_df
+    except Exception:
+        # Read by management.background for the Slack failure message
+        last_step = timer.rows[-1]["step"] if timer.rows else "start"
+        print(f"{CMT_FAILED_STEP_MARKER}{last_step}")
+        raise
     finally:
         timer.lap("other")
         try:
@@ -625,8 +684,12 @@ def run_cmt_pipeline(
         except (OSError, ValueError, KeyError) as exc:
             print(f"[run_auto_cmt] could not combine run timings: {exc}")
             timings_df = timer.to_dataframe()
+        # Only a summary line, so the log tail keeps any traceback
         safe_write_timings(timings_df, output_dir / TIMINGS_FILENAME)
-        print(timings_df.to_string(index=False))
+        print(
+            f"[run_auto_cmt] timings written to {output_dir / TIMINGS_FILENAME} "
+            f"(total {format_duration(timer.to_dataframe()['seconds'].iloc[-1])})"
+        )
 
 
 @cli.from_docstring(app)
