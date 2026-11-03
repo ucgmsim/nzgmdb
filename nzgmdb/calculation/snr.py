@@ -11,7 +11,7 @@ import numpy as np
 import pandas as pd
 from pandas.errors import EmptyDataError
 
-from IM import im_calculation, snr_calculation
+from IM import im_calculation, konno_ohmachi, snr_calculation
 from nzgmdb.management import config as cfg
 from nzgmdb.management import custom_errors, file_structure
 from nzgmdb.mseed_management import reading
@@ -21,9 +21,9 @@ def compute_snr_for_single_mseed(
     mseed_file: Path,
     phase_table: pd.DataFrame,
     output_dir: Path,
-    ko_directory: Path,
     common_frequency_vector: np.ndarray = im_calculation.DEFAULT_FREQUENCIES,
     xml_dir: Path | None = None,
+    bandwidth: float = konno_ohmachi.DEFAULT_BANDWIDTH,
 ):
     """
     Compute the SNR for a single mseed file
@@ -36,13 +36,13 @@ def compute_snr_for_single_mseed(
         Phase arrival table
     output_dir : Path
         Path to the output directory
-    ko_directory : Path
-        Path to the directory containing the Ko matrices
     common_frequency_vector : np.ndarray, optional
         Common frequency vector to extract for SNR and FAS, by default None
     xml_dir : Path, optional
         Path to the directory containing the StationXML files, by default None
         If None, will try to extract inventory from FDSN
+    bandwidth : float, optional
+        The Konno-Ohmachi smoothing bandwidth for the FAS, by default the IM_calculation default
 
     Returns
     -------
@@ -165,16 +165,8 @@ def compute_snr_for_single_mseed(
                 stats.delta,
                 tp,
                 frequencies=common_frequency_vector,
-                cores=1,
-                ko_directory=ko_directory,
+                bandwidth=bandwidth,
             )
-    except FileNotFoundError:
-        skipped_record_dict = {
-            "record_id": mseed_file.stem,
-            "reason": "Failed to find Ko matrix",
-        }
-        skipped_record = pd.DataFrame([skipped_record_dict])
-        return None, skipped_record
     except ValueError:
         skipped_record_dict = {
             "record_id": mseed_file.stem,
@@ -221,7 +213,6 @@ def compute_snr_for_mseed_data(
     phase_table_path: Path,
     meta_output_dir: Path,
     snr_fas_output_dir: Path,
-    ko_directory: Path,
     n_procs: int = 1,
     common_frequency_vector: np.ndarray = None,
     batch_size: int = 5000,
@@ -240,8 +231,6 @@ def compute_snr_for_mseed_data(
         Path to the output directory for the metadata and skipped records
     snr_fas_output_dir : Path
         Path to the output directory for the SNR and FAS data
-    ko_directory : Path
-        Path to the ko matrix directory
     n_procs : int, optional
         Number of processes to use, by default 1
     common_frequency_vector : np.ndarray, optional
@@ -313,9 +302,9 @@ def compute_snr_for_mseed_data(
                         compute_snr_for_single_mseed,
                         phase_table=phase_table,
                         output_dir=snr_fas_output_dir,
-                        ko_directory=ko_directory,
                         common_frequency_vector=common_frequency_vector,
                         xml_dir=xml_dir,
+                        bandwidth=config.get_value("ko_bandwidth"),
                     ),
                     batch,
                 )
