@@ -42,7 +42,7 @@ def test_extract_waveforms_outputs():
             "3713218_ASHS_HN_20": "No data from ptime_est to ds595 + 1std",
             "3713218_PPHS_HN_20": "Could not agree on best traces using Arias Intensity selection",
             "2016p863743_VUWB_BN_26": "Offset in traces missing data between noise and ds595 + 1std",
-            "2020p053330_TRAB_HNX_28": "All 0's",
+            "2020p053330_TRAB_HN_28": "All 0's",
             "2018p681807_LHBS_HN_20": "Start time after end time when trimming to common length",
             "2015p150076_VUWB_BN_26": "Could not agree on best traces using Arias Intensity selection",
             "2015p150076_VUWB_BN_2A": "Could not agree on best traces using Arias Intensity selection",

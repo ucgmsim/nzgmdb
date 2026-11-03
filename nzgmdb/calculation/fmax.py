@@ -11,7 +11,7 @@ import numpy as np
 import pandas as pd
 
 from nzgmdb.management import config as cfg
-from nzgmdb.management import file_structure, custom_errors
+from nzgmdb.management import custom_errors, file_structure
 from nzgmdb.mseed_management import reading
 
 
@@ -21,7 +21,7 @@ def run_full_fmax_calc(
     snr_fas_output_dir: Path,
     batches_dir: Path,
     n_procs: int = 1,
-    bypass_records_ffp: Path = None,
+    bypass_records_ffp: Path | None = None,
     batch_size: int = 20000,
 ):
     """
@@ -42,17 +42,19 @@ def run_full_fmax_calc(
         Number of processes to use, by default 1.
     bypass_records_ffp : Path, optional
         The full file path to the bypass records file, which includes a custom fmax
-    batch_size: int, optional
+    batch_size : int, optional
         The number of mseed files to process in each batch, by default 20000.
     """
     batches_dir.mkdir(parents=True, exist_ok=True)
 
-    mseed_files = list(waveform_dir.rglob("*.mseed"))
+    # Sorted so the batches are the same on a re-run
+    mseed_files = sorted(waveform_dir.rglob("*.mseed"))
     total = len(mseed_files)
     print(f"Total number of mseed files to process: {total}")
 
-    # Create batches of mseed files for checkpointing
-    mseed_batches = np.array_split(mseed_files, np.ceil(len(mseed_files) / batch_size))
+    # Create batches of mseed files for checkpointing (at least 1 so no files still writes empty outputs)
+    n_batches = max(1, int(np.ceil(total / batch_size)))
+    mseed_batches = np.array_split(mseed_files, n_batches)
 
     for index, batch in enumerate(mseed_batches):
         batch_dir = batches_dir / f"batch_{index + 1}"
@@ -60,7 +62,7 @@ def run_full_fmax_calc(
         batch_fmax_file = batch_dir / file_structure.FlatfileNames.FMAX
         if not batch_fmax_file.exists():
             print(f"Processing batch {index + 1}/{len(mseed_batches)}")
-            with mp.Pool(n_procs) as p:
+            with mp.get_context("forkserver").Pool(n_procs) as p:
                 results = p.map(
                     functools.partial(
                         assess_snr_and_get_fmax,
@@ -125,20 +127,23 @@ def run_full_fmax_calc(
 
             fmax_df.to_csv(batch_dir / file_structure.FlatfileNames.FMAX, index=False)
 
-    # For each batch_dir combine the dfs
+    # Combine only this run's batches, so batches from a run with a different batch_size are not mixed in
+    batch_dirs = [batches_dir / f"batch_{index + 1}" for index in range(n_batches)]
     all_skipped_records_df = pd.concat(
         [
-            pd.read_csv(f)
-            for f in batches_dir.rglob("*.csv")
-            if file_structure.SkippedRecordFilenames.FMAX_SKIPPED_RECORDS in f.name
+            pd.read_csv(
+                batch_dir / file_structure.SkippedRecordFilenames.FMAX_SKIPPED_RECORDS
+            )
+            for batch_dir in batch_dirs
         ],
+        ignore_index=True,
     )
     all_fmax_df = pd.concat(
         [
-            pd.read_csv(f)
-            for f in batches_dir.rglob("*.csv")
-            if file_structure.FlatfileNames.FMAX in f.name
+            pd.read_csv(batch_dir / file_structure.FlatfileNames.FMAX)
+            for batch_dir in batch_dirs
         ],
+        ignore_index=True,
     )
 
     all_skipped_records_df.to_csv(
@@ -203,12 +208,7 @@ def assess_snr_and_get_fmax(
         (1 / dt) * 0.5 * config.get_value("nyquist_freq_scaling_factor")
     )
 
-    snr_filename = (
-        snr_fas_output_dir
-        / filename.parent.parent.parent.stem
-        / filename.parent.parent.stem
-        / f"{record_id}_snr_fas.csv"
-    )
+    snr_filename = file_structure.get_snr_fas_ffp(snr_fas_output_dir, filename)
 
     if not snr_filename.exists():
         # Use the Nyquist frequency as the fmax
