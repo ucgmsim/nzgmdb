@@ -768,6 +768,8 @@ def compute_distances_for_event(
         srf_points = srf_points.reshape(-1, 3)
         # Swap the lat and lon for the srf points
         srf_points = srf_points[:, [1, 0, 2]]
+        # Grid depths are in metres, convert to km to match the srf points
+        srf_points[:, 2] /= 1000
 
         # Generate the srf header
         nstrike = max(int(round(length * points_per_km)), 1)
@@ -781,9 +783,6 @@ def compute_distances_for_event(
                 "width": dip_dist,
             }
         ]
-
-    # Divide the srf depth points by 1000 to convert to km
-    srf_points[:, 2] /= 1000
 
     # Calculate the distances
     rrups, rjbs, rrup_points = src_site_dist.calc_rrup_rjb(
