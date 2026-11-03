@@ -4,10 +4,10 @@ This module contains the functions to merge different flatfiles together to crea
 
 from pathlib import Path
 
+import numpy as np
 import pandas as pd
-import pyarrow as pa
-import pyarrow.parquet as pq
 
+from IM import im_calculation
 from nzgmdb.management import config as cfg
 from nzgmdb.management import file_structure
 
@@ -580,7 +580,10 @@ def merge_flatfiles(main_dir: Path, bypass_records_ffp: Path = None):
         num=config.get_value("common_frequency_num"),
     )
     psa_columns = [f"pSA_{p}" for p in psa_periods]
-    fas_columns = [f"FAS_{f}" for f in fas_frequencies]
+    # FAS columns are labelled the same way as in the IM calculation
+    fas_columns = [
+        f"FAS_{im_calculation.frequency_label(freq)}" for freq in fas_frequencies
+    ]
     columns = (
         [
             "record_id",
