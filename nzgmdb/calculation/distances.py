@@ -392,7 +392,7 @@ def get_nodal_plane_info(
 
         nodal_plane_info["srf_points"] = srf_model.points.loc[
             :, ["lon", "lat", "dep"]
-        ].to_numpy()
+        ].to_numpy(copy=True)
 
         # Generate the srf header
         nodal_plane_info["srf_header"] = (
@@ -1154,7 +1154,7 @@ def distance_in_taupo(
         )
 
         tvz_length = 0
-        boundary_dist_rjb = None
+        boundary_dist_rjb = np.nan
 
         # Check if the line intersects the Taupo VZ polygon
         if line.intersection(taupo_polygon):
