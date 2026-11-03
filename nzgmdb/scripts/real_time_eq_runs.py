@@ -333,6 +333,7 @@ def run_event(
             event_dir,
             n_procs=config.get_n_procs(machine, cfg.WorkflowStep.IM),
             intensity_measures=intensity_measures,
+            force_recompute=True,
         )
         # Calculate distances
         run_nzgmdb.distances.calc_distances(
@@ -428,6 +429,8 @@ def run_event(
         event_dir,
         n_procs=config.get_n_procs(machine, cfg.WorkflowStep.IM),
         intensity_measures=intensity_measures,
+        # Records were reprocessed with the GMC fmin / fmax under the same record_ids
+        force_recompute=True,
     )
 
     # Calculate distances

@@ -530,6 +530,7 @@ def run_im_calculation(
         ),
     ] = None,
     batch_size: Annotated[int, typer.Option()] = 5000,
+    force_recompute: Annotated[bool, typer.Option()] = False,
 ):
     """
     Run IM Calculation on processed waveform files.
@@ -548,9 +549,12 @@ def run_im_calculation(
         The list of intensity measures to calculate, by default None and will use the config file.
     batch_size : int, optional
         The number of records in each batch (default is 5000).
+    force_recompute : bool, optional
+        Recalculate every batch, ignoring completed batches of an earlier run (default is False).
+        Needed if the records were reprocessed since the earlier run.
     """
     ims.compute_ims_for_all_processed_records(
-        main_dir, n_procs, intensity_measures, batch_size
+        main_dir, n_procs, intensity_measures, batch_size, force_recompute
     )
 
 
