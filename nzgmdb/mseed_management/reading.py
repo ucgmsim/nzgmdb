@@ -111,7 +111,7 @@ def create_waveform_from_mseed(
     Returns
     -------
     np.ndarray
-        The waveform data in the shape (1, n_samples, 3)
+        The waveform data in the shape (3, 1, n_samples) (component, station, time)
 
     Raises
     ------

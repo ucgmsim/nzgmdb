@@ -3,7 +3,8 @@ pandas
 numpy>=2.0
 obspy
 mseedlib
-scipy
+# Upper bound only because hik/puy_focmec.npy hold RBFInterpolators pickled with an older scipy (unloadable from 1.17)
+scipy>=1.16,<1.17
 requests
 fiona
 pyproj

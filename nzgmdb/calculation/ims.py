@@ -172,12 +172,14 @@ def get_skipped_records_dir(main_dir: Path) -> Path:
     return file_structure.get_im_merge_dir(main_dir) / "im_calc_skipped_records"
 
 
-def prepare_batches(main_dir: Path, batch_records: pd.DataFrame):
+def prepare_batches(
+    main_dir: Path, batch_records: pd.DataFrame, force_recompute: bool = False
+):
     """
     Save the record_id / batch assignment for this run. If it differs from the saved
-    assignment (e.g. a different batch size or set of records), the batch files of the
-    earlier run are removed so they are not resumed or mixed in, as the component
-    directories are read as a whole by later steps.
+    assignment (e.g. a different batch size or set of records), or force_recompute is set,
+    the batch files of the earlier run are removed so they are not resumed or mixed in,
+    as the component directories are read as a whole by later steps.
 
     Parameters
     ----------
@@ -185,19 +187,23 @@ def prepare_batches(main_dir: Path, batch_records: pd.DataFrame):
         The main directory of the NZGMDB results
     batch_records : pd.DataFrame
         The record_id and batch of every record in this run
+    force_recompute : bool, optional
+        Remove the earlier batch files even if the assignment is the same, by default False
+        Used when the waveforms have been reprocessed under the same record_ids
     """
     im_merge_dir = file_structure.get_im_merge_dir(main_dir)
     batch_records_ffp = im_merge_dir / "batch_records.csv"
 
     if batch_records_ffp.exists():
         saved_batch_records = pd.read_csv(batch_records_ffp, dtype={"record_id": str})
-        if saved_batch_records["record_id"].tolist() == batch_records[
-            "record_id"
-        ].tolist() and (
-            saved_batch_records["batch"].tolist() == batch_records["batch"].tolist()
+        if (
+            not force_recompute
+            and saved_batch_records["record_id"].tolist()
+            == batch_records["record_id"].tolist()
+            and saved_batch_records["batch"].tolist() == batch_records["batch"].tolist()
         ):
             return
-        print("IM batches differ from the earlier run, removing its batch files")
+        print("Removing the IM batch files of the earlier run")
         for batch_file in im_merge_dir.glob("*/batch_*"):
             batch_file.unlink()
 
@@ -210,6 +216,7 @@ def compute_ims_for_all_processed_records(
     n_procs: int = 1,
     intensity_measures: list[ims.IM] | None = None,
     batch_size: int = 5000,
+    force_recompute: bool = False,
 ):
     """
     Compute the IMs for all processed records in batches and save a parquet file per batch
@@ -217,6 +224,8 @@ def compute_ims_for_all_processed_records(
 
     Batches that already have a skipped records file are skipped (checkpointing),
     as long as the records in each batch are the same as the earlier run.
+    The checkpoint does not track waveform content, so use force_recompute
+    if the records were reprocessed since the earlier run.
 
     Parameters
     ----------
@@ -228,6 +237,8 @@ def compute_ims_for_all_processed_records(
         The list of intensity measures to calculate, by default None and will use the config file
     batch_size : int, optional
         The number of records in each batch, by default 5000
+    force_recompute : bool, optional
+        Recalculate every batch, ignoring completed batches of an earlier run, by default False
     """
     # Get the waveform directory and all the 000 files (sorted so batches are the same on a re-run)
     waveform_dir = file_structure.get_waveform_dir(main_dir)
@@ -277,6 +288,7 @@ def compute_ims_for_all_processed_records(
                 ],
             }
         ),
+        force_recompute,
     )
     skipped_records_dir = get_skipped_records_dir(main_dir)
     skipped_records_dir.mkdir(parents=True, exist_ok=True)

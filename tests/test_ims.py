@@ -318,3 +318,24 @@ def test_no_records(tmp_path: Path, fake_calculate_ims: list[float]):
 
     assert read_skipped(tmp_path).empty
     assert len(fake_calculate_ims) == 0
+
+
+def test_force_recompute_recalculates_complete_batches(
+    tmp_path: Path, fake_calculate_ims: list[float]
+):
+    """force_recompute recalculates every batch even when the earlier run completed."""
+    record_ids = [f"2020p00000{i}_ABC_HN_20" for i in range(1, 4)]
+    for record_id in record_ids:
+        write_record(tmp_path, record_id)
+
+    ims.compute_ims_for_all_processed_records(
+        tmp_path, intensity_measures=INTENSITY_MEASURES, batch_size=1
+    )
+    ims.compute_ims_for_all_processed_records(
+        tmp_path,
+        intensity_measures=INTENSITY_MEASURES,
+        batch_size=1,
+        force_recompute=True,
+    )
+    assert len(fake_calculate_ims) == 6
+    assert sorted(read_component(tmp_path, "rotd50")["record_id"]) == record_ids

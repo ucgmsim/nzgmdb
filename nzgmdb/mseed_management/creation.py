@@ -4,47 +4,40 @@ This module contains functions for creating mseed files from the waveform data f
 
 from pathlib import Path
 
-import mseedlib
-from obspy import Stream
+import numpy as np
+from obspy import Stream, Trace
 
 from nzgmdb.management import file_structure
 
 
-def write_stream_to_mseed(stream: Stream, output_file: Path):
+def write_stream_to_mseed(stream: Stream | Trace, output_file: Path):
     """
-    Write an ObsPy Stream object to a MiniSEED file using mseedlib.
+    Write an ObsPy Stream or Trace to a MiniSEED v2 file (STEIM1, 4096 byte records).
+
+    Uses ObsPy's writer, as mseedlib's MSTraceList.add_data leaves a dangling
+    pointer in the C trace segment that corrupts the heap of the process.
 
     Parameters
     ----------
-    stream : obspy.core.stream.Stream
-        The Stream object to write to MiniSEED
+    stream : Stream or Trace
+        The Stream or Trace object to write to MiniSEED
     output_file : Path
         The path to the output MiniSEED file
 
     Raises
     ------
     ValueError
-        If the sample type of the trace data is not supported
+        If the trace data is not integer counts
     """
-    mstl = mseedlib.MSTraceList()
+    stream = Stream([stream]) if isinstance(stream, Trace) else stream.copy()
     for trace in stream:
-        start_time = mseedlib.timestr2nstime(f"{trace.stats.starttime.isoformat()}Z")
-        sourceid = f"FDSN:{trace.stats.network}_{trace.stats.station}_{trace.stats.location}_{'_'.join(trace.stats.channel)}"
-        mstl.add_data(
-            sourceid=sourceid,
-            data_samples=trace.data,
-            sample_type="i",
-            sample_rate=trace.stats.sampling_rate,
-            start_time=start_time,
-        )
+        if not np.issubdtype(trace.data.dtype, np.integer):
+            raise ValueError(
+                f"Unsupported sample type {trace.data.dtype} for {trace.id}, expected integer counts"
+            )
+        trace.data = trace.data.astype(np.int32, copy=False)
 
-    with open(output_file, "wb") as f:
-        mstl.pack(
-            lambda record, handler_data: handler_data["fh"].write(record),
-            {"fh": f},
-            flush_data=True,
-            format_version=2,
-        )
+    stream.write(str(output_file), format="MSEED", encoding="STEIM1", reclen=4096)
 
 
 def write_mseed(mseed: Stream, event_id: str, station: str, output_directory: Path):
