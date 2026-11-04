@@ -56,6 +56,12 @@ class FlatfileNames(StrEnum):
     GROUND_MOTION_IM_ROTD0_FLAT = "ground_motion_im_table_rotd0_flat.parquet"
     GROUND_MOTION_IM_ROTD50_FLAT = "ground_motion_im_table_rotd50_flat.parquet"
     GROUND_MOTION_IM_ROTD100_FLAT = "ground_motion_im_table_rotd100_flat.parquet"
+    GROUND_MOTION_IM_ROTD0_ORIENTATION_FLAT = (
+        "ground_motion_im_table_rotd0_orientation_flat.parquet"
+    )
+    GROUND_MOTION_IM_ROTD100_ORIENTATION_FLAT = (
+        "ground_motion_im_table_rotd100_orientation_flat.parquet"
+    )
     GROUND_MOTION_IM_EAS_FAS_FLAT = "ground_motion_im_table_eas_fas_flat.parquet"
 
 
