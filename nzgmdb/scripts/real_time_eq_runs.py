@@ -319,8 +319,6 @@ def run_event(
             event_dir, n_procs=config.get_n_procs(machine, cfg.WorkflowStep.PROCESS)
         )
         # Run IM_calculation
-        im_dir = file_structure.get_im_dir(event_dir)
-        im_dir.mkdir(parents=True, exist_ok=True)
         intensity_measures = [
             ims.IM.PGA,
             ims.IM.PGV,
@@ -333,12 +331,10 @@ def run_event(
         ]
         run_nzgmdb.run_im_calculation(
             event_dir,
-            ko_matrix_path,
             n_procs=config.get_n_procs(machine, cfg.WorkflowStep.IM),
             intensity_measures=intensity_measures,
+            force_recompute=True,
         )
-        # Merge results
-        run_nzgmdb.merge_im_results(im_dir, flatfile_dir, None, None)
         # Calculate distances
         run_nzgmdb.distances.calc_distances(
             event_dir, config.get_n_procs(machine, cfg.WorkflowStep.DISTANCES)
@@ -399,7 +395,6 @@ def run_event(
     snr_fas_output_dir = file_structure.get_snr_fas_dir(event_dir)
     run_nzgmdb.calculate_snr(
         event_dir,
-        ko_matrix_path,
         phase_table_path,
         flatfile_dir,
         snr_fas_output_dir,
@@ -431,17 +426,16 @@ def run_event(
 
     run_nzgmdb.run_im_calculation(
         event_dir,
-        ko_matrix_path,
         n_procs=config.get_n_procs(machine, cfg.WorkflowStep.IM),
         intensity_measures=intensity_measures,
+        # Records were reprocessed with the GMC fmin / fmax under the same record_ids
+        force_recompute=True,
     )
 
     # Calculate distances
     run_nzgmdb.distances.calc_distances(
         event_dir, config.get_n_procs(machine, cfg.WorkflowStep.DISTANCES)
     )
-
-    run_nzgmdb.merge_im_results(im_dir, flatfile_dir, None, None)
 
     run_nzgmdb.merge_flat_files(event_dir)
 

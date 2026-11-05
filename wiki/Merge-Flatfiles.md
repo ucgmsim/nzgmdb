@@ -91,20 +91,28 @@ Enhances station metadata by merging location codes from GeoNet and the FDSN Cli
 | `station_magnitude_table.csv` | Station-specific magnitude calculations per event-channel pair |
 | `phase_arrival_table.csv` | P and S-wave arrival times and probabilities from PhaseNet |
 | `site_table.csv` | Site characteristics: Vs30, basin depths, coordinates, site classification |
+| `station_table.csv` | Station channel / location epochs: coordinates, loc_elev, start and end times |
+| `multi_event_table.csv` | Multi-event STA/LTA score and sync event flag per record |
 | `propagation_path_table.csv` | Distance metrics: rrup, rjb, rx, ry for each station-event pair |
 
 ### 🔹 Component-Specific Intensity Measure Flat Tables
 
 | File | Description |
 |------|-------------|
-| `ground_motion_im_table_000_flat.csv` | 000 component IMs + complete metadata integration |
-| `ground_motion_im_table_090_flat.csv` | 090 component IMs + complete metadata integration |
-| `ground_motion_im_table_ver_flat.csv` | Vertical component IMs + complete metadata integration |
-| `ground_motion_im_table_rotd0_flat.csv` | RotD0 IMs + complete metadata integration |
-| `ground_motion_im_table_rotd50_flat.csv` | RotD50 IMs + complete metadata integration |
-| `ground_motion_im_table_rotd100_flat.csv` | RotD100 IMs + complete metadata integration |
-| `ground_motion_im_table_EAS_flat.csv` | EAS IMs + complete metadata integration |
-| `ground_motion_im_table_geom_flat.csv` | Geometric mean IMs + complete metadata integration |
+| `ground_motion_im_table_000_flat.parquet` | 000 component IMs + complete metadata integration |
+| `ground_motion_im_table_000_fas_flat.parquet` | 000 component FAS + complete metadata integration |
+| `ground_motion_im_table_090_flat.parquet` | 090 component IMs + complete metadata integration |
+| `ground_motion_im_table_090_fas_flat.parquet` | 090 component FAS + complete metadata integration |
+| `ground_motion_im_table_ver_flat.parquet` | Vertical component IMs + complete metadata integration |
+| `ground_motion_im_table_ver_fas_flat.parquet` | Vertical component FAS + complete metadata integration |
+| `ground_motion_im_table_geom_flat.parquet` | Geometric mean IMs + complete metadata integration |
+| `ground_motion_im_table_geom_fas_flat.parquet` | Geometric mean FAS + complete metadata integration |
+| `ground_motion_im_table_rotd0_flat.parquet` | RotD0 IMs + complete metadata integration |
+| `ground_motion_im_table_rotd50_flat.parquet` | RotD50 IMs + complete metadata integration |
+| `ground_motion_im_table_rotd100_flat.parquet` | RotD100 IMs + complete metadata integration |
+| `ground_motion_im_table_rotd0_orientation_flat.parquet` | Rotation angle (degrees) of each RotD0 IM + complete metadata integration |
+| `ground_motion_im_table_rotd100_orientation_flat.parquet` | Rotation angle (degrees) of each RotD100 IM + complete metadata integration |
+| `ground_motion_im_table_eas_fas_flat.parquet` | EAS + complete metadata integration |
 
 ### 🔹 Quality Control Outputs
 

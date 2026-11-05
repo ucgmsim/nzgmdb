@@ -392,7 +392,7 @@ def get_nodal_plane_info(
 
         nodal_plane_info["srf_points"] = srf_model.points.loc[
             :, ["lon", "lat", "dep"]
-        ].to_numpy()
+        ].to_numpy(copy=True)
 
         # Generate the srf header
         nodal_plane_info["srf_header"] = (
@@ -768,6 +768,8 @@ def compute_distances_for_event(
         srf_points = srf_points.reshape(-1, 3)
         # Swap the lat and lon for the srf points
         srf_points = srf_points[:, [1, 0, 2]]
+        # Grid depths are in metres, convert to km to match the srf points
+        srf_points[:, 2] /= 1000
 
         # Generate the srf header
         nstrike = max(int(round(length * points_per_km)), 1)
@@ -782,40 +784,22 @@ def compute_distances_for_event(
             }
         ]
 
-    # Divide the srf depth points by 1000 to convert to km
-    srf_points[:, 2] /= 1000
-
     # Calculate the distances
     rrups, rjbs, rrup_points = src_site_dist.calc_rrup_rjb(
         srf_points, stations, return_rrup_points=True
     )
-    try:
-        rxs, rys = src_site_dist.calc_rx_ry(srf_points, srf_header, stations)
-    except Exception:
-        print(f"Event ID {event_id}")
-        print(srf_header)
-        raise Exception(f"Event ID {event_id}")
+    rxs, rys = src_site_dist.calc_rx_ry(srf_points, srf_header, stations)
     rrups_lon, rrups_lat = rrup_points[:, 0], rrup_points[:, 1]
 
     # Get the segment corners for the srf or corners
     if event_id in srf_files:
-        seg_corners = np.zeros((3, 4, len(planes)))
-        for i, plane in enumerate(planes):
-            for j, idx in enumerate([0, 1, 3, 2]):  # Ordering to match corner mapping
-                seg_corners[:, j, i] = (
-                    coordinates.wgs_depth_to_nztm(plane.corners[idx])[[1, 0, 2]]
-                    / 1000.0
-                )
-
+        # Plane corners are already clockwise (TL, TR, BR, BL)
+        seg_corners = get_seg_corners([plane.corners for plane in planes])
     else:
-        # If not in srf_files, use the nodal plane info corners
-        seg_corners = np.zeros((3, 4, 1))
-        for i, corner in enumerate(
-            [corner_0, corner_1, corner_3, corner_2]
-        ):  # Map to correct corner order
-            seg_corners[:, i, 0] = (
-                coordinates.wgs_depth_to_nztm(np.array(corner))[[1, 0, 2]] / 1000.0
-            )
+        # grid_corners order is (TL, TR, BL, BR) so swap the bottom corners
+        seg_corners = get_seg_corners(
+            [np.array([corner_0, corner_1, corner_3, corner_2])]
+        )
 
     # Flip the stations index 0 and 1 to match for NZTM convention
     nztm_stations = (
@@ -1050,6 +1034,29 @@ def inverse_square_integral(
     return result
 
 
+def get_seg_corners(plane_corners: list[np.ndarray]) -> np.ndarray:
+    """
+    Convert clockwise plane corners to NZTM segment corners for Ravg.
+
+    Parameters
+    ----------
+    plane_corners : list[np.ndarray]
+        Corners per plane, each shape (4, 3) in (lat, lon, depth in m) format
+        ordered clockwise from the top left (TL, TR, BR, BL)
+
+    Returns
+    -------
+    np.ndarray, shape (3, 4, n_segments)
+        Segment corners in (x, y, z) km format
+    """
+    seg_corners = np.zeros((3, 4, len(plane_corners)))
+    for i, corners in enumerate(plane_corners):
+        seg_corners[:, :, i] = (
+            coordinates.wgs_depth_to_nztm(np.asarray(corners))[:, [1, 0, 2]].T / 1000.0
+        )
+    return seg_corners
+
+
 def compute_ravg_distance_vectorized(
     seg_corners: np.ndarray, sites: np.ndarray
 ) -> np.ndarray:
@@ -1146,7 +1153,7 @@ def distance_in_taupo(
         )
 
         tvz_length = 0
-        boundary_dist_rjb = None
+        boundary_dist_rjb = np.nan
 
         # Check if the line intersects the Taupo VZ polygon
         if line.intersection(taupo_polygon):
@@ -1260,11 +1267,9 @@ def calc_distances(main_dir: Path, n_procs: int = 1):
 
     # Get the IM data to know what stations to calculate the distances for each event
     im_df = pd.read_parquet(
-        flatfile_dir / "im_merge_batch_dir" / "im_merge_rotd50",
+        file_structure.get_im_component_dir(main_dir, "rotd50"),
         columns=["evid", "sta"],
     )
-
-    print(f"Length of im_df: {len(im_df)}")
 
     # Get the site information
     site_df = pd.read_csv(

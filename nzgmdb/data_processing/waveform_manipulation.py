@@ -24,7 +24,7 @@ def check_sensitivity(
 
     Parameters
     ----------
-    resp: Response
+    resp : Response
         The response object to check the sensitivity of
     threshold : float, optional
         The percentage difference threshold to determine if the sensitivity mismatch is acceptable, by default 10.0
@@ -36,7 +36,7 @@ def check_sensitivity(
     float
         The percentage difference between the total sensitivity and the stage sensitivity
 
-    Reference
+    References
     ----------
         USGS gmprocess instrument-response helper:
         https://ghsc.code-pages.usgs.gov/esi/groundmotion-processing/_modules/gmprocess/waveform_processing/instrument_response.html
@@ -61,9 +61,7 @@ def initial_preprocessing(
     mseed: Stream,
     apply_taper: bool = True,
     apply_zero_padding: bool = True,
-    inventory: Inventory = None,
-    provider: str = "GEONET",
-    network: str = "NZ",
+    inventory: Inventory | None = None,
 ) -> Stream:
     """
     Basic pre-processing of the waveform data
@@ -84,11 +82,8 @@ def initial_preprocessing(
     apply_zero_padding : bool, optional
         Whether to apply zero padding, by default True
     inventory : Inventory, optional
-        The inventory object to use for sensitivity removal, by default None (Will try to extract from FDSN if not provided)
-    provider : str, optional
-        The FDSN provider to use if inventory is not provided, by default "GEONET"
-    network : str, optional
-        The network code to use if inventory is not provided, by default "NZ"
+        The inventory object to use for sensitivity removal, by default None
+        If None, falls back to FDSN for main provider networks only (temp array requests can hang)
 
     Returns
     -------
@@ -131,25 +126,41 @@ def initial_preprocessing(
             tr.trim(tr_starttime_trim, tr_endtime_trim, pad=True, fill_value=0)
 
     # Get the inventory information
+    network = mseed[0].stats.network
     station = mseed[0].stats.station
     location = mseed[0].stats.location
     channel = mseed[0].stats.channel[:2]
 
     inv = inventory
     if inv is None:
-        # try:
-        #     client_NZ = FDSN_Client(provider)
-        #     inv = client_NZ.get_stations(
-        #         level="response",
-        #         network=network,
-        #         station=station,
-        #         location=location,
-        #         channel=f"{channel}?",
-        #     )
-        # except FDSNNoDataException:
-        raise custom_errors.InventoryNotFoundError(
-            f"No inventory information found for station {station} with location {location}"
+        # Only fall back to FDSN for main provider networks, temp array requests can hang
+        provider = next(
+            (
+                prov
+                for prov, networks in config.get_value(
+                    "main_providers_networks"
+                ).items()
+                if network in networks
+            ),
+            None,
         )
+        if provider is None:
+            raise custom_errors.InventoryNotFoundError(
+                f"No inventory information found for station {station} with location {location}"
+            )
+        try:
+            client_NZ = FDSN_Client(provider)
+            inv = client_NZ.get_stations(
+                level="response",
+                network=network,
+                station=station,
+                location=location,
+                channel=f"{channel}?",
+            )
+        except FDSNNoDataException:
+            raise custom_errors.InventoryNotFoundError(
+                f"No inventory information found for station {station} with location {location}"
+            )
 
     try:
         # Apply the correct sensitivity removal based on the check_sensitivity function
