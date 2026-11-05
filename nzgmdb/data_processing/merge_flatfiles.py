@@ -156,7 +156,7 @@ def merge_flatfiles(main_dir: Path, bypass_records_ffp: Path = None):
 
     # Load the files
     gmc_ffp = flatfile_dir / file_structure.FlatfileNames.GMC_PREDICTIONS
-    if not gmc_ffp.exists():
+    if not gmc_ffp.exists() or not gmc_ffp.stat().st_size:
         gmc_df = pd.DataFrame(
             columns=[
                 "record",
