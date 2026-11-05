@@ -1,5 +1,5 @@
 """
-Clean up CMT run folders inside a folder of live events, e.g. for runs made before automatic cleanup.
+Clean up CMT run folders and Green's function stores inside a folder of live events.
 """
 
 from pathlib import Path
@@ -7,7 +7,12 @@ from typing import Annotated
 
 import typer
 
-from nzgmdb.management.cmt_cleanup import cleanup_cmt_run, find_cmt_run_dirs
+from nzgmdb.management.cmt_cleanup import (
+    cleanup_cmt_run,
+    cleanup_gf_store,
+    find_cmt_run_dirs,
+    find_gf_store_dirs,
+)
 from qcore import cli
 
 app = typer.Typer(pretty_exceptions_enable=False)
@@ -56,7 +61,8 @@ def cleanup_old_cmts(
 
     Looks in each event folder for sub folders with "cmt" in their name, then
     cleans every completed run folder (containing results/solution_summary.csv)
-    found in them. CMT folders without a completed run (e.g. failed runs) are
+    found in them and deletes any shared Green's function store (gf_store/).
+    Run folders of CMT folders without a completed run (e.g. failed runs) are
     listed but left untouched.
 
     Parameters
@@ -71,8 +77,15 @@ def cleanup_old_cmts(
     cmt_dirs = find_event_cmt_dirs(live_events_dir, event_ids)
     total = 0
     n_runs = 0
+    n_gf_stores = 0
     no_runs = []
     for cmt_dir in cmt_dirs:
+        # The store is never needed once the runs have finished
+        for gf_store_dir in find_gf_store_dirs(cmt_dir):
+            freed = cleanup_gf_store(gf_store_dir, dry_run=dry_run)
+            total += freed
+            n_gf_stores += 1
+            print(f"{gf_store_dir.relative_to(live_events_dir)}: {freed / 1e9:.2f} GB")
         run_dirs = find_cmt_run_dirs(cmt_dir)
         if not run_dirs:
             no_runs.append(cmt_dir)
@@ -91,7 +104,7 @@ def cleanup_old_cmts(
     action = "would free" if dry_run else "freed"
     print(
         f"\n{len(cmt_dirs)} CMT folder(s), {n_runs} run(s) cleaned, "
-        f"{action} {total / 1e9:.2f} GB"
+        f"{n_gf_stores} Green's function store(s) deleted, {action} {total / 1e9:.2f} GB"
     )
 
 

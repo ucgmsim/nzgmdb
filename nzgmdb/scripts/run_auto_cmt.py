@@ -9,7 +9,7 @@ import sys
 import time
 import traceback
 from collections.abc import Iterator
-from concurrent.futures import ProcessPoolExecutor, as_completed
+from concurrent.futures import Future, ProcessPoolExecutor
 from contextlib import contextmanager
 from pathlib import Path
 from typing import Annotated, Any
@@ -30,7 +30,13 @@ from auto_cmt.run_cmt import (
 from auto_cmt.timing import TIMINGS_FILENAME as STAGE_TIMINGS_FILENAME
 
 from nzgmdb.management.background import CMT_FAILED_STEP_MARKER
-from nzgmdb.management.cmt_cleanup import cleanup_cmt_run, find_cmt_run_dirs
+from nzgmdb.management.cmt_cleanup import (
+    GF_STORE_DIRNAME,
+    cleanup_cmt_run,
+    cleanup_gf_store,
+    find_cmt_run_dirs,
+    find_gf_store_dirs,
+)
 from nzgmdb.management.slack import CMT_EMOJI, EventThread
 from nzgmdb.management.timing import (
     TIMINGS_FILENAME,
@@ -46,11 +52,15 @@ app = typer.Typer(pretty_exceptions_enable=False)
 RUN_ALL_STATIONS = "all_stations"
 RUN_AZIMUTH = "azimuth"
 RUN_DROP_OUTLIERS_DEV = "drop_outliers_dev"
+N_RUNS = 3
 
 EVENT_CSV_FILENAME = "event.csv"
 STATION_VR_FILENAME = "station_vr.csv"
 CMT_SELECTION_FILENAME = "cmt_selection.csv"
 RUN_LOG_FILENAME = "cmt_run.log"
+
+# Seconds between checks for a run's cmt_solution.csv
+SOLUTION_POLL_S = 0.5
 
 # Outlier station defaults (see find_outlier_stations)
 DEFAULT_OUTLIER_Z = 5.0
@@ -296,6 +306,48 @@ def _summarise_run(run_dir: Path) -> dict[str, Any]:
     }
 
 
+def new_run_record(
+    run_name: str,
+    run_dir: Path,
+    azimuth_control: bool = False,
+    drop_stations: list[str] | None = None,
+    deviatoric: bool = False,
+) -> dict[str, Any]:
+    """
+    Create the cmt_selection.csv record of a run before it starts.
+
+    Parameters
+    ----------
+    run_name : str
+        Name of the run (also its folder name).
+    run_dir : Path
+        Output folder for this run.
+    azimuth_control : bool, optional
+        Apply azimuthal station thinning, by default False.
+    drop_stations : list[str], optional
+        Stations to exclude, by default None.
+    deviatoric : bool, optional
+        Invert for a deviatoric moment tensor only, by default False.
+
+    Returns
+    -------
+    dict
+        Run record, status "ok" until the run fails.
+    """
+    return {
+        "run": run_name,
+        "folder": str(run_dir),
+        "status": "ok",
+        "message": "",
+        "deviatoric": deviatoric,
+        "azimuth_control": azimuth_control,
+        "dropped_stations": ";".join(drop_stations or []),
+        "solution_s": np.nan,
+        "run_s": np.nan,
+        "cleanup_s": np.nan,
+    }
+
+
 def run_single_cmt(
     run_name: str,
     event_row: pd.Series,
@@ -305,14 +357,17 @@ def run_single_cmt(
     azimuth_control: bool = False,
     drop_stations: list[str] | None = None,
     deviatoric: bool = False,
-    cleanup: bool = True,
+    station_df: Path | None = None,
+    gf_store_dir: Path | None = None,
     profile: bool = False,
 ) -> dict[str, Any]:
     """
-    Run one CMT inversion, catching any failure, and clean up on success.
+    Run one CMT inversion, including its figures and report, catching any failure.
 
-    Uses the velocity grid in the module level _NZ_GRID. Output is written
-    to run_dir/cmt_run.log, stage timings to run_dir/results/timings.csv.
+    Runs in a forked worker and uses the velocity grid in the module level
+    _NZ_GRID. Output is written to run_dir/cmt_run.log, stage timings to
+    run_dir/results/timings.csv. cmt_solution.csv is written as soon as the
+    solution exists, before the figures.
 
     Parameters
     ----------
@@ -325,36 +380,27 @@ def run_single_cmt(
     real_time : bool
         Query GeoNet's near-real-time FDSN client.
     threads : int
-        Axitra thread count.
+        Axitra/inversion processes.
     azimuth_control : bool, optional
         Apply azimuthal station thinning, by default False.
     drop_stations : list[str], optional
         Stations to exclude, by default None.
     deviatoric : bool, optional
         Invert for a deviatoric moment tensor only, by default False.
-    cleanup : bool, optional
-        Run cleanup_cmt_run after a successful run, by default True.
+    station_df : Path, optional
+        stations_downloaded.csv of an earlier run of the event, whose
+        waveforms are reused instead of downloading again, by default None.
+    gf_store_dir : Path, optional
+        Green's function store shared by the runs of the event, by default None.
     profile : bool, optional
         Write a cProfile dump to run_dir/results/profile.prof, by default False.
 
     Returns
     -------
     dict
-        Run record for cmt_selection.csv, including inversion_s and cleanup_s
-        timings.
+        status ("ok" or "failed"), message and run_s (seconds for the whole run).
     """
-    run_dir.mkdir(parents=True, exist_ok=True)
-    record = {
-        "run": run_name,
-        "folder": str(run_dir),
-        "status": "ok",
-        "message": "",
-        "deviatoric": deviatoric,
-        "azimuth_control": azimuth_control,
-        "dropped_stations": ";".join(drop_stations or []),
-        "inversion_s": np.nan,
-        "cleanup_s": np.nan,
-    }
+    result = {"status": "ok", "message": "", "run_s": np.nan}
     with _redirect_output(run_dir / RUN_LOG_FILENAME):
         start = time.perf_counter()
         try:
@@ -368,43 +414,131 @@ def run_single_cmt(
                 drop_stations=drop_stations,
                 deviatoric=deviatoric,
                 profile=profile,
+                station_df=station_df,
+                gf_store_dir=gf_store_dir,
             )
-            record["inversion_s"] = time.perf_counter() - start
-            record.update(_summarise_run(run_dir))
-            if cleanup:
-                start = time.perf_counter()
-                freed = cleanup_cmt_run(run_dir)
-                record["cleanup_s"] = time.perf_counter() - start
-                print(f"Cleanup freed {freed / 1e9:.2f} GB")
         except Exception as exc:  # noqa: BLE001
             traceback.print_exc()
-            record["status"] = "failed"
-            record["message"] = f"{type(exc).__name__}: {exc}"
-            if np.isnan(record["inversion_s"]):
-                record["inversion_s"] = time.perf_counter() - start
-    print(f"[run_auto_cmt] {run_name}: {record['status']} {record['message']}")
-    return record
+            result["status"] = "failed"
+            result["message"] = f"{type(exc).__name__}: {exc}"
+        result["run_s"] = time.perf_counter() - start
+    print(f"[run_auto_cmt] {run_name}: {result['status']} {result['message']}")
+    return result
 
 
-def format_run_record(record: dict[str, Any]) -> str:
+def apply_run_result(record: dict[str, Any], future: Future) -> None:
     """
-    Format a finished run record for a Slack reply.
+    Update a run record with the result of its finished worker.
+
+    A failure after cmt_solution.csv was written (e.g. in the figures) keeps
+    the run's solution and is only noted in the message.
 
     Parameters
     ----------
     record : dict
-        Run record from run_single_cmt.
+        Run record from new_run_record, updated in place.
+    future : Future
+        Finished future of run_single_cmt.
+    """
+    try:
+        result = future.result()
+    except Exception as exc:  # noqa: BLE001
+        # e.g. the worker was killed
+        result = {
+            "status": "failed",
+            "message": f"{type(exc).__name__}: {exc}",
+            "run_s": np.nan,
+        }
+    record["run_s"] = result["run_s"]
+    if result["status"] == "ok":
+        return
+    if (Path(record["folder"]) / CMT_SOLUTION_FILENAME).is_file():
+        record["message"] = "; ".join(
+            m
+            for m in [record["message"], f"figures/report failed: {result['message']}"]
+            if m
+        )
+    else:
+        record["status"] = "failed"
+        record["message"] = result["message"]
+
+
+def run_until_solution(
+    pool: ProcessPoolExecutor, record: dict[str, Any], **run_kwargs: Any
+) -> Future:
+    """
+    Start a run in a worker and wait until it has written its solution.
+
+    The run's figures and report keep drawing in the background, so the next
+    run can start straight away.
+
+    Parameters
+    ----------
+    pool : ProcessPoolExecutor
+        Forked worker pool, with a worker free for this run.
+    record : dict
+        Run record from new_run_record, updated in place with solution_s, the
+        status and the solution summary.
+    **run_kwargs : Any
+        Passed to run_single_cmt.
+
+    Returns
+    -------
+    Future
+        Future of the run, done once its figures and report are finished.
+    """
+    run_dir = Path(record["folder"])
+    run_dir.mkdir(parents=True, exist_ok=True)
+    solution_ffp = run_dir / CMT_SOLUTION_FILENAME
+    # A solution from an earlier attempt would look like this run finished
+    solution_ffp.unlink(missing_ok=True)
+
+    start = time.perf_counter()
+    future = pool.submit(
+        run_single_cmt,
+        record["run"],
+        run_dir=run_dir,
+        azimuth_control=record["azimuth_control"],
+        drop_stations=[s for s in record["dropped_stations"].split(";") if s],
+        deviatoric=record["deviatoric"],
+        **run_kwargs,
+    )
+    while not future.done() and not solution_ffp.is_file():
+        time.sleep(SOLUTION_POLL_S)
+    record["solution_s"] = time.perf_counter() - start
+
+    if not solution_ffp.is_file():
+        # Finished without a solution, so it failed
+        apply_run_result(record, future)
+    if record["status"] == "ok":
+        try:
+            record.update(_summarise_run(run_dir))
+        except (OSError, KeyError, IndexError, ValueError) as exc:
+            record["status"] = "failed"
+            record["message"] = f"Could not read results: {type(exc).__name__}: {exc}"
+    return future
+
+
+def format_run_record(record: dict[str, Any]) -> str:
+    """
+    Format a run's solution for a Slack reply.
+
+    Parameters
+    ----------
+    record : dict
+        Run record after run_until_solution.
 
     Returns
     -------
     str
-        Run name, time taken and its key results, or its error if it failed.
+        Run name, time to its solution and its key results, or its error if
+        it failed.
     """
-    duration = format_duration(record["inversion_s"])
+    duration = format_duration(record["solution_s"])
     if record["status"] != "ok":
         return f"❌ CMT run `{record['run']}` failed after {duration}: `{record['message']}`"
     message = (
-        f"✅ CMT run `{record['run']}` finished in {duration}: "
+        f"✅ CMT run `{record['run']}` solution in {duration}: "
         f"VR {record['variance_reduction']:.2f}, Mw {record['Mw']:.2f}, "
         f"depth {record['centroid_depth_km']:.1f} km, {record['n_stations']} stations"
     )
@@ -453,7 +587,7 @@ def build_timings_df(
     timer : StepTimer
         Pipeline step timer.
     records : list[dict]
-        Run records from run_single_cmt that finished, used for cleanup times.
+        Run records from new_run_record, used for cleanup times.
         Runs without a record (e.g. a crashed worker) are still included if
         they wrote stage timings.
 
@@ -493,6 +627,43 @@ def build_timings_df(
     ]
 
 
+def cleanup_event_runs(
+    output_dir: Path, records: list[dict[str, Any]], gf_store_dir: Path | None
+) -> None:
+    """
+    Clean up the successful run folders and delete the shared Green's function store.
+
+    Only called once every run has finished, as later runs read the
+    all_stations waveforms and all runs share the store.
+
+    Parameters
+    ----------
+    output_dir : Path
+        Event CMT output folder.
+    records : list[dict]
+        Run records, cleanup_s is set in place for each cleaned run.
+    gf_store_dir : Path, optional
+        Shared Green's function store to delete, None if not used.
+    """
+    for record in records:
+        if record["status"] != "ok":
+            continue
+        start = time.perf_counter()
+        try:
+            freed = cleanup_cmt_run(Path(record["folder"]))
+            print(f"[run_auto_cmt] cleanup {record['run']} freed {freed / 1e9:.2f} GB")
+        except (OSError, ValueError) as exc:
+            print(f"[run_auto_cmt] could not clean up {record['run']}: {exc}")
+        record["cleanup_s"] = time.perf_counter() - start
+    if gf_store_dir is not None and gf_store_dir.is_dir():
+        try:
+            freed = cleanup_gf_store(gf_store_dir)
+            print(f"[run_auto_cmt] deleted {gf_store_dir} ({freed / 1e9:.2f} GB)")
+        except OSError as exc:
+            print(f"[run_auto_cmt] could not delete {gf_store_dir}: {exc}")
+    print(f"[run_auto_cmt] cleaned up {output_dir}")
+
+
 @cli.from_docstring(app)
 def run_cmt_pipeline(
     event_id: Annotated[str, typer.Argument()],
@@ -505,6 +676,7 @@ def run_cmt_pipeline(
     nz_3dvm_path: Annotated[
         Path, typer.Option(exists=True, dir_okay=False)
     ] = DEFAULT_NZ_3DVM_PATH,
+    share_work: Annotated[bool, typer.Option()] = True,
     skip_cleanup: Annotated[bool, typer.Option(is_flag=True)] = False,
     profile: Annotated[bool, typer.Option(is_flag=True)] = False,
     slack_thread_ts: Annotated[str | None, typer.Option()] = None,
@@ -513,9 +685,11 @@ def run_cmt_pipeline(
     """
     Run the three-run CMT pipeline for one event and select the best solution.
 
-    Runs all-stations and azimuth-control inversions in parallel, drops
-    stations that are VR outliers in both, runs a deviatoric inversion
-    without them, then selects the run with the highest variance reduction.
+    Runs all-stations, then azimuth-control, then a deviatoric inversion
+    without the stations that are VR outliers in both, one after another with
+    all threads each (as auto_cmt.run_event). Each run's figures and report are
+    drawn in the background while the next run starts. The run with the
+    highest variance reduction is selected as soon as all solutions exist.
 
     Parameters
     ----------
@@ -529,20 +703,23 @@ def run_cmt_pipeline(
     real_time : bool, optional
         Query GeoNet's near-real-time FDSN client, for just-happened events.
     threads : int, optional
-        Axitra thread count for each run.
+        Axitra/inversion processes for each run.
     outlier_z : float, optional
         Robust z-score magnitude a station must fall below to be an outlier.
     outlier_vr_floor : float, optional
         Station VR a station must fall below to be an outlier.
     nz_3dvm_path : Path, optional
         3-D NZ velocity model CSV.
+    share_work : bool, optional
+        Reuse the all_stations waveforms in later runs and share one Green's
+        function store (gf_store/) between runs. Does not change any result.
     skip_cleanup : bool, optional
-        Keep all run files (no cleanup), for debugging.
+        Keep all run files and the Green's function store, for debugging.
     profile : bool, optional
         Write a cProfile dump for each run to <run>/results/profile.prof.
     slack_thread_ts : str, optional
         Slack thread of the event to reply into when each run starts and
-        finishes. If None, no Slack messages are sent.
+        has its solution. If None, no Slack messages are sent.
     slack_summary : str, optional
         Event summary shown in the Slack thread's parent message.
 
@@ -561,9 +738,11 @@ def run_cmt_pipeline(
 
     timer = StepTimer()
     thread = EventThread(slack_thread_ts, slack_summary)
-    # Finished run records, so timings can be written whatever step fails
+    # Run records and their futures, so timings and cleanup happen whatever step fails
     records = []
+    futures = []
     output_dir.mkdir(parents=True, exist_ok=True)
+    gf_store_dir = output_dir / GF_STORE_DIRNAME if share_work else None
     try:
         event_csv_ffp = output_dir / EVENT_CSV_FILENAME
         if event_csv is None:
@@ -581,103 +760,137 @@ def run_cmt_pipeline(
             "event_row": event_row,
             "real_time": real_time,
             "threads": threads,
-            "cleanup": not skip_cleanup,
+            "gf_store_dir": gf_store_dir,
             "profile": profile,
         }
 
-        # Runs 1 and 2 in parallel, forked workers inherit _NZ_GRID
-        print("[run_auto_cmt] running all_stations and azimuth runs")
-        thread.reply(
-            f"{CMT_EMOJI} CMT runs `{RUN_ALL_STATIONS}` and `{RUN_AZIMUTH}` started (in parallel)"
-        )
+        # One worker per run, as each keeps drawing its figures after its
+        # solution. Forked workers inherit _NZ_GRID
         with ProcessPoolExecutor(
-            max_workers=2, mp_context=mp.get_context("fork")
+            max_workers=N_RUNS, mp_context=mp.get_context("fork")
         ) as pool:
-            all_future = pool.submit(
-                run_single_cmt,
-                RUN_ALL_STATIONS,
-                run_dir=output_dir / RUN_ALL_STATIONS,
-                **run_kwargs,
+            # Run 1: all stations, downloads the waveforms
+            all_record = new_run_record(RUN_ALL_STATIONS, output_dir / RUN_ALL_STATIONS)
+            records.append(all_record)
+            thread.reply(
+                f"{CMT_EMOJI} CMT run `{RUN_ALL_STATIONS}` started (1/{N_RUNS}, "
+                f"{threads} threads)"
             )
-            azimuth_future = pool.submit(
-                run_single_cmt,
-                RUN_AZIMUTH,
-                run_dir=output_dir / RUN_AZIMUTH,
-                azimuth_control=True,
-                **run_kwargs,
-            )
-            # Report each run as it finishes
-            for future in as_completed([all_future, azimuth_future]):
-                thread.reply(format_run_record(future.result()))
-            all_record, azimuth_record = all_future.result(), azimuth_future.result()
-        records += [all_record, azimuth_record]
-        timer.lap("runs_all_stations_azimuth")
+            futures.append(run_until_solution(pool, all_record, **run_kwargs))
+            timer.lap(f"run_{RUN_ALL_STATIONS}")
+            thread.reply(format_run_record(all_record))
 
-        # Outlier stations need both runs to agree
-        dropped = []
-        if all_record["status"] == "ok" and azimuth_record["status"] == "ok":
-            dropped, station_vr_df, message = find_outlier_stations(
-                compute_station_vr(read_station_df(output_dir / RUN_ALL_STATIONS)),
-                compute_station_vr(read_station_df(output_dir / RUN_AZIMUTH)),
-                outlier_z,
-                outlier_vr_floor,
+            # Later runs reuse the all_stations waveforms when they exist
+            downloaded_ffp = (
+                output_dir / RUN_ALL_STATIONS / "metadata" / "stations_downloaded.csv"
             )
-            station_vr_df.to_csv(output_dir / STATION_VR_FILENAME, index=False)
-        else:
-            message = "Not dropping stations: all_stations or azimuth run failed"
-        print(f"[run_auto_cmt] dropping stations: {dropped} {message}")
-        timer.lap("outlier_detection")
-        thread.reply(
-            f"{CMT_EMOJI} CMT run `{RUN_DROP_OUTLIERS_DEV}` started (deviatoric), "
-            f"dropping stations: {', '.join(dropped) or 'none'}"
-            + (f" ({message})" if message else "")
-        )
+            station_df = (
+                downloaded_ffp if share_work and downloaded_ffp.is_file() else None
+            )
+            reuse_note = (
+                f", reusing `{RUN_ALL_STATIONS}` waveforms" if station_df else ""
+            )
 
-        # Run 3 in a fresh worker so its output redirect stays isolated
-        with ProcessPoolExecutor(
-            max_workers=1, mp_context=mp.get_context("fork")
-        ) as pool:
-            drop_record = pool.submit(
-                run_single_cmt,
+            # Run 2: azimuth control
+            azimuth_record = new_run_record(
+                RUN_AZIMUTH, output_dir / RUN_AZIMUTH, azimuth_control=True
+            )
+            records.append(azimuth_record)
+            thread.reply(
+                f"{CMT_EMOJI} CMT run `{RUN_AZIMUTH}` started (2/{N_RUNS}, "
+                f"azimuthal thinning{reuse_note})"
+            )
+            futures.append(
+                run_until_solution(
+                    pool, azimuth_record, station_df=station_df, **run_kwargs
+                )
+            )
+            timer.lap(f"run_{RUN_AZIMUTH}")
+            thread.reply(format_run_record(azimuth_record))
+
+            # Outlier stations need both runs to agree
+            dropped = []
+            if all_record["status"] == "ok" and azimuth_record["status"] == "ok":
+                dropped, station_vr_df, message = find_outlier_stations(
+                    compute_station_vr(read_station_df(output_dir / RUN_ALL_STATIONS)),
+                    compute_station_vr(read_station_df(output_dir / RUN_AZIMUTH)),
+                    outlier_z,
+                    outlier_vr_floor,
+                )
+                station_vr_df.to_csv(output_dir / STATION_VR_FILENAME, index=False)
+            else:
+                message = "Not dropping stations: all_stations or azimuth run failed"
+            print(f"[run_auto_cmt] dropping stations: {dropped} {message}")
+            timer.lap("outlier_detection")
+
+            # Run 3: deviatoric without the outlier stations
+            drop_record = new_run_record(
                 RUN_DROP_OUTLIERS_DEV,
-                run_dir=output_dir / RUN_DROP_OUTLIERS_DEV,
+                output_dir / RUN_DROP_OUTLIERS_DEV,
                 drop_stations=dropped,
                 deviatoric=True,
-                **run_kwargs,
-            ).result()
-        records.append(drop_record)
-        timer.lap("run_drop_outliers_dev")
-        thread.reply(format_run_record(drop_record))
-        if message:
-            drop_record["message"] = "; ".join(
-                m for m in [message, drop_record["message"]] if m
             )
-
-        selection_df = select_best_run(records)
-        selection_df.to_csv(output_dir / CMT_SELECTION_FILENAME, index=False)
-        print(selection_df.to_string())
-
-        selected = selection_df["selected"].any()
-        if selected:
-            selected_dir = Path(
-                selection_df.loc[selection_df["selected"], "folder"].iloc[0]
+            records.append(drop_record)
+            thread.reply(
+                f"{CMT_EMOJI} CMT run `{RUN_DROP_OUTLIERS_DEV}` started (3/{N_RUNS}, "
+                f"deviatoric{reuse_note}), dropping stations: {', '.join(dropped) or 'none'}"
+                + (f" ({message})" if message else "")
             )
-            shutil.copy(
-                selected_dir / CMT_SOLUTION_FILENAME, output_dir / CMT_SOLUTION_FILENAME
+            futures.append(
+                run_until_solution(
+                    pool, drop_record, station_df=station_df, **run_kwargs
+                )
             )
-            print(f"[run_auto_cmt] selected {selected_dir.name}")
-        timer.lap("selection")
+            timer.lap(f"run_{RUN_DROP_OUTLIERS_DEV}")
+            thread.reply(format_run_record(drop_record))
+            if message:
+                drop_record["message"] = "; ".join(
+                    m for m in [message, drop_record["message"]] if m
+                )
 
-        if not selected:
-            raise RuntimeError(f"All CMT runs failed for {event_id}, see {output_dir}")
+            # Select as soon as all solutions exist, figures are still drawing
+            selection_df = select_best_run(records)
+            selected = selection_df["selected"].any()
+            if selected:
+                selected_row = selection_df[selection_df["selected"]].iloc[0]
+                shutil.copy(
+                    Path(selected_row["folder"]) / CMT_SOLUTION_FILENAME,
+                    output_dir / CMT_SOLUTION_FILENAME,
+                )
+                print(f"[run_auto_cmt] selected {selected_row['run']}")
+            timer.lap("selection")
 
-        return selection_df
+            if not selected:
+                raise RuntimeError(
+                    f"All CMT runs failed for {event_id}, see {output_dir}"
+                )
+
+            solutions_s = timer.to_dataframe()["seconds"].iloc[-1]
+            thread.reply(
+                f"📌 All CMT solutions in {format_duration(solutions_s)}, "
+                f"selected `{selected_row['run']}` "
+                f"(VR {selected_row['variance_reduction']:.2f}). "
+                "Finishing figures and reports"
+            )
+        # Leaving the pool waited for the background figures
+        timer.lap("figures")
+
     except Exception:
         # Read by management.background for the Slack failure message
         last_step = timer.rows[-1]["step"] if timer.rows else "start"
         print(f"{CMT_FAILED_STEP_MARKER}{last_step}")
         raise
     finally:
+        # All workers have finished once the pool is closed
+        for record, future in zip(records, futures):
+            apply_run_result(record, future)
+        if not skip_cleanup:
+            cleanup_event_runs(output_dir, records, gf_store_dir)
+            timer.lap("cleanup")
+        if records:
+            select_best_run(records).to_csv(
+                output_dir / CMT_SELECTION_FILENAME, index=False
+            )
         timer.lap("other")
         try:
             timings_df = build_timings_df(output_dir, timer, records)
@@ -691,6 +904,8 @@ def run_cmt_pipeline(
             f"(total {format_duration(timer.to_dataframe()['seconds'].iloc[-1])})"
         )
 
+    return select_best_run(records)
+
 
 @cli.from_docstring(app)
 def cleanup_cmt(
@@ -698,7 +913,7 @@ def cleanup_cmt(
     dry_run: Annotated[bool, typer.Option(is_flag=True)] = False,
 ) -> None:
     """
-    Clean up every CMT run folder at or below a path.
+    Clean up every CMT run folder and Green's function store at or below a path.
 
     Parameters
     ----------
@@ -708,13 +923,21 @@ def cleanup_cmt(
         Only print what would be deleted.
     """
     run_dirs = find_cmt_run_dirs(path)
+    gf_store_dirs = find_gf_store_dirs(path)
     total = 0
     for run_dir in run_dirs:
         freed = cleanup_cmt_run(run_dir, dry_run=dry_run)
         total += freed
         print(f"{run_dir}: {freed / 1e9:.2f} GB")
+    for gf_store_dir in gf_store_dirs:
+        freed = cleanup_gf_store(gf_store_dir, dry_run=dry_run)
+        total += freed
+        print(f"{gf_store_dir}: {freed / 1e9:.2f} GB")
     action = "would free" if dry_run else "freed"
-    print(f"{len(run_dirs)} run folder(s), {action} {total / 1e9:.2f} GB")
+    print(
+        f"{len(run_dirs)} run folder(s), {len(gf_store_dirs)} Green's function "
+        f"store(s), {action} {total / 1e9:.2f} GB"
+    )
 
 
 if __name__ == "__main__":

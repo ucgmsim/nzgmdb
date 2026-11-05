@@ -228,8 +228,9 @@ def _read_cmt_timing_summary(output_dir: Path) -> str:
     Returns
     -------
     str
-        Total time, each run's time and the slowest stages across all runs
-        (share of the summed run time), or an empty string if timings.csv is
+        Time until all solutions and in total, each run's time to its
+        solution and the slowest stages across all runs (share of the summed
+        run time, figures included), or an empty string if timings.csv is
         missing or can't be parsed.
     """
     try:
@@ -241,12 +242,24 @@ def _read_cmt_timing_summary(output_dir: Path) -> str:
         return ""
 
     is_total = timings_df["stage"] == "total"
-    pipeline_total = timings_df.loc[
-        is_total & (timings_df["run"] == "pipeline"), "seconds"
-    ]
+    pipeline_df = timings_df[timings_df["run"] == "pipeline"]
+    pipeline_total = pipeline_df.loc[pipeline_df["stage"] == "total", "seconds"]
     run_totals = timings_df[is_total & (timings_df["run"] != "pipeline")]
+
+    # Runs are sequential, each pipeline "run_<name>" step is its time to solution
+    run_steps = pipeline_df[pipeline_df["stage"].str.startswith("run_")]
     runs = ", ".join(
-        f"{row.run} {format_duration(row.seconds)}" for row in run_totals.itertuples()
+        f"{row.stage.removeprefix('run_')} {format_duration(row.seconds)}"
+        for row in run_steps.itertuples()
+    )
+    # All solutions exist once the best run is selected
+    steps = pipeline_df["stage"].tolist()
+    solutions = (
+        format_duration(
+            pipeline_df["seconds"].iloc[: steps.index("selection") + 1].sum()
+        )
+        if "selection" in steps
+        else "?"
     )
 
     # Slowest stages summed over the runs
@@ -264,7 +277,10 @@ def _read_cmt_timing_summary(output_dir: Path) -> str:
     )
 
     total = format_duration(pipeline_total.iloc[0]) if len(pipeline_total) else "?"
-    return f"Timing: total {total} ({runs}); slowest stages: {stages}"
+    return (
+        f"Timing: all solutions {solutions}, total with figures {total} "
+        f"(to solution: {runs}); slowest stages: {stages}"
+    )
 
 
 def _watch_and_notify(
@@ -360,11 +376,12 @@ def launch_cmt_background(
         Interpreter to run the CMT pipeline with. Defaults to the interpreter
         running the caller.
     threads : int, optional
-        Override the default Axitra thread count for each run.
+        Override the default Axitra/inversion process count for each run.
     slack_thread : slack.EventThread, optional
         Slack thread of the event. If omitted, no Slack notification is sent.
         Otherwise a reply is posted on launch, the pipeline replies when each
-        run starts and finishes, and a final reply reports the selected run,
+        run starts and has its solution and once all solutions exist (the
+        runs are sequential), and a final reply reports the selected run,
         each run's variance reduction, the dropped stations and the selected
         solution's magnitude and location, plus a timing summary (or the
         failed step, run errors and traceback on failure).
