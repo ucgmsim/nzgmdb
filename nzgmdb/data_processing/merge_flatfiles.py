@@ -34,7 +34,8 @@ def add_ground_level(
     # Get the recorders information for location codes
     config = cfg.Config()
     locations_url = config.get_value("locations_url")
-    locations_df = pd.read_csv(locations_url)
+    # Location codes are str, so "00" is not read as 0
+    locations_df = pd.read_csv(locations_url, dtype={"Location": str})
     # Ensure the Station and Location pairings are unique
     locations_df = locations_df.drop_duplicates(subset=["Station", "Location"])
 
@@ -202,8 +203,10 @@ def merge_flatfiles(main_dir: Path, bypass_records_ffp: Path = None):
     sta_mag_df = pd.read_csv(
         flatfile_dir
         / file_structure.PreFlatfileNames.STATION_MAGNITUDE_TABLE_EXTRACTION,
-        dtype={"evid": str},
+        dtype={"evid": str, "loc": str},
     )
+    # Empty loc codes are "00", matching the record_id
+    sta_mag_df["loc"] = sta_mag_df["loc"].fillna("00")
     if (flatfile_dir / file_structure.PreFlatfileNames.PHASE_ARRIVAL_TABLE).exists():
         phase_table_df = pd.read_csv(
             flatfile_dir / file_structure.PreFlatfileNames.PHASE_ARRIVAL_TABLE
@@ -233,7 +236,8 @@ def merge_flatfiles(main_dir: Path, bypass_records_ffp: Path = None):
         flatfile_dir / file_structure.PreFlatfileNames.SITE_TABLE
     )
     station_df = pd.read_csv(
-        flatfile_dir / file_structure.PreFlatfileNames.STATION_TABLE
+        flatfile_dir / file_structure.PreFlatfileNames.STATION_TABLE,
+        dtype={"loc": str},
     )
     station_extraction_df = pd.read_csv(
         flatfile_dir / file_structure.PreFlatfileNames.STATION_EXTRACTION_TABLE_GEONET,
@@ -690,7 +694,8 @@ def read_flatfile(ffp: Path) -> pd.DataFrame:
     """
     if ffp.suffix == ".parquet":
         return pd.read_parquet(ffp)
-    return pd.read_csv(ffp, dtype={"evid": str})
+    # Location codes are str, so "00" is not read as 0
+    return pd.read_csv(ffp, dtype={"evid": str, "loc": str})
 
 
 def write_flatfile(df: pd.DataFrame, ffp: Path):

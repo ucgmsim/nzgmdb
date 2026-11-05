@@ -111,3 +111,33 @@ def test_filter_flatfiles_on_catalouge(tmp_path: Path):
         filtered_df = pd.read_csv((output_dir / flatfile_name).with_suffix(".csv"))
         assert filtered_df["sta"].tolist() == ["STA1"], flatfile_name
     assert not list(output_dir.glob("*.parquet"))
+
+
+def test_filter_station_table_on_chan_loc(tmp_path: Path):
+    """Check the station table keeps only the sta, chan and loc used by the records."""
+    flatfile_dir = tmp_path / "flatfiles"
+    output_dir = tmp_path / "quality_db"
+    output_dir.mkdir()
+    write_db(flatfile_dir, ["1_STA1_HN_20"], 1.0)
+    # Same station with several channel and location codes
+    station_df = pd.DataFrame(
+        {
+            "sta": ["STA1", "STA1", "STA1", "STA1", "STA2"],
+            "chan": ["HN", "HN", "BN", "HN", "HN"],
+            "loc": ["20", "10", "20", "00", "20"],
+        }
+    )
+    station_df.to_csv(
+        flatfile_dir / file_structure.FlatfileNames.STATION_TABLE, index=False
+    )
+    rotd50_flat = make_flatfile(["1_STA1_HN_20", "2_STA1_HN_00"], 1.0)
+
+    quality_db.filter_flatfiles_on_catalouge(flatfile_dir, output_dir, rotd50_flat)
+
+    filtered_df = pd.read_csv(
+        output_dir / file_structure.FlatfileNames.STATION_TABLE, dtype={"loc": str}
+    )
+    assert filtered_df[["sta", "chan", "loc"]].values.tolist() == [
+        ["STA1", "HN", "20"],
+        ["STA1", "HN", "00"],
+    ]

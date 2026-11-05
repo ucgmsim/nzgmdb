@@ -69,8 +69,6 @@ def filter_flatfiles_on_catalouge(
             # filter by evid
             df_filtered = df[df["evid"].isin(rotd50_flat["evid"])]
         elif file == file_structure.FlatfileNames.STATION_MAGNITUDE_TABLE:
-            # Ensure loc is str
-            df["loc"] = df["loc"].astype(str)
             # Make the record_id column
             df["record_id"] = (
                 df["evid"]
@@ -84,11 +82,16 @@ def filter_flatfiles_on_catalouge(
             df_filtered = df[df["record_id"].isin(rotd50_flat["record_id"])]
             # remove the record_id column
             df_filtered = df_filtered.drop(columns=["record_id"])
-        elif file in [
-            file_structure.FlatfileNames.SITE_TABLE,
-            file_structure.FlatfileNames.STATION_TABLE,
-        ]:
+        elif file == file_structure.FlatfileNames.SITE_TABLE:
             df_filtered = df[df["sta"].isin(rotd50_flat["sta"])]
+        elif file == file_structure.FlatfileNames.STATION_TABLE:
+            # Keep only the sta, chan and loc combinations used by the records
+            record_parts = rotd50_flat["record_id"].str.split("_", n=3, expand=True)
+            used_channels = pd.MultiIndex.from_arrays(
+                [record_parts[1], record_parts[2], record_parts[3]]
+            )
+            station_channels = pd.MultiIndex.from_frame(df[["sta", "chan", "loc"]])
+            df_filtered = df[station_channels.isin(used_channels)]
         elif file in [
             file_structure.FlatfileNames.PROPAGATION_TABLE,
             file_structure.FlatfileNames.STATION_EXTRACTION_TABLE,
