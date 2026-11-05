@@ -355,7 +355,6 @@ def run_event(
         # Send a POST request to the endpoint
         response = requests.post(url)
 
-        # Check the response status
         if response.status_code == 200:
             print("Event added successfully")
             # Get updated values
@@ -542,8 +541,10 @@ def poll_earthquake_data(
                 )
 
                 if not result:
-                    # remove the event directory
-                    shutil.rmtree(event_dir)
+                    # Check if the event directory exists before trying to remove it, in case the error happened before the directory was created
+                    if event_dir.exists():
+                        # remove the event directory
+                        shutil.rmtree(event_dir)
                     # add the event to the no stations events
                     no_stations_events.append(event_id)
                 init_start_date = end_date
