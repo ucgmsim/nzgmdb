@@ -18,6 +18,7 @@ import typer
 from matplotlib.patches import Patch
 
 import oq_wrapper as oqw
+from nzgmdb.data_processing import merge_flatfiles
 from nzgmdb.management import data_registry, file_structure
 from qcore import cli
 
@@ -331,7 +332,6 @@ def compute_nzgmdb_emp_gm_params(obs_data: pd.DataFrame):
         "sta_lat",
         "tect_class",
     ] + list(OBS_DATA_OQ_COLS_MAPPING.keys())
-    # rupture_df = pd.read_csv(nzgmdb_flat_ffp, index_col=0)[columns]
     rupture_df = obs_data[columns].copy(True)
 
     # Convert Z1.0 to kilometres
@@ -1214,6 +1214,26 @@ def plot_site_table_image(
     )
 
 
+def read_gm_flatfile(ffp: Path) -> pd.DataFrame:
+    """
+    Read a ground motion flatfile, as parquet (4p4+) or csv (4p3) based on which exists.
+
+    Parameters
+    ----------
+    ffp : Path
+        Path to the flatfile, with either suffix
+
+    Returns
+    -------
+    pd.DataFrame
+        The flatfile dataframe
+    """
+    parquet_ffp = ffp.with_suffix(".parquet")
+    if parquet_ffp.exists():
+        return merge_flatfiles.read_flatfile(parquet_ffp)
+    return merge_flatfiles.read_flatfile(ffp.with_suffix(".csv"))
+
+
 def parse_nzgmdb_version(value: str) -> NZGMDB_Versions:
     """
     Parse a string input into an NZGMDB_Versions enum member.
@@ -1356,16 +1376,12 @@ def generate_report(
         if compare_version_directory
         else None
     )
-    # full_new = pd.read_csv(nzgmdb_full_new_ffp, dtype={"evid": str})
-    full_new = pd.read_parquet(nzgmdb_full_new_ffp)
-    quality_new = pd.read_csv(nzgmdb_quality_new_ffp.with_suffix(".csv"), dtype={"evid": str})
-    full_old = (
-        pd.read_csv(nzgmdb_full_old_ffp.with_suffix(".csv"), dtype={"evid": str})
-        if nzgmdb_full_old_ffp
-        else None
-    )
+    # The quality DB is always CSV, the full DB is parquet from 4p4 onwards
+    full_new = read_gm_flatfile(nzgmdb_full_new_ffp)
+    quality_new = read_gm_flatfile(nzgmdb_quality_new_ffp.with_suffix(".csv"))
+    full_old = read_gm_flatfile(nzgmdb_full_old_ffp) if nzgmdb_full_old_ffp else None
     quality_old = (
-        pd.read_csv(nzgmdb_quality_old_ffp.with_suffix(".csv"), dtype={"evid": str})
+        read_gm_flatfile(nzgmdb_quality_old_ffp.with_suffix(".csv"))
         if nzgmdb_quality_old_ffp
         else None
     )

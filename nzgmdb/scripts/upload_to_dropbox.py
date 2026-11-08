@@ -40,6 +40,10 @@ def zip_files(file_list: list, output_dir: Path, zip_name: str):
     zip_filename = output_dir / f"{zip_name}.zip"
     with zipfile.ZipFile(zip_filename, "w", zipfile.ZIP_DEFLATED) as zipf:
         for file_path in file_list:
+            # Not every run makes every flatfile (e.g. no FAS IMs), so skip missing ones
+            if not file_path.exists():
+                print(f"Skipping missing file {file_path} for {zip_name}.zip")
+                continue
             zipf.write(file_path, arcname=file_path.name)
     return zip_filename  # Return zip file path for later use
 
