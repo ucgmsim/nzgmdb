@@ -7,6 +7,7 @@ from pathlib import Path
 import numpy as np
 import pandas as pd
 
+from nzgmdb.data_processing import merge_flatfiles
 from nzgmdb.management import config as cfg
 from nzgmdb.management import file_structure
 from nzgmdb.management.data_registry import NZGMDB_DATA
@@ -19,6 +20,7 @@ def filter_flatfiles_on_catalouge(
     """
     Filter the flatfiles based on the records in the rotd50_flat dataframe.
     Ensures that the flatfiles are only for the records that are in the rotd50_flat dataframe.
+    The filtered flatfiles are always saved as CSV.
 
     Parameters
     ----------
@@ -35,23 +37,31 @@ def filter_flatfiles_on_catalouge(
         file_structure.FlatfileNames.FMAX,
         file_structure.FlatfileNames.STATION_MAGNITUDE_TABLE,
         file_structure.FlatfileNames.STATION_EXTRACTION_TABLE,
+        file_structure.FlatfileNames.MULTI_EVENT_TABLE,
         file_structure.FlatfileNames.SITE_TABLE,
+        file_structure.FlatfileNames.STATION_TABLE,
         file_structure.FlatfileNames.PHASE_ARRIVAL_TABLE,
         file_structure.FlatfileNames.PROPAGATION_TABLE,
         file_structure.FlatfileNames.GMC_PREDICTIONS,
         file_structure.FlatfileNames.SNR_METADATA,
         file_structure.FlatfileNames.GROUND_MOTION_IM_000_FLAT,
+        file_structure.FlatfileNames.GROUND_MOTION_IM_000_FAS_FLAT,
         file_structure.FlatfileNames.GROUND_MOTION_IM_090_FLAT,
+        file_structure.FlatfileNames.GROUND_MOTION_IM_090_FAS_FLAT,
         file_structure.FlatfileNames.GROUND_MOTION_IM_VER_FLAT,
+        file_structure.FlatfileNames.GROUND_MOTION_IM_VER_FAS_FLAT,
         file_structure.FlatfileNames.GROUND_MOTION_IM_ROTD0_FLAT,
         file_structure.FlatfileNames.GROUND_MOTION_IM_ROTD100_FLAT,
+        file_structure.FlatfileNames.GROUND_MOTION_IM_ROTD0_ORIENTATION_FLAT,
+        file_structure.FlatfileNames.GROUND_MOTION_IM_ROTD100_ORIENTATION_FLAT,
         file_structure.FlatfileNames.GROUND_MOTION_IM_GEOM_FLAT,
-        file_structure.FlatfileNames.GROUND_MOTION_IM_EAS_FLAT,
+        file_structure.FlatfileNames.GROUND_MOTION_IM_GEOM_FAS_FLAT,
+        file_structure.FlatfileNames.GROUND_MOTION_IM_EAS_FAS_FLAT,
     ]
 
     for file in file_to_filter:
         # Load the new file and filter based on record_id
-        df = pd.read_csv(flatfile_dir / file, dtype={"evid": str})
+        df = merge_flatfiles.read_flatfile(flatfile_dir / file)
         if file in [
             file_structure.FlatfileNames.EARTHQUAKE_SOURCE_TABLE,
             file_structure.FlatfileNames.EARTHQUAKE_SOURCE_GEOMETRY,
@@ -59,8 +69,6 @@ def filter_flatfiles_on_catalouge(
             # filter by evid
             df_filtered = df[df["evid"].isin(rotd50_flat["evid"])]
         elif file == file_structure.FlatfileNames.STATION_MAGNITUDE_TABLE:
-            # Ensure loc is str
-            df["loc"] = df["loc"].astype(str)
             # Make the record_id column
             df["record_id"] = (
                 df["evid"]
@@ -76,14 +84,24 @@ def filter_flatfiles_on_catalouge(
             df_filtered = df_filtered.drop(columns=["record_id"])
         elif file == file_structure.FlatfileNames.SITE_TABLE:
             df_filtered = df[df["sta"].isin(rotd50_flat["sta"])]
+        elif file == file_structure.FlatfileNames.STATION_TABLE:
+            # Keep only the sta, chan and loc combinations used by the records
+            record_parts = rotd50_flat["record_id"].str.split("_", n=3, expand=True)
+            used_channels = pd.MultiIndex.from_arrays(
+                [record_parts[1], record_parts[2], record_parts[3]]
+            )
+            station_channels = pd.MultiIndex.from_frame(df[["sta", "chan", "loc"]])
+            df_filtered = df[station_channels.isin(used_channels)]
         elif file in [
             file_structure.FlatfileNames.PROPAGATION_TABLE,
             file_structure.FlatfileNames.STATION_EXTRACTION_TABLE,
         ]:
             # Make the evid_sta column
             df["evid_sta"] = df["evid"] + "_" + df["sta"]
-            # Assert the same length of unique values
-            assert len(df["evid_sta"].unique()) == len(df)
+            # The propagation table has one row per evid_sta, the station extraction
+            # table can have several (one per provider / network)
+            if file == file_structure.FlatfileNames.PROPAGATION_TABLE:
+                assert df["evid_sta"].is_unique
             # Create the rodtd50 evid_sta
             rotd50_flat["evid_sta"] = rotd50_flat["evid"] + "_" + rotd50_flat["sta"]
             df_filtered = df[df["evid_sta"].isin(rotd50_flat["evid_sta"])]
@@ -94,7 +112,8 @@ def filter_flatfiles_on_catalouge(
             df_filtered = df[df["record"].isin(rotd50_flat["record_id"])]
         else:
             df_filtered = df[df["record_id"].isin(rotd50_flat["record_id"])]
-        df_filtered.to_csv(final_output / file, index=False)
+        # The quality database is always saved as CSV
+        df_filtered.to_csv((final_output / file).with_suffix(".csv"), index=False)
 
 
 def filter_mag(catalogue: pd.DataFrame, mag_min: float):
@@ -241,7 +260,8 @@ def filter_multi_event(
     """
     # Find records that have been flagged as multi-event
     multi_event_filter = catalogue[
-        (catalogue["stalta_score"] > score_min) | (catalogue["sync_event"].astype(bool))
+        (catalogue["stalta_score"] >= score_min)
+        | (catalogue["sync_event"].astype(bool))
     ]
 
     # Remove the bypass records if they exist
@@ -989,9 +1009,8 @@ def create_quality_db(
 
     # Load the ground motion im catalogue
     flatfile_dir = file_structure.get_flatfile_dir(main_dir)
-    gm_df = pd.read_csv(
-        flatfile_dir / file_structure.FlatfileNames.GROUND_MOTION_IM_ROTD50_FLAT,
-        dtype={"evid": str},
+    gm_df = pd.read_parquet(
+        flatfile_dir / file_structure.FlatfileNames.GROUND_MOTION_IM_ROTD50_FLAT
     )
 
     # Get the clipped records
@@ -1014,9 +1033,11 @@ def create_quality_db(
     # Filter the other flatfiles based on the records in the rotd50_flat dataframe
     filter_flatfiles_on_catalouge(flatfile_dir, output_dir, gm_df)
 
-    # Save the gm_df and skipped_records
+    # Save the gm_df and skipped_records, the quality database is always CSV
     gm_df.to_csv(
-        output_dir / file_structure.FlatfileNames.GROUND_MOTION_IM_ROTD50_FLAT,
+        (
+            output_dir / file_structure.FlatfileNames.GROUND_MOTION_IM_ROTD50_FLAT
+        ).with_suffix(".csv"),
         index=False,
     )
     skipped_records.to_csv(
