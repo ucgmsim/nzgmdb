@@ -21,6 +21,7 @@ python -m nzgmdb.scripts.run_nzgmdb extract-waveforms <main_dir> <station_extrac
 - **`--n-procs`** \- Number of processes to run (default: 1)
 - **`--batch-size`** \- Size of processing batches (default: 1000)
 - **`--only-record-ids-ffp`** \- Path to file containing specific record IDs to process
+- **`--tmp-array-dir`** \- Path to the directory of previously downloaded waveform arrays to use to extract waveforms from instead of downloading again
 
 **Example:**
 ```bash
@@ -216,8 +217,9 @@ As part of the waveform extraction process, several output files are generated i
 ### 🔹 Station XML Inventory Files
 - **Location:** `stationxml/` subdirectory
 - **Format:** StationXML (`.xml`)
-- **Naming convention:** `{network}_{station}.xml`
+- **Naming convention:** `{network}.{station}.xml`
 - **Content:** Station metadata including sensor response information
+- **When:** Fetched before extraction for any site without an existing file, so the response is available for multi-event scoring and the later processing steps
 
 ### 🔹 Station Magnitude Table (`station_magnitude_table.csv`)
 

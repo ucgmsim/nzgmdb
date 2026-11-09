@@ -9,40 +9,54 @@ import h5py
 import mseedlib
 import numpy as np
 import pandas as pd
-from obspy import Inventory, Stream, Trace, UTCDateTime
+from obspy import Stream, Trace, UTCDateTime, read_inventory
 from obspy.clients.fdsn import Client as FDSN_Client
 from obspy.clients.fdsn.header import FDSNNoDataException
+from obspy.core.inventory.response import Response
 
 
-def create_empty_h5_file(h5_ffp: Path, group_name: str):
+def check_sensitivity(
+    resp: Response,
+    threshold: float = 10.0,
+) -> tuple[bool, float]:
     """
-    Create an empty HDF5 file with the specified group name.
+    Returns True if full response removal is safe,
+    False if sensitivity mismatch suggests using remove_sensitivity().
+    Copy of waveform_manipulation.check_sensitivity, as nzgmdb is not installed in the PhaseNet environment.
 
     Parameters
     ----------
-    h5_ffp : Path
-        The full file path to the HDF5 file.
-    group_name : str
-        The name of the group to create in the HDF5 file (mseed file name).
-    """
-    # Create empty arrays with shape but no data
-    empty_shape = (0,)  # 0-length array
-    dtype = np.float32
+    resp : Response
+        The response object to check the sensitivity of
+    threshold : float, optional
+        The percentage difference threshold to determine if the sensitivity mismatch is acceptable, by default 10.0
 
-    with h5py.File(h5_ffp, "w") as f:
-        group = f.create_group(group_name)
-        group.create_dataset(
-            "p_prob_series",
-            shape=empty_shape,
-            dtype=dtype,
-            compression="lzf",
-        )
-        group.create_dataset(
-            "s_prob_series",
-            shape=empty_shape,
-            dtype=dtype,
-            compression="lzf",
-        )
+    Returns
+    -------
+    bool
+        True if the percentage difference is less than or equal to the threshold, False otherwise
+    float
+        The percentage difference between the total sensitivity and the stage sensitivity
+
+    References
+    ----------
+        USGS gmprocess instrument-response helper:
+        https://ghsc.code-pages.usgs.gov/esi/groundmotion-processing/_modules/gmprocess/waveform_processing/instrument_response.html
+    """
+    stages = resp.response_stages
+
+    # Total sensitivity
+    total = resp.instrument_sensitivity.value
+
+    # Stage sensitivity (product of stage gains)
+    stage = 1.0
+    for s in stages:
+        stage *= s.stage_gain
+
+    # Percent difference
+    pct_diff = 200.0 * abs(total - stage) / (total + stage)
+
+    return pct_diff <= threshold, pct_diff
 
 
 def run_phase_net(
@@ -113,8 +127,9 @@ def run_phase_net(
 def process_mseed(
     mseed_file: Path,
     h5_ffp: Path,
-    bypass_row: pd.Series = None,
-    inventory: Inventory = None,
+    bypass_row: pd.Series | None = None,
+    xml_dir: Path | None = None,
+    geonet_networks: list[str] | None = None,
 ):
     """
     Process an mseed file and return the phase arrival data.
@@ -127,8 +142,11 @@ def process_mseed(
         Path to the HDF5 file to save the probability series.
     bypass_row : pd.Series, optional
         A row from the bypass file with known p and s wave datetimes, by default None
-    inventory : Inventory, optional
-        The inventory object to use for sensitivity removal, by default None (Will try extract from FDSN if not provided)
+    xml_dir : Path, optional
+        Directory of the saved NET.STA.xml station files used for sensitivity removal, by default None
+    geonet_networks : list[str], optional
+        Networks that can fall back to the GeoNet FDSN when no station xml is saved, by default None
+        Other networks (temporary arrays) must use the saved station xml
 
     Returns
     -------
@@ -140,7 +158,16 @@ def process_mseed(
     mseed = Stream()
     nptype = {"i": np.int32, "f": np.float32, "d": np.float64, "t": np.char}
     mstl = mseedlib.MSTraceList()
-    mstl.read_file(str(mseed_file), unpack_data=False, record_list=True)
+    try:
+        mstl.read_file(str(mseed_file), unpack_data=False, record_list=True)
+    except mseedlib.exceptions.MseedLibError:
+        skipped_record = pd.DataFrame(
+            {
+                "record_id": [mseed_file.stem],
+                "reason": ["Failed to read mseed file with mseedlib"],
+            }
+        )
+        return None, skipped_record
 
     for traceid in mstl.traceids():
         for segment in traceid.segments():
@@ -183,7 +210,6 @@ def process_mseed(
                 "reason": ["File did not contain 3 components"],
             }
         )
-        create_empty_h5_file(h5_ffp, mseed_file.stem)
         return None, skipped_record
 
     # Small Processing
@@ -191,42 +217,77 @@ def process_mseed(
     mseed.detrend("linear")
 
     # Get the inventory information
+    network = mseed[0].stats.network
     station = mseed[0].stats.station
     location = mseed[0].stats.location
     channel = mseed[0].stats.channel[:2]
 
-    if inventory is None:
+    inv = None
+    if xml_dir is not None:
+        xml_ffp = xml_dir / f"{network}.{station}.xml"
+        if xml_ffp.is_file():
+            inv = read_inventory(xml_ffp)
+
+    # Only fall back to FDSN for GeoNet networks, temp array requests can hang
+    if inv is None and network in (geonet_networks or []):
         try:
             client_NZ = FDSN_Client("GEONET")
             inv = client_NZ.get_stations(
-                level="response", network="NZ", station=station, location=location
+                level="response",
+                network=network,
+                station=station,
+                location=location,
+                channel=f"{channel}?",
             )
         except FDSNNoDataException:
-            skipped_record = pd.DataFrame(
-                {
-                    "record_id": [mseed_file.stem],
-                    "reason": ["Failed to find Inventory information"],
-                }
-            )
-            create_empty_h5_file(h5_ffp, mseed_file.stem)
-            return None, skipped_record
-    else:
-        inv = inventory
+            inv = None
+
+    if inv is None:
+        skipped_record = pd.DataFrame(
+            {
+                "record_id": [mseed_file.stem],
+                "reason": ["Failed to find Inventory information"],
+            }
+        )
+        return None, skipped_record
 
     try:
-        mseed = mseed.remove_response(inventory=inv, output="ACC")
-    except ValueError:
+        # Apply the correct sensitivity removal based on the check_sensitivity function
+        t = UTCDateTime(mseed[0].stats.starttime)
+        resp = inv.get_response(mseed[0].id, t)
+        ok, diff = check_sensitivity(resp)
+        paz = resp.get_paz()
+        has_paz = not (len(paz.poles) == 0 and len(paz.zeros) == 0)
+
+        # Checks that the response has poles and zeros and that the sensitivity mismatch is acceptable before applying the full remove_response method.
+        if has_paz and ok:
+            if channel[:2] in ["HN", "BN"]:
+                mseed = mseed.remove_response(inventory=inv, output="ACC")
+            else:
+                # We have a broadband record so need to apply some pre-filters
+                f_nyq = 0.5 / mseed[0].stats.delta
+                f3 = 0.9 * f_nyq
+                pre_filt = (0.01, 0.05, f3, f_nyq)
+                mseed = mseed.remove_response(
+                    inventory=inv,
+                    output="VEL",
+                    pre_filt=pre_filt,
+                    zero_mean=True,
+                    taper=True,
+                )
+        else:
+            # Now we must use remove sensitivity instead
+            mseed = mseed.remove_sensitivity(inventory=inv)
+    except Exception:  # noqa: BLE001
         skipped_record = pd.DataFrame(
             {
                 "record_id": [mseed_file.stem],
                 "reason": ["Failed to remove sensitivity"],
             }
         )
-        create_empty_h5_file(h5_ffp, mseed_file.stem)
         return None, skipped_record
 
-    # If the channel is not a Strong Motion station then we need to differentiate
-    if channel not in ["HN", "BN"]:
+    if channel[:2] not in ["HN", "BN"]:
         try:
             # differentiate data i.e., m/s to m/s^2
             mseed.differentiate()
@@ -234,10 +295,11 @@ def process_mseed(
             skipped_record = pd.DataFrame(
                 {
                     "record_id": [mseed_file.stem],
-                    "reason": ["Unable to differentiate record"],
+                    "reason": [
+                        "Failed to differentiate data after sensitivity removal"
+                    ],
                 }
             )
-            create_empty_h5_file(h5_ffp, mseed_file.stem)
             return None, skipped_record
 
     try:
@@ -255,7 +317,6 @@ def process_mseed(
                 "reason": ["Zero size array after re-sample"],
             }
         )
-        create_empty_h5_file(h5_ffp, mseed_file.stem)
         return None, skipped_record
 
     # Save the prob_series
@@ -317,7 +378,13 @@ def process_mseed(
     )
 
 
-def run_phasenet(mseed_files_ffp: Path, output_dir: Path, bypass_ffp: Path = None):
+def run_phasenet(
+    mseed_files_ffp: Path,
+    output_dir: Path,
+    bypass_ffp: Path | None = None,
+    xml_dir: Path | None = None,
+    geonet_networks: list[str] | None = None,
+):
     """
     Run PhaseNet on the mseed files.
 
@@ -329,6 +396,10 @@ def run_phasenet(mseed_files_ffp: Path, output_dir: Path, bypass_ffp: Path = Non
         Output directory for skipped records and phase arrival information.
     bypass_ffp : Path, optional
         Optional bypass file path with known p and s wave datetimes, by default None
+    xml_dir : Path, optional
+        Optional directory of saved NET.STA.xml station files to use for sensitivity removal, by default None
+    geonet_networks : list[str], optional
+        Networks that can fall back to the GeoNet FDSN when no station xml is saved, by default None
     """
     # Read the .txt for the mseed files to process
     mseed_files = mseed_files_ffp.read_text().splitlines()
@@ -336,6 +407,12 @@ def run_phasenet(mseed_files_ffp: Path, output_dir: Path, bypass_ffp: Path = Non
     skipped_records = []
     phase_arrival_table = []
     h5_ffp = output_dir / "prob_series.h5"
+
+    # Ensure output directory exists and start a fresh HDF5 container
+    # (a re-run batch may have a partial file, which would fail on duplicate groups)
+    output_dir.mkdir(parents=True, exist_ok=True)
+    with h5py.File(h5_ffp, "w"):
+        pass
 
     if bypass_ffp is not None:
         # Read the bypass file
@@ -347,10 +424,17 @@ def run_phasenet(mseed_files_ffp: Path, output_dir: Path, bypass_ffp: Path = Non
         mseed_file = Path(mseed_file)
         bypass_row = None
         if bypass_ffp is not None:
-            bypass_row = bypass_df.loc[bypass_df["record_id"] == mseed_file.stem].iloc[
-                0
-            ]
-        phase_arrival, skipped_record = process_mseed(mseed_file, h5_ffp, bypass_row)
+            bypass_rows = bypass_df.loc[bypass_df["record_id"] == mseed_file.stem]
+            if len(bypass_rows) > 0:
+                bypass_row = bypass_rows.iloc[0]
+
+        phase_arrival, skipped_record = process_mseed(
+            mseed_file,
+            h5_ffp,
+            bypass_row,
+            xml_dir=xml_dir,
+            geonet_networks=geonet_networks,
+        )
         if phase_arrival is not None:
             phase_arrival_table.append(phase_arrival)
         if skipped_record is not None:
@@ -395,5 +479,23 @@ if __name__ == "__main__":
         help="Optional bypass file path with known p and s wave datetimes.",
         default=None,
     )
+    parser.add_argument(
+        "--xml_dir",
+        type=Path,
+        help="Optional directory containing station xml files to use for sensitivity removal.",
+        default=None,
+    )
+    parser.add_argument(
+        "--geonet_networks",
+        type=lambda networks: networks.split(","),
+        help="Comma separated networks that can fall back to the GeoNet FDSN, e.g. NZ,IU.",
+        default=None,
+    )
     args = parser.parse_args()
-    run_phasenet(args.mseed_files_ffp, args.output_dir, args.bypass_ffp)
+    run_phasenet(
+        args.mseed_files_ffp,
+        args.output_dir,
+        args.bypass_ffp,
+        args.xml_dir,
+        args.geonet_networks,
+    )

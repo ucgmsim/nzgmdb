@@ -8,10 +8,10 @@ from pathlib import Path
 
 import numpy as np
 import pandas as pd
-from obspy import read_inventory
 
 import qcore.timeseries as ts
 from nzgmdb.data_processing import waveform_manipulation
+from nzgmdb.data_retrieval import inventory_xml
 from nzgmdb.management import custom_errors, file_structure
 from nzgmdb.mseed_management import reading
 
@@ -54,7 +54,15 @@ def process_single_mseed(
     gmc_rows = None if gmc_df is None else gmc_df[gmc_df["record"] == mseed_stem]
 
     # Read mseed information
-    mseed = reading.read_mseed_to_stream(mseed_file)
+    try:
+        mseed = reading.read_mseed_to_stream(mseed_file)
+    except custom_errors.InvalidMseedFileError:
+        skipped_record_dict = {
+            "record_id": mseed_stem,
+            "reason": "Invalid mseed file",
+        }
+        skipped_record = pd.DataFrame([skipped_record_dict])
+        return skipped_record
 
     # Extract mseed values
     dt = mseed.traces[0].stats.delta
@@ -72,9 +80,9 @@ def process_single_mseed(
     inventory = None
     if xml_dir:
         # Load the inventory information
-        inventory_file = xml_dir / f"NZ.{station}.xml"
-        if inventory_file.is_file():
-            inventory = read_inventory(inventory_file)
+        inventory = inventory_xml.load_station_inventory(
+            xml_dir, mseed.traces[0].stats.network, station
+        )
 
     # Perform initial pre-processing
     try:
@@ -104,6 +112,13 @@ def process_single_mseed(
         skipped_record_dict = {
             "record_id": mseed_file.stem,
             "reason": "Unable to differentiate record",
+        }
+        skipped_record = pd.DataFrame([skipped_record_dict])
+        return skipped_record
+    except custom_errors.DetrendError:
+        skipped_record_dict = {
+            "record_id": mseed_file.stem,
+            "reason": "Failed to demean and detrend the data",
         }
         skipped_record = pd.DataFrame([skipped_record_dict])
         return skipped_record
@@ -242,7 +257,7 @@ def process_mseeds_to_txt(
     bypass_df = None if bypass_records_ffp is None else pd.read_csv(bypass_records_ffp)
 
     # Use multiprocessing to process the mseed files
-    with multiprocessing.Pool(processes=n_procs) as pool:
+    with multiprocessing.get_context("forkserver").Pool(processes=n_procs) as pool:
         skipped_records = pool.map(
             functools.partial(
                 process_single_mseed,

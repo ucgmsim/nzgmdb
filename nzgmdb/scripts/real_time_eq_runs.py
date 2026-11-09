@@ -237,9 +237,8 @@ def run_event(
     conda_sh: Annotated[Path, typer.Argument(exists=True, file_okay=True)],
     gmc_activate: Annotated[str, typer.Argument()],
     gmc_predict_activate: Annotated[str, typer.Argument()],
-    ko_matrix_path: Annotated[
-        Path, typer.Argument(exists=True, file_okay=False)
-    ],
+    ko_matrix_path: Annotated[Path, typer.Argument(exists=True, file_okay=False)],
+    nzcvm_data_ffp: Annotated[Path, typer.Argument(exists=True, file_okay=False)],
     add_seismic_now: Annotated[bool, typer.Option(is_flag=True)] = False,
     machine: Annotated[
         cfg.MachineName,
@@ -267,6 +266,8 @@ def run_event(
         Command to activate gmc_predict environment.
     ko_matrix_path : Path
         Path to the KO matrix directory.
+    nzcvm_data_ffp : Path
+        Path to the nzcvm_data repository that stores the basin information.
     add_seismic_now : bool, optional
         Whether to add the event to SeismicNow (default is False).
     machine : cfg.MachineName, optional
@@ -280,7 +281,7 @@ def run_event(
     try:
         config = cfg.Config()
         # Execute custom pipeline
-        run_nzgmdb.generate_site_table_basin(event_dir)
+        run_nzgmdb.generate_site_table_basin(event_dir, nzcvm_data_ffp)
         # Get geonet data
         run_nzgmdb.fetch_geonet_data(
             event_dir,
@@ -321,8 +322,6 @@ def run_event(
             event_dir, n_procs=config.get_n_procs(machine, cfg.WorkflowStep.PROCESS)
         )
         # Run IM_calculation
-        im_dir = file_structure.get_im_dir(event_dir)
-        im_dir.mkdir(parents=True, exist_ok=True)
         intensity_measures = [
             ims.IM.PGA,
             ims.IM.PGV,
@@ -335,12 +334,10 @@ def run_event(
         ]
         run_nzgmdb.run_im_calculation(
             event_dir,
-            ko_matrix_path,
             n_procs=config.get_n_procs(machine, cfg.WorkflowStep.IM),
             intensity_measures=intensity_measures,
+            force_recompute=True,
         )
-        # Merge results
-        run_nzgmdb.merge_im_results(im_dir, flatfile_dir, None, None)
         # Calculate distances
         run_nzgmdb.distances.calc_distances(
             event_dir, config.get_n_procs(machine, cfg.WorkflowStep.DISTANCES)
@@ -361,7 +358,6 @@ def run_event(
         # Send a POST request to the endpoint
         response = requests.post(url)
 
-        # Check the response status
         if response.status_code == 200:
             print("Event added successfully")
             # Get updated values
@@ -402,7 +398,6 @@ def run_event(
     snr_fas_output_dir = file_structure.get_snr_fas_dir(event_dir)
     run_nzgmdb.calculate_snr(
         event_dir,
-        ko_matrix_path,
         phase_table_path,
         flatfile_dir,
         snr_fas_output_dir,
@@ -415,7 +410,7 @@ def run_event(
         flatfile_dir,
         waveform_dir,
         snr_fas_output_dir,
-        config.get_n_procs(machine, cfg.WorkflowStep.FMAX),
+        n_procs=config.get_n_procs(machine, cfg.WorkflowStep.FMAX),
     )
 
     run_gmc.run_gmc_processing(
@@ -434,17 +429,16 @@ def run_event(
 
     run_nzgmdb.run_im_calculation(
         event_dir,
-        ko_matrix_path,
         n_procs=config.get_n_procs(machine, cfg.WorkflowStep.IM),
         intensity_measures=intensity_measures,
+        # Records were reprocessed with the GMC fmin / fmax under the same record_ids
+        force_recompute=True,
     )
 
     # Calculate distances
     run_nzgmdb.distances.calc_distances(
         event_dir, config.get_n_procs(machine, cfg.WorkflowStep.DISTANCES)
     )
-
-    run_nzgmdb.merge_im_results(im_dir, flatfile_dir, None, None)
 
     run_nzgmdb.merge_flat_files(event_dir)
 
@@ -468,6 +462,7 @@ def poll_earthquake_data(
     gmc_activate: Annotated[str, typer.Argument()],
     gmc_predict_activate: Annotated[str, typer.Argument()],
     ko_matrix_path: Annotated[Path, typer.Argument(exists=True, file_okay=False)],
+    nzcvm_data_ffp: Annotated[Path, typer.Argument(exists=True, file_okay=False)],
     add_seismic_now: Annotated[bool, typer.Option(is_flag=True)] = False,
     machine: Annotated[
         cfg.MachineName,
@@ -493,6 +488,8 @@ def poll_earthquake_data(
         Command to activate gmc_predict environment.
     ko_matrix_path : Path
         Path to the KO matrix directory.
+    nzcvm_data_ffp : Path
+        Path to the nzcvm_data repository that stores the basin information.
     add_seismic_now : bool, optional
         Whether to add the event to SeismicNow (default is False).
     machine : cfg.MachineName, optional
@@ -545,13 +542,16 @@ def poll_earthquake_data(
                     gmc_activate,
                     gmc_predict_activate,
                     ko_matrix_path,
+                    nzcvm_data_ffp,
                     add_seismic_now,
                     machine,
                 )
 
                 if not result:
-                    # remove the event directory
-                    shutil.rmtree(event_dir)
+                    # Check if the event directory exists before trying to remove it, in case the error happened before the directory was created
+                    if event_dir.exists():
+                        # remove the event directory
+                        shutil.rmtree(event_dir)
                     # add the event to the no stations events
                     no_stations_events.append(event_id)
                 init_start_date = end_date

@@ -35,14 +35,14 @@ hypocentre:
   distances: 44
   upload: 44
 rch:
-  geonet: 128
-  extraction: 32
-  tec_domain: 128
-  phase_table: 128
-  snr: 64
-  fmax: 128
-  gmc: 64
-  process: 128
-  im: 64
-  distances: 128
-  upload: 128
+  geonet: 64
+  extraction: 64
+  tec_domain: 64
+  phase_table: 16
+  snr: 16
+  fmax: 64
+  gmc: 16
+  process: 64
+  im: 32
+  distances: 64
+  upload: 64

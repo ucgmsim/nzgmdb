@@ -386,19 +386,30 @@ After the rotd50 flatfile is filtered, the step then filters the rest of the fla
 
 The quality database creates filtered versions of all flatfiles, ensuring consistency across the entire dataset:
 
+The IM flatfiles are read from the parquet flatfiles, but every quality database output is saved as **CSV**.
+
 | File                                      | Description                                                                   |
 |-------------------------------------------|-------------------------------------------------------------------------------|
-| `ground_motion_im_rotd50_flat.csv`        | RotD50 filtered intensity measure catalogue with quality metrics                |
-| `ground_motion_im_table_000_flat.csv`     | 000 component filtered intensity measure catalogue with quality metrics         |
-| `ground_motion_im_table_090_flat.csv`     | 090 component filtered intensity measure catalogue with quality metrics         |
-| `ground_motion_im_table_ver_flat.csv`     | Vertical component filtered intensity measure catalogue with quality metrics  n |
-| `ground_motion_im_table_rotd0_flat.csv`   | RotD0 filtered intensity measure catalogue with quality metrics                 |
-| `ground_motion_im_table_rotd100_flat.csv` | RotD100 filtered intensity measure catalogue with quality metrics               |
-| `ground_motion_im_table_EAS_flat.csv`     | EAS filtered intensity measure catalogue with quality metrics                   |
-| `ground_motion_im_table_geom_flat.csv`    | Geometric mean filtered intensity measure catalogue with quality metrics        |
+| `ground_motion_im_table_rotd50_flat.csv` | RotD50 filtered intensity measure catalogue with quality metrics |
+| `ground_motion_im_table_000_flat.csv` | 000 component filtered intensity measure catalogue |
+| `ground_motion_im_table_000_fas_flat.csv` | 000 component filtered FAS catalogue |
+| `ground_motion_im_table_090_flat.csv` | 090 component filtered intensity measure catalogue |
+| `ground_motion_im_table_090_fas_flat.csv` | 090 component filtered FAS catalogue |
+| `ground_motion_im_table_ver_flat.csv` | Vertical component filtered intensity measure catalogue |
+| `ground_motion_im_table_ver_fas_flat.csv` | Vertical component filtered FAS catalogue |
+| `ground_motion_im_table_geom_flat.csv` | Geometric mean filtered intensity measure catalogue |
+| `ground_motion_im_table_geom_fas_flat.csv` | Geometric mean filtered FAS catalogue |
+| `ground_motion_im_table_rotd0_flat.csv` | RotD0 filtered intensity measure catalogue |
+| `ground_motion_im_table_rotd100_flat.csv` | RotD100 filtered intensity measure catalogue |
+| `ground_motion_im_table_rotd0_orientation_flat.csv` | Rotation angle (degrees) of each filtered RotD0 IM |
+| `ground_motion_im_table_rotd100_orientation_flat.csv` | Rotation angle (degrees) of each filtered RotD100 IM |
+| `ground_motion_im_table_eas_fas_flat.csv` | EAS filtered FAS catalogue |
 | `earthquake_source_table.csv`             | Event source data for remaining records                                       |
 | `earthquake_source_geometry.csv`          | Fault geometry: strike, dip, rake, corner coordinates                         |
 | `site_table.csv`                          | Station metadata for sites with quality records                               |
+| `station_table.csv` | Station channel / location epochs for sites with quality records |
+| `multi_event_table.csv` | Multi-event STA/LTA score and sync event flag for quality records |
+| `station_extraction_table.csv` | Station extraction info for the quality event / station pairs |
 | `propagation_path_table.csv`              | Distance metrics for filtered record set                                      |
 | `phase_arrival_table.csv`                 | P and S-wave arrival times and probabilities from PhaseNet                    |
 | `fmax.csv`                                | Maximum frequency data for quality records                                    |

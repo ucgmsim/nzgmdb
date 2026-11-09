@@ -23,8 +23,8 @@ class PreFlatfileNames(StrEnum):
     EARTHQUAKE_SOURCE_GEOMETRY = "earthquake_source_geometry_all.csv"
     PHASE_ARRIVAL_TABLE = "phase_arrival_table_all.csv"
     SITE_TABLE = "site_table_all.csv"
+    STATION_TABLE = "station_table_all.csv"
     PROPAGATION_TABLE = "propagation_path_table_all.csv"
-    GROUND_MOTION_IM_CATALOGUE = "ground_motion_im_catalogue.csv"
     PROB_SERIES = "prob_series.h5"
 
 
@@ -39,19 +39,30 @@ class FlatfileNames(StrEnum):
     STATION_EXTRACTION_TABLE = "station_extraction_table.csv"
     MULTI_EVENT_TABLE = "multi_event_table.csv"
     SITE_TABLE = "site_table.csv"
+    STATION_TABLE = "station_table.csv"
     PHASE_ARRIVAL_TABLE = "phase_arrival_table.csv"
     PROPAGATION_TABLE = "propagation_path_table.csv"
     GMC_PREDICTIONS = "gmc_predictions.csv"
     FMAX = "fmax.csv"
     SNR_METADATA = "snr_metadata.csv"
-    GROUND_MOTION_IM_000_FLAT = "ground_motion_im_table_000_flat.csv"
-    GROUND_MOTION_IM_090_FLAT = "ground_motion_im_table_090_flat.csv"
-    GROUND_MOTION_IM_VER_FLAT = "ground_motion_im_table_ver_flat.csv"
-    GROUND_MOTION_IM_GEOM_FLAT = "ground_motion_im_table_geom_flat.csv"
-    GROUND_MOTION_IM_ROTD0_FLAT = "ground_motion_im_table_rotd0_flat.csv"
-    GROUND_MOTION_IM_ROTD50_FLAT = "ground_motion_im_table_rotd50_flat.csv"
-    GROUND_MOTION_IM_ROTD100_FLAT = "ground_motion_im_table_rotd100_flat.csv"
-    GROUND_MOTION_IM_EAS_FLAT = "ground_motion_im_table_eas_flat.csv"
+    GROUND_MOTION_IM_000_FLAT = "ground_motion_im_table_000_flat.parquet"
+    GROUND_MOTION_IM_000_FAS_FLAT = "ground_motion_im_table_000_fas_flat.parquet"
+    GROUND_MOTION_IM_090_FLAT = "ground_motion_im_table_090_flat.parquet"
+    GROUND_MOTION_IM_090_FAS_FLAT = "ground_motion_im_table_090_fas_flat.parquet"
+    GROUND_MOTION_IM_VER_FLAT = "ground_motion_im_table_ver_flat.parquet"
+    GROUND_MOTION_IM_VER_FAS_FLAT = "ground_motion_im_table_ver_fas_flat.parquet"
+    GROUND_MOTION_IM_GEOM_FLAT = "ground_motion_im_table_geom_flat.parquet"
+    GROUND_MOTION_IM_GEOM_FAS_FLAT = "ground_motion_im_table_geom_fas_flat.parquet"
+    GROUND_MOTION_IM_ROTD0_FLAT = "ground_motion_im_table_rotd0_flat.parquet"
+    GROUND_MOTION_IM_ROTD50_FLAT = "ground_motion_im_table_rotd50_flat.parquet"
+    GROUND_MOTION_IM_ROTD100_FLAT = "ground_motion_im_table_rotd100_flat.parquet"
+    GROUND_MOTION_IM_ROTD0_ORIENTATION_FLAT = (
+        "ground_motion_im_table_rotd0_orientation_flat.parquet"
+    )
+    GROUND_MOTION_IM_ROTD100_ORIENTATION_FLAT = (
+        "ground_motion_im_table_rotd100_orientation_flat.parquet"
+    )
+    GROUND_MOTION_IM_EAS_FAS_FLAT = "ground_motion_im_table_eas_fas_flat.parquet"
 
 
 class SkippedRecordFilenames(StrEnum):
@@ -114,6 +125,33 @@ def get_mseed_dir_from_snrfas(snrfas_file: Path) -> Path:
     year = int(snrfas_file.parent.parent.name)
     event_id = snrfas_file.parent.name
     return get_mseed_dir(main_dir, year, event_id)
+
+
+def get_snr_fas_ffp(snr_fas_dir: Path, mseed_file: Path) -> Path:
+    """
+    Get the SNR/FAS file path for an mseed file.
+
+    Uses the same year and event ID folders as the mseed file (waveforms/<year>/<evid>/mseed).
+
+    Parameters
+    ----------
+    snr_fas_dir : Path
+        The directory where the SNR/FAS files are stored.
+    mseed_file : Path
+        The mseed file.
+
+    Returns
+    -------
+    Path
+        The SNR/FAS file path, named <record_id>_snr_fas.csv.
+    """
+    event_dir = mseed_file.parent.parent
+    return (
+        snr_fas_dir
+        / event_dir.parent.name
+        / event_dir.name
+        / f"{mseed_file.stem}_snr_fas.csv"
+    )
 
 
 def get_processed_dir(main_dir: Path, year: int, event_id: str) -> Path:
@@ -217,6 +255,23 @@ def get_snr_fas_dir(main_dir: Path) -> Path:
     return main_dir / "snr_fas"
 
 
+def get_fmax_dir(main_dir: Path) -> Path:
+    """
+    Get the directory for storing the Fmax batch results.
+
+    Parameters
+    ----------
+    main_dir : Path
+        The main directory of the NZGMDB results.
+
+    Returns
+    -------
+    Path
+        The directory where the Fmax batch results are stored.
+    """
+    return main_dir / "fmax"
+
+
 def get_waveform_dir(main_dir: Path) -> Path:
     """
     Get the directory where waveforms (mseed and processed) are stored.
@@ -234,9 +289,9 @@ def get_waveform_dir(main_dir: Path) -> Path:
     return main_dir / "waveforms"
 
 
-def get_im_dir(main_dir: Path) -> Path:
+def get_im_merge_dir(main_dir: Path) -> Path:
     """
-    Get the directory for storing IM results.
+    Get the directory for storing the batched IM results for each component.
 
     Parameters
     ----------
@@ -246,9 +301,28 @@ def get_im_dir(main_dir: Path) -> Path:
     Returns
     -------
     Path
-        The directory where IM results are stored.
+        The directory containing an im_merge_<component> directory per component.
     """
-    return main_dir / "IM"
+    return get_flatfile_dir(main_dir) / "im_merge_batch_dir"
+
+
+def get_im_component_dir(main_dir: Path, component: str) -> Path:
+    """
+    Get the directory of batched IM parquet files for a component.
+
+    Parameters
+    ----------
+    main_dir : Path
+        The main directory of the NZGMDB results.
+    component : str
+        The IM component, e.g. "rotd50", or "000_fas" for the FAS of the 000 component.
+
+    Returns
+    -------
+    Path
+        The directory of batch_<n>.parquet files, which can be read as a single parquet dataset.
+    """
+    return get_im_merge_dir(main_dir) / f"im_merge_{component}"
 
 
 def get_processed_dir_from_mseed(mseed_file: Path) -> Path:
@@ -300,3 +374,49 @@ def get_stationxml_dir(main_dir: Path) -> Path:
         The directory where StationXML files are stored.
     """
     return main_dir / "stationxml"
+
+
+def get_stationxml_ffp(xml_dir: Path, network: str, station: str) -> Path:
+    """
+    Get the StationXML file path for a station, named NET.STA.xml.
+
+    Parameters
+    ----------
+    xml_dir : Path
+        The directory where StationXML files are stored.
+    network : str
+        The network code of the station.
+    station : str
+        The station code.
+
+    Returns
+    -------
+    Path
+        The StationXML file path.
+    """
+    return xml_dir / f"{network}.{station}.xml"
+
+
+def get_record_id(event_id: str, station: str, channel: str, location: str) -> str:
+    """
+    Get the record_id for a record, formatted as EVID_STA_CHAN_LOC.
+
+    Parameters
+    ----------
+    event_id : str
+        The event id.
+    station : str
+        The station code.
+    channel : str
+        The channel code, only the first 2 characters are used.
+    location : str
+        The location code, empty location codes are written as "00".
+
+    Returns
+    -------
+    str
+        The record_id.
+    """
+    # Empty location codes are written as "00" based on the FDSN Source Identifiers documentation
+    # (https://docs.fdsn.org/projects/source-identifiers/en/latest/location-codes.html)
+    return f"{event_id}_{station}_{channel[:2]}_{location or '00'}"

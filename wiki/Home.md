@@ -87,6 +87,9 @@ While the flowchart provides a conceptual overview of the NZGMDB pipeline's data
 
 The pipeline is therefore composed of subtasks that can be run independently. These subtasks are listed below, along with links to their detailed documentation to explain what parts of the site and event streams the task invloves.
 
+### 📡 Temporary Arrays
+Data from temporary seismic deployments (IRIS, AUSPASS, ...) is bulk downloaded before the pipeline runs and read locally during waveform extraction. See **[Temporary Arrays](https://github.com/ucgmsim/nzgmdb/wiki/Temporary-Arrays)** for how to download it, add new periods and run the pipeline with it.
+
 ### 🧩 Subtasks
 1. **[Fetching Site Table](https://github.com/ucgmsim/nzgmdb/wiki/Fetching-site-table)** (Gets all the sites in the NZ network domain and gathers their metadata, such as Vs30 and basin info)
 2. **[Parse Geonet](https://github.com/ucgmsim/nzgmdb/wiki/Parse-Geonet)** (Fetches event metadata and station extraction information)

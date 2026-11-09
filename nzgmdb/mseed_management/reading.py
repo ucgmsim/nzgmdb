@@ -10,6 +10,7 @@ from obspy.core import Stream, Trace, UTCDateTime
 from obspy.core.inventory import Inventory
 
 from nzgmdb.data_processing import waveform_manipulation
+from nzgmdb.data_retrieval import inventory_xml
 from nzgmdb.management import custom_errors
 
 
@@ -26,11 +27,21 @@ def read_mseed_to_stream(file_path: Path):
     -------
     Stream
         ObsPy Stream object containing the data from the MiniSEED file
+
+    Raises
+    ------
+    InvalidMseedFileError
+        If mseedlib fails to read the file
     """
     stream = Stream()
     nptype = {"i": np.int32, "f": np.float32, "d": np.float64, "t": np.char}
     mstl = mseedlib.MSTraceList()
-    mstl.read_file(str(file_path), unpack_data=False, record_list=True)
+    try:
+        mstl.read_file(str(file_path), unpack_data=False, record_list=True)
+    except mseedlib.exceptions.MseedLibError as e:
+        raise custom_errors.InvalidMseedFileError(
+            f"Error reading MiniSEED file {file_path}"
+        ) from e
 
     for traceid in mstl.traceids():
         for segment in traceid.segments():
@@ -75,6 +86,7 @@ def create_waveform_from_mseed(
     apply_taper: bool = False,
     apply_zero_padding: bool = False,
     inventory: Inventory | None = None,
+    xml_dir: Path | None = None,
 ):
     """
     Create a waveform object from a mseed file
@@ -93,11 +105,13 @@ def create_waveform_from_mseed(
         Whether to apply zero padding to the data, by default False (Only used when pre_process is True)
     inventory : Inventory, optional
         The inventory object to use for sensitivity removal, by default None (Will try to extract from FDSN if not provided)
+    xml_dir : Path, optional
+        Directory of saved StationXML files, used to load the inventory when `inventory` is None
 
     Returns
     -------
     np.ndarray
-        The waveform data in the shape (1, n_samples, 3)
+        The waveform data in the shape (3, 1, n_samples) (component, station, time)
 
     Raises
     ------
@@ -116,6 +130,12 @@ def create_waveform_from_mseed(
             f"All 3 components are not present in the mseed file {mseed_file}"
         )
 
+    # Load the saved inventory for this trace's network and station
+    if inventory is None and xml_dir is not None:
+        inventory = inventory_xml.load_station_inventory(
+            xml_dir, mseed[0].stats.network, mseed[0].stats.station
+        )
+
     # Process the data if needed
     if pre_process:
         mseed = waveform_manipulation.initial_preprocessing(
@@ -130,7 +150,7 @@ def create_waveform_from_mseed(
         data = np.stack([tr.data for tr in mseed], axis=1)
         data = data.astype(np.float32)
         # Reshape the waveform to have the correct shape for the IM calculation
-        reshaped_waveform = data[np.newaxis, :, :]
+        reshaped_waveform = data.T[:, None, :]
     except ValueError:
         raise custom_errors.InvalidTraceLengthError(
             f"Error reading data from {mseed_file}"
