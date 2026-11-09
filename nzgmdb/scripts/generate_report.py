@@ -1378,10 +1378,12 @@ def generate_report(
     )
     # The quality DB is always CSV, the full DB is parquet from 4p4 onwards
     full_new = read_gm_flatfile(nzgmdb_full_new_ffp)
-    quality_new = read_gm_flatfile(nzgmdb_quality_new_ffp.with_suffix(".csv"))
+    quality_new = merge_flatfiles.read_flatfile(
+        nzgmdb_quality_new_ffp.with_suffix(".csv")
+    )
     full_old = read_gm_flatfile(nzgmdb_full_old_ffp) if nzgmdb_full_old_ffp else None
     quality_old = (
-        read_gm_flatfile(nzgmdb_quality_old_ffp.with_suffix(".csv"))
+        merge_flatfiles.read_flatfile(nzgmdb_quality_old_ffp.with_suffix(".csv"))
         if nzgmdb_quality_old_ffp
         else None
     )
