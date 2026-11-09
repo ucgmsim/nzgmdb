@@ -27,7 +27,10 @@ STATION_COLUMNS = [
     "loc",
     "start_date",
     "end_date",
+    "restricted",
 ]
+# Older station CSVs may not have these columns, they are filled with ""
+OPTIONAL_STATION_COLUMNS = ["restricted"]
 MSEED_TIME_FORMAT = "%Y%m%dT%H%M%SZ"
 
 
@@ -85,9 +88,14 @@ def read_station_csv(station_ffp: Path) -> pd.DataFrame:
         If required columns are missing
     """
     station_df = pd.read_csv(station_ffp, dtype=str, keep_default_na=False)
-    missing = sorted(set(STATION_COLUMNS) - set(station_df.columns))
+    missing = sorted(
+        set(STATION_COLUMNS) - set(OPTIONAL_STATION_COLUMNS) - set(station_df.columns)
+    )
     if missing:
         raise ValueError(f"{station_ffp} is missing columns: {missing}")
+    for col in OPTIONAL_STATION_COLUMNS:
+        if col not in station_df.columns:
+            station_df[col] = ""
     return station_df
 
 

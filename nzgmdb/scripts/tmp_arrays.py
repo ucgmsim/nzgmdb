@@ -12,7 +12,14 @@ from typing import Annotated
 
 import typer
 
-from nzgmdb.tmp_array import backup, completeness, download, file_layout, stations
+from nzgmdb.tmp_array import (
+    backup,
+    completeness,
+    download,
+    file_layout,
+    pending,
+    stations,
+)
 from qcore import cli
 
 app = typer.Typer(pretty_exceptions_enable=False)
@@ -143,6 +150,8 @@ def download_data(
     Adds to any existing data in data_dir and skips months already downloaded, so it
     is safe to re-run or to run again later with a new window. Use dates on month
     boundaries (e.g. 2026-01-01 to 2027-01-01) so windows do not overlap.
+    Rows still missing data (embargoed or not released) are tracked in
+    <data_dir>/pending_data.csv for recheck-pending.
 
     Parameters
     ----------
@@ -173,6 +182,10 @@ def download_data(
     results_df.to_csv(results_ffp, index=False)
     print(f"\n{results_df['status'].value_counts().to_string()}")
     print(f"Wrote results to {results_ffp}")
+
+    pending_df = pending.update_pending(data_dir, station_df, results_df)
+    print(f"\nPending data ({data_dir / pending.PENDING_NAME}):")
+    print(pending.describe_pending(pending_df))
 
 
 @cli.from_docstring(app)
@@ -216,6 +229,42 @@ def check_data(
         output_ffp = data_dir / f"check_{_window_name(start_date, end_date)}.csv"
     check_df.to_csv(output_ffp, index=False)
     print(f"\nWrote check results to {output_ffp}")
+
+
+@cli.from_docstring(app)
+def recheck_pending(
+    data_dir: Annotated[Path, typer.Argument(exists=True, file_okay=False)],
+    providers: Annotated[list[str], typer.Option(callback=_split_commas)] = None,
+    output_ffp: Annotated[Path, typer.Option(dir_okay=False)] = None,
+):
+    """
+    Retry downloading data listed in pending_data.csv (embargoed or not yet released).
+
+    Writes the rows that gained data and prints the sites and dates to re-run the
+    pipeline for with --only-sites, before merging into the database.
+
+    Parameters
+    ----------
+    data_dir : Path
+        Root temporary array data directory
+    providers : list[str], optional
+        Comma separated providers to recheck, by default all
+    output_ffp : Path, optional
+        Output CSV of newly available rows, by default
+        <data_dir>/newly_available_<today>.csv
+    """
+    pending_df, newly_available_df = pending.recheck_pending(data_dir, providers)
+    print(f"\nStill pending:\n{pending.describe_pending(pending_df)}")
+    if newly_available_df.empty:
+        print("\nNo new data available")
+        return
+
+    if output_ffp is None:
+        output_ffp = data_dir / f"newly_available_{datetime.now():%Y%m%d}.csv"
+    newly_available_df.to_csv(output_ffp, index=False)
+    print(f"\nNew data for {len(newly_available_df)} rows, written to {output_ffp}")
+    print("Re-run the pipeline for these sites and dates, then merge-databases:")
+    print(pending.summarise_for_pipeline(newly_available_df).to_string(index=False))
 
 
 @cli.from_docstring(app)

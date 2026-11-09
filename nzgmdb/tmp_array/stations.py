@@ -5,7 +5,7 @@ import nzgeom.coastlines
 import pandas as pd
 from obspy import UTCDateTime
 from obspy.clients.fdsn import Client as FDSN_Client
-from obspy.clients.fdsn.header import FDSNException
+from obspy.clients.fdsn.header import FDSNException, FDSNNoDataException
 from shapely.geometry import Point
 
 from nzgmdb.management import config as cfg
@@ -45,6 +45,39 @@ DEFAULT_CHANNELS = ["HH", "BH", "HN", "BN"]
 DEFAULT_EXCLUDED_NETWORKS = ["NZ", "IU", "SY"]
 
 
+def open_channel_ids(
+    client: FDSN_Client, query: dict
+) -> set[tuple[str, str, str, str]] | None:
+    """
+    Get the channels a provider lists when restricted data is excluded.
+
+    Parameters
+    ----------
+    client : FDSN_Client
+        Provider client
+    query : dict
+        get_stations keyword arguments used for the full query
+
+    Returns
+    -------
+    set[tuple[str, str, str, str]] | None
+        (net, sta, loc, cha) ids of open channels,
+        or None if the provider does not support the includerestricted option
+    """
+    try:
+        inventory = client.get_stations(**query, includerestricted=False)
+    except FDSNNoDataException:
+        return set()
+    except (FDSNException, ValueError, OSError):
+        return None
+    return {
+        (network.code, station.code, channel.location_code, channel.code)
+        for network in inventory
+        for station in network
+        for channel in station
+    }
+
+
 def query_provider(
     provider: str,
     start: UTCDateTime,
@@ -52,7 +85,7 @@ def query_provider(
     bbox: tuple[float, float, float, float],
 ) -> list[list]:
     """
-    Get one row per station / channel prefix / location from a single provider.
+    Get one row per channel from a single provider, flagging restricted (embargoed) channels.
 
     Parameters
     ----------
@@ -68,10 +101,11 @@ def query_provider(
     Returns
     -------
     list[list]
-        Rows in STATION_COLUMNS order
+        Rows in STATION_COLUMNS order, restricted is "True", "False" or "" (unknown)
     """
     min_lat, max_lat, min_lon, max_lon = bbox
-    inventory = FDSN_Client(provider).get_stations(
+    client = FDSN_Client(provider)
+    query = dict(
         starttime=start,
         endtime=end,
         minlatitude=min_lat,
@@ -80,11 +114,33 @@ def query_provider(
         maxlongitude=max_lon,
         level="channel",
     )
+    inventory = client.get_stations(**query)
+    open_ids = open_channel_ids(client, query)
 
     rows = []
     for network in inventory:
         for station in network:
             for channel in station:
+                # Restricted if marked closed, or hidden when restricted data is excluded
+                status = (
+                    channel.restricted_status
+                    or station.restricted_status
+                    or network.restricted_status
+                )
+                channel_id = (
+                    network.code,
+                    station.code,
+                    channel.location_code,
+                    channel.code,
+                )
+                if status == "closed" or (
+                    open_ids is not None and channel_id not in open_ids
+                ):
+                    restricted = "True"
+                elif status == "open" or open_ids is not None:
+                    restricted = "False"
+                else:
+                    restricted = ""
                 rows.append(
                     [
                         provider,
@@ -97,9 +153,29 @@ def query_provider(
                         channel.location_code,
                         channel.start_date,
                         channel.end_date,
+                        restricted,
                     ]
                 )
     return rows
+
+
+def _combine_restricted(values: pd.Series) -> str:
+    """
+    Combine channel restricted flags into one flag for a station row.
+
+    Parameters
+    ----------
+    values : pd.Series
+        Restricted flags ("True", "False" or "")
+
+    Returns
+    -------
+    str
+        "True" if any channel is restricted, "" if any is unknown, otherwise "False"
+    """
+    if (values == "True").any():
+        return "True"
+    return "" if (values == "").any() else "False"
 
 
 def get_station_table(
@@ -178,6 +254,7 @@ def get_station_table(
         start_date=("start_date", "min"),
         end_date=("end_date", "max"),
         open=("open", "any"),
+        restricted=("restricted", _combine_restricted),
     ).reset_index()
     station_df.loc[station_df["open"], "end_date"] = ""
 

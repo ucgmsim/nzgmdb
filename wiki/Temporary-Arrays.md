@@ -32,6 +32,8 @@ So a network must be **both** downloaded and listed in `config.yaml` to end up i
 ├── stationxml/<NET>/<NET>_<STA>_<CHAN>_<LOC>/<NET>.<STA>.xml
 ├── download_results_<start>_<end>.csv
 ├── check_<start>_<end>.csv
+├── pending_data.csv               # rows still missing data (embargoed / not released)
+├── newly_available_<date>.csv     # written by recheck-pending
 └── dropbox_manifest.csv
 ```
 
@@ -55,7 +57,7 @@ python nzgmdb/scripts/tmp_arrays.py get-stations stations_2026.csv 2026-01-01 20
 - At the end it lists networks **not in `config.yaml`**. Check whether each one should be used, and if so add it under `tmp_array_providers_networks`.
 - Useful options: `--providers IRIS,AUSPASS`, `--channels HH,HN`, `--exclude-networks NZ,IU,SY,AM`, `--no-coastline-filter`.
 
-The CSV has one row per provider / network / station / channel prefix / location. `end_date` is blank for stations that are still running.
+The CSV has one row per provider / network / station / channel prefix / location. `end_date` is blank for stations that are still running. `restricted` is `True` when the provider marks the data as closed or hides it when restricted data is excluded, `False` when it is open, and blank when the provider doesn't say.
 
 ### 2. `download-data` – download waveforms and StationXML
 
@@ -69,9 +71,11 @@ python nzgmdb/scripts/tmp_arrays.py download-data stations_2026.csv /data/tmp_ar
 - Writes `download_results_<start>_<end>.csv` with one status per row:
   - `ok`: every month in the window has data
   - `partial`: some months have no data
-  - `no_data`: no data at all, which usually means the data is **embargoed or restricted**
-  - `error`: the request failed
+  - `embargoed`: no data, and the data is restricted (flagged in the station CSV, or a short test request got HTTP 401/403)
+  - `no_data`: no data and not known to be restricted (HTTP 204). Some providers return this for embargoed data too
+  - `error`: the request failed. Re-run the same command
   - `outside_window`: the station was not running in the window
+- Rows that are `partial`, `embargoed` or `no_data` are added to `pending_data.csv` (see [Embargoed data](#-embargoed-and-unreleased-data)), with `missing_reason` set to `restricted`, `no_data` or `unknown`.
 
 > Use start and end dates on month boundaries (`YYYY-MM-01`). A window ending mid-month creates a short file, and a later window would then download an overlapping file for that month.
 
@@ -83,7 +87,15 @@ python nzgmdb/scripts/tmp_arrays.py check-data stations_2026.csv /data/tmp_array
 
 Prints and writes `check_<start>_<end>.csv`, giving each row a status of `complete`, `partial` or `missing`, the number of months done, and the number of **overlapping files**. If overlaps are reported, remove the duplicate files before running the pipeline.
 
-### 4. `backup-data` – back up to Dropbox
+### 4. `recheck-pending` – retry embargoed / unreleased data
+
+```bash
+python nzgmdb/scripts/tmp_arrays.py recheck-pending /data/tmp_arrays
+```
+
+Retries only the rows in `pending_data.csv`, writes the rows that gained data to `newly_available_<date>.csv`, and prints the sites and dates to re-run the pipeline for. Use `--providers AUSPASS` to recheck only some providers.
+
+### 5. `backup-data` – back up to Dropbox
 
 ```bash
 python nzgmdb/scripts/tmp_arrays.py backup-data /data/tmp_arrays dropbox:/QuakeCoRE/NZGMDB_tmp_arrays
@@ -108,7 +120,7 @@ Run this once all of the period's data should be available. Temporary array data
    ```bash
    python nzgmdb/scripts/tmp_arrays.py download-data /data/tmp_arrays/stations_2026.csv /data/tmp_arrays 2026-01-01 2027-01-01
    ```
-4. **Check**, then re-run step 3 for anything `partial` or failed:
+4. **Check**, then re-run step 3 for any rows that failed (`error`). Embargoed rows are tracked in `pending_data.csv`:
    ```bash
    python nzgmdb/scripts/tmp_arrays.py check-data /data/tmp_arrays/stations_2026.csv /data/tmp_arrays 2026-01-01 2027-01-01
    ```
@@ -131,9 +143,56 @@ Run this once all of the period's data should be available. Temporary array data
 
 ---
 
+## 🔒 Embargoed and unreleased data
+
+Temporary array data is often held back by the deployment team for a few years before it's public. The station metadata is visible, but data requests return HTTP 403 (restricted) or HTTP 204 (no data).
+
+**How it is tracked**
+
+- `get-stations` flags restricted stations in the `restricted` column.
+- `download-data` still tries every row, since an embargo can lift at any time. Rows that end up without data go into `pending_data.csv` with:
+  - the window
+  - how many months are missing
+  - the reason (`restricted`, `no_data` or `unknown`)
+  - when the row was first seen and last checked
+- Rows are removed from the list once their data is downloaded.
+
+**Adding data once it is released**
+
+Run this every few months, or when a deployment team says its data is public:
+
+1. **Retry the pending rows:**
+   ```bash
+   python nzgmdb/scripts/tmp_arrays.py recheck-pending /data/tmp_arrays
+   ```
+   New months are downloaded into the same `waveforms/` folder, and the output looks like:
+   ```
+   net        sites      start        end
+    X5  AKB03,AKB04 2023-07-01 2026-02-01
+   ```
+2. **Check `config.yaml`** lists the network under `tmp_array_providers_networks`.
+3. **Run the pipeline for just those sites and dates** into a new output folder:
+   ```bash
+   python nzgmdb/scripts/run_nzgmdb.py run-full-nzgmdb /output/nzgmdb_backfill_X5 2023-07-01 2026-02-01 \
+     /path/to/nzcvm_data /path/to/gm_classifier /path/to/conda.sh \
+     "conda activate gmc_features" "conda activate gmc_predict" /path/to/KO_matrices \
+     --only-sites AKB03,AKB04 --add-tmp-arrays --tmp-array-data-dir /data/tmp_arrays/waveforms
+   ```
+4. **Merge** into the current database. The new records are added, and any duplicates are replaced:
+   ```bash
+   python nzgmdb/scripts/run_nzgmdb.py merge-databases /output/nzgmdb_current/flatfiles /output/nzgmdb_backfill_X5/flatfiles /output/nzgmdb_merged/flatfiles
+   ```
+5. **Back up** with `backup-data`. Only the folders that changed are uploaded.
+
+> `--only-sites` matches station codes. If two networks share a station code, both are included.
+
+> Check the merged database after the first backfill. `merge-databases` has mostly been used to merge whole periods, so check that the event and site tables come through correctly when the second database only covers a few sites.
+
+---
+
 ## ⚠️ Things to watch
 
-- **Embargoed data:** recent deployments are often restricted (HTTP 403) or not yet public (HTTP 204), and show as `no_data`. Re-run the period later.
+- **Embargoed data:** see [Embargoed and unreleased data](#-embargoed-and-unreleased-data). `pending_data.csv` is the list of everything still waiting.
 - **Events at the end of a period:** an event late on the last day needs data from the next window. That data only exists once the next period is downloaded, so those records may be skipped until then.
 - **Config networks:** a network that is downloaded but not in `config.yaml` is ignored by the pipeline. A network in `config.yaml` that is not downloaded is skipped with `No Waveform Data`.
 - **Provider duplicates:** when several providers serve the same station, the first in `--providers` order is kept.

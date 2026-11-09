@@ -10,6 +10,13 @@ from pathlib import Path
 
 import pandas as pd
 from obspy import UTCDateTime
+from obspy.clients.fdsn import Client as FDSN_Client
+from obspy.clients.fdsn.header import (
+    FDSNException,
+    FDSNForbiddenException,
+    FDSNNoDataException,
+    FDSNUnauthorizedException,
+)
 from obspy.clients.fdsn.mass_downloader import (
     GlobalDomain,
     MassDownloader,
@@ -18,6 +25,8 @@ from obspy.clients.fdsn.mass_downloader import (
 
 from nzgmdb.tmp_array import file_layout
 
+# Length of the small request used to find out why a month has no data
+PROBE_SECONDS = 60
 # Smallest chunk to back off to when a provider rejects a request as too large
 MIN_CHUNK_SECONDS = 3600
 MAX_BACKOFF_ATTEMPTS = 4
@@ -134,6 +143,36 @@ def download_chunk(
     raise RuntimeError(f"Request still too large after {MAX_BACKOFF_ATTEMPTS} attempts")
 
 
+def probe_missing_reason(row: pd.Series, time: UTCDateTime) -> str:
+    """
+    Find out why a station has no data by requesting a minute of it directly.
+
+    Parameters
+    ----------
+    row : pd.Series
+        Station table row
+    time : UTCDateTime
+        Start of a month that returned no data
+
+    Returns
+    -------
+    str
+        "restricted" (HTTP 401/403), "no_data" (HTTP 204) or "unknown"
+    """
+    try:
+        FDSN_Client(row["provider"]).get_waveforms(
+            row["net"], row["sta"], "*", f"{row['chan']}?", time, time + PROBE_SECONDS
+        )
+    except (FDSNForbiddenException, FDSNUnauthorizedException):
+        return "restricted"
+    except FDSNNoDataException:
+        return "no_data"
+    except (FDSNException, ValueError, OSError):
+        return "unknown"
+    # Data exists for this minute, so the month is missing for another reason (e.g. gaps)
+    return "unknown"
+
+
 def download_row(
     row: pd.Series, data_dir: Path, start: UTCDateTime, end: UTCDateTime
 ) -> dict:
@@ -154,7 +193,8 @@ def download_row(
     Returns
     -------
     dict
-        Result with status (ok, error, outside_window), chunk counts and any error
+        Result with status (ok, partial, no_data, embargoed, error, outside_window),
+        chunk counts, the reason months are missing and any error
     """
     result = {
         "provider": row["provider"],
@@ -189,16 +229,24 @@ def download_row(
         except Exception as e:  # noqa: BLE001
             errors.append(f"{chunk_start.date}: {e}")
 
-    # Months with no file after downloading had no data at the provider (or are restricted)
-    n_without_data = sum(
-        not file_layout.has_z_file_ending_at(mseed_dir, c[1]) for c in chunks
-    )
-    result["n_chunks_without_data"] = n_without_data
+    # Months with no file after downloading had no data at the provider or are restricted
+    missing = [
+        c for c in chunks if not file_layout.has_z_file_ending_at(mseed_dir, c[1])
+    ]
+    result |= {"n_chunks_without_data": len(missing), "missing_reason": ""}
     if errors:
         return result | {"status": "error", "error": " | ".join(errors)}
-    if n_without_data == len(chunks):
-        return result | {"status": "no_data"}
-    return result | {"status": "ok" if n_without_data == 0 else "partial"}
+    if not missing:
+        return result | {"status": "ok"}
+
+    if row.get("restricted") == "True":
+        reason = "restricted"
+    else:
+        reason = probe_missing_reason(row, missing[0][0])
+    result["missing_reason"] = reason
+    if len(missing) < len(chunks):
+        return result | {"status": "partial"}
+    return result | {"status": "embargoed" if reason == "restricted" else "no_data"}
 
 
 def download_stations(
