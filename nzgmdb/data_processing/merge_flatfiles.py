@@ -656,7 +656,12 @@ def merge_flatfiles(main_dir: Path, bypass_records_ffp: Path = None):
     gm_im_df_flat = gm_im_df_flat.drop(columns=["evid", "sta", "chan", "loc"])
 
     for component, final_output in component_flatfiles.items():
-        df = pd.read_parquet(file_structure.get_im_component_dir(main_dir, component))
+        component_dir = file_structure.get_im_component_dir(main_dir, component)
+        # Components are only written when calculated (e.g. no FAS in real-time runs)
+        if not component_dir.exists():
+            print(f"Skipping {final_output}, no IM results for component {component}")
+            continue
+        df = pd.read_parquet(component_dir)
 
         # Drop component column
         df = df.drop(columns=["component"])

@@ -60,6 +60,10 @@ def filter_flatfiles_on_catalouge(
     ]
 
     for file in file_to_filter:
+        # Not every run makes every flatfile (e.g. no FAS in real-time runs)
+        if not (flatfile_dir / file).exists():
+            print(f"Skipping {file}, it does not exist")
+            continue
         # Load the new file and filter based on record_id
         df = merge_flatfiles.read_flatfile(flatfile_dir / file)
         if file in [
