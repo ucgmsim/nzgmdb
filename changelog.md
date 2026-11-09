@@ -18,6 +18,7 @@
 * Added Hyp_depth to geometry table
 * Adjusted is_ground_level logic by adding in FDSN Inventory data
 * Add XML inventory information per station
+* Temporary array tooling (`nzgmdb/tmp_array`, `scripts/tmp_arrays.py`) to find, bulk download (any date window, added to existing data), check and back up temporary array data, with embargoed data tracked in a pending list and `recheck-pending` to add it once released
 * Change processing to use remove response instead of remove sensitivity
 * Updated CMT solutions for domain regions
 * Increased date range to end of 2025

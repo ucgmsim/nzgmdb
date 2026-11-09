@@ -792,6 +792,10 @@ def get_tmp_array_stream(
     for f in sorted(selected_files):
         st += read(str(f))
 
+    # Join traces split across file chunks (which share their boundary sample),
+    # split() keeps real gaps as separate traces as they would come from GeoNet
+    st = st.merge(method=1).split()
+
     # Trim to exact window
     st.trim(start_time, end_time)
 
