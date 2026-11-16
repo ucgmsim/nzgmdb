@@ -29,6 +29,7 @@ from auto_cmt.run_cmt import (
 )
 from auto_cmt.timing import TIMINGS_FILENAME as STAGE_TIMINGS_FILENAME
 
+from nzgmdb.management import seismic_now
 from nzgmdb.management.background import CMT_FAILED_STEP_MARKER
 from nzgmdb.management.cmt_cleanup import (
     GF_STORE_DIRNAME,
@@ -681,6 +682,7 @@ def run_cmt_pipeline(
     profile: Annotated[bool, typer.Option(is_flag=True)] = False,
     slack_thread_ts: Annotated[str | None, typer.Option()] = None,
     slack_summary: Annotated[str, typer.Option()] = "",
+    update_seismic_now: Annotated[bool, typer.Option(is_flag=True)] = False,
 ) -> pd.DataFrame:
     """
     Run the three-run CMT pipeline for one event and select the best solution.
@@ -722,6 +724,9 @@ def run_cmt_pipeline(
         has its solution. If None, no Slack messages are sent.
     slack_summary : str, optional
         Event summary shown in the Slack thread's parent message.
+    update_seismic_now : bool, optional
+        Ask SeismicNow to apply the new CMT solution once the pipeline has
+        finished (cmt_selection.csv and figures written), by default False.
 
     Returns
     -------
@@ -903,6 +908,10 @@ def run_cmt_pipeline(
             f"[run_auto_cmt] timings written to {output_dir / TIMINGS_FILENAME} "
             f"(total {format_duration(timer.to_dataframe()['seconds'].iloc[-1])})"
         )
+
+    # Only reached on success, once cmt_selection.csv is final
+    if update_seismic_now:
+        seismic_now.update_event_cmt(event_id, thread)
 
     return select_best_run(records)
 

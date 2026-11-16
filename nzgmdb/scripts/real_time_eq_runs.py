@@ -17,13 +17,12 @@ from nzgmdb.data_processing import process_observed
 from nzgmdb.management import config as cfg
 from nzgmdb.management import custom_errors, file_structure, slack
 from nzgmdb.management.background import launch_cmt_background
+from nzgmdb.management.seismic_now import SEISMIC_NOW_URL, format_response_error
 from nzgmdb.management.timing import StepTimer, profile_to, safe_write_timings
 from nzgmdb.scripts import run_gmc, run_nzgmdb
 from qcore import cli
 
 app = typer.Typer(pretty_exceptions_enable=False)
-
-SEISMIC_NOW_URL = "https://quakecoresoft.canterbury.ac.nz/seismicnow/api/"
 
 # Written into the event directory by run_event
 NZGMDB_TIMINGS_FILENAME = "nzgmdb_timings.csv"
@@ -166,23 +165,6 @@ def is_below_threshold(event_info: dict) -> bool:
         True if the event should not be on SeismicNow
     """
     return event_info["quality"] == "best" and event_info["mag"] < SEISMIC_NOW_MIN_MAG
-
-
-def _format_response_error(response: requests.Response) -> str:
-    """
-    Format a failed SeismicNow response for a Slack message.
-
-    Parameters
-    ----------
-    response : requests.Response
-        The failed response.
-
-    Returns
-    -------
-    str
-        Status code and the start of the response text.
-    """
-    return f"status {response.status_code}: `{response.text[: slack.MAX_ERROR_CHARS]}`"
 
 
 @cli.from_docstring(app)
@@ -468,7 +450,7 @@ def _run_event(
             print(f"Failed to add event. Status code: {response.status_code}")
             print(f"Response: {response.text}")
             thread.reply(
-                f"❌ Failed to add to SeismicNow ({_format_response_error(response)}), SW team investigate"
+                f"❌ Failed to add to SeismicNow ({format_response_error(response)}), SW team investigate"
             )
             thread.set_status(slack.STATUS_FAILED, summary)
             return False
@@ -593,7 +575,7 @@ def _run_event(
                 print(f"Response: {response.text}")
                 thread.reply(
                     f"❌ Failed to remove from SeismicNow for falling below the magnitude threshold "
-                    f"({_format_response_error(response)}), SW team investigate"
+                    f"({format_response_error(response)}), SW team investigate"
                 )
                 thread.set_status(slack.STATUS_FAILED, summary)
 
@@ -620,6 +602,7 @@ def _run_event(
                 eq_source_ffp,
                 event_dir / "cmt_1d",
                 slack_thread=thread,
+                update_seismic_now=True,
             )
             timer.lap("launch_cmt")
 
@@ -627,7 +610,7 @@ def _run_event(
             print(f"Failed to add event. Status code: {response.status_code}")
             print(f"Response: {response.text}")
             thread.reply(
-                f"❌ Failed to update on SeismicNow ({_format_response_error(response)}), SW team investigate"
+                f"❌ Failed to update on SeismicNow ({format_response_error(response)}), SW team investigate"
             )
             thread.set_status(slack.STATUS_FAILED, summary)
             return False

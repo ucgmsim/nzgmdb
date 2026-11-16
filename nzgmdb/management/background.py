@@ -340,6 +340,7 @@ def launch_cmt_background(
     threads: int | None = None,
     slack_thread: slack.EventThread | None = None,
     profile: bool = True,
+    update_seismic_now: bool = False,
 ) -> subprocess.Popen:
     """
     Launch the multi-run 1-D CMT pipeline for one event as a detached background process.
@@ -388,6 +389,9 @@ def launch_cmt_background(
     profile : bool, optional
         Write a cProfile dump for each run to <run>/results/profile.prof,
         by default True.
+    update_seismic_now : bool, optional
+        Ask SeismicNow to apply the CMT solution once the pipeline finishes,
+        by default False.
 
     Returns
     -------
@@ -417,6 +421,8 @@ def launch_cmt_background(
         cmd += ["--threads", str(threads)]
     if profile:
         cmd.append("--profile")
+    if update_seismic_now:
+        cmd.append("--update-seismic-now")
     if slack_thread is not None and slack_thread.ts is not None:
         cmd += [
             "--slack-thread-ts",
