@@ -24,6 +24,7 @@ def compute_snr_for_single_mseed(
     common_frequency_vector: np.ndarray = im_calculation.DEFAULT_FREQUENCIES,
     xml_dir: Path | None = None,
     bandwidth: float = konno_ohmachi.DEFAULT_BANDWIDTH,
+    noise_subtraction: bool = False,
 ):
     """
     Compute the SNR for a single mseed file
@@ -43,6 +44,8 @@ def compute_snr_for_single_mseed(
         If None, will try to extract inventory from FDSN
     bandwidth : float, optional
         The Konno-Ohmachi smoothing bandwidth for the FAS, by default the IM_calculation default
+    noise_subtraction : bool, optional
+        Also remove the noise power from the SNR (Eq. 8), by default False
 
     Returns
     -------
@@ -166,6 +169,7 @@ def compute_snr_for_single_mseed(
                 tp,
                 frequencies=common_frequency_vector,
                 bandwidth=bandwidth,
+                noise_subtraction=noise_subtraction,
             )
     except ValueError:
         skipped_record_dict = {
@@ -305,6 +309,7 @@ def compute_snr_for_mseed_data(
                         common_frequency_vector=common_frequency_vector,
                         xml_dir=xml_dir,
                         bandwidth=config.get_value("ko_bandwidth"),
+                        noise_subtraction=config.get_value("snr_noise_subtraction"),
                     ),
                     batch,
                 )

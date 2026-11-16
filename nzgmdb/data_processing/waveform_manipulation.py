@@ -317,10 +317,10 @@ def high_and_low_cut_processing(
         When not provided will use the default value in the config
     fmax_h : float (optional)
         The maximum frequency to use for bandpass filtering for horizontal components
-        When not provided will use 1 / (2.5 * dt)
+        When not provided or NaN will use 1 / (2.5 * dt)
     fmax_v : float (optional)
         The maximum frequency to use for bandpass filtering for the vertical component
-        When not provided will use 1 / (2.5 * dt)
+        When not provided or NaN will use 1 / (2.5 * dt)
 
     Returns
     -------
@@ -349,8 +349,9 @@ def high_and_low_cut_processing(
     poly_order = config.get_value("poly_order_default")
 
     # Determine the high and low cut frequencies for both horizontal and vertical components
-    highcut_h = fmax_h or 1 / (2.5 * dt)
-    highcut_v = fmax_v or 1 / (2.5 * dt)
+    # A missing (None / NaN) fmax uses the default highcut of 0.8 x Nyquist
+    highcut_h = 1 / (2.5 * dt) if fmax_h is None or np.isnan(fmax_h) else fmax_h
+    highcut_v = 1 / (2.5 * dt) if fmax_v is None or np.isnan(fmax_v) else fmax_v
     lowcut_h = config.get_value("low_cut_default") if fmin_h is None else fmin_h / 1.25
     lowcut_v = config.get_value("low_cut_default") if fmin_v is None else fmin_v / 1.25
 

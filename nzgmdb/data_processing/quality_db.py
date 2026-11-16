@@ -291,6 +291,7 @@ def filter_fmax(
     """
     Filter the catalogue based on the fmax_min value for the fmax_X and fmax_Y.
     (Horizontal components only, vertical component is not considered)
+    Records with no fmax (e.g. SNR screening failed) are also filtered out.
 
     Parameters
     ----------
@@ -306,24 +307,36 @@ def filter_fmax(
     pd.DataFrame
         The skipped records to filter out of the catalogue
     """
-    # Find fmax_min
-    catalogue.loc[:, "fmax_min"] = catalogue[["fmax_X", "fmax_Y"]].apply(min, axis=1)
+    # Find fmax_min, NaN if either horizontal has no fmax
+    catalogue.loc[:, "fmax_min"] = catalogue[["fmax_X", "fmax_Y"]].min(
+        axis=1, skipna=False
+    )
 
-    # Find records that have too low of a fmax_min value
-    fmax_min_filter = catalogue[catalogue["fmax_min"] < fmax_min]
-
-    # Remove the bypass records if they exist
+    # Find records with no fmax or too low of a fmax_min value
+    no_fmax = catalogue["fmax_min"].isna()
+    low_fmax = catalogue["fmax_min"] < fmax_min
     if bypass_records is not None:
-        fmax_min_filter = fmax_min_filter[
-            ~fmax_min_filter["record_id"].isin(bypass_records)
-        ]
+        is_bypass = catalogue["record_id"].isin(bypass_records)
+        no_fmax &= ~is_bypass
+        low_fmax &= ~is_bypass
 
-    # Create the skipped_records dataframe from fmax_min_filter
-    skipped_records = pd.DataFrame(
-        {
-            "record_id": fmax_min_filter["record_id"],
-            "reason": f"Fmax value is less than {fmax_min}",
-        }
+    # Create the skipped_records dataframe
+    skipped_records = pd.concat(
+        [
+            pd.DataFrame(
+                {
+                    "record_id": catalogue.loc[no_fmax, "record_id"],
+                    "reason": "Fmax could not be computed",
+                }
+            ),
+            pd.DataFrame(
+                {
+                    "record_id": catalogue.loc[low_fmax, "record_id"],
+                    "reason": f"Fmax value is less than {fmax_min}",
+                }
+            ),
+        ],
+        ignore_index=True,
     )
 
     return skipped_records

@@ -65,6 +65,36 @@ def get_max_magnitude(magnitudes: list[Magnitude], mag_type: str):
     return None
 
 
+def relink_preferred_references(event_cat: Event) -> Event:
+    """
+    Re-point the preferred origin / magnitude ids at the event's own objects
+
+    obspy resolves preferred_origin() / preferred_magnitude() through a per-process
+    resource id registry, which is empty in forkserver / spawn workers, so both return
+    None after the event is pickled into a worker unless the references are relinked.
+
+    Parameters
+    ----------
+    event_cat : Event
+        The event to relink, modified in place
+
+    Returns
+    -------
+    Event
+        The same event with resolvable preferred references
+    """
+    for pref_id, items in [
+        (event_cat.preferred_origin_id, event_cat.origins),
+        (event_cat.preferred_magnitude_id, event_cat.magnitudes),
+    ]:
+        if pref_id is None:
+            continue
+        match = next((item for item in items if item.resource_id == pref_id), None)
+        if match is not None:
+            pref_id.set_referred_object(match, warn=False)
+    return event_cat
+
+
 def fetch_event_line(event_cat: Event, event_id: str):
     """
     Fetch the event line from the geonet client to be added to the event_df
@@ -299,8 +329,8 @@ def fetch_sta_extraction(
         )
         return pd.DataFrame(), skipped_reason
 
-    # Get the preferred_origin
-    preferred_origin = event_cat.preferred_origin()
+    # Get the preferred_origin (relinked as this may run in a worker process)
+    preferred_origin = relink_preferred_references(event_cat).preferred_origin()
     ev_lat = preferred_origin.latitude
     ev_lon = preferred_origin.longitude
 
@@ -436,6 +466,9 @@ def fetch_event_data(
     EventData
         The parsed event data.
     """
+    # Relink preferred references lost when the event is pickled into a worker
+    relink_preferred_references(event_cat)
+
     # Get the event line
     event_line = fetch_event_line(event_cat, event_id)
     station_extraction_table = pd.DataFrame()

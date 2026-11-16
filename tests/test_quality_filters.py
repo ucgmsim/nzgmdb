@@ -1,5 +1,6 @@
 from pathlib import Path
 
+import numpy as np
 import pandas as pd
 import pytest
 
@@ -200,3 +201,29 @@ def test_filter_all(sample_catalogue: pd.DataFrame):
     # Assert that all the skipped records are in the skipped DataFrame
     removed_ids = set(sample_catalogue["record_id"]) - set(cat["record_id"])
     assert removed_ids.issubset(set(skipped["record_id"]))
+
+
+def test_filter_fmax_nan(sample_catalogue: pd.DataFrame):
+    """
+    Records with no fmax on either horizontal are filtered, unless bypassed.
+
+    Parameters
+    ----------
+    sample_catalogue : pd.DataFrame
+        A sample catalogue DataFrame to test the filtering function.
+    """
+    catalogue = sample_catalogue.copy()
+    good_ids = catalogue.loc[
+        catalogue[["fmax_X", "fmax_Y"]].min(axis=1) >= 4.1, "record_id"
+    ].to_numpy()
+    both_nan, one_nan, bypassed = good_ids[:3]
+    catalogue.loc[catalogue["record_id"].isin([both_nan, bypassed]), "fmax_X"] = None
+    catalogue.loc[catalogue["record_id"].isin([both_nan, bypassed]), "fmax_Y"] = None
+    catalogue.loc[catalogue["record_id"] == one_nan, "fmax_Y"] = None
+
+    skipped = quality_db.filter_fmax(
+        catalogue, fmax_min=4.1, bypass_records=np.array([bypassed])
+    )
+
+    no_fmax = skipped.loc[skipped["reason"] == "Fmax could not be computed"]
+    assert set(no_fmax["record_id"]) == {both_nan, one_nan}

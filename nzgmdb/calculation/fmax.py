@@ -4,6 +4,7 @@ Calculates the maximum useable frequency (fmax).
 
 import functools
 import multiprocessing as mp
+from enum import StrEnum
 from pathlib import Path
 from typing import Optional
 
@@ -13,6 +14,122 @@ import pandas as pd
 from nzgmdb.management import config as cfg
 from nzgmdb.management import custom_errors, file_structure
 from nzgmdb.mseed_management import reading
+
+FMAX_COLUMNS = [
+    "record_id",
+    "fmax_000",
+    "fmax_090",
+    "fmax_ver",
+    "fmax_status",
+    "lpf_default",
+]
+
+
+class FmaxStatus(StrEnum):
+    """How the fmax of a record was found, saved in the fmax_status column."""
+
+    COMPUTED = "computed"
+    SCREENING_FAILED = "screening_failed"
+    NO_SNR = "no_snr"
+    INVALID_MSEED = "invalid_mseed"
+    BYPASS = "bypass"
+
+
+def nan_fmax_record(
+    record_id: str, status: FmaxStatus, lpf_default: float = np.nan
+) -> pd.DataFrame:
+    """
+    Fmax row for a record whose fmax could not be computed.
+
+    Parameters
+    ----------
+    record_id : str
+        The record id
+    status : FmaxStatus
+        Why the fmax could not be computed
+    lpf_default : float, optional
+        The default lowpass filter frequency (scaled Nyquist) used in processing
+        when there is no fmax, by default NaN
+
+    Returns
+    -------
+    pd.DataFrame
+        Single row with NaN fmax values and the status
+    """
+    return pd.DataFrame(
+        [
+            {
+                "record_id": record_id,
+                "fmax_000": np.nan,
+                "fmax_090": np.nan,
+                "fmax_ver": np.nan,
+                "fmax_status": status.value,
+                "lpf_default": lpf_default,
+            }
+        ]
+    )
+
+
+def brune_f0(mag: float) -> float:
+    """
+    Brune corner frequency of an event, clipped to the config f0_min_Hz - f0_max_Hz.
+
+    Parameters
+    ----------
+    mag : float
+        Event magnitude, used as the moment magnitude
+
+    Returns
+    -------
+    float
+        Corner frequency in Hz
+    """
+    config = cfg.Config()
+    m0 = 10 ** (1.5 * mag + 16.05)
+    f0 = (
+        4.906e6
+        * config.get_value("f0_beta_kms")
+        * (config.get_value("f0_stress_drop_bar") / m0) ** (1 / 3)
+    )
+    return float(
+        np.clip(f0, config.get_value("f0_min_Hz"), config.get_value("f0_max_Hz"))
+    )
+
+
+def get_search_start_freqs(
+    meta_output_dir: Path, mseed_files: list[Path]
+) -> list[float | None]:
+    """
+    Get the frequency each record's fmax search starts from.
+
+    Parameters
+    ----------
+    meta_output_dir : Path
+        Path to the flatfile directory containing the tectonic earthquake source table
+    mseed_files : list[Path]
+        The mseed files to process
+
+    Returns
+    -------
+    list[float | None]
+        The start frequency for each file, None uses the config min_freq_Hz
+        (fmax_search_start "fixed", or no magnitude for the event)
+    """
+    config = cfg.Config()
+    if config.get_value("fmax_search_start") != "f0":
+        return [None] * len(mseed_files)
+
+    event_df = pd.read_csv(
+        meta_output_dir
+        / file_structure.PreFlatfileNames.EARTHQUAKE_SOURCE_TABLE_TECTONIC,
+        dtype={"evid": str},
+    )
+    f0_per_event = {
+        evid: brune_f0(mag)
+        for evid, mag in zip(event_df["evid"], event_df["mag"])
+        if not pd.isna(mag)
+    }
+    return [f0_per_event.get(ffp.stem.split("_")[0]) for ffp in mseed_files]
 
 
 def run_full_fmax_calc(
@@ -49,26 +166,32 @@ def run_full_fmax_calc(
 
     # Sorted so the batches are the same on a re-run
     mseed_files = sorted(waveform_dir.rglob("*.mseed"))
+    search_start_freqs = get_search_start_freqs(meta_output_dir, mseed_files)
     total = len(mseed_files)
     print(f"Total number of mseed files to process: {total}")
 
     # Create batches of mseed files for checkpointing (at least 1 so no files still writes empty outputs)
     n_batches = max(1, int(np.ceil(total / batch_size)))
-    mseed_batches = np.array_split(mseed_files, n_batches)
+    mseed_batches = np.array_split(np.asarray(mseed_files, dtype=object), n_batches)
+    start_freq_batches = np.array_split(
+        np.asarray(search_start_freqs, dtype=object), n_batches
+    )
 
-    for index, batch in enumerate(mseed_batches):
+    for index, (batch, start_freq_batch) in enumerate(
+        zip(mseed_batches, start_freq_batches)
+    ):
         batch_dir = batches_dir / f"batch_{index + 1}"
         batch_dir.mkdir(parents=True, exist_ok=True)
         batch_fmax_file = batch_dir / file_structure.FlatfileNames.FMAX
         if not batch_fmax_file.exists():
             print(f"Processing batch {index + 1}/{len(mseed_batches)}")
             with mp.get_context("forkserver").Pool(n_procs) as p:
-                results = p.map(
+                results = p.starmap(
                     functools.partial(
                         assess_snr_and_get_fmax,
                         snr_fas_output_dir=snr_fas_output_dir,
                     ),
-                    batch,
+                    zip(batch, start_freq_batch),
                 )
 
             if len(results) == 0:
@@ -82,9 +205,7 @@ def run_full_fmax_calc(
             if not all(value is None for value in meta_dfs):
                 fmax_df = pd.concat(meta_dfs).reset_index(drop=True)
             else:
-                fmax_df = pd.DataFrame(
-                    columns=["record_id", "fmax_000", "fmax_090", "fmax_ver"]
-                )
+                fmax_df = pd.DataFrame(columns=FMAX_COLUMNS)
             if not all(value is None for value in skipped_record_dfs):
                 skipped_records_df = pd.concat(skipped_record_dfs).reset_index(
                     drop=True
@@ -108,6 +229,12 @@ def run_full_fmax_calc(
                     how="left",
                     suffixes=("", "_bypass"),
                 )
+                has_bypass_fmax = (
+                    fmax_df[["fmax_000_bypass", "fmax_090_bypass", "fmax_ver_bypass"]]
+                    .notna()
+                    .any(axis=1)
+                )
+                fmax_df.loc[has_bypass_fmax, "fmax_status"] = FmaxStatus.BYPASS.value
                 fmax_df["fmax_000"] = fmax_df["fmax_000_bypass"].fillna(
                     fmax_df["fmax_000"]
                 )
@@ -154,7 +281,9 @@ def run_full_fmax_calc(
 
 
 def assess_snr_and_get_fmax(
-    filename: Path, snr_fas_output_dir: Path
+    filename: Path,
+    search_start_freq: float | None = None,
+    snr_fas_output_dir: Path | None = None,
 ) -> tuple[Optional[pd.DataFrame], Optional[pd.DataFrame]]:
     """
     Assess the record's Signal-to-Noise Ratio (SNR) within the frequency interval specified in the config file
@@ -164,13 +293,17 @@ def assess_snr_and_get_fmax(
     ----------
     filename : Path
         Path to the `record_id.mseed` file.
+    search_start_freq : float, optional
+        Frequency the fmax search starts from, by default None uses the config min_freq_Hz
     snr_fas_output_dir : Path
         Path to the output directory where the `record_id_snr_fas.csv` file is stored.
 
     Returns
     -------
     fmax_record: pd.DataFrame
-        DataFrame containing the fmax values, if the record is skipped the values are set to the Nyquist frequency.
+        DataFrame containing the fmax values, fmax_status and lpf_default
+        (the scaled Nyquist lowpass used in processing when there is no fmax).
+        If the fmax could not be computed (e.g. screening failed) the fmax values are NaN.
     skipped_record: pd.DataFrame | None
         If the record is skipped, returns a DataFrame containing the reason for skipping, otherwise returns None.
     """
@@ -181,16 +314,7 @@ def assess_snr_and_get_fmax(
     try:
         mseed = reading.read_mseed_to_stream(filename)
     except custom_errors.InvalidMseedFileError:
-        fmax_record = pd.DataFrame(
-            [
-                {
-                    "record_id": record_id,
-                    "fmax_000": np.nan,
-                    "fmax_090": np.nan,
-                    "fmax_ver": np.nan,
-                }
-            ]
-        )
+        fmax_record = nan_fmax_record(record_id, FmaxStatus.INVALID_MSEED)
         skipped_record = pd.DataFrame(
             [
                 {
@@ -211,17 +335,7 @@ def assess_snr_and_get_fmax(
     snr_filename = file_structure.get_snr_fas_ffp(snr_fas_output_dir, filename)
 
     if not snr_filename.exists():
-        # Use the Nyquist frequency as the fmax
-        fmax_record = pd.DataFrame(
-            [
-                {
-                    "record_id": record_id,
-                    "fmax_000": scaled_nyquist_freq,
-                    "fmax_090": scaled_nyquist_freq,
-                    "fmax_ver": scaled_nyquist_freq,
-                }
-            ]
-        )
+        fmax_record = nan_fmax_record(record_id, FmaxStatus.NO_SNR, scaled_nyquist_freq)
         skipped_record = pd.DataFrame(
             [
                 {
@@ -278,17 +392,15 @@ def assess_snr_and_get_fmax(
         # keep the record
         skipped_record = None
 
-        snr_smooth_gtr_min_freq = snr_smooth.loc[
-            snr_with_freq_signal_noise["frequency"] > config.get_value("min_freq_Hz")
-        ]
-
+        min_freq = (
+            config.get_value("min_freq_Hz")
+            if search_start_freq is None
+            else search_start_freq
+        )
+        above_min_freq = snr_with_freq_signal_noise["frequency"] > min_freq
+        snr_smooth_gtr_min_freq = snr_smooth.loc[above_min_freq]
         freq_gtr_min_freq = (
-            snr_with_freq_signal_noise["frequency"]
-            .loc[
-                snr_with_freq_signal_noise["frequency"]
-                > config.get_value("min_freq_Hz")
-            ]
-            .to_numpy()
+            snr_with_freq_signal_noise["frequency"].loc[above_min_freq].to_numpy()
         )
 
         calculate_fmax_partial = functools.partial(
@@ -311,23 +423,16 @@ def assess_snr_and_get_fmax(
                     "fmax_ver": calculate_fmax_partial(
                         snr_smooth_gtr_min_freq["snr_ver"]
                     ),
+                    "fmax_status": FmaxStatus.COMPUTED.value,
+                    "lpf_default": scaled_nyquist_freq,
                 }
             ]
         )
 
-        ############################################################################
-
     else:
-        # Use the Nyquist frequency as the fmax
-        fmax_record = pd.DataFrame(
-            [
-                {
-                    "record_id": record_id,
-                    "fmax_000": scaled_nyquist_freq,
-                    "fmax_090": scaled_nyquist_freq,
-                    "fmax_ver": scaled_nyquist_freq,
-                }
-            ]
+        # Not enough signal to find an fmax
+        fmax_record = nan_fmax_record(
+            record_id, FmaxStatus.SCREENING_FAILED, scaled_nyquist_freq
         )
 
         skipped_record = pd.DataFrame(

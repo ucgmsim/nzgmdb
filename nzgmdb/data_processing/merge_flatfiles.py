@@ -8,6 +8,7 @@ import numpy as np
 import pandas as pd
 
 from IM import im_calculation
+from nzgmdb.calculation import fmax
 from nzgmdb.management import config as cfg
 from nzgmdb.management import file_structure
 
@@ -187,10 +188,12 @@ def merge_flatfiles(main_dir: Path, bypass_records_ffp: Path = None):
 
     fmax_ffp = flatfile_dir / file_structure.FlatfileNames.FMAX
     fmax_df = (
-        pd.DataFrame(columns=["record_id", "fmax_000", "fmax_090", "fmax_ver"])
+        pd.DataFrame(columns=fmax.FMAX_COLUMNS)
         if not fmax_ffp.exists() or not fmax_ffp.stat().st_size
         else pd.read_csv(fmax_ffp)
     )
+    # fmax files from before fmax_status / lpf_default were added
+    fmax_df = fmax_df.reindex(columns=fmax.FMAX_COLUMNS)
     event_df = pd.read_csv(
         flatfile_dir
         / file_structure.PreFlatfileNames.EARTHQUAKE_SOURCE_TABLE_AFTERSHOCKS,
@@ -453,6 +456,10 @@ def merge_flatfiles(main_dir: Path, bypass_records_ffp: Path = None):
             how="left",
             suffixes=("", "_bypass"),
         )
+        has_bypass_fmax = (
+            gm_im_df_flat[["fmax_000", "fmax_090", "fmax_ver"]].notna().any(axis=1)
+        )
+        gm_im_df_flat.loc[has_bypass_fmax, "fmax_status"] = fmax.FmaxStatus.BYPASS.value
         for bypass_col, col in [
             ("fmin_000", "fmin_X"),
             ("fmin_090", "fmin_Y"),
@@ -493,8 +500,17 @@ def merge_flatfiles(main_dir: Path, bypass_records_ffp: Path = None):
     gm_im_df_flat["HPF_h"] = gm_im_df_flat["fmin_max_h"] / 1.25
     gm_im_df_flat["HPF_v"] = gm_im_df_flat["fmin_Z"] / 1.25
 
-    gm_im_df_flat["LPF_h"] = gm_im_df_flat[["fmax_X", "fmax_Y"]].min(axis=1)
-    gm_im_df_flat["LPF_v"] = gm_im_df_flat["fmax_Z"]
+    # Lowpass filter used in processing, the default (scaled Nyquist) when there is no fmax
+    gm_im_df_flat["LPF_h"] = (
+        gm_im_df_flat[["fmax_X", "fmax_Y"]]
+        .min(axis=1, skipna=False)
+        .fillna(gm_im_df_flat["lpf_default"])
+    )
+    gm_im_df_flat["LPF_v"] = gm_im_df_flat["fmax_Z"].fillna(
+        gm_im_df_flat["lpf_default"]
+    )
+    # Records the fmax step did not see
+    gm_im_df_flat["fmax_status"] = gm_im_df_flat["fmax_status"].fillna("missing")
 
     # Save final outputs
     event_df.to_csv(
@@ -615,6 +631,7 @@ def merge_flatfiles(main_dir: Path, bypass_records_ffp: Path = None):
             "fmin_Z",
             "fmax_Z",
             "multi_Z",
+            "fmax_status",
             "stalta_score",
             "sync_event",
             "HPF_h",
