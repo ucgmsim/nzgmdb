@@ -111,7 +111,8 @@ def download_chunk(
     Exception
         The MassDownloader error if it is not a size error or the chunk cannot shrink further
     """
-    loc = "*" if row["loc"] == "NA" else row["loc"]
+    # "--" is the FDSN code for a blank location, "*" would pull every location into this row
+    loc = row["loc"] or "--"
     chunk_length = int(chunk_end - chunk_start)
 
     for _ in range(MAX_BACKOFF_ATTEMPTS):
@@ -161,7 +162,12 @@ def probe_missing_reason(row: pd.Series, time: UTCDateTime) -> str:
     """
     try:
         FDSN_Client(row["provider"]).get_waveforms(
-            row["net"], row["sta"], "*", f"{row['chan']}?", time, time + PROBE_SECONDS
+            row["net"],
+            row["sta"],
+            row["loc"] or "--",
+            f"{row['chan']}?",
+            time,
+            time + PROBE_SECONDS,
         )
     except (FDSNForbiddenException, FDSNUnauthorizedException):
         return "restricted"
