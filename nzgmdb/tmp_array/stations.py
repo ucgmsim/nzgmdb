@@ -1,12 +1,10 @@
 """Find temporary array stations in NZ from FDSN providers and compare them with the pipeline config."""
 
-import geopandas as gpd
-import nzgeom.coastlines
 import pandas as pd
+import region_geo
 from obspy import UTCDateTime
 from obspy.clients.fdsn import Client as FDSN_Client
 from obspy.clients.fdsn.header import FDSNException, FDSNNoDataException
-from shapely.geometry import Point
 
 from nzgmdb.management import config as cfg
 from nzgmdb.tmp_array.file_layout import STATION_COLUMNS
@@ -233,11 +231,9 @@ def get_station_table(
         return station_df
 
     if coastline_filter:
-        nz_coast = nzgeom.coastlines.get_NZ_coastlines().to_crs("EPSG:4326").union_all()
-        points = gpd.GeoSeries(
-            [Point(lon, lat) for lon, lat in zip(station_df["lon"], station_df["lat"])]
-        )
-        station_df = station_df[points.within(nz_coast).to_numpy()]
+        station_df = station_df[
+            region_geo.points_on_land(station_df["lon"], station_df["lat"])
+        ]
 
     # A missing end date means still running, keep it open ("") rather than the latest epoch end
     station_df["start_date"] = station_df["start_date"].map(str)
