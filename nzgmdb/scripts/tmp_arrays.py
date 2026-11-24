@@ -102,7 +102,8 @@ def get_stations(
     exclude_networks : list[str], optional
         Comma separated networks to drop (NZ and IU come from GeoNet in the main pipeline)
     coastline_filter : bool, optional
-        Keep only stations inside the NZ coastline
+        Keep only stations on land in NZ (region_geo, Chatham and Kermadec Islands
+        excluded), by default True
     min_lat : float, optional
         Minimum latitude
     max_lat : float, optional

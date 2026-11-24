@@ -53,6 +53,7 @@ python nzgmdb/scripts/tmp_arrays.py get-stations stations_2026.csv 2026-01-01 20
 
 - Searches FDSN providers for stations inside NZ that operated between the dates.
 - Keeps `HH, BH, HN, BN` channels and drops `NZ, IU` (from GeoNet in the main pipeline) and `SY` (IRIS synthetics).
+- Keeps only stations on land, using the NZ coastline from [region-geo](https://github.com/ucgmsim/region_geo). The Chatham and Kermadec Islands are left out; use `--no-coastline-filter` to keep every station in the box.
 - Providers that fail or have no station service are skipped with a message.
 - At the end it lists networks **not in `config.yaml`**. Check whether each one should be used, and if so add it under `tmp_array_providers_networks`.
 - Useful options: `--providers IRIS,AUSPASS`, `--channels HH,HN`, `--exclude-networks NZ,IU,SY,AM`, `--no-coastline-filter`.

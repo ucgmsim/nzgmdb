@@ -205,7 +205,8 @@ def get_station_table(
     bbox : tuple[float, float, float, float]
         (min_lat, max_lat, min_lon, max_lon)
     coastline_filter : bool, optional
-        Keep only stations on the NZ mainland coastline polygons, by default True
+        Keep only stations on land in NZ (region_geo, Chatham and Kermadec Islands
+        excluded), by default True
 
     Returns
     -------
