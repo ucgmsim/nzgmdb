@@ -37,13 +37,13 @@ nzgmdb_output/flatfiles/quality_skipped_records.csv
 ## 📋 Prerequisites
 
 The Quality-DB step requires the following inputs from previous pipeline step:
-- **[Merge Flatfiles](Merge-Flatfiles.md)** - Provides the consolidated ground motion IM catalogue and flatfiles to filter
+- **[Merge Flatfiles](Merge-Flatfiles.md)** - Provides the IM flatfiles (parquet) and the other flatfiles to filter
 
 ---
 
 ## ⚙️ Process
 
-The Quality-DB step loads the `ground_motion_im_rotd50_flat.csv` file and applies a comprehensive series of quality filters through the `apply_all_filters()` function. Each filter removes records that don't meet specific quality criteria, with detailed tracking of why records were excluded.
+The Quality-DB step loads the `ground_motion_im_table_rotd50_flat.parquet` file and applies a comprehensive series of quality filters through the `apply_all_filters()` function. Each filter removes records that don't meet specific quality criteria, with detailed tracking of why records were excluded.
 
 ### 🔹 Filter Sequence Overview
 

@@ -251,7 +251,7 @@ Key parameters from `config.yaml` that control distance calculations:
 ### 🔹 Propagation Table
 The main output is a comprehensive CSV file containing distance metrics for every event-station pair:
 
-**File Location**: `flatfiles/propagation_table.csv`
+**File Location**: `flatfiles/propagation_path_table_all.csv` (filtered to `propagation_path_table.csv` by Merge flatfiles). The event table with the distance step updates is saved as `flatfiles/earthquake_source_table_distances.csv`.
 
 **Key Columns**
 
@@ -302,7 +302,7 @@ Additional fault parameters are merged into the earthquake source table:
 
 Additional geometry information is stored in a separate table for each of the planes used in the distance calculations (Some Faults like the FF Models have multiple planes):
 
-**File Location**: `flatfiles/earthquake_source_geometry.csv`
+**File Location**: `flatfiles/earthquake_source_geometry_all.csv` (filtered to `earthquake_source_geometry.csv` by Merge flatfiles)
 
 **Geometry Output Columns**
 

@@ -23,8 +23,10 @@ Optional parameters include:
 - `--meta-output-dir`: Custom directory for metadata and skipped records output
 - `--waveform-dir`: Custom directory containing mseed files
 - `--snr-fas-output-dir`: Custom directory for SNR and FAS data
+- `--batches-dir`: Directory for the checkpointed Fmax batches (default: `fmax/`)
 - `--n-procs`: Number of processes to use for parallel processing (default: 1)
 - `--bypass-records-ffp`: Path to bypass records file for custom Fmax values
+- `--batch-size`: Records per checkpointed batch (default: 20000)
 
 ---
 

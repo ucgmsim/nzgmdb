@@ -14,6 +14,14 @@ python -m nzgmdb.scripts.run_nzgmdb calculate-snr <main_dir>
 
 - **<main_dir>** is the top-level output directory where NZGMDB stores its results.
 
+Options:
+- `--phase-table-path`: Phase arrival table to use (default: `flatfiles/phase_arrival_table_all.csv`)
+- `--meta-output-dir`: Directory for the metadata and skipped records (default: `flatfiles/`)
+- `--snr-fas-output-dir`: Directory for the SNR / FAS files (default: `snr_fas/`)
+- `--n-procs`: Number of processes to use (default: 1)
+- `--batch-size`: Records per checkpointed batch (default: 5000)
+- `--bypass-records-ffp`: Bypass records file with custom P-wave values
+
 Example:
 ```bash
 python -m nzgmdb.scripts.run_nzgmdb calculate-snr nzgmdb_output/
@@ -30,7 +38,7 @@ nzgmdb_output/snr_fas/year/event_id/evid_station_channel_location_snr_fas.csv
 ## 📋 Prerequisites
 
 The Calculate SNR step requires the following inputs from previous pipeline steps:
-- **[Parse Geonet](https://github.com/ucgmsim/nzgmdb/wiki/Parse-Geonet)** (generates MSEED files in the waveforms directory)
+- **[Waveform Extraction](https://github.com/ucgmsim/nzgmdb/wiki/Waveform-Extraction)** (generates MSEED files in the waveforms directory)
 - **[Phase Arrival](https://github.com/ucgmsim/nzgmdb/wiki/Phase-Arrival)** (produces phase arrival table with P-wave arrival times)
 
 ---
@@ -136,10 +144,17 @@ Additional output files are generated in the `flatfiles/` directory:
   - Sampling information (npts, delta, starttime, endtime)
 
 - **`snr_skipped_records.csv`**: Documents failed records with reasons:
+  - "Invalid mseed file"
   - "Failed to find inventory information"
-  - "Failed to find Ko matrix"  
+  - "Failed to remove sensitivity"
+  - "File did not contain 3 components"
+  - "Failed to rotate the data"
+  - "Invalid trace length from mseed file"
+  - "Unable to differentiate record"
+  - "Failed to demean and detrend the data"
+  - "No P-wave found in phase arrival table"
+  - "TP not in waveform bounds"
   - "Noise was less than 1 second"
-  - "P-wave arrival not found"
 
 ---
 

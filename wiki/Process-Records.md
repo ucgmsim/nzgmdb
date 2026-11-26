@@ -20,6 +20,8 @@ python -m nzgmdb.scripts.run_nzgmdb process-records nzgmdb_output/
 ```
 
 Optional parameters include:
+- `--gmc-ffp`: GMC predictions file to use (default: `flatfiles/gmc_predictions.csv`)
+- `--fmax-ffp`: Fmax file to use (default: `flatfiles/fmax.csv`)
 - `--n-procs`: Number of processes to use for parallel processing (default: 1)
 - `--bypass-records-ffp`: Path to bypass records file for custom fmin/fmax values
 
@@ -36,7 +38,7 @@ nzgmdb_output/waveforms/year/event_id/processed/evid_station_channel_location.ve
 ## 📋 Prerequisites
 
 The Process Records step requires the following inputs from previous pipeline steps:
-- **[Parse Geonet](https://github.com/ucgmsim/nzgmdb/wiki/Parse-Geonet)** (generates MSEED files in the waveforms directory)
+- **[Waveform Extraction](https://github.com/ucgmsim/nzgmdb/wiki/Waveform-Extraction)** (generates MSEED files in the waveforms directory)
 - **[Calculate Fmax](https://github.com/ucgmsim/nzgmdb/wiki/Calculate-Fmax)** (provides maximum usable frequency values)
 - **[GMC](https://github.com/ucgmsim/nzgmdb/wiki/GMC)** (provides minimum frequency and quality classification scores)
 
@@ -135,13 +137,17 @@ Each ASCII file contains:
 
 Additional output files are generated in the `flatfiles/` directory:
 
-- **`processed_records_skipped.csv`**: Contains failed records with detailed failure reasons:
+- **`processing_skipped_records.csv`**: Contains failed records with detailed failure reasons:
+  - "Invalid mseed file"
   - "File did not contain 3 components"
-  - "Failed to find Inventory information"  
+  - "Failed to find Inventory information"
   - "Failed to remove sensitivity"
   - "Failed to rotate the data"
   - "Unable to differentiate record"
-  - "Lowcut frequency greater than highcut frequency" (component-specific)
+  - "Failed to demean and detrend the data"
+  - "Invalid trace length for the mseed file"
+  - "Lowcut frequency is greater than the highcut frequency" (component-specific)
+  - "Failed to find N, E, X, or Y components"
 
 ---
 
@@ -171,4 +177,4 @@ The record processing utilises functions from the `nzgmdb.data_processing` modul
 - **Previous**: [GMC](GMC.md) - Provides fmin values and quality scores for record filtering
 - **Previous**: [Calculate Fmax](Calculate-Fmax.md) - Provides maximum usable frequency bounds
 - **Next**: [IM Calculation](IM-Calculation.md) - Uses processed ASCII files for intensity measure computation
-- **Related**: [Parse Geonet](Parse-Geonet.md) - Provides raw MSEED files for processing
+- **Related**: [Waveform Extraction](Waveform-Extraction.md) - Provides raw MSEED files for processing

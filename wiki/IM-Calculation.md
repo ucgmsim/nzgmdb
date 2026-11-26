@@ -23,6 +23,7 @@ Optional parameters include:
 - `--n-procs`: Number of processes for parallel processing (default: 1)
 - `--batch-size`: Number of records in each batch (default: 5000)
 - `--intensity-measures`: Comma-separated list of specific IMs to calculate, defaults to all configured IMs in `config.yaml`
+- `--force-recompute`: Remove the IM batches of an earlier run and calculate every record again, e.g. after records were reprocessed under the same record IDs (default: False)
 
 Konno-Ohmachi smoothing for the FAS is done inside [IM_calculation](https://github.com/ucgmsim/IM_calculation), so no smoothing matrices are needed.
 
@@ -61,6 +62,7 @@ The pipeline calculates the following intensity measures based on configuration 
 - **PGA** - Peak Ground Acceleration
 - **PGV** - Peak Ground Velocity  
 - **PGD** - Peak Ground Displacement
+- **MMI** - Modified Mercalli Intensity, estimated from the ground motion by the IM package (needs `im-calculation>=2026.11.2`)
 - **CAV** - Cumulative Absolute Velocity
 - **CAV5** - Cumulative Absolute Velocity (threshold: 5 cm/s²)
 - **AI** - Arias Intensity
@@ -143,8 +145,8 @@ Every table starts with `record_id`, `component`, `evid`, `sta`, `chan`, `loc`, 
 
 | Directory | Components | IM columns |
 |-----------|------------|------------|
-| `im_merge_<comp>` | 000, 090, ver, geom | `PGA`, `PGV`, `PGD`, `CAV`, `CAV5`, `Ds575`, `Ds595`, `AI`, `pSA_<period>` |
-| `im_merge_<comp>` | rotd0, rotd50, rotd100 | `PGA`, `PGV`, `PGD`, `pSA_<period>` |
+| `im_merge_<comp>` | 000, 090, ver, geom | `PGA`, `PGV`, `PGD`, `MMI`, `CAV`, `CAV5`, `Ds575`, `Ds595`, `AI`, `pSA_<period>` |
+| `im_merge_<comp>` | rotd0, rotd50, rotd100 | `PGA`, `PGV`, `PGD`, `MMI`, `pSA_<period>` |
 | `im_merge_<comp>` | rotd0_orientation, rotd100_orientation | `PGA`, `PGV`, `PGD`, `pSA_<period>`, holding the rotation angle (degrees) of the RotD0 / RotD100 value |
 | `im_merge_<comp>_fas` | 000, 090, ver, geom, eas | `FAS_<frequency>` (only when FAS is calculated) |
 

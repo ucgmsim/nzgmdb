@@ -59,12 +59,18 @@ python -m nzgmdb.scripts.run_auto_cmt run-cmt-pipeline <event_id> <event_dir>/cm
 |---|---|---|
 | `--event-csv` | built from GeoNet | Event CSV (`evid, datetime, lat, lon, depth, mag`) |
 | `--real-time` | off | Use GeoNet's near-real-time FDSN service |
-| `--threads` | 12 | Axitra threads per run |
+| `--threads` | 16 | Axitra threads per run |
 | `--outlier-z` | 5.0 | Robust z-score threshold for outliers |
 | `--outlier-vr-floor` | -1.0 | Station VR threshold for outliers |
 | `--nz-3dvm-path` | bundled `nz3dvm_2p3.csv` | 3-D NZ velocity model |
+| `--share-work` / `--no-share-work` | on | Reuse the all_stations waveforms in later runs and share one Green's function store (`gf_store/`) between runs. Does not change any result |
 | `--skip-cleanup` | off | Keep all run files, for debugging |
 | `--profile` | off (on for real-time launches) | Write a cProfile dump per run to `<run>/results/profile.prof` |
+| `--slack-thread-ts` | none | Slack thread of the event to reply into when each run starts and has its solution. No Slack messages without it |
+| `--slack-summary` | empty | Event summary shown in the Slack thread's parent message |
+| `--update-seismic-now` | off | Ask SeismicNow to apply the new CMT solution once the pipeline has finished |
+
+Slack messages need the `SLACK_BOT_TOKEN` and `SLACK_CHANNEL` environment variables. Without them, Slack calls are printed as failures and skipped, and the pipeline carries on. See [Real-Time Runs](Real-Time-Runs.md).
 
 Disk use peaks at roughly 2 × 40 GB while runs 1 and 2 are running at the same time. Most of that is the Green's functions.
 
@@ -79,6 +85,7 @@ cmt_1d/
 ├── station_vr.csv       # per-station VR, z-score and outlier flags for runs 1 and 2
 ├── cmt_selection.csv    # one row per run: status, VR, Mw, depth, dropped stations, selected
 ├── cmt_solution.csv     # copy of the selected run's solution
+├── gf_store/            # shared Green's function store (with --share-work, cleaned)
 ├── timings.csv          # pipeline step timings + each run's BayesISOLA stage timings
 └── cmt_1d_run.log       # pipeline log (real-time launches only)
 ```
