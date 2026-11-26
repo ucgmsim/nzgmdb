@@ -22,5 +22,6 @@ qcore-utils>=2025.12.1,<2026.10.1
 source_modelling>=2025.12.1,
 openquake.engine==3.24.1,
 im-calculation>=2026.11.2,
-velocity-modelling>=2025.12.1
+# Upper bound only because 2026.7.1+ fails the NZCVM threshold nz check for every station (ucgmsim/velocity_modelling#60)
+velocity-modelling>=2026.4.1,<2026.7.1
 cmt-solutions>=2026.11.02
