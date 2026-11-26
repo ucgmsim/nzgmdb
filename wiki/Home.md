@@ -107,6 +107,9 @@ Data from temporary seismic deployments (IRIS, AUSPASS, ...) is bulk downloaded 
 13. **[Merge flatfiles](https://github.com/ucgmsim/nzgmdb/wiki/Merge-Flatfiles)** (Merges all flatfiles to ensure to remove filtered entries and split IM results per component into different flatfiles)
 14. **[Quality DB](Quality-DB.md)** (Applies filters and generates the final quality database flatfiles with all filtered records)
 
+Real-time / standalone:
+- **[Auto CMT](Auto-CMT.md)** (Runs the automated multi-run 1-D CMT inversion for an event and selects the best solution, launched by the real-time pipeline or run manually for past events)
+
 ---
 
 ## 🗂️ File Structure
