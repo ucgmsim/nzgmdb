@@ -42,7 +42,7 @@ python -m nzgmdb.scripts.upload_to_dropbox download-dropbox-archive <output_dir>
 The Upload to Dropbox step is an **optional** final step that requires:
 - **[Merge Flatfiles](https://github.com/ucgmsim/nzgmdb/wiki/Merge-Flatfiles)** (generates final flatfile outputs)
 - **Rclone Configuration** (see Setup section below)
-- **[Quality DB]()** (generates quality database files, optional)
+- **[Quality DB](Quality-DB.md)** (generates quality database files, optional)
 
 ---
 
@@ -79,7 +79,7 @@ Files are uploaded to: `dropbox:/QuakeCoRE/Public/NZGMDB/{version}/`
 The process creates several thematic ZIP archives:
 
 **1. Flatfiles Archive (`flatfiles_{version}.zip`)**
-- Contains all final CSV flatfiles from the flatfiles directory
+- Contains all final flatfiles from the flatfiles directory (the IM flatfiles are parquet, the rest CSV)
 - Includes earthquake source table, IM results, metadata files
 - Uses `file_structure.FlatfileNames` for consistent file selection
 

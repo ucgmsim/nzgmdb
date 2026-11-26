@@ -8,7 +8,7 @@ import itertools
 import multiprocessing as mp
 import time
 import warnings
-from datetime import datetime
+from datetime import timedelta
 from pathlib import Path
 from typing import NamedTuple
 
@@ -45,8 +45,8 @@ class StationExtractionResult(NamedTuple):
 
 
 def get_inital_stream(
-    start_time: datetime,
-    end_time: datetime,
+    start_time: UTCDateTime,
+    end_time: UTCDateTime,
     channel_codes: str,
     location: str,
     client: FDSN_Client,
@@ -58,9 +58,9 @@ def get_inital_stream(
 
     Parameters
     ----------
-    start_time : datetime
+    start_time : UTCDateTime
         The start time of the waveform data to retrieve.
-    end_time : datetime
+    end_time : UTCDateTime
         The end time of the waveform data to retrieve.
     channel_codes : str
         The channel codes to retrieve, formatted as a comma-separated string.
@@ -79,6 +79,11 @@ def get_inital_stream(
     Stream
         An ObsPy Stream object containing the waveform data for the specified parameters.
     """
+    # Ensure the end_time is at least 30 seconds in the past before running extraction
+    time_threshold = UTCDateTime.utcnow() - timedelta(seconds=30)
+    if end_time > time_threshold:
+        time.sleep(end_time - time_threshold)
+
     # Get the waveforms with multiple retries when IncompleteReadError occurs
     max_retries = 3
     for attempt in range(max_retries):
@@ -815,6 +820,7 @@ def extract_station_info(
     extraction_table: pd.DataFrame,
     only_record_ids: pd.DataFrame = None,
     tmp_array_dir: Path | None = None,
+    real_time: bool = False,
 ) -> StationExtractionResult:
     """
     Extract the waveform data for a single station based on the extraction parameters.
@@ -833,6 +839,8 @@ def extract_station_info(
         A DataFrame containing a subset of record IDs to use for extraction, if provided.
     tmp_array_dir : Path, optional
         The directory where the temporary array waveform files are stored, if using temporary array storage for waveforms.
+    real_time : bool, optional
+        A boolean indicating if the extraction is being performed in real-time, which will use a different client.
 
     Returns
     -------
@@ -891,7 +899,10 @@ def extract_station_info(
     st, skip_reason = None, "No Waveform Data"
     if provider == "GEONET":
         # Get the Stream
-        client = FDSN_Client("GEONET")
+        if real_time:
+            client = FDSN_Client(base_url=config.get_value("real_time_url"))
+        else:
+            client = FDSN_Client("GEONET")
         st = get_inital_stream(
             start_time, end_time, channel_codes, location, client, network, station
         )
@@ -1127,6 +1138,7 @@ def extract_waveforms(
     only_record_ids_ffp: Path | None = None,
     batch_size: int = 1000,
     tmp_array_dir: Path | None = None,
+    real_time: bool = False,
 ):
     """
     Extract waveforms for each station in the station extraction table.
@@ -1148,6 +1160,8 @@ def extract_waveforms(
         The number of rows to process in each batch, by default 1000.
     tmp_array_dir : Path, optional
         The directory where the temporary array waveform files are stored, if using temporary array storage for waveforms.
+    real_time : bool, optional
+        Whether to run in real-time mode so uses a different client
     """
     station_extraction_table = pd.read_csv(
         station_extraction_table_ffp, dtype={"evid": str}
@@ -1191,7 +1205,11 @@ def extract_waveforms(
         station_extraction_table.index,
         np.ceil(len(station_extraction_table) / batch_size),
     )
-    client = FDSN_Client("GEONET")
+    config = cfg.Config()
+    if real_time:
+        client = FDSN_Client(base_url=config.get_value("real_time_url"))
+    else:
+        client = FDSN_Client("GEONET")
 
     # Fetch the station xmls before extraction, as they are needed for the response removal
     xml_dir = file_structure.get_stationxml_dir(main_dir)
@@ -1244,6 +1262,7 @@ def extract_waveforms(
                 extraction_table=station_extraction_table,
                 only_record_ids=only_record_ids,
                 tmp_array_dir=tmp_array_dir,
+                real_time=real_time,
             )
 
             results = []

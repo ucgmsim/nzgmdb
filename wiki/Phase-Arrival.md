@@ -9,26 +9,28 @@ This step in the NZGMDB pipeline generates P and S wave arrival times for seismi
 To generate the phase arrival table, run the following Python script:
 
 ```bash
-python -m nzgmdb.scripts.run_nzgmdb generate-phase-arrival-table <main_dir> <run_phasenet_script_ffp> <conda_sh> <env_activate_command> --n-procs <n_procs> --bypass-records-ffp <bypass_records_ffp>
+python -m nzgmdb.scripts.run_nzgmdb make-phase-arrival-table <main_dir> <run_phasenet_script_ffp> <conda_sh> <env_activate_command> --n-procs <n_procs> --n-batches <n_batches> --bypass-records-ffp <bypass_records_ffp>
 ```
 
 - **<main_dir>** is the top-level output directory where NZGMDB stores its results
 - **<run_phasenet_script_ffp>** is the path to the `run_phasenet.py` script (located in `NZGMDB/phase_arrival/`)
 - **<conda_sh>** is the path to your conda.sh script for environment activation
-- **<env_activate_command>** is the command to activate the PhaseNet installed environment
+- **<env_activate_command>** is the command to activate the PhaseNet installed environment (the `gmc_features` env, Python 3.9)
 - **--n-procs** (optional) is the number of processes to use (default: 1)
+- **--n-batches** (optional) is the number of batches to split the records into, each run as one PhaseNet call and checkpointed (default: n_procs)
 - **--bypass-records-ffp** (optional) is the path to a file containing custom P-wave index values for specific records
 
 Example:
 ```bash
-python -m nzgmdb.scripts.run_nzgmdb generate-phase-arrival-table nzgmdb_output/ nzgmdb/phase_arrival/run_phasenet.py ~/.conda/conda.sh "conda activate phasenet" --n-procs 6
+python -m nzgmdb.scripts.run_nzgmdb make-phase-arrival-table nzgmdb_output/ nzgmdb/phase_arrival/run_phasenet.py ~/.conda/conda.sh "conda activate gmc_features" --n-procs 6
 ```
 
 This will create the files:
 
 ```bash
-nzgmdb_output/flatfiles/phase_arrival_table.csv
+nzgmdb_output/flatfiles/phase_arrival_table_all.csv
 nzgmdb_output/flatfiles/phase_arrival_skipped_records.csv
+nzgmdb_output/flatfiles/prob_series.h5
 nzgmdb_output/phase_arrival/batch_*/phase_arrival_table.csv
 nzgmdb_output/phase_arrival/batch_*/skipped_records.csv
 nzgmdb_output/phase_arrival/batch_*/prob_series.h5
@@ -77,7 +79,7 @@ Records are skipped if they encounter processing errors such as:
 
 The phase arrival processing generates several output files:
 
-### Phase Arrival Table (`phase_arrival_table.csv`)
+### Phase Arrival Table (`phase_arrival_table_all.csv`)
 Contains phase picking results for all successfully processed records:
 
 | Column              | Description                                               |

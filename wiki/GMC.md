@@ -9,7 +9,7 @@ This step in the NZGMDB pipeline uses machine learning to classify seismic recor
 To run GMC processing, use the following Python script:
 
 ```bash
-python -m nzgmdb.scripts.run_nzgmdb run-gmc-processing <main_dir> <gm_classifier_dir> <ko_matrices_dir> <conda_sh> <gmc_activate> <gmc_predict_activate> --n-procs <n_procs> --waveform-dir <waveform_dir> --output-dir <output_dir> --bypass-records-ffp <bypass_records_ffp>
+python -m nzgmdb.scripts.run_gmc <main_dir> <gm_classifier_dir> <ko_matrices_dir> <conda_sh> <gmc_activate> <gmc_predict_activate> --n-procs <n_procs> --gmc-n-batches <n_batches> --waveform-dir <waveform_dir> --output-dir <output_dir> --bypass-records-ffp <bypass_records_ffp>
 ```
 
 **Required Parameters:**
@@ -22,13 +22,15 @@ python -m nzgmdb.scripts.run_nzgmdb run-gmc-processing <main_dir> <gm_classifier
 
 **Optional Parameters:**
 - **--n-procs** - Number of processes for parallel processing (default: 1)
+- **--gmc-n-batches** - Number of batches to split the records into, each checkpointed (default: n_procs)
 - **--waveform-dir** - Custom directory containing waveform files (default: uses main_dir/waveforms)
 - **--output-dir** - Custom output directory for GMC predictions (default: uses main_dir/flatfiles)
 - **--bypass-records-ffp** - Path to bypass records file containing custom Fmin / Score values
+- **--allow-empty** - If a batch has no features (e.g. no record could be processed), write an empty predictions file instead of failing. Used by the real-time pipeline (default: False)
 
 **Example:**
 ```bash
-python -m nzgmdb.scripts.run_nzgmdb run-gmc-processing nzgmdb_output/ ~/gm_classifier/ ~/ko_matrices/ ~/.conda/conda.sh "conda activate gmc_features" "conda activate gmc_predict" --n-procs 4
+python -m nzgmdb.scripts.run_gmc nzgmdb_output/ ~/gm_classifier/ ~/ko_matrices/ ~/.conda/conda.sh "conda activate gmc_features" "conda activate gmc_predict" --n-procs 4
 ```
 
 This will create the following output files:
@@ -45,7 +47,7 @@ nzgmdb_output/gmc/batch_*/predict.log
 ## 📋 Prerequisites
 
 The GMC step requires the following inputs from previous pipeline steps:
-- **[Parse Geonet](Parse-Geonet.md)** - Provides MSEED waveform files
+- **[Waveform Extraction](Waveform-Extraction.md)** - Provides MSEED waveform files
 - **[Phase Arrival](Phase-Arrival.md)** - Generates phase arrival table and probability series files
 - **Pre-generated KO matrices** - Required for feature extraction (created using gm_classifier tools)
 - **Two conda environments** - `gmc_features` and `gmc_predict` (set up following gm_classifier documentation)

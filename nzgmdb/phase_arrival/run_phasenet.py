@@ -2,6 +2,9 @@
 Script to run PhaseNet on mseed files, predict p and s waves as well as save the probability series to an HDF5 file.
 """
 
+# Runs in the PhaseNet environment (Python 3.9), so keep X | None hints unevaluated
+from __future__ import annotations
+
 import argparse
 from pathlib import Path
 

@@ -598,6 +598,7 @@ def merge_flatfiles(main_dir: Path, bypass_records_ffp: Path = None):
             "PGA",
             "PGV",
             "PGD",
+            "MMI",
             "CAV",
             "CAV5",
             "AI",

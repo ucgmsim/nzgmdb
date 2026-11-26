@@ -15,16 +15,18 @@ python -m nzgmdb.scripts.run_nzgmdb generate-site-table-basin <main_dir> <nzcvm_
 
 - `<main_dir>` is the top-level output directory where NZGMDB stores its results.
 - `<nzcvm_data_ffp>` is the full file path to the local clone of the `nzcvm_data` repository.
+- `--add-tmp-arrays` also adds the temporary array stations (from the `tmp_array_providers_networks` in `config.yaml`), default False.
 
 Example:
 ```bash
 python -m nzgmdb.scripts.run_nzgmdb generate-site-table-basin nzgmdb_output/ /path/to/nzcvm_data
 ```
 
-This will create the file:
+This will create the files:
 
 ```bash
-nzgmdb_output/flatfiles/site_table_basin.csv
+nzgmdb_output/flatfiles/site_table_all.csv
+nzgmdb_output/flatfiles/station_table_all.csv
 ```
 
 ## ⚙️ Process
@@ -70,7 +72,7 @@ Below is an example of the basin outlines used (version `2.09`):
 
 ## 📦 Output
 
-- The final merged dataframe gets saved as `site_table.csv` in the flatfiles directory containing:
+- The final merged dataframe gets saved as `site_table_all.csv` in the flatfiles directory (with the station channel / location epochs in `station_table_all.csv`). Merge flatfiles later filters these to `site_table.csv` and `station_table.csv`. The site table contains:
 
 | Column          | Description                                                  |
 |-----------------|--------------------------------------------------------------|

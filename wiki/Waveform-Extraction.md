@@ -22,16 +22,18 @@ python -m nzgmdb.scripts.run_nzgmdb extract-waveforms <main_dir> <station_extrac
 - **`--batch-size`** \- Size of processing batches (default: 1000)
 - **`--only-record-ids-ffp`** \- Path to file containing specific record IDs to process
 - **`--tmp-array-dir`** \- Path to the directory of previously downloaded waveform arrays to use to extract waveforms from instead of downloading again
+- **`--real-time`** \- Use the GeoNet near-real-time FDSN service (`real_time_url` in `config.yaml`) for GeoNet stations, and wait until each request's end time is at least 30 s old (default: False)
 
 **Example:**
 ```bash
-python -m nzgmdb.scripts.run_nzgmdb extract-waveforms nzgmdb_output/ flatfiles/station_extraction_table.csv --n-procs 4 --batch-size 500
+python -m nzgmdb.scripts.run_nzgmdb extract-waveforms nzgmdb_output/ nzgmdb_output/flatfiles/station_extraction_table_geonet.csv --n-procs 4 --batch-size 500
 ```
 
 This will create several output files in the flatfiles directory:
 - `station_magnitude_table_extraction.csv`
+- `multi_event_table.csv`
 - `extraction_skipped_records.csv`
-- `extraction_clipped_records.csv`
+- `clipped_records.csv`
 - `multi_trace_issue_records.csv`
 
 ---
@@ -221,7 +223,7 @@ As part of the waveform extraction process, several output files are generated i
 - **Content:** Station metadata including sensor response information
 - **When:** Fetched before extraction for any site without an existing file, so the response is available for multi-event scoring and the later processing steps
 
-### 🔹 Station Magnitude Table (`station_magnitude_table.csv`)
+### 🔹 Station Magnitude Table (`station_magnitude_table_extraction.csv`)
 
 Records station-specific magnitude measurements:
 
@@ -239,7 +241,7 @@ Records station-specific magnitude measurements:
 | `amp` | Amplitude measurement |
 | `amp_unit` | Amplitude units |
 
-#### **Skipped Records (`skipped_records.csv`)**
+#### **Skipped Records (`extraction_skipped_records.csv`)**
 - Records where waveform extraction failed
 - Contains record identifier and reason for skipping (e.g., no data, incomplete data, extreme multi-trace issues)
 

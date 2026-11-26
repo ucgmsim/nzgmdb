@@ -1,6 +1,6 @@
 # 🔗 Merge Flatfiles
 
-This step in the NZGMDB pipeline consolidates all individual flatfiles into final component-specific datasets while ensuring data consistency and removing filtered entries. **This critical step transforms the comprehensive intensity measure catalogue into organised, analysis-ready flatfiles** that separate results by motion component and integrate metadata from earthquake source, site, and propagation tables.
+This step in the NZGMDB pipeline consolidates all individual flatfiles into final component-specific datasets while ensuring data consistency and removing filtered entries. **This critical step transforms the batched IM results from IM Calculation into organised, analysis-ready flatfiles** that separate results by motion component and integrate metadata from earthquake source, site, and propagation tables.
 
 ---
 
@@ -26,9 +26,9 @@ python -m nzgmdb.scripts.run_nzgmdb merge-flat-files nzgmdb_output/
 ## 📋 Prerequisites
 
 The Merge Flatfiles step requires the following inputs from previous pipeline steps:
-- **[Calculate Aftershocks](Calculate-Aftershocks.md)** - Generates the earthquake source table with aftershock classifications
+- **[Merge Aftershocks](Merge-Aftershocks.md)** - Generates the earthquake source table with aftershock classifications
 - **[Calculate Distances](Calculate-Distances.md)** - Provides the distance calculations and the geometry table containing rupture polygons
-- **[Merge IM Results](Merge-IM-Results.md)** - Generates the ground_motion_im_catalogue.csv file
+- **[IM Calculation](IM-Calculation.md)** - Generates the batched IM parquet datasets in `flatfiles/im_merge_batch_dir/`
 
 ---
 
@@ -41,14 +41,14 @@ The Merge Flatfiles step performs **four main consolidation functions**:
 Ensures that only events and records that successfully passed all pipeline filtering steps are included in the final flatfiles:
 
 **Quality Assurance:**
-- Cross-references records in the ground_motion_im_catalogue with all supporting metadata tables
+- Cross-references the records in the IM batches with all supporting metadata tables
 - Removes events that lack complete intensity measure data
 - Validates that all records have corresponding site, source, and propagation information
 - Documents missing sites in a separate output file for quality tracking
 
 ### 🔹 2. Component Separation
 
-Splits the comprehensive ground_motion_im_catalogue into component-specific tables:
+Reads each `im_merge_<component>` parquet dataset into its own component-specific table:
 
 **Component Organisation:**
 - **000**: North-South horizontal component
@@ -57,6 +57,7 @@ Splits the comprehensive ground_motion_im_catalogue into component-specific tabl
 - **rotd0**: Minimum rotated horizontal component
 - **rotd50**: Median rotated horizontal component
 - **rotd100**: Maximum rotated horizontal component
+- **rotd0_orientation / rotd100_orientation**: Rotation angle (degrees) of each RotD0 / RotD100 IM
 - **EAS**: Effective Amplitude Spectrum (for FAS calculations)
 - **geom**: Geometric mean horizontal component
 
@@ -208,6 +209,6 @@ Only includes the columns where appropriate IMs were calculated for the componen
 
 ## 🔗 Related Steps
 
-- **Previous**: [Calculate Aftershocks](Calculate-Aftershocks.md) - Generates earthquake source table with aftershock classifications
+- **Previous**: [Merge Aftershocks](Merge-Aftershocks.md) - Generates earthquake source table with aftershock classifications
 - **Next**: [Quality DB](Quality-DB.md) - Applies final filtering and creates delivery-ready quality database
 - **Related**: [IM-Calculation](IM-Calculation.md) - Details the intensity measure calculations and which IM's are computed per component

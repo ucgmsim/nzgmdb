@@ -10,7 +10,8 @@ The **NZGMDB** (New Zealand Ground Motion Database) repository contains a set of
 
 This tool is designed for researchers working with strong motion records.
 
-This codebase and documentation is currently up-to-date with the latest NZGMDB release **Version 4.3 (September 2025)**.
+This codebase and documentation is currently up-to-date with NZGMDB **Version 4.4** (see the [changelog](changelog.md)).
+The same pipeline can also run in near-real-time for new GeoNet events, see [Real-Time Runs](https://github.com/ucgmsim/nzgmdb/wiki/Real-Time-Runs).
 More information on the NZGMDB and the steps involved can be found on the [NZGMDB Wiki](https://github.com/ucgmsim/nzgmdb/wiki).
 
 ---
@@ -19,7 +20,7 @@ More information on the NZGMDB and the steps involved can be found on the [NZGMD
 
 ### 1. Clone the NZGMDB Repository
 
-Clone the repository and install in editable mode:
+NZGMDB requires **Python 3.12**. Clone the repository and install in editable mode:
 
 ```bash
 git clone https://github.com/ucgmsim/nzgmdb.git
@@ -42,7 +43,7 @@ git clone https://github.com/ucgmsim/gm_classifier.git
 
 Then follow the instructions in the gm_classifier repository to create two Conda environments:
 
-- **gmc_features**: For feature extraction
+- **gmc_features**: For feature extraction and PhaseNet P-wave picking
 
 - **gmc_predict**: For feature classification
 
@@ -67,7 +68,7 @@ Before running the full pipeline, ensure the following:
 
 - Your Python environment has the `nzgmdb` package installed
 
-- You have generated **KO (Konno-Ohmachi) matrices**. These are required by different steps in the NZGMDB pipeline and can be created using the tools in the `gm_classifier` repository. The readme in the `gm_classifier` repository provides instructions on how to generate these matrices.
+- You have generated **KO (Konno-Ohmachi) matrices**. These are only needed by the GMC step and can be created using the tools in the `gm_classifier` repository. The readme in the `gm_classifier` repository provides instructions on how to generate these matrices.
 
 - You know the paths to:
   - The cloned `gm_classifier` directory
@@ -86,7 +87,7 @@ functions to run the automated pipeline. You can run the entire automated pipeli
 by running the following command:
 
 ```bash
-python scripts/run_nzgmdb.py run-full-nzgmdb \
+python -m nzgmdb.scripts.run_nzgmdb run-full-nzgmdb \
   /output_dir \
   2000-01-01 \
   2024-12-31 \
@@ -110,15 +111,15 @@ python scripts/run_nzgmdb.py run-full-nzgmdb \
 | `/path/to/conda.sh`             | Path to the Conda initialization script (e.g., `/opt/anaconda3/etc/profile.d/conda.sh`) |
 | `"conda activate gmc_features"` | Command to activate the feature extraction environment                      |
 | `"conda activate gmc_predict"`  | Command to activate the classification environment                          |
-| `/path/to/KO_matrices`          | Directory containing the pre-generated KO matrices                          |
+| `/path/to/KO_matrices`          | Directory containing the pre-generated KO matrices (used by GMC)            |
 
 ### 📝 Additional Arguments
 
-There are also a variety of extra arguments that can be passed to the script, allowing control and modification of different steps, such as event / site filtering or the number of processes to use for the given system.
+There are also a variety of extra arguments that can be passed to the script, allowing control and modification of different steps, such as event / site filtering, `--create-quality-db`, `--upload`, or `--machine` to use the per-step process counts for a known machine in `nzgmdb/config/machine_config.yaml`.
 For a full list of arguments and their descriptions, run:
 
 ```bash
-python scripts/run_nzgmdb.py --help
+python -m nzgmdb.scripts.run_nzgmdb run-full-nzgmdb --help
 ```
 
 ## 📄 Documentation

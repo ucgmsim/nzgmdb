@@ -10,19 +10,19 @@ Specifically, it performs **relocations** and **tectonic mapping** by integratin
 To add tectonic domains to the earthquake source table, run:
 
 ```bash
-python -m nzgmdb.scripts.run_nzgmdb merge-tect-domain <eq_source_ffp> <output_dir> [--n-procs N]
+python -m nzgmdb.scripts.run_nzgmdb merge-tect-domain <eq_source_ffp> <out_ffp> [--n-procs N]
 ```
 
 **Parameters:**
 - **eq_source_ffp**: Path to the earthquake source table CSV file (from [Parse Geonet](https://github.com/ucgmsim/nzgmdb/wiki/Parse-Geonet) step)
-- **output_dir**: Directory where the enhanced earthquake source table will be saved
+- **out_ffp**: Output CSV file for the earthquake source table with tectonic domains
 - **n-procs**: Number of processes to use for parallel computation (default: 1)
 
 **Example:**
 ```bash
 python -m nzgmdb.scripts.run_nzgmdb merge-tect-domain \
     nzgmdb_output/flatfiles/earthquake_source_table_geonet.csv \
-    nzgmdb_output/flatfiles/ \
+    nzgmdb_output/flatfiles/earthquake_source_table_tectonic.csv \
     --n-procs 6
 ```
 

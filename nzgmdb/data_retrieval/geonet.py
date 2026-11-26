@@ -14,7 +14,7 @@ import obspy
 import pandas as pd
 import requests
 from obspy.clients.fdsn import Client as FDSN_Client
-from obspy.core.event import Event, Magnitude
+from obspy.core.event import Event, Magnitude, Origin
 from obspy.core.inventory import Inventory, Network, Station
 from obspy.geodetics import kilometers2degrees
 from obspy.taup import TauPyModel
@@ -65,6 +65,44 @@ def get_max_magnitude(magnitudes: list[Magnitude], mag_type: str):
     return None
 
 
+def get_preferred_origin_magnitude(
+    event_cat: Event,
+) -> tuple[Origin | None, Magnitude | None]:
+    """
+    Get the preferred origin and magnitude of an event.
+
+    preferred_origin() and preferred_magnitude() return None in a forkserver worker,
+    as the resource id links are not restored when the event is unpickled, so fall
+    back to matching the preferred ids to the event's origins and magnitudes.
+
+    Parameters
+    ----------
+    event_cat : Event
+        The event to get the preferred origin and magnitude from
+
+    Returns
+    -------
+    Origin | None
+        The preferred origin, None if the event has none
+    Magnitude | None
+        The preferred magnitude, None if the event has none
+    """
+    origin = event_cat.preferred_origin()
+    if origin is None and event_cat.preferred_origin_id is not None:
+        origin_id = str(event_cat.preferred_origin_id)
+        origin = next(
+            (o for o in event_cat.origins if str(o.resource_id) == origin_id), None
+        )
+    magnitude = event_cat.preferred_magnitude()
+    if magnitude is None and event_cat.preferred_magnitude_id is not None:
+        magnitude_id = str(event_cat.preferred_magnitude_id)
+        magnitude = next(
+            (m for m in event_cat.magnitudes if str(m.resource_id) == magnitude_id),
+            None,
+        )
+    return origin, magnitude
+
+
 def fetch_event_line(event_cat: Event, event_id: str):
     """
     Fetch the event line from the geonet client to be added to the event_df
@@ -84,8 +122,7 @@ def fetch_event_line(event_cat: Event, event_id: str):
     reloc = "no"  # Indicates if an earthquake has been relocated, default to 'no'.
 
     # Get the preferred magnitude and preferred origin
-    preferred_origin = event_cat.preferred_origin()
-    preferred_magnitude = event_cat.preferred_magnitude()
+    preferred_origin, preferred_magnitude = get_preferred_origin_magnitude(event_cat)
 
     # If the preferred origin or magnitude is None, return None
     if preferred_origin is None or preferred_magnitude is None:
@@ -215,8 +252,8 @@ def get_stations_within_radius(
     Inventory
         The subset of the inventory with the stations within the radius
     """
-    preferred_magnitude = event_cat.preferred_magnitude().mag
-    preferred_origin = event_cat.preferred_origin()
+    preferred_origin, preferred_magnitude = get_preferred_origin_magnitude(event_cat)
+    preferred_magnitude = preferred_magnitude.mag
     event_lat = preferred_origin.latitude
     event_lon = preferred_origin.longitude
     ev_datetime = preferred_origin.time
@@ -248,12 +285,12 @@ def get_stations_within_radius(
 def fetch_sta_extraction(
     station: Station,
     network: Network,
-    event_cat: Event,
+    provider: str | None,
+    preferred_origin: Origin,
     event_id: str,
     pref_mag: float,
     pref_mag_type: str,
     site_table: pd.DataFrame,
-    provider: str | None,
 ):
     """
     Fetch the extraction table for a station to be added to the station extraction table
@@ -265,8 +302,11 @@ def fetch_sta_extraction(
         The station to fetch the data for
     network : Network
         The network of the station
-    event_cat : Event
-        The event catalogue to fetch the data from
+    provider : str | None
+        The provider of the station's network, however if None, the station will be skipped and a reason will be returned
+    preferred_origin : Origin
+        The event's preferred origin, passed directly as preferred_origin() returns
+        None in a forkserver worker
     event_id : str
         The event id
     pref_mag : float
@@ -275,8 +315,6 @@ def fetch_sta_extraction(
         The preferred magnitude type
     site_table : pd.DataFrame
         The site table to extract the vs30 value from
-    provider : str | None
-        The provider of the station's network, however if None, the station will be skipped and a reason will be returned
 
     Returns
     -------
@@ -299,8 +337,6 @@ def fetch_sta_extraction(
         )
         return pd.DataFrame(), skipped_reason
 
-    # Get the preferred_origin
-    preferred_origin = event_cat.preferred_origin()
     ev_lat = preferred_origin.latitude
     ev_lon = preferred_origin.longitude
 
@@ -484,7 +520,7 @@ def fetch_event_data(
                 results = pool.starmap(
                     functools.partial(
                         fetch_sta_extraction,
-                        event_cat=event_cat,
+                        preferred_origin=get_preferred_origin_magnitude(event_cat)[0],
                         event_id=event_id,
                         pref_mag=event_line[7],
                         pref_mag_type=event_line[8],
@@ -500,12 +536,12 @@ def fetch_event_data(
                 fetch_sta_extraction(
                     station,
                     network,
-                    event_cat,
+                    network_providers.get(network.code),
+                    get_preferred_origin_magnitude(event_cat)[0],
                     event_id,
                     event_line[7],
                     event_line[8],
                     site_table,
-                    network_providers.get(network.code),
                 )
                 for network, station in filtered_stations
             ]
