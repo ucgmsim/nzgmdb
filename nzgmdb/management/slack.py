@@ -154,7 +154,7 @@ def format_nz_time(time: datetime.datetime | None = None) -> str:
     Returns
     -------
     str
-        e.g. "2026-11-02 14:03:12 NZDT".
+        Formatted time, e.g. "2026-11-02 14:03:12 NZDT".
     """
     if time is None:
         time = datetime.datetime.now(datetime.UTC)
@@ -189,7 +189,7 @@ def format_event_line(
     Returns
     -------
     str
-        e.g. "M4.12 | Depth 12.30 km | Lat -41.2000, Lon 174.5000 | Quality preliminary".
+        Event line, e.g. "M4.12 | Depth 12.30 km | Lat -41.2000, Lon 174.5000 | Quality preliminary".
     """
     line = f"M{mag:.2f} | Depth {depth:.2f} km | Lat {lat:.4f}, Lon {lon:.4f}"
     if quality:
@@ -258,7 +258,7 @@ def format_error(exc: BaseException) -> str:
     Returns
     -------
     str
-        e.g. "ValueError: bad value".
+        Exception type and message, e.g. "ValueError: bad value".
     """
     return f"{type(exc).__name__}: {exc}"[:MAX_ERROR_CHARS]
 
@@ -270,17 +270,18 @@ class EventThread:
 
     Slack failures are printed and never raised, so they can't stop the
     pipeline. Before ``start`` (or without a ts), every call does nothing.
+
+    Parameters
+    ----------
+    ts : str, optional
+        Timestamp of an existing parent message.
+    summary : str, optional
+        Event summary shown in the existing parent message.
     """
 
-    def __init__(self, ts: str | None = None, summary: str = ""):
-        """
-        Parameters
-        ----------
-        ts : str, optional
-            Timestamp of an existing parent message.
-        summary : str, optional
-            Event summary shown in the existing parent message.
-        """
+    def __init__(  # noqa: D107  # numpydoc ignore=GL08
+        self, ts: str | None = None, summary: str = ""
+    ):
         self.ts = ts
         self.summary = summary
 

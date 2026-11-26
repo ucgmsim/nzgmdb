@@ -28,7 +28,7 @@ class StepTimer:
     previous lap (or creation) is recorded against that step.
     """
 
-    def __init__(self):  # noqa: D107
+    def __init__(self):  # noqa: D107  # numpydoc ignore=GL08
         self.rows: list[dict] = []
         self._start = self._last = time.perf_counter()
 
@@ -140,7 +140,7 @@ def format_duration(seconds: float) -> str:
     Returns
     -------
     str
-        e.g. "1h02m", "4m10s" or "12s".
+        Short duration, e.g. "1h02m", "4m10s" or "12s".
     """
     seconds = round(float(seconds))
     hours, remainder = divmod(seconds, 3600)

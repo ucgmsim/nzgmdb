@@ -91,7 +91,7 @@ def fetch_geonet_update(event_id: str) -> dict:
     Returns
     -------
     dict
-        mag, lat, lon, depth, quality, locality and origin_time (UTC datetime)
+        The mag, lat, lon, depth, quality, locality and origin_time (UTC datetime)
         of the event, matching the format_event_summary arguments.
     """
     url = f"https://api.geonet.org.nz/quake/{event_id}"

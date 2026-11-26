@@ -294,7 +294,7 @@ def _summarise_run(run_dir: Path) -> dict[str, Any]:
     Returns
     -------
     dict
-        n_stations, variance_reduction, Mw, centroid_depth_km and on_grid_edge.
+        The n_stations, variance_reduction, Mw, centroid_depth_km and on_grid_edge.
     """
     summary = pd.read_csv(run_dir / "results" / "solution_summary.csv").iloc[0]
     centroid = pd.read_csv(run_dir / "results" / "centroid_location.csv").iloc[0]
@@ -399,7 +399,7 @@ def run_single_cmt(
     Returns
     -------
     dict
-        status ("ok" or "failed"), message and run_s (seconds for the whole run).
+        The status ("ok" or "failed"), message and run_s (seconds for the whole run).
     """
     result = {"status": "ok", "message": "", "run_s": np.nan}
     with _redirect_output(run_dir / RUN_LOG_FILENAME):

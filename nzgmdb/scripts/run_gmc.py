@@ -103,7 +103,7 @@ def process_batch(
         The full file path to the prob_series hdf5 file.
     xml_dir : Path
         The directory containing the stationxml files.
-    allow_empty: bool, optional
+    allow_empty : bool, optional
         Whether to allow an empty run if records are not able to be processed.
 
     Raises
